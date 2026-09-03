@@ -2651,7 +2651,10 @@ export const createExpenseReport = async (req: RequestWithUser, res: Response) =
       requester_name: requester_name || req.user.username,
       requester_department,
       requester_position,
-      total_amount,
+      total_amount: (() => {
+        const n = Number(total_amount) || 0;
+        return n >= 0 ? Math.floor(n) : Math.ceil(n);
+      })(),
       currency: 'INR',
       purpose: safePurpose,
       items: itemsFinal,
@@ -2765,6 +2768,10 @@ export const updateExpenseReport = async (req: RequestWithUser, res: Response) =
 
     nextBody.status = isSubmit ? 'submitted' : prevStatus;
     nextBody.currency = 'INR';
+    if (nextBody.total_amount != null) {
+      const n = Number(nextBody.total_amount) || 0;
+      nextBody.total_amount = n >= 0 ? Math.floor(n) : Math.ceil(n);
+    }
     if (isSubmit && !expense.submitted_at) {
       nextBody.submitted_at = new Date();
     }
@@ -3195,7 +3202,12 @@ const canApproveExpense = (expense: any, user: any) => {
   return currentId !== null && currentId === user.id;
 };
 
-const roundMoney = (value: number) => Math.round((Number(value) || 0) * 100) / 100;
+const roundMoney = (value: number) => {
+  const n = Number(value) || 0;
+  if (!Number.isFinite(n)) return 0;
+  // 지출결의: 소수점 이하 차감(정수 금액)
+  return n >= 0 ? Math.floor(n) : Math.ceil(n);
+};
 
 const getExpenseRemainingAmount = (expense: any) => {
   const total = roundMoney(Number(expense.total_amount || 0));

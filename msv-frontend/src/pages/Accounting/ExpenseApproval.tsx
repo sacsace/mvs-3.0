@@ -27,6 +27,7 @@ import {
   Divider,
   Avatar,
   LinearProgress,
+  CircularProgress,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -78,7 +79,7 @@ import { useNavigate } from 'react-router-dom';
 import { accountingService, companyService, workAssigneeListService } from '../../services/api';
 import { resolveHeaderCompanyInfo, useReferenceDataStore } from '../../store/referenceDataStore';
 import { resolveRegisteredStateCodeFromCompanyLike } from '../HR/payroll/indianProfessionalTax';
-import { getUploadUrl, downloadUploadFile } from '../../utils/uploadUrl';
+import { getUploadUrl, downloadUploadFile, fetchUploadObjectUrl } from '../../utils/uploadUrl';
 import AuthMedia from '../../components/Common/AuthMedia';
 import QRCode from 'qrcode';
 import { useTranslation } from 'react-i18next';
@@ -100,6 +101,9 @@ const getReceiptDisplayName = (filePath: string): string => {
 
 const isImageReceipt = (filePath: string): boolean =>
   /\.(jpe?g|png|gif|webp|bmp|heic)$/i.test(String(filePath || ''));
+
+const isPdfReceipt = (filePath: string): boolean =>
+  /\.pdf$/i.test(String(filePath || ''));
 
 const normalizeAttachmentPaths = (value: unknown): string[] => {
   if (!value) return [];
@@ -592,12 +596,40 @@ const buildRemittanceProofFileName = (file: File, partnerName?: string, descript
   return `${ymd}_RT (${partner}) (${desc}).${ext}`;
 };
 
+const getFileExtension = (fileName: string) => {
+  const base = String(fileName || '').split(/[/\\]/).pop() || '';
+  const idx = base.lastIndexOf('.');
+  if (idx <= 0 || idx === base.length - 1) return '';
+  return base.slice(idx + 1);
+};
+
+/** 확장자는 유지하고 표시 파일명만 변경 */
+const renameFileKeepingExtension = (file: File, nextName: string): File => {
+  const cleaned = String(nextName || '')
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return file;
+  const ext = getFileExtension(file.name);
+  const withoutExt = cleaned.replace(/\.[^.]+$/, '').trim() || cleaned;
+  const finalName = ext ? `${withoutExt}.${ext}` : withoutExt;
+  if (finalName === file.name) return file;
+  return new File([file], finalName, { type: file.type, lastModified: file.lastModified });
+};
+
 const getTodayLocalYmd = () => formatLocalYmd(new Date());
 
+/** 소수점 이하 자동 차감(내림/절삭) — 정수 금액만 사용 */
+const floorMoney = (value: number): number => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return n >= 0 ? Math.floor(n) : Math.ceil(n);
+};
+
 const formatAmount = (value: number) =>
-  Number(value || 0).toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+  floorMoney(value).toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   });
 
 const GST_SPLIT_RATE = 9;
@@ -714,9 +746,8 @@ const calcExpenseTax = (
   companyGstNumber = '',
   companyGstState = ''
 ) => {
-  const subtotal = (items || []).reduce(
-    (sum, item) => sum + Number(item.total ?? item.amount ?? 0),
-    0
+  const subtotal = floorMoney(
+    (items || []).reduce((sum, item) => sum + Number(item.total ?? item.amount ?? 0), 0)
   );
   let igstRate = readMetaNumber(meta, 'igstRate', 'igst_rate');
   let cgstRate = readMetaNumber(meta, 'cgstRate', 'cgst_rate');
@@ -730,10 +761,10 @@ const calcExpenseTax = (
     cgstRate = resolved.cgstRate;
     sgstRate = resolved.sgstRate;
   }
-  const igstAmount = subtotal * (igstRate / 100);
-  const cgstAmount = subtotal * (cgstRate / 100);
-  const sgstAmount = subtotal * (sgstRate / 100);
-  const tdsAmount = subtotal * (tdsRate / 100);
+  const igstAmount = floorMoney(subtotal * (igstRate / 100));
+  const cgstAmount = floorMoney(subtotal * (cgstRate / 100));
+  const sgstAmount = floorMoney(subtotal * (sgstRate / 100));
+  const tdsAmount = floorMoney(subtotal * (tdsRate / 100));
   return {
     subtotal,
     igstRate,
@@ -745,7 +776,7 @@ const calcExpenseTax = (
     cgstAmount,
     sgstAmount,
     tdsAmount,
-    grandTotal: subtotal + igstAmount + cgstAmount + sgstAmount - tdsAmount,
+    grandTotal: floorMoney(subtotal + igstAmount + cgstAmount + sgstAmount - tdsAmount),
   };
 };
 
@@ -874,10 +905,15 @@ const ExpenseApproval: React.FC = () => {
   const [qrImage, setQrImage] = useState('');
   const [qrImageError, setQrImageError] = useState('');
   const [previewAttachment, setPreviewAttachment] = useState<string | null>(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewLoadError, setPreviewLoadError] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [paymentAmountInput, setPaymentAmountInput] = useState('');
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
   const [paymentProofPreviewUrl, setPaymentProofPreviewUrl] = useState<string>('');
+  const [proofNameEditing, setProofNameEditing] = useState(false);
+  const [proofNameDraft, setProofNameDraft] = useState('');
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const lastSavedPayloadRef = useRef<string>('');
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -958,30 +994,30 @@ const ExpenseApproval: React.FC = () => {
   };
 
   const subtotalAmount = useMemo(
-    () => lineItems.reduce((sum, item) => sum + Number(item.total || 0), 0),
+    () => floorMoney(lineItems.reduce((sum, item) => sum + Number(item.total || 0), 0)),
     [lineItems]
   );
   const igstAmount = useMemo(
-    () => subtotalAmount * (Number(voucherData.igstRate || 0) / 100),
+    () => floorMoney(subtotalAmount * (Number(voucherData.igstRate || 0) / 100)),
     [subtotalAmount, voucherData.igstRate]
   );
   const cgstAmount = useMemo(
-    () => subtotalAmount * (Number(voucherData.cgstRate || 0) / 100),
+    () => floorMoney(subtotalAmount * (Number(voucherData.cgstRate || 0) / 100)),
     [subtotalAmount, voucherData.cgstRate]
   );
   const sgstAmount = useMemo(
-    () => subtotalAmount * (Number(voucherData.sgstRate || 0) / 100),
+    () => floorMoney(subtotalAmount * (Number(voucherData.sgstRate || 0) / 100)),
     [subtotalAmount, voucherData.sgstRate]
   );
   const tdsAmount = useMemo(
     () =>
       voucherData.tdsEnabled
-        ? subtotalAmount * (Number(voucherData.tdsRate || 0) / 100)
+        ? floorMoney(subtotalAmount * (Number(voucherData.tdsRate || 0) / 100))
         : 0,
     [subtotalAmount, voucherData.tdsEnabled, voucherData.tdsRate]
   );
   const totalAmount = useMemo(
-    () => subtotalAmount + igstAmount + cgstAmount + sgstAmount - tdsAmount,
+    () => floorMoney(subtotalAmount + igstAmount + cgstAmount + sgstAmount - tdsAmount),
     [subtotalAmount, igstAmount, cgstAmount, sgstAmount, tdsAmount]
   );
 
@@ -1010,9 +1046,9 @@ const ExpenseApproval: React.FC = () => {
   }, [t, isRootUser, companyFilterId]);
 
   const getTransferFilterKey = useCallback((expense: ExpenseApprovalItem) => {
-    const total = Number(expense.totalAmount || 0);
-    const paid = Number(expense.paidAmount || 0);
-    const remaining = Math.max(0, Math.round((total - paid) * 100) / 100);
+    const total = floorMoney(Number(expense.totalAmount || 0));
+    const paid = floorMoney(Number(expense.paidAmount || 0));
+    const remaining = Math.max(0, total - paid);
     if (String(expense.bankTransferStatus || '').toLowerCase() === 'failed') {
       return 'transfer_failed';
     }
@@ -1029,9 +1065,9 @@ const ExpenseApproval: React.FC = () => {
 
   /** 목록에서 '지급 완료'로 취급 (문서 status와 무관하게 전액 송금 포함) */
   const isExpensePaidForList = useCallback((expense: ExpenseApprovalItem) => {
-    const total = Number(expense.totalAmount || 0);
-    const paid = Number(expense.paidAmount || 0);
-    const remaining = Math.max(0, Math.round((total - paid) * 100) / 100);
+    const total = floorMoney(Number(expense.totalAmount || 0));
+    const paid = floorMoney(Number(expense.paidAmount || 0));
+    const remaining = Math.max(0, total - paid);
     const paymentPaid = String(expense.paymentRequestStatus || '').toLowerCase() === 'paid';
     return (
       paymentPaid ||
@@ -1044,14 +1080,18 @@ const ExpenseApproval: React.FC = () => {
     (statusOverride?: ExpenseApprovalItem['status']) => ({
       title: formData.title,
       purpose: formData.purpose,
-      total_amount: Number(totalAmount.toFixed(2)),
+      total_amount: floorMoney(totalAmount),
       currency: 'INR',
       current_approver_id: voucherData.approvedById ? Number(voucherData.approvedById) : null,
       priority: formData.priority,
       due_date: formData.dueDate || null,
       notes: formData.notes || '',
       items: {
-        rows: lineItems,
+        rows: lineItems.map((item) => ({
+          ...item,
+          unitPrice: floorMoney(Number(item.unitPrice || 0)),
+          total: floorMoney(Number(item.total || 0)),
+        })),
         meta: {
           ...voucherData,
           checkedById: voucherData.approvedById || ''
@@ -1449,9 +1489,9 @@ const ExpenseApproval: React.FC = () => {
   }, [formData, lineItems, voucherData, draftId, selectedExpense?.id, viewMode, isInitializingDraft, buildExpensePayload]);
 
   const getExpenseRemainingAmount = useCallback((expense: ExpenseApprovalItem) => {
-    const total = Number(expense.totalAmount || 0);
-    const paid = Number(expense.paidAmount || 0);
-    return Math.max(0, Math.round((total - paid) * 100) / 100);
+    const total = floorMoney(Number(expense.totalAmount || 0));
+    const paid = floorMoney(Number(expense.paidAmount || 0));
+    return Math.max(0, total - paid);
   }, []);
 
   const getExpenseRemittanceEntries = (expense: ExpenseApprovalItem) => {
@@ -1562,14 +1602,18 @@ const ExpenseApproval: React.FC = () => {
       dueDate: savedDueDate || todayDate,
       notes: expense.notes || ''
     });
-    const savedItems = (expense.items || []).map((item) => ({
-      id: item.id || `${Date.now()}-${Math.random()}`,
-      invoiceDate: formatLocalYmd(item.invoiceDate || item.date) || todayDate,
-      description: item.description || '',
-      qty: Number(item.qty || 1),
-      unitPrice: Number(item.unitPrice || item.amount || 0),
-      total: Number(item.total || item.amount || 0)
-    }));
+    const savedItems = (expense.items || []).map((item) => {
+      const qty = Number(item.qty || 1);
+      const unitPrice = floorMoney(Number(item.unitPrice || item.amount || 0));
+      return {
+        id: item.id || `${Date.now()}-${Math.random()}`,
+        invoiceDate: formatLocalYmd(item.invoiceDate || item.date) || todayDate,
+        description: item.description || '',
+        qty,
+        unitPrice,
+        total: floorMoney(Number(item.total || item.amount || qty * unitPrice)),
+      };
+    });
     setLineItems(savedItems.length > 0 ? savedItems : [createEmptyLineItem()]);
     setCurrentAttachments(expense.attachments || []);
     setVoucherData({
@@ -1718,9 +1762,12 @@ const ExpenseApproval: React.FC = () => {
       prev.map((item) => {
         if (item.id !== id) return item;
         const nextItem = { ...item, [field]: value };
+        if (field === 'unitPrice') {
+          nextItem.unitPrice = floorMoney(Number(value || 0));
+        }
         const qty = Number(nextItem.qty || 0);
         const unitPrice = Number(nextItem.unitPrice || 0);
-        nextItem.total = Number((qty * unitPrice).toFixed(2));
+        nextItem.total = floorMoney(qty * unitPrice);
         return nextItem;
       })
     );
@@ -1820,13 +1867,64 @@ const ExpenseApproval: React.FC = () => {
   }, [qrOpen, viewMode, selectedExpense?.id, draftId, t]);
 
   const openAttachment = (file: string) => {
-    if (isImageReceipt(file)) {
-      setPreviewAttachment(file);
+    setPreviewLoadError(false);
+    setPreviewAttachment(file);
+  };
+
+  const closeAttachmentPreview = () => {
+    setPreviewAttachment(null);
+    setPreviewBlobUrl('');
+    setPreviewLoading(false);
+    setPreviewLoadError(false);
+  };
+
+  useEffect(() => {
+    if (!previewAttachment || isImageReceipt(previewAttachment)) {
+      setPreviewBlobUrl('');
+      setPreviewLoading(false);
+      setPreviewLoadError(false);
       return;
     }
-    const url = getUploadUrl(file);
-    if (url) window.open(url, '_blank', 'noopener,noreferrer');
-  };
+
+    if (!isPdfReceipt(previewAttachment)) {
+      setPreviewBlobUrl('');
+      setPreviewLoading(false);
+      setPreviewLoadError(false);
+      return;
+    }
+
+    let cancelled = false;
+    let createdUrl = '';
+    setPreviewLoading(true);
+    setPreviewLoadError(false);
+    setPreviewBlobUrl('');
+
+    void (async () => {
+      try {
+        const url = await fetchUploadObjectUrl(previewAttachment, {
+          forceMime: 'application/pdf',
+        });
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        createdUrl = url;
+        setPreviewBlobUrl(url);
+      } catch {
+        if (!cancelled) {
+          setPreviewLoadError(true);
+          setPreviewBlobUrl('');
+        }
+      } finally {
+        if (!cancelled) setPreviewLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
+    };
+  }, [previewAttachment]);
 
   const renderAttachmentList = (files: string[]) => (
     <Box
@@ -2092,6 +2190,8 @@ const ExpenseApproval: React.FC = () => {
   const setRemittanceProofFile = useCallback((file: File | null) => {
     if (!file) {
       setPaymentProofFile(null);
+      setProofNameEditing(false);
+      setProofNameDraft('');
       return;
     }
     const meta = selectedExpense?.itemMeta || {};
@@ -2106,7 +2206,31 @@ const ExpenseApproval: React.FC = () => {
       { type: file.type, lastModified: file.lastModified }
     );
     setPaymentProofFile(named);
+    setProofNameEditing(false);
+    setProofNameDraft(named.name);
   }, [partners, selectedExpense]);
+
+  const startEditProofName = () => {
+    if (!paymentProofFile || paymentSubmitting) return;
+    setProofNameDraft(paymentProofFile.name);
+    setProofNameEditing(true);
+  };
+
+  const commitProofNameEdit = () => {
+    if (!paymentProofFile) {
+      setProofNameEditing(false);
+      return;
+    }
+    const renamed = renameFileKeepingExtension(paymentProofFile, proofNameDraft);
+    setPaymentProofFile(renamed);
+    setProofNameDraft(renamed.name);
+    setProofNameEditing(false);
+  };
+
+  const cancelProofNameEdit = () => {
+    setProofNameDraft(paymentProofFile?.name || '');
+    setProofNameEditing(false);
+  };
 
   useEffect(() => {
     if (!paymentProofFile || !paymentProofFile.type.startsWith('image/')) {
@@ -2144,6 +2268,8 @@ const ExpenseApproval: React.FC = () => {
     const remaining = getExpenseRemainingAmount(selectedExpense);
     setPaymentAmountInput(remaining > 0 ? String(remaining) : String(selectedExpense.totalAmount || ''));
     setRemittanceProofFile(null);
+    setProofNameEditing(false);
+    setProofNameDraft('');
     setPaymentDialogOpen(true);
   };
 
@@ -2483,39 +2609,79 @@ const ExpenseApproval: React.FC = () => {
   const attachmentPreviewDialog = (
     <Dialog
       open={Boolean(previewAttachment)}
-      onClose={() => setPreviewAttachment(null)}
-      maxWidth="md"
+      onClose={closeAttachmentPreview}
+      maxWidth="lg"
       fullWidth
+      sx={{ zIndex: (theme) => theme.zIndex.modal + 2 }}
     >
       <DialogTitle sx={{ pr: 6 }}>
         {previewAttachment ? getReceiptDisplayName(previewAttachment) : ''}
       </DialogTitle>
-      <DialogContent dividers>
+      <DialogContent dividers sx={{ p: 0, bgcolor: '#F1F5F9', minHeight: { xs: 320, sm: 480 } }}>
         {previewAttachment && isImageReceipt(previewAttachment) ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', bgcolor: '#F1F5F9', borderRadius: 1, p: 1 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 1 }}>
             <AuthMedia
               src={previewAttachment}
               alt={getReceiptDisplayName(previewAttachment)}
-              sx={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }}
+              sx={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain' }}
             />
           </Box>
-        ) : null}
+        ) : previewLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 360 }}>
+            <CircularProgress size={32} />
+          </Box>
+        ) : previewAttachment && isPdfReceipt(previewAttachment) && previewBlobUrl ? (
+          <Box
+            component="iframe"
+            title={getReceiptDisplayName(previewAttachment)}
+            src={previewBlobUrl}
+            sx={{
+              display: 'block',
+              width: '100%',
+              height: { xs: '60vh', sm: '75vh' },
+              border: 0,
+              bgcolor: '#fff',
+            }}
+          />
+        ) : (
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 1.5,
+              minHeight: 280,
+              px: 2,
+              textAlign: 'center',
+            }}
+          >
+            <FileIcon sx={{ fontSize: 40, color: 'text.secondary' }} />
+            <Typography variant="body2" color="text.secondary">
+              {previewLoadError
+                ? t('expenseApproval.errors.attachmentPreviewFailed', {
+                    defaultValue: '미리보기를 불러오지 못했습니다. 다운로드하거나 새 탭에서 열어 주세요.',
+                  })
+                : t('expenseApproval.detail.attachmentPreviewUnavailable', {
+                    defaultValue: '이 파일 형식은 미리보기를 지원하지 않습니다. 다운로드하거나 새 탭에서 열어 주세요.',
+                  })}
+            </Typography>
+          </Box>
+        )}
       </DialogContent>
       <DialogActions>
         {previewAttachment ? (
           <>
-            {isImageReceipt(previewAttachment) && (
-              <Button
-                variant="outlined"
-                startIcon={<DownloadIcon fontSize="small" />}
-                onClick={() => {
-                  void downloadUploadFile(previewAttachment, getReceiptDisplayName(previewAttachment));
-                }}
-                sx={mvsBodyOutlinedBtnSx}
-              >
-                {t('common.download')}
-              </Button>
-            )}
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon fontSize="small" />}
+              onClick={() => {
+                void downloadUploadFile(previewAttachment, getReceiptDisplayName(previewAttachment));
+              }}
+              sx={mvsBodyOutlinedBtnSx}
+            >
+              {t('common.download')}
+            </Button>
             <Button
               variant="outlined"
               startIcon={<OpenInNewIcon fontSize="small" />}
@@ -2528,7 +2694,7 @@ const ExpenseApproval: React.FC = () => {
             </Button>
           </>
         ) : null}
-        <Button onClick={() => setPreviewAttachment(null)} sx={mvsBodyOutlinedBtnSx}>
+        <Button onClick={closeAttachmentPreview} sx={mvsBodyOutlinedBtnSx}>
           {t('common.close')}
         </Button>
       </DialogActions>
@@ -3137,7 +3303,7 @@ const ExpenseApproval: React.FC = () => {
                           onChange={(e) => handleUpdateLineItem(item.id, 'unitPrice', Number(e.target.value || 0))}
                           onKeyDown={handleLineItemKeyDown(item.id, 'unitPrice', index)}
                           size="small"
-                          inputProps={{ min: 0 }}
+                          inputProps={{ min: 0, step: 1 }}
                           fullWidth
                           placeholder={t('expenseApproval.voucher.placeholderUnitPrice')}
                           inputRef={setInputRef(item.id, 'unitPrice')}
@@ -4377,7 +4543,9 @@ const ExpenseApproval: React.FC = () => {
                   <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 0.5 }}>
                     <Button variant="outlined" component="label" disabled={paymentSubmitting}>
                       {paymentProofFile
-                        ? paymentProofFile.name
+                        ? t('expenseApproval.dialog.remittanceProofChange', {
+                            defaultValue: '파일 변경',
+                          })
                         : t('expenseApproval.dialog.remittanceProofUpload')}
                       <input
                         hidden
@@ -4396,6 +4564,65 @@ const ExpenseApproval: React.FC = () => {
                       </Button>
                     )}
                   </Box>
+                  {paymentProofFile && (
+                    <Box sx={{ mb: 0.5 }}>
+                      {proofNameEditing ? (
+                        <TextField
+                          size="small"
+                          fullWidth
+                          autoFocus
+                          value={proofNameDraft}
+                          disabled={paymentSubmitting}
+                          onChange={(e) => setProofNameDraft(e.target.value)}
+                          onBlur={commitProofNameEdit}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              commitProofNameEdit();
+                            }
+                            if (e.key === 'Escape') {
+                              e.preventDefault();
+                              cancelProofNameEdit();
+                            }
+                          }}
+                          helperText={t('expenseApproval.dialog.remittanceProofRenameHint', {
+                            defaultValue: 'Enter로 저장, Esc로 취소',
+                          })}
+                        />
+                      ) : (
+                        <Typography
+                          component="button"
+                          type="button"
+                          onClick={startEditProofName}
+                          title={t('expenseApproval.dialog.remittanceProofRenameTitle', {
+                            defaultValue: '클릭하여 파일명 변경',
+                          })}
+                          sx={{
+                            all: 'unset',
+                            cursor: 'pointer',
+                            display: 'block',
+                            width: '100%',
+                            boxSizing: 'border-box',
+                            px: 1,
+                            py: 0.75,
+                            border: `1px solid ${EXPENSE_LINE}`,
+                            bgcolor: '#fff',
+                            fontSize: '0.8125rem',
+                            fontWeight: 600,
+                            color: 'text.primary',
+                            wordBreak: 'break-all',
+                            lineHeight: 1.35,
+                            '&:hover': {
+                              borderColor: 'primary.main',
+                              bgcolor: alpha(theme.palette.primary.main, 0.04),
+                            },
+                          }}
+                        >
+                          {paymentProofFile.name}
+                        </Typography>
+                      )}
+                    </Box>
+                  )}
                   {paymentProofPreviewUrl && (
                     <Box
                       component="img"

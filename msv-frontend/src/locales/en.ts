@@ -3208,6 +3208,7 @@ export default {
         clearAccounts: 'Delete all accounts',
         clearLocal: 'Clear local data',
         exportExcel: 'Download Excel',
+        showMore: 'Show more ({{shown}} / {{total}})',
       },
       searchPlaceholder: 'Search account, Korean name, narration, client',
       matchFilter: 'Match',
@@ -3266,6 +3267,7 @@ export default {
       stats: {
         accounts: '{{count}} accounts',
         ledger: '{{count}} rows · matched {{matched}} / unmatched {{unmatched}} · INR {{inr}}',
+        showingPartial: '(showing {{shown}} / {{total}})',
       },
       empty: {
         accounts: 'Upload the GAS standard chart Excel file.',
@@ -3274,7 +3276,7 @@ export default {
       },
       success: {
         gasLoaded: 'Loaded {{count}} GAS accounts.',
-        ledgerLoaded: 'Imported {{count}} ledger rows (total {{total}}).',
+        ledgerLoaded: 'Imported {{count}} ledger rows · mapped {{mapped}} / {{total}}.',
         rematched: 'Korean names remapped from prior ledger and GAS. (mapped {{mapped}} / {{total}})',
         accountsCleared: 'All GAS accounts deleted.',
         cleared: 'Local cost-analysis data cleared.',
@@ -4395,6 +4397,9 @@ export default {
           'Total {{currency}} {{total}} / Paid {{currency}} {{paid}} / Remaining: {{currency}} {{remaining}}',
         remittanceProof: 'Payment proof',
         remittanceProofUpload: 'Choose proof file',
+        remittanceProofChange: 'Change file',
+        remittanceProofRenameTitle: 'Click to rename file',
+        remittanceProofRenameHint: 'Press Enter to save, Esc to cancel',
         remittanceProofHint:
           'Upload a bank transfer confirmation image or PDF. You can also paste a captured image with Ctrl+V.',
       },

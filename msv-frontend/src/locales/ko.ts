@@ -3280,6 +3280,7 @@ export default {
         clearAccounts: '전체 계정과목 삭제',
         clearLocal: '로컬 데이터 삭제',
         exportExcel: 'Excel 다운로드',
+        showMore: '더 보기 ({{shown}} / {{total}})',
       },
       searchPlaceholder: '계정·한글명·적요·거래처 검색',
       matchFilter: '매칭',
@@ -3338,6 +3339,7 @@ export default {
       stats: {
         accounts: '계정 {{count}}건',
         ledger: '{{count}}건 · 매칭 {{matched}} / 미매칭 {{unmatched}} · INR {{inr}}',
+        showingPartial: '(화면 {{shown}} / {{total}}건)',
       },
       empty: {
         accounts: 'GAS 표준계정 엑셀을 업로드하세요.',
@@ -3346,7 +3348,7 @@ export default {
       },
       success: {
         gasLoaded: 'GAS 계정 {{count}}건을 불러왔습니다.',
-        ledgerLoaded: '보조부 {{count}}건 import (합계 {{total}}건).',
+        ledgerLoaded: '보조부 {{count}}건 import · 매핑 {{mapped}} / {{total}}건.',
         rematched: '이전 누계 보조부·GAS 기준으로 한글명 재매핑했습니다. (매핑 {{mapped}} / {{total}})',
         accountsCleared: '전체 계정과목을 삭제했습니다.',
         cleared: '로컬 원가분석 데이터를 삭제했습니다.',
@@ -4465,6 +4467,9 @@ export default {
           '총액 {{currency}} {{total}} / 지급완료 {{currency}} {{paid}} / 잔금 {{currency}} {{remaining}}',
         remittanceProof: '송금 확인증',
         remittanceProofUpload: '확인증 파일 선택',
+        remittanceProofChange: '파일 변경',
+        remittanceProofRenameTitle: '클릭하여 파일명 변경',
+        remittanceProofRenameHint: 'Enter로 저장, Esc로 취소',
         remittanceProofHint:
           '은행 앱/이체 확인증 이미지 또는 PDF를 업로드하세요. 캡처 이미지는 Ctrl+V로 붙여넣을 수 있습니다.'
       },

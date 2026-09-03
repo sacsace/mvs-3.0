@@ -392,9 +392,10 @@ function buildParsedLedgerRowFromFields(
 ): ParsedLedgerRow | null {
   const voucherNo = norm(fields.voucherNo);
   const accountCode = norm(fields.accountCode);
-  const accountNameTally = norm(fields.accountNameTally);
+  let accountNameTally = norm(fields.accountNameTally);
   const accountNameHqKo = norm(fields.accountNameHqKo);
-  const accountNameHqEn = norm(fields.accountNameHqEn);
+  let accountNameHqEn = norm(fields.accountNameHqEn);
+  let clientName = norm(fields.clientName);
   const amountInr = toNumber(fields.amountInr);
   const voucherDateRaw = fields.voucherDate;
   let voucherDate = toDateText(voucherDateRaw);
@@ -403,12 +404,19 @@ function buildParsedLedgerRowFromFields(
     voucherDate = toDateText(monthRaw);
   }
 
-  if (!accountCode && !accountNameTally && !accountNameHqKo) return null;
+  // 일부 Tally Report(기준) 파일: Account name-* 비고, 계정명이 Client Name 에만 있음
+  // → Tally/HQ에 복사하되 Client Name은 유지 (다른 행에 Client를 퍼뜨리지 않음)
+  if (!accountCode && !accountNameTally && !accountNameHqKo && !accountNameHqEn && clientName) {
+    accountNameTally = clientName;
+    accountNameHqEn = clientName;
+  }
+
+  if (!accountCode && !accountNameTally && !accountNameHqKo && !accountNameHqEn) return null;
   if (!voucherNo && !voucherDate && !amountInr) return null;
 
   const month = toMonthKey(voucherDate, monthRaw);
 
-  const tally = accountNameTally || accountNameHqKo;
+  const tally = accountNameTally || accountNameHqEn || accountNameHqKo;
   // 한글이 없으면 HQ 한글명으로 쓰지 않음(영문/Tally 복제 → 이후 학습 매핑으로 채움)
   const hqKo = hasHangul(accountNameHqKo) ? accountNameHqKo : '';
 
@@ -418,11 +426,12 @@ function buildParsedLedgerRowFromFields(
     accountCode,
     accountNameTally: tally,
     accountNameHqKo: hqKo,
-    accountNameHqEn: accountNameHqEn || (!hasHangul(accountNameHqKo) ? accountNameHqKo : '') || '',
+    accountNameHqEn:
+      accountNameHqEn || (!hasHangul(accountNameHqKo) ? accountNameHqKo : '') || tally || '',
     amountInr,
     amountKrw: toNumber(fields.amountKrw),
     costCategory: norm(fields.costCategory),
-    clientName: norm(fields.clientName),
+    clientName,
     narration: norm(fields.narration),
     division: norm(fields.division),
     month,
@@ -484,21 +493,34 @@ function findGasAccountForRow(
 function learnTallyRef(
   map: Map<string, TallyAccountRef>,
   tallyName: string,
-  ref: Partial<TallyAccountRef> & { accountCode?: string }
+  ref: Partial<TallyAccountRef> & { accountCode?: string },
+  options?: { forceNameKo?: boolean }
 ): void {
   if (!tallyName) return;
   const key = normKey(tallyName);
   const prev = map.get(key);
   const learnedKo = hasHangul(norm(ref.nameKo)) ? norm(ref.nameKo) : '';
+  const prevKo = hasHangul(norm(prev?.nameKo)) ? norm(prev?.nameKo) : '';
+  // 기본: 기존 한글 보호. forceNameKo 시 Cost Category 등 신뢰 키로 교정
+  const nameKo = options?.forceNameKo && learnedKo ? learnedKo : prevKo || learnedKo;
   const next: TallyAccountRef = {
     accountCode: norm(ref.accountCode) || prev?.accountCode || '',
-    nameKo: learnedKo || prev?.nameKo || '',
-    nameEn: norm(ref.nameEn) || prev?.nameEn || '',
+    nameKo,
+    nameEn:
+      options?.forceNameKo && learnedKo
+        ? norm(ref.nameEn) || prev?.nameEn || ''
+        : (nameKo && prevKo && !options?.forceNameKo ? prev?.nameEn : '') ||
+          norm(ref.nameEn) ||
+          prev?.nameEn ||
+          '',
     costCategory: norm(ref.costCategory) || prev?.costCategory || '',
     clientName: norm(ref.clientName) || prev?.clientName || '',
     gsIndiaCost: norm(ref.gsIndiaCost) || prev?.gsIndiaCost || '',
     division: norm(ref.division) || prev?.division || '',
   };
+  if (!options?.forceNameKo && prevKo) {
+    next.nameEn = prev?.nameEn || next.nameEn;
+  }
   if (
     !prev ||
     next.accountCode ||
@@ -512,21 +534,265 @@ function learnTallyRef(
   }
 }
 
+function learnLedgerAliases(
+  map: Map<string, TallyAccountRef>,
+  keys: Array<string | undefined>,
+  ref: Partial<TallyAccountRef> & { accountCode?: string },
+  options?: { forceNameKo?: boolean }
+): void {
+  const unique = new Set<string>();
+  for (const key of keys) {
+    const n = norm(key);
+    if (!n) continue;
+    const k = normKey(n);
+    if (unique.has(k)) continue;
+    unique.add(k);
+    learnTallyRef(map, n, ref, options);
+  }
+}
+
+function resolveLearnedRef(
+  map: Map<string, TallyAccountRef>,
+  ...keys: Array<string | undefined>
+): TallyAccountRef | undefined {
+  // 앞쪽 키(Client/Narration 등)에 한글명이 있으면 뒤쪽(HQ/GAS 잔여값)보다 우선
+  let best: TallyAccountRef | undefined;
+  for (const key of keys) {
+    const n = norm(key);
+    if (!n) continue;
+    const hit = map.get(normKey(n));
+    if (!hit) continue;
+    if (!best) {
+      best = { ...hit };
+      continue;
+    }
+    const hitKo = hasHangul(norm(hit.nameKo)) ? norm(hit.nameKo) : '';
+    const bestKo = hasHangul(norm(best.nameKo)) ? norm(best.nameKo) : '';
+    // 이미 우선 키에서 한글을 찾았으면 nameKo/nameEn 유지, 빈 필드만 보강
+    if (bestKo) {
+      best = {
+        accountCode: best.accountCode || hit.accountCode,
+        nameKo: bestKo,
+        nameEn: best.nameEn || hit.nameEn,
+        costCategory: best.costCategory || hit.costCategory,
+        clientName: best.clientName || hit.clientName,
+        gsIndiaCost: best.gsIndiaCost || hit.gsIndiaCost,
+        division: best.division || hit.division,
+      };
+    } else if (hitKo) {
+      best = {
+        accountCode: hit.accountCode || best.accountCode,
+        nameKo: hitKo,
+        nameEn: hit.nameEn || best.nameEn,
+        costCategory: hit.costCategory || best.costCategory,
+        clientName: hit.clientName || best.clientName,
+        gsIndiaCost: hit.gsIndiaCost || best.gsIndiaCost,
+        division: hit.division || best.division,
+      };
+    } else {
+      best = {
+        accountCode: best.accountCode || hit.accountCode,
+        nameKo: best.nameKo || hit.nameKo,
+        nameEn: best.nameEn || hit.nameEn,
+        costCategory: best.costCategory || hit.costCategory,
+        clientName: best.clientName || hit.clientName,
+        gsIndiaCost: best.gsIndiaCost || hit.gsIndiaCost,
+        division: best.division || hit.division,
+      };
+    }
+  }
+  return best;
+}
+
+/** Cost Category · Client Name · Tally/HQ — 이전 누계 학습 조회 (Narration 단독 매칭 금지) */
+function resolvePriorLedgerMapping(
+  map: Map<string, TallyAccountRef>,
+  row: {
+    clientName?: string;
+    costCategory?: string;
+    accountNameTally?: string;
+    accountNameHqEn?: string;
+  }
+): TallyAccountRef | undefined {
+  // Narration은 전표마다 공유되는 경우가 많아(자금이체 적요 등) 전체 행으로 확산됨 → 제외
+  return resolveLearnedRef(
+    map,
+    row.costCategory,
+    row.clientName,
+    row.accountNameTally,
+    row.accountNameHqEn
+  );
+}
+
+function costCategoryConflictsAccount(
+  costCategory: string,
+  nameKo: string,
+  nameEn: string
+): boolean {
+  const c = normKey(costCategory);
+  if (!c) return false;
+  const blob = normKey(`${nameKo} ${nameEn}`);
+  if (!blob) return false;
+  const costRental = /rental|임차|숙소|accommodation/.test(c);
+  const costTravel = /travel|여비|출장|overseas/.test(c);
+  const accRental = /rental|임차|숙소|accommodation/.test(blob);
+  const accTravel = /travel|여비|출장|overseas/.test(blob);
+  if (costRental && accTravel) return true;
+  if (costTravel && accRental) return true;
+  return false;
+}
+
+/**
+ * 같은 업로드/배치 안에서 Cost Category·Client·Tally 가 같은 행들의
+ * 다수 한글/영문 매핑을 뽑아 오매핑 행을 교정한다.
+ */
+function buildBatchConsensusMap(
+  rows: Array<Partial<ParsedLedgerRow> | Partial<LedgerRow>>
+): Map<string, TallyAccountRef> {
+  type Vote = { ref: TallyAccountRef; count: number };
+  const buckets = new Map<string, Map<string, Vote>>();
+
+  const castVote = (alias: string, ref: TallyAccountRef) => {
+    const a = norm(alias);
+    if (!a || !ref.nameKo) return;
+    const key = normKey(a);
+    const sig = `${normKey(ref.nameKo)}|${normKey(ref.nameEn)}|${normKey(ref.accountCode)}`;
+    let bySig = buckets.get(key);
+    if (!bySig) {
+      bySig = new Map();
+      buckets.set(key, bySig);
+    }
+    const prev = bySig.get(sig);
+    if (prev) prev.count += 1;
+    else bySig.set(sig, { ref: { ...ref }, count: 1 });
+  };
+
+  for (const row of rows) {
+    const hqKo = pickStrongHqKo(row.accountNameHqKo, (row as LedgerRow).matchedNameKo);
+    const hqEn = norm(row.accountNameHqEn) || norm((row as LedgerRow).matchedNameEn);
+    const costCategory = norm(row.costCategory);
+    const client = norm(row.clientName);
+    const tally = norm(row.accountNameTally);
+    if (!hqKo) continue;
+    if (costCategoryConflictsAccount(costCategory, hqKo, hqEn)) continue;
+
+    const ref: TallyAccountRef = {
+      accountCode: norm(row.accountCode),
+      nameKo: hqKo,
+      nameEn: hqEn,
+      costCategory,
+      clientName: client,
+      gsIndiaCost: norm(row.gsIndiaCost),
+      division: norm(row.division),
+    };
+
+    if (costCategory) castVote(costCategory, ref);
+    if (client) castVote(client, ref);
+    if (tally) castVote(tally, ref);
+    if (client && costCategory) castVote(`${client}||${costCategory}`, ref);
+    if (tally && costCategory) castVote(`${tally}||${costCategory}`, ref);
+  }
+
+  const winners = new Map<string, TallyAccountRef>();
+  buckets.forEach((bySig, key) => {
+    let best: Vote | undefined;
+    bySig.forEach((vote) => {
+      if (!best || vote.count > best.count) best = vote;
+    });
+    if (best && best.count >= 1) winners.set(key, best.ref);
+  });
+  return winners;
+}
+
+function isNonExpenseLedgerName(name: string): boolean {
+  const u = norm(name).toUpperCase();
+  if (!u) return false;
+  if (/\bBANK\b|HDFC|ICICI|\bSBI\b|SHINHAN|AXIS BANK|KOTAK|YES BANK/.test(u)) return true;
+  if (/TDS RECEIVABLE|TDS PAYABLE|INTEREST ON FIXED|FIXED DEPOSIT|UNBILLED REVENUE/.test(u)) return true;
+  if (/^CGST|^SGST|^IGST|INPUT CGST|OUTPUT CGST|INPUT IGST|OUTPUT IGST/.test(u)) return true;
+  return false;
+}
+
+function resolveBatchConsensus(
+  consensus: Map<string, TallyAccountRef>,
+  row: {
+    clientName?: string;
+    costCategory?: string;
+    accountNameTally?: string;
+  }
+): TallyAccountRef | undefined {
+  const client = norm(row.clientName);
+  const cost = norm(row.costCategory);
+  const tally = norm(row.accountNameTally);
+  // Client+Cost / Tally+Cost 가 있을 때만 Cost 단독 키 사용 (무관한 행 확산 방지)
+  const keys = [
+    client && cost ? `${client}||${cost}` : '',
+    tally && cost ? `${tally}||${cost}` : '',
+    client,
+    tally,
+    client || tally ? cost : '',
+  ];
+  for (const k of keys) {
+    if (!k) continue;
+    const hit = consensus.get(normKey(k));
+    if (hit?.nameKo) return hit;
+  }
+  return undefined;
+}
+
+function findGasByCostCategory(
+  accounts: GasAccount[],
+  costCategory: string
+): GasAccount | undefined {
+  const c = normKey(costCategory);
+  if (!c) return undefined;
+  const preferRental = /rental|임차|숙소|accommodation/.test(c);
+  const preferTravel = /travel|여비|출장|overseas/.test(c);
+  if (!preferRental && !preferTravel) return undefined;
+
+  let best: GasAccount | undefined;
+  for (const acc of accounts) {
+    const blob = `${acc.nameEn} ${acc.nameKo} ${acc.nameLocal}`;
+    if (preferRental && /rental|임차|숙소|accommodation/i.test(blob)) {
+      if (/accommodation|숙소/i.test(blob)) return acc;
+      if (!best) best = acc;
+    }
+    if (preferTravel && /travel|여비|출장|overseas/i.test(blob)) {
+      if (!best) best = acc;
+    }
+  }
+  return best;
+}
+
 function mergeTallyRefsIntoMap(
   map: Map<string, TallyAccountRef>,
   rows: Array<Partial<ParsedLedgerRow> | Partial<LedgerRow>>
 ): void {
   for (const row of rows) {
     const tally = norm(row.accountNameTally);
-    if (!tally) continue;
-    const hqKo = pickStrongHqKo(row.accountNameHqKo, (row as LedgerRow).matchedNameKo);
     const hqEn = norm(row.accountNameHqEn) || norm((row as LedgerRow).matchedNameEn);
-    learnTallyRef(map, tally, {
+    const client = norm(row.clientName);
+    if (!tally && !hqEn && !client) continue;
+
+    const hqKo = pickStrongHqKo(row.accountNameHqKo, (row as LedgerRow).matchedNameKo);
+    const costCategory = norm(row.costCategory);
+    const conflict = costCategoryConflictsAccount(costCategory, hqKo, hqEn);
+
+    // 한글이 있고 Cost Category와 모순되지 않을 때만 Client/Cost 학습 (Narration 제외)
+    const keys: Array<string | undefined> = [];
+    if (hqKo && !conflict) {
+      keys.push(tally, hqEn, client, costCategory);
+    } else {
+      keys.push(tally, hqEn);
+      if (client && !tally && !hqEn) keys.push(client);
+    }
+
+    learnLedgerAliases(map, keys, {
       accountCode: norm(row.accountCode),
-      nameKo: hqKo,
-      nameEn: hqEn,
-      costCategory: norm(row.costCategory),
-      clientName: norm(row.clientName),
+      nameKo: hqKo && !conflict ? hqKo : '',
+      nameEn: hqKo && !conflict ? hqEn || tally || client : hqEn || tally,
+      costCategory,
+      clientName: client,
       gsIndiaCost: norm(row.gsIndiaCost),
       division: norm(row.division),
     });
@@ -604,7 +870,7 @@ function appendLedgerObjects(
     const accountCode = norm(
       pickRowValue(row, headerIndex, values, 'Account Code', '계정과목', 'GL Code')
     );
-    const accountNameTally = norm(
+    let accountNameTally = norm(
       pickRowValue(
         row,
         headerIndex,
@@ -637,8 +903,6 @@ function appendLedgerObjects(
     if (!voucherDate && !norm(voucherDateRaw)) {
       voucherDate = toDateText(monthRaw);
     }
-    if (!accountCode && !accountNameTally) continue;
-    if (!voucherNo && !voucherDate && !amountInr) continue;
 
     const accountNameHqKo = norm(
       pickRowValue(
@@ -651,13 +915,13 @@ function appendLedgerObjects(
         '한글계정'
       )
     );
-    const accountNameHqEn = norm(
+    let accountNameHqEn = norm(
       pickRowValue(row, headerIndex, values, 'Account name-HQ(English)', 'HQ English')
     );
     const month = toMonthKey(voucherDate, monthRaw);
     const amountKrw = toNumber(pickRowValue(row, headerIndex, values, 'Amount(KRW)', 'KRW'));
     const costCategory = norm(pickRowValue(row, headerIndex, values, 'Cost Category', '원가구분', 'Category'));
-    const clientName = norm(pickRowValue(row, headerIndex, values, 'Client Name', '거래처', 'Party'));
+    let clientName = norm(pickRowValue(row, headerIndex, values, 'Client Name', '거래처', 'Party'));
     const narration = norm(pickRowValue(row, headerIndex, values, 'Narration', '적요', 'Remarks'));
     const division = norm(pickRowValue(row, headerIndex, values, 'Division', '구분'));
     const gsIndiaCost = norm(
@@ -674,7 +938,15 @@ function appendLedgerObjects(
       )
     );
 
-    const tally = accountNameTally || accountNameHqKo;
+    if (!accountCode && !accountNameTally && !accountNameHqKo && !accountNameHqEn && clientName) {
+      accountNameTally = clientName;
+      accountNameHqEn = clientName;
+    }
+
+    if (!accountCode && !accountNameTally && !accountNameHqKo && !accountNameHqEn) continue;
+    if (!voucherNo && !voucherDate && !amountInr) continue;
+
+    const tally = accountNameTally || accountNameHqEn || accountNameHqKo;
     const hqKo = hasHangul(accountNameHqKo) ? accountNameHqKo : '';
     // 급여 배분처럼 전표·계정·금액이 같아도 엑셀 각 행은 합계에 포함해야 함 → 행 단위 유지
     out.push({
@@ -683,7 +955,7 @@ function appendLedgerObjects(
       accountCode,
       accountNameTally: tally,
       accountNameHqKo: hqKo,
-      accountNameHqEn: accountNameHqEn || (!hasHangul(accountNameHqKo) ? accountNameHqKo : '') || '',
+      accountNameHqEn: accountNameHqEn || (!hasHangul(accountNameHqKo) ? accountNameHqKo : '') || tally || '',
       amountInr,
       amountKrw,
       costCategory,
@@ -855,50 +1127,175 @@ export async function parseLedgerWorkbook(
   return { rows: matchLedgerRows(out, accounts), detectedFxRate };
 }
 
+/** 업로드 행을 이전 누계 보조부·GAS 학습값으로 매핑해 리스트용 행 생성 */
+export function mapLedgerUpload(
+  uploaded: Array<Partial<LedgerRow> | ParsedLedgerRow>,
+  accounts: GasAccount[],
+  priorLedger: LedgerRow[],
+  mode: 'replace' | 'append'
+): LedgerRow[] {
+  // 교체 import 이더라도 이전 화면 데이터에서 한글·원가구분 학습 유지
+  rebuildTallyAccountMapFromLedger(priorLedger);
+
+  const toRaw = (
+    rows: Array<Partial<LedgerRow> | ParsedLedgerRow>
+  ): Omit<LedgerRow, 'matchedNameKo' | 'matchedNameEn' | 'matchSource' | 'id'>[] =>
+    rows.map((row) => {
+      const r = row as LedgerRow;
+      return {
+        voucherNo: norm(r.voucherNo),
+        voucherDate: norm(r.voucherDate),
+        accountCode: norm(r.accountCode),
+        accountNameTally: norm(r.accountNameTally),
+        accountNameHqKo: norm(r.accountNameHqKo),
+        accountNameHqEn: norm(r.accountNameHqEn),
+        amountInr: Number(r.amountInr) || 0,
+        amountKrw: Number(r.amountKrw) || 0,
+        costCategory: norm(r.costCategory),
+        clientName: norm(r.clientName),
+        narration: norm(r.narration),
+        division: norm(r.division),
+        month: norm(r.month),
+        gsIndiaCost: norm(r.gsIndiaCost),
+      };
+    });
+
+  const rawUploaded = toRaw(uploaded);
+  if (mode === 'append') {
+    return matchLedgerRows([...toRaw(priorLedger), ...rawUploaded], accounts);
+  }
+  return matchLedgerRows(rawUploaded, accounts);
+}
+
 export function matchLedgerRows(
   rows: Omit<LedgerRow, 'matchedNameKo' | 'matchedNameEn' | 'matchSource' | 'id'>[],
   accounts: GasAccount[]
 ): LedgerRow[] {
   const lookups = buildAccountLookups(accounts);
   const byTally = loadTallyAccountMap();
-  // 이전(또는 함께 넘긴) 누계 보조부에서 한글·원가구분·거래처 등을 먼저 학습
+
+  // 1) 같은 배치(업로드 파일) 다수결 → 오매핑 행 교정용
+  const batchConsensus = buildBatchConsensusMap(rows);
+  batchConsensus.forEach((ref, key) => {
+    // consensus map keys are already normKey'd
+    const prev = byTally.get(key);
+    byTally.set(key, {
+      accountCode: ref.accountCode || prev?.accountCode || '',
+      nameKo: ref.nameKo,
+      nameEn: ref.nameEn || prev?.nameEn || '',
+      costCategory: ref.costCategory || prev?.costCategory || '',
+      clientName: ref.clientName || prev?.clientName || '',
+      gsIndiaCost: ref.gsIndiaCost || prev?.gsIndiaCost || '',
+      division: ref.division || prev?.division || '',
+    });
+  });
+
+  // 2) 이전 누계 + 현재 배치 soft 학습 (모순 행은 Client/Cost 키에 반영 안 함)
   mergeTallyRefsIntoMap(byTally, rows);
 
   const matched = rows.map((row, idx) => {
-    const tallyKey = row.accountNameTally ? normKey(row.accountNameTally) : '';
-    const tallyRef = tallyKey ? byTally.get(tallyKey) : undefined;
+    const costCategoryRaw = norm(row.costCategory);
+    const rowClient = norm(row.clientName);
+    const rowTally = norm(row.accountNameTally);
+    const skipExpenseMap = isNonExpenseLedgerName(rowTally);
+
+    const batchHitRaw = skipExpenseMap
+      ? undefined
+      : resolveBatchConsensus(batchConsensus, {
+          clientName: rowClient,
+          costCategory: costCategoryRaw,
+          accountNameTally: rowTally,
+        });
+    const priorRaw = skipExpenseMap
+      ? undefined
+      : resolvePriorLedgerMapping(byTally, {
+          clientName: rowClient,
+          costCategory: costCategoryRaw,
+          accountNameTally: rowTally,
+          accountNameHqEn: row.accountNameHqEn,
+        });
+
+    // Cost Category 와 모순되는 학습값(Rental←Travel 등)은 폐기
+    const batchHit =
+      batchHitRaw &&
+      !costCategoryConflictsAccount(costCategoryRaw, batchHitRaw.nameKo, batchHitRaw.nameEn)
+        ? batchHitRaw
+        : undefined;
+    const prior =
+      priorRaw &&
+      !costCategoryConflictsAccount(costCategoryRaw, priorRaw.nameKo, priorRaw.nameEn)
+        ? priorRaw
+        : undefined;
+
     const fileKo = pickStrongHqKo(row.accountNameHqKo, (row as LedgerRow).matchedNameKo);
-    const { gas, source: gasSource } = findGasAccountForRow(
-      { ...row, accountNameHqKo: fileKo || row.accountNameHqKo },
-      lookups,
-      tallyRef
-    );
+    const fileEn = norm(row.accountNameHqEn);
+    const fileConflicts =
+      Boolean(fileKo || fileEn) &&
+      costCategoryConflictsAccount(costCategoryRaw, fileKo, fileEn);
+    const effectiveFileKo = fileConflicts ? '' : fileKo;
 
-    const accountCode = row.accountCode || tallyRef?.accountCode || gas?.accountCode || '';
-    const accountNameHqKo =
-      pickStrongHqKo(gas?.nameKo, tallyRef?.nameKo, fileKo) ||
-      (fileKo ? fileKo : '') ||
-      '';
-    const accountNameHqEn =
-      norm(gas?.nameEn) ||
-      norm(tallyRef?.nameEn) ||
-      norm(row.accountNameHqEn) ||
-      row.accountNameTally ||
-      '';
+    // 배치 다수결 > 이전 학습 > Cost Category GAS > 파일 > 일반 GAS
+    const batchKo = pickStrongHqKo(batchHit?.nameKo);
+    const priorKo = pickStrongHqKo(prior?.nameKo);
+    const gasFromCost =
+      !skipExpenseMap && !batchKo && !priorKo && costCategoryRaw
+        ? findGasByCostCategory(accounts, costCategoryRaw)
+        : undefined;
 
-    const costCategory = norm(row.costCategory) || norm(tallyRef?.costCategory) || '';
-    const clientName = norm(row.clientName) || norm(tallyRef?.clientName) || '';
-    const gsIndiaCost = norm(row.gsIndiaCost) || norm(tallyRef?.gsIndiaCost) || '';
-    const division = norm(row.division) || norm(tallyRef?.division) || '';
+    const preferTrusted = Boolean(batchKo || priorKo || gasFromCost);
+
+    const { gas, source: gasSource } = preferTrusted
+      ? {
+          gas: gasFromCost,
+          source: gasFromCost ? ('english' as LedgerRow['matchSource']) : undefined,
+        }
+      : findGasAccountForRow(
+          { ...row, accountNameHqKo: effectiveFileKo || row.accountNameHqKo },
+          lookups,
+          prior
+        );
+
+    const accountCode =
+      row.accountCode || batchHit?.accountCode || prior?.accountCode || gas?.accountCode || '';
+    const accountNameHqKo = skipExpenseMap
+      ? effectiveFileKo || ''
+      : pickStrongHqKo(batchKo, priorKo, gasFromCost?.nameKo, preferTrusted ? '' : effectiveFileKo, gas?.nameKo) ||
+        (preferTrusted ? '' : effectiveFileKo) ||
+        '';
+    const accountNameHqEn = skipExpenseMap
+      ? fileEn || rowTally || ''
+      : preferTrusted
+        ? norm(batchHit?.nameEn) ||
+          norm(prior?.nameEn) ||
+          norm(gasFromCost?.nameEn) ||
+          norm(gas?.nameEn) ||
+          (fileConflicts ? '' : fileEn) ||
+          rowTally ||
+          ''
+        : fileEn || norm(gas?.nameEn) || norm(prior?.nameEn) || rowTally || '';
+
+    // Client / Cost Category / GS India 는 원본 행 값만 유지 (학습값으로 빈칸 채우지 않음)
+    const costCategory = costCategoryRaw;
+    const clientName = rowClient;
+    const gsIndiaCost = norm(row.gsIndiaCost);
+    const division = norm(row.division) || '';
 
     let matchSource: LedgerRow['matchSource'] = 'none';
-    if (gas && gasSource) matchSource = gasSource;
-    else if (pickStrongHqKo(tallyRef?.nameKo, fileKo) || (tallyRef?.accountCode && accountNameHqKo)) {
-      matchSource = 'file';
+    if (!skipExpenseMap && (batchKo || priorKo)) matchSource = 'file';
+    else if (!skipExpenseMap && (gasFromCost || (gas && gasSource))) matchSource = gasSource || 'english';
+    else if (effectiveFileKo || (accountNameHqKo && accountCode)) matchSource = 'file';
+
+    const learnKeys: Array<string | undefined> = [rowTally, accountNameHqEn];
+    const forceFromTrusted = Boolean(!skipExpenseMap && accountNameHqKo && preferTrusted);
+    if (!skipExpenseMap && accountNameHqKo && (forceFromTrusted || effectiveFileKo)) {
+      if (clientName) learnKeys.push(clientName);
+      if (costCategory) learnKeys.push(costCategory);
     }
 
-    if (row.accountNameTally) {
-      learnTallyRef(byTally, row.accountNameTally, {
+    learnLedgerAliases(
+      byTally,
+      learnKeys,
+      {
         accountCode,
         nameKo: accountNameHqKo,
         nameEn: accountNameHqEn,
@@ -906,8 +1303,9 @@ export function matchLedgerRows(
         clientName,
         gsIndiaCost,
         division,
-      });
-    }
+      },
+      { forceNameKo: forceFromTrusted }
+    );
 
     return {
       ...row,
@@ -919,8 +1317,8 @@ export function matchLedgerRows(
       gsIndiaCost,
       division,
       id: `${idx}-${row.voucherNo}-${row.voucherDate}-${accountCode}-${row.amountInr}-${row.accountNameTally}`,
-      matchedNameKo: pickStrongHqKo(gas?.nameKo, tallyRef?.nameKo, accountNameHqKo) || accountNameHqKo,
-      matchedNameEn: gas?.nameEn || tallyRef?.nameEn || accountNameHqEn || row.accountNameTally || '',
+      matchedNameKo: accountNameHqKo,
+      matchedNameEn: accountNameHqEn || rowTally || '',
       matchSource,
     };
   });

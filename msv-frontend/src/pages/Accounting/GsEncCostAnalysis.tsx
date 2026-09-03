@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Autocomplete,
@@ -57,6 +57,7 @@ import {
   loadBasicInfo,
   loadGasAccounts,
   loadLedgerRows,
+  mapLedgerUpload,
   matchLedgerRows,
   parseGasAccountsWorkbook,
   parseLedgerWorkbook,
@@ -488,28 +489,6 @@ const getLastMonthDateRange = (now = new Date()): { from: string; to: string } =
   return { from: toYmd(fromDate), to: toYmd(toDate) };
 };
 
-/** 저장된 원가 내역 월 범위로 기간 필터 초기화 (없으면 지난달) */
-const getInitialPeriodRange = (rows: LedgerRow[]): { from: string; to: string } => {
-  const months = rows
-    .map((r) => {
-      const m = formatLedgerMonth(r.month);
-      if (m && m !== '-') return m;
-      const d = formatLedgerDate(r.voucherDate);
-      return d && d !== '-' && d.length >= 7 ? d.slice(0, 7) : '';
-    })
-    .filter(Boolean)
-    .sort();
-  if (!months.length) return getLastMonthDateRange();
-  const fromMonth = months[0];
-  const toMonth = months[months.length - 1];
-  const [y, m] = toMonth.split('-').map(Number);
-  const lastDay = new Date(y, m, 0).getDate();
-  return {
-    from: `${fromMonth}-01`,
-    to: `${toMonth}-${String(lastDay).padStart(2, '0')}`,
-  };
-};
-
 const GsEncCostAnalysis: React.FC = () => {
   const { t } = useTranslation();
   const gasInputRef = useRef<HTMLInputElement>(null);
@@ -517,21 +496,14 @@ const GsEncCostAnalysis: React.FC = () => {
 
   const [tab, setTab] = useState(0);
   const [accounts, setAccounts] = useState<GasAccount[]>(() => loadGasAccounts());
-  const [ledger, setLedger] = useState<LedgerRow[]>(() => {
-    const rows = loadLedgerRows();
-    if (!rows.length) return rows;
-    // 이전 누계 보조부 학습사전 + GAS로 한글/원가구분 등 자동 재매핑
-    rebuildTallyAccountMapFromLedger(rows);
-    const rematched = matchLedgerRows(rows, loadGasAccounts());
-    saveLedgerRows(rematched);
-    return rematched;
-  });
+  const [ledger, setLedger] = useState<LedgerRow[]>(() => loadLedgerRows());
   const [basicInfo, setBasicInfo] = useState<GsEncBasicInfo>(() => loadBasicInfo());
   const [search, setSearch] = useState('');
-  const [periodFrom, setPeriodFrom] = useState(() => getInitialPeriodRange(loadLedgerRows()).from);
-  const [periodTo, setPeriodTo] = useState(() => getInitialPeriodRange(loadLedgerRows()).to);
+  const [periodFrom, setPeriodFrom] = useState(() => getLastMonthDateRange().from);
+  const [periodTo, setPeriodTo] = useState(() => getLastMonthDateRange().to);
   const [itemFilter, setItemFilter] = useState('');
   const [matchFilter, setMatchFilter] = useState<'all' | 'matched' | 'unmatched'>('all');
+  const [ledgerVisibleCount, setLedgerVisibleCount] = useState(200);
   const [exporting, setExporting] = useState(false);
   const [listSortKey, setListSortKey] = useState<ListSortKey>('voucherDate');
   const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc');
@@ -568,6 +540,10 @@ const GsEncCostAnalysis: React.FC = () => {
     const next = ledger.map((row) =>
       row.id === rowId ? applyLedgerCellEdit(row, column, editDraft) : row
     );
+    // 한글 Account name / HQ 수정 시 회사명(HQ English)·Tally 학습
+    if (column === 'accountName' || column === 'accountNameHqEn' || column === 'accountNameTally') {
+      rebuildTallyAccountMapFromLedger(next);
+    }
     setLedger(next);
     saveLedgerRows(next);
     setEditingCell(null);
@@ -651,8 +627,9 @@ const GsEncCostAnalysis: React.FC = () => {
         setError(t('gsEncCostAnalysis.errors.ledgerEmpty'));
         return;
       }
-      const base = mode === 'append' ? ledger : [];
-      const merged = matchLedgerRows([...base, ...parsed], accounts);
+      // 이전 누계 보조부 학습 + 업로드 컬럼 매핑 후 화면에 표시
+      const merged = mapLedgerUpload(parsed, accounts, ledger, mode);
+      const mappedCount = merged.filter((r) => r.matchSource !== 'none').length;
       setLedger(merged);
       saveLedgerRows(merged);
       if (detectedFxRate > 0 && (!basicInfo.fxRate || mode === 'replace')) {
@@ -664,7 +641,7 @@ const GsEncCostAnalysis: React.FC = () => {
         .map((r) => formatLedgerMonth(r.month))
         .filter((m) => m && m !== '-')
         .sort();
-      if (months.length && mode === 'replace') {
+      if (months.length && (mode === 'replace' || mode === 'append')) {
         const fromMonth = months[0];
         const toMonth = months[months.length - 1];
         setPeriodFrom(`${fromMonth}-01`);
@@ -676,9 +653,11 @@ const GsEncCostAnalysis: React.FC = () => {
         t('gsEncCostAnalysis.success.ledgerLoaded', {
           count: parsed.length,
           total: merged.length,
+          mapped: mappedCount,
         })
       );
       setTab(1);
+      setMatchFilter('all');
     } catch (e: any) {
       const msg = String(e?.message || '');
       if (msg === 'PDF_IMAGE_ONLY') {
@@ -872,16 +851,23 @@ const GsEncCostAnalysis: React.FC = () => {
     });
   }, [ledger, search, matchFilter, periodFrom, periodTo, itemFilter]);
 
+  useEffect(() => {
+    setLedgerVisibleCount(200);
+  }, [search, matchFilter, periodFrom, periodTo, itemFilter]);
+
   const itemOptions = useMemo(() => {
     const set = new Set<string>();
-    for (const row of ledger) {
+    // 전체 ledger 스캔은 느리므로 필터 결과(+여유)만 옵션으로 사용
+    const source = filteredLedger.length ? filteredLedger : ledger.slice(0, 800);
+    for (const row of source) {
       const name = row.matchedNameKo || row.accountNameHqKo || row.accountNameTally;
       if (name) set.add(name);
       if (row.costCategory) set.add(row.costCategory);
       if (row.division) set.add(row.division);
+      if (set.size >= 400) break;
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'));
-  }, [ledger]);
+  }, [filteredLedger, ledger]);
 
   type LedgerViewRow = LedgerRow & {
     accountName: string;
@@ -923,6 +909,11 @@ const GsEncCostAnalysis: React.FC = () => {
     });
     return rows;
   }, [ledgerViewRows, listSortKey, listSortDir]);
+
+  const visibleLedger = useMemo(
+    () => sortedLedger.slice(0, ledgerVisibleCount),
+    [sortedLedger, ledgerVisibleCount]
+  );
 
   const totals = useMemo(() => {
     let amountInr = 0;
@@ -1261,17 +1252,27 @@ const GsEncCostAnalysis: React.FC = () => {
                 disabled={busy || !ledger.length}
                 sx={mvsBodyOutlinedBtnSx}
                 onClick={() => {
-                  rebuildTallyAccountMapFromLedger(ledger);
-                  const rematched = matchLedgerRows(ledger, accounts);
-                  const mapped = rematched.filter((r) => r.matchSource !== 'none').length;
-                  setLedger(rematched);
-                  saveLedgerRows(rematched);
-                  setSuccess(
-                    t('gsEncCostAnalysis.success.rematched', {
-                      mapped,
-                      total: rematched.length,
-                    })
-                  );
+                  setBusy(true);
+                  setError('');
+                  window.setTimeout(() => {
+                    try {
+                      rebuildTallyAccountMapFromLedger(ledger);
+                      const rematched = matchLedgerRows(ledger, accounts);
+                      const mapped = rematched.filter((r) => r.matchSource !== 'none').length;
+                      startTransition(() => {
+                        setLedger(rematched);
+                      });
+                      saveLedgerRows(rematched);
+                      setSuccess(
+                        t('gsEncCostAnalysis.success.rematched', {
+                          mapped,
+                          total: rematched.length,
+                        })
+                      );
+                    } finally {
+                      setBusy(false);
+                    }
+                  }, 0);
                 }}
               >
                 {t('gsEncCostAnalysis.actions.rematch')}
@@ -1322,6 +1323,14 @@ const GsEncCostAnalysis: React.FC = () => {
                   unmatched: matchStats.unmatched,
                   inr: formatInr(totals.amountInr),
                 })}
+            {tab === 1 && sortedLedger.length > visibleLedger.length ? (
+              <Typography component="span" variant="body2" color="warning.main" sx={{ ml: 1 }}>
+                {t('gsEncCostAnalysis.stats.showingPartial', {
+                  shown: visibleLedger.length,
+                  total: sortedLedger.length,
+                })}
+              </Typography>
+            ) : null}
           </Typography>
         </Box>
       </Card>
@@ -1457,7 +1466,7 @@ const GsEncCostAnalysis: React.FC = () => {
                       <TableCell colSpan={13}>{t('gsEncCostAnalysis.empty.ledger')}</TableCell>
                     </TableRow>
                   ) : (
-                    sortedLedger.map((row) => (
+                    visibleLedger.map((row) => (
                       <TableRow
                         key={row.id}
                         hover
@@ -1650,6 +1659,22 @@ const GsEncCostAnalysis: React.FC = () => {
                   )}
                 </TableBody>
               </Table>
+            )}
+
+            {tab === 1 && sortedLedger.length > visibleLedger.length && (
+              <Box sx={{ py: 1.5, display: 'flex', justifyContent: 'center' }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  sx={mvsBodyOutlinedBtnSx}
+                  onClick={() => setLedgerVisibleCount((n) => n + 200)}
+                >
+                  {t('gsEncCostAnalysis.actions.showMore', {
+                    shown: visibleLedger.length,
+                    total: sortedLedger.length,
+                  })}
+                </Button>
+              </Box>
             )}
 
             {tab === 2 && (

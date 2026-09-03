@@ -40,6 +40,49 @@ const fileNameFromUrl = (url: string, fallback = 'image') => {
   }
 };
 
+/** 업로드 경로 → 절대 URL (쿼리 토큰 없이, fetch Authorization용) */
+export const getUploadAbsoluteUrl = (pathOrUrl?: string | null): string => {
+  if (!pathOrUrl || typeof pathOrUrl !== 'string') return '';
+  const raw = pathOrUrl.trim();
+  if (!raw) return '';
+  if (raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw.split('?')[0];
+  const normalized = raw.startsWith('/uploads/')
+    ? raw
+    : `/uploads/${raw.replace(/^\/+/, '')}`;
+  return `${getApiOrigin()}${normalized}`;
+};
+
+/**
+ * 인증이 필요한 업로드 파일을 blob object URL로 로드.
+ * 호출측에서 URL.revokeObjectURL 로 해제해야 함.
+ */
+export const fetchUploadObjectUrl = async (
+  pathOrUrl?: string | null,
+  opts?: { forceMime?: string }
+): Promise<string> => {
+  const raw = String(pathOrUrl || '').trim();
+  if (!raw) throw new Error('empty upload path');
+  if (raw.startsWith('blob:') || raw.startsWith('data:')) return raw;
+
+  const absolute = getUploadAbsoluteUrl(raw);
+  const token = getAuthTokenFromStorage();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(absolute, {
+    headers,
+    credentials: 'include',
+    cache: 'force-cache',
+  });
+  if (!res.ok) throw new Error(`upload fetch ${res.status}`);
+  let blob = await res.blob();
+  if (opts?.forceMime && blob.type !== opts.forceMime) {
+    blob = new Blob([blob], { type: opts.forceMime });
+  }
+  return URL.createObjectURL(blob);
+};
+
 /** 인증 포함 업로드 파일을 로컬에 저장 */
 export const downloadUploadFile = async (pathOrUrl?: string | null, filename?: string) => {
   const url =
@@ -49,10 +92,7 @@ export const downloadUploadFile = async (pathOrUrl?: string | null, filename?: s
   if (!url) return;
   const suggested = (filename || fileNameFromUrl(url)).replace(/[\\/:*?"<>|]/g, '_') || 'image';
   try {
-    const res = await fetch(url, { credentials: 'include' });
-    if (!res.ok) throw new Error('download failed');
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
+    const objectUrl = await fetchUploadObjectUrl(pathOrUrl);
     const a = document.createElement('a');
     a.href = objectUrl;
     a.download = suggested;
