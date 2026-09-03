@@ -912,7 +912,6 @@ const ExpenseApproval: React.FC = () => {
   const [paymentAmountInput, setPaymentAmountInput] = useState('');
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
   const [paymentProofPreviewUrl, setPaymentProofPreviewUrl] = useState<string>('');
-  const [proofNameEditing, setProofNameEditing] = useState(false);
   const [proofNameDraft, setProofNameDraft] = useState('');
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const lastSavedPayloadRef = useRef<string>('');
@@ -2190,7 +2189,6 @@ const ExpenseApproval: React.FC = () => {
   const setRemittanceProofFile = useCallback((file: File | null) => {
     if (!file) {
       setPaymentProofFile(null);
-      setProofNameEditing(false);
       setProofNameDraft('');
       return;
     }
@@ -2206,31 +2204,17 @@ const ExpenseApproval: React.FC = () => {
       { type: file.type, lastModified: file.lastModified }
     );
     setPaymentProofFile(named);
-    setProofNameEditing(false);
     setProofNameDraft(named.name);
   }, [partners, selectedExpense]);
 
-  const startEditProofName = () => {
-    if (!paymentProofFile || paymentSubmitting) return;
-    setProofNameDraft(paymentProofFile.name);
-    setProofNameEditing(true);
-  };
-
-  const commitProofNameEdit = () => {
-    if (!paymentProofFile) {
-      setProofNameEditing(false);
-      return;
-    }
-    const renamed = renameFileKeepingExtension(paymentProofFile, proofNameDraft);
-    setPaymentProofFile(renamed);
-    setProofNameDraft(renamed.name);
-    setProofNameEditing(false);
-  };
-
-  const cancelProofNameEdit = () => {
-    setProofNameDraft(paymentProofFile?.name || '');
-    setProofNameEditing(false);
-  };
+  const applyProofFileName = useCallback((nextName: string) => {
+    setPaymentProofFile((prev) => {
+      if (!prev) return prev;
+      const renamed = renameFileKeepingExtension(prev, nextName);
+      setProofNameDraft(renamed.name);
+      return renamed;
+    });
+  }, []);
 
   useEffect(() => {
     if (!paymentProofFile || !paymentProofFile.type.startsWith('image/')) {
@@ -2268,7 +2252,6 @@ const ExpenseApproval: React.FC = () => {
     const remaining = getExpenseRemainingAmount(selectedExpense);
     setPaymentAmountInput(remaining > 0 ? String(remaining) : String(selectedExpense.totalAmount || ''));
     setRemittanceProofFile(null);
-    setProofNameEditing(false);
     setProofNameDraft('');
     setPaymentDialogOpen(true);
   };
@@ -2335,7 +2318,12 @@ const ExpenseApproval: React.FC = () => {
       setError(t('expenseApproval.errors.remittanceProofRequired'));
       return;
     }
-    await handleCompletePayment(selectedExpense.id, amount, paymentProofFile);
+    const proofToSend = renameFileKeepingExtension(paymentProofFile, proofNameDraft);
+    if (proofToSend.name !== paymentProofFile.name) {
+      setPaymentProofFile(proofToSend);
+      setProofNameDraft(proofToSend.name);
+    }
+    await handleCompletePayment(selectedExpense.id, amount, proofToSend);
   };
 
   const handleApprovePayment = async (id: number, reason?: string) => {
@@ -4540,13 +4528,9 @@ const ExpenseApproval: React.FC = () => {
                   <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary' }}>
                     {t('expenseApproval.dialog.remittanceProof')} *
                   </Typography>
-                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 0.5 }}>
-                    <Button variant="outlined" component="label" disabled={paymentSubmitting}>
-                      {paymentProofFile
-                        ? t('expenseApproval.dialog.remittanceProofChange', {
-                            defaultValue: '파일 변경',
-                          })
-                        : t('expenseApproval.dialog.remittanceProofUpload')}
+                  {!paymentProofFile ? (
+                    <Button variant="outlined" component="label" disabled={paymentSubmitting} sx={{ mb: 0.5 }}>
+                      {t('expenseApproval.dialog.remittanceProofUpload')}
                       <input
                         hidden
                         type="file"
@@ -4554,73 +4538,74 @@ const ExpenseApproval: React.FC = () => {
                         onChange={(e) => setRemittanceProofFile(e.target.files?.[0] || null)}
                       />
                     </Button>
-                    {paymentProofFile && (
-                      <Button
-                        size="small"
-                        disabled={paymentSubmitting}
-                        onClick={() => setRemittanceProofFile(null)}
-                      >
-                        {t('common.delete')}
-                      </Button>
-                    )}
-                  </Box>
-                  {paymentProofFile && (
+                  ) : (
                     <Box sx={{ mb: 0.5 }}>
-                      {proofNameEditing ? (
-                        <TextField
-                          size="small"
-                          fullWidth
-                          autoFocus
-                          value={proofNameDraft}
-                          disabled={paymentSubmitting}
-                          onChange={(e) => setProofNameDraft(e.target.value)}
-                          onBlur={commitProofNameEdit}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              commitProofNameEdit();
-                            }
-                            if (e.key === 'Escape') {
-                              e.preventDefault();
-                              cancelProofNameEdit();
-                            }
-                          }}
-                          helperText={t('expenseApproval.dialog.remittanceProofRenameHint', {
-                            defaultValue: 'Enter로 저장, Esc로 취소',
-                          })}
-                        />
-                      ) : (
-                        <Typography
-                          component="button"
-                          type="button"
-                          onClick={startEditProofName}
-                          title={t('expenseApproval.dialog.remittanceProofRenameTitle', {
+                      <TextField
+                        size="small"
+                        fullWidth
+                        value={proofNameDraft}
+                        disabled={paymentSubmitting}
+                        onChange={(e) => setProofNameDraft(e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                        onBlur={() => applyProofFileName(proofNameDraft)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            (e.target as HTMLInputElement).blur();
+                          }
+                          if (e.key === 'Escape') {
+                            e.preventDefault();
+                            setProofNameDraft(paymentProofFile.name);
+                            (e.target as HTMLInputElement).blur();
+                          }
+                        }}
+                        helperText={t('expenseApproval.dialog.remittanceProofRenameTitle', {
+                          defaultValue: '클릭하여 파일명 변경',
+                        })}
+                        FormHelperTextProps={{ sx: { mx: 0 } }}
+                        inputProps={{
+                          'aria-label': t('expenseApproval.dialog.remittanceProofRenameTitle', {
                             defaultValue: '클릭하여 파일명 변경',
-                          })}
-                          sx={{
-                            all: 'unset',
-                            cursor: 'pointer',
-                            display: 'block',
-                            width: '100%',
-                            boxSizing: 'border-box',
-                            px: 1,
-                            py: 0.75,
-                            border: `1px solid ${EXPENSE_LINE}`,
+                          }),
+                        }}
+                        sx={{
+                          mb: 0.5,
+                          '& .MuiOutlinedInput-root': {
                             bgcolor: '#fff',
+                            '& fieldset': { borderColor: EXPENSE_LINE },
+                          },
+                          '& .MuiOutlinedInput-input': {
                             fontSize: '0.8125rem',
                             fontWeight: 600,
-                            color: 'text.primary',
-                            wordBreak: 'break-all',
-                            lineHeight: 1.35,
-                            '&:hover': {
-                              borderColor: 'primary.main',
-                              bgcolor: alpha(theme.palette.primary.main, 0.04),
-                            },
-                          }}
+                            py: 1,
+                          },
+                        }}
+                      />
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <Button
+                          size="small"
+                          disabled={paymentSubmitting}
+                          onClick={() => setRemittanceProofFile(null)}
                         >
-                          {paymentProofFile.name}
-                        </Typography>
-                      )}
+                          {t('common.delete')}
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          component="label"
+                          disabled={paymentSubmitting}
+                        >
+                          {t('expenseApproval.dialog.remittanceProofChange', {
+                            defaultValue: '파일 변경',
+                          })}
+                          <input
+                            hidden
+                            type="file"
+                            accept="image/*,application/pdf"
+                            onChange={(e) => setRemittanceProofFile(e.target.files?.[0] || null)}
+                          />
+                        </Button>
+                      </Box>
                     </Box>
                   )}
                   {paymentProofPreviewUrl && (
