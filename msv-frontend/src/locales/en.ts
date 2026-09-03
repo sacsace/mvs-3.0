@@ -23,6 +23,8 @@ export default {
       previous: 'Previous',
       close: 'Close',
       open: 'Open',
+      download: 'Download',
+      openInNew: 'Open in new tab',
       refresh: 'Refresh',
       reset: 'Reset',
       settings: 'Settings',

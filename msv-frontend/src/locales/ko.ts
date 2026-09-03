@@ -23,6 +23,8 @@ export default {
       previous: '이전',
       close: '닫기',
       open: '열기',
+      download: '다운로드',
+      openInNew: '새 탭에서 열기',
       refresh: '새로고침',
       reset: '초기화',
       settings: '설정',

@@ -21,8 +21,20 @@ export const getUploadUrl = (path?: string | null): string => {
 
   if (normalized.startsWith('http')) return normalized;
 
+  const encoded = normalized
+    .split('/')
+    .map((seg, idx) => {
+      if (idx === 0 || !seg) return seg;
+      try {
+        return encodeURIComponent(decodeURIComponent(seg));
+      } catch {
+        return encodeURIComponent(seg);
+      }
+    })
+    .join('/');
+
   const origin = getApiOrigin();
-  const base = `${origin}${normalized}`;
+  const base = `${origin}${encoded}`;
   const token = getAuthTokenFromStorage();
   if (!token) return base;
 
@@ -50,7 +62,18 @@ export const getUploadAbsoluteUrl = (pathOrUrl?: string | null): string => {
   const normalized = raw.startsWith('/uploads/')
     ? raw
     : `/uploads/${raw.replace(/^\/+/, '')}`;
-  return `${getApiOrigin()}${normalized}`;
+  const encoded = normalized
+    .split('/')
+    .map((seg, idx) => {
+      if (idx === 0 || !seg) return seg;
+      try {
+        return encodeURIComponent(decodeURIComponent(seg));
+      } catch {
+        return encodeURIComponent(seg);
+      }
+    })
+    .join('/');
+  return `${getApiOrigin()}${encoded}`;
 };
 
 /**
@@ -73,12 +96,30 @@ export const fetchUploadObjectUrl = async (
   const res = await fetch(absolute, {
     headers,
     credentials: 'include',
-    cache: 'force-cache',
+    cache: 'no-store',
   });
   if (!res.ok) throw new Error(`upload fetch ${res.status}`);
-  let blob = await res.blob();
+
+  const buffer = await res.arrayBuffer();
+  if (!buffer.byteLength) throw new Error('empty upload body');
+
+  if (opts?.forceMime === 'application/pdf') {
+    const head = new Uint8Array(buffer, 0, Math.min(5, buffer.byteLength));
+    const isPdf =
+      head.length >= 4 &&
+      head[0] === 0x25 && // %
+      head[1] === 0x50 && // P
+      head[2] === 0x44 && // D
+      head[3] === 0x46; // F
+    if (!isPdf) throw new Error('not a pdf');
+    return URL.createObjectURL(new Blob([buffer], { type: 'application/pdf' }));
+  }
+
+  let blob = new Blob([buffer], {
+    type: opts?.forceMime || res.headers.get('content-type') || undefined,
+  });
   if (opts?.forceMime && blob.type !== opts.forceMime) {
-    blob = new Blob([blob], { type: opts.forceMime });
+    blob = new Blob([buffer], { type: opts.forceMime });
   }
   return URL.createObjectURL(blob);
 };

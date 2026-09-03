@@ -328,10 +328,14 @@ app.use('/uploads', authenticateUploadAccess, express.static(uploadPath, {
   redirect: false,
   fallthrough: false,
   maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0,
-  setHeaders: (res) => {
+  setHeaders: (res, filePath) => {
     // FE(www) ↔ BE 분리 도메인에서 <img>/fetch 가 가능하도록
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('Cache-Control', 'private, max-age=86400');
+    if (/\.pdf$/i.test(String(filePath || ''))) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline');
+    }
   },
 }));
 // 인증은 됐지만 파일이 없을 때 명확한 404

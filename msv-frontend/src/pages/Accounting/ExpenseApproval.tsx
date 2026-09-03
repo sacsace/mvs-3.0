@@ -1893,7 +1893,7 @@ const ExpenseApproval: React.FC = () => {
     }
 
     let cancelled = false;
-    let createdUrl = '';
+    let objectUrl = '';
     setPreviewLoading(true);
     setPreviewLoadError(false);
     setPreviewBlobUrl('');
@@ -1907,7 +1907,7 @@ const ExpenseApproval: React.FC = () => {
           URL.revokeObjectURL(url);
           return;
         }
-        createdUrl = url;
+        objectUrl = url;
         setPreviewBlobUrl(url);
       } catch {
         if (!cancelled) {
@@ -1921,7 +1921,7 @@ const ExpenseApproval: React.FC = () => {
 
     return () => {
       cancelled = true;
-      if (createdUrl) URL.revokeObjectURL(createdUrl);
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [previewAttachment]);
 
@@ -2268,28 +2268,28 @@ const ExpenseApproval: React.FC = () => {
         throw new Error(response?.message || t('expenseApproval.errors.paymentCompleteFailed'));
       }
       await loadExpenseData();
-      if (response?.data) {
-        setSelectedExpense(mapExpense(response.data));
-      } else {
-        setSelectedExpense((prev) => {
-          if (!prev || prev.id !== id) return prev;
-          const remaining = Number(response?.remaining_amount);
-          const fullyPaid = Number.isFinite(remaining) ? remaining <= 0 : true;
-          return {
-            ...prev,
-            paidAmount: Number(response?.paid_amount ?? prev.paidAmount),
-            paymentRequestStatus: fullyPaid ? 'paid' : 'approved',
-            status: fullyPaid ? 'paid' : prev.status,
-          };
-        });
-      }
       setPaymentDialogOpen(false);
       setRemittanceProofFile(null);
       const remaining = Number(response?.remaining_amount);
       if (Number.isFinite(remaining) && remaining > 0) {
         setSuccess(t('expenseApproval.success.partialPaymentCompleted', { remaining }));
+        if (response?.data) {
+          setSelectedExpense(mapExpense(response.data));
+        } else {
+          setSelectedExpense((prev) => {
+            if (!prev || prev.id !== id) return prev;
+            return {
+              ...prev,
+              paidAmount: Number(response?.paid_amount ?? prev.paidAmount),
+              paymentRequestStatus: 'approved',
+            };
+          });
+        }
       } else {
         setSuccess(t('expenseApproval.success.paymentCompleted'));
+        setSelectedExpense(null);
+        setListTab('transfer');
+        setViewMode('list');
       }
     } catch (err: any) {
       setError(
@@ -2620,17 +2620,26 @@ const ExpenseApproval: React.FC = () => {
           </Box>
         ) : previewAttachment && isPdfReceipt(previewAttachment) && previewBlobUrl ? (
           <Box
-            component="iframe"
-            title={getReceiptDisplayName(previewAttachment)}
-            src={previewBlobUrl}
             sx={{
-              display: 'block',
+              position: 'relative',
               width: '100%',
               height: { xs: '60vh', sm: '75vh' },
-              border: 0,
               bgcolor: '#fff',
             }}
-          />
+          >
+            <Box
+              component="iframe"
+              title={getReceiptDisplayName(previewAttachment)}
+              src={`${previewBlobUrl}#toolbar=1&navpanes=0`}
+              sx={{
+                display: 'block',
+                width: '100%',
+                height: '100%',
+                border: 0,
+                bgcolor: '#fff',
+              }}
+            />
+          </Box>
         ) : (
           <Box
             sx={{
@@ -2657,7 +2666,7 @@ const ExpenseApproval: React.FC = () => {
           </Box>
         )}
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ px: 2, py: 1.5, gap: 1, flexWrap: 'wrap' }}>
         {previewAttachment ? (
           <>
             <Button
@@ -2673,12 +2682,13 @@ const ExpenseApproval: React.FC = () => {
             <Button
               variant="outlined"
               startIcon={<OpenInNewIcon fontSize="small" />}
-              href={getUploadUrl(previewAttachment)}
-              target="_blank"
-              rel="noreferrer"
+              onClick={() => {
+                const url = previewBlobUrl || getUploadUrl(previewAttachment);
+                if (url) window.open(url, '_blank', 'noopener,noreferrer');
+              }}
               sx={mvsBodyOutlinedBtnSx}
             >
-              {t('common.openInNew', { defaultValue: '새 탭에서 열기' })}
+              {t('common.openInNew')}
             </Button>
           </>
         ) : null}
