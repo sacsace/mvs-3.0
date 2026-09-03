@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import path from 'path';
 import { RequestWithUser } from '../types';
 import { Invoice, InvoiceItem, Customer, ExpenseReport, Budget, Asset, Company, Approval, User, RoomBooking } from '../models';
-import { Op, Sequelize, QueryTypes } from 'sequelize';
+import { Op, Sequelize, QueryTypes, Transaction } from 'sequelize';
 import sequelize from '../config/database';
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
@@ -2238,11 +2238,18 @@ const expenseHasRemarks = (itemsValue: any, notes?: string) => {
 const receiptOrRemarksRequiredMessage =
   '영수증을 첨부하거나, 영수증이 없으면 비고에 설명을 입력해주세요.';
 
-const allocateExpenseVoucherNo = async (tenantId: number, companyId: number) => {
+const allocateExpenseVoucherNo = async (
+  tenantId: number,
+  companyId: number,
+  transaction?: any
+) => {
   const year = new Date().getFullYear();
+  // 소프트삭제(is_active=false) 행도 UNIQUE에 남아 있으므로 채번 대상에 포함
   const rows = await (ExpenseReport as any).findAll({
-    where: { tenant_id: tenantId, company_id: companyId, is_active: true },
+    where: { tenant_id: tenantId, company_id: companyId },
     attributes: ['expense_id', 'items'],
+    transaction,
+    lock: transaction ? Transaction.LOCK.UPDATE : undefined,
   });
   let maxSeq = 0;
   for (const row of rows) {
@@ -2253,6 +2260,18 @@ const allocateExpenseVoucherNo = async (tenantId: number, companyId: number) => 
     );
   }
   return `${EXPENSE_VOUCHER_PREFIX}-${year}-${String(maxSeq + 1).padStart(4, '0')}`;
+};
+
+const isExpenseIdUniqueViolation = (error: any) => {
+  const code = String(error?.original?.code || error?.parent?.code || error?.code || '');
+  if (code !== '23505') return false;
+  const constraint = String(
+    error?.original?.constraint || error?.parent?.constraint || error?.constraint || ''
+  );
+  return (
+    constraint.includes('expense_id') ||
+    String(error?.original?.detail || error?.parent?.detail || '').includes('expense_id')
+  );
 };
 
 const toPositiveInt = (value: unknown): number | null => {
@@ -2599,75 +2618,126 @@ export const createExpenseReport = async (req: RequestWithUser, res: Response) =
       return res.status(400).json({ success: false, message: receiptOrRemarksRequiredMessage });
     }
 
-    const voucherNo = await allocateExpenseVoucherNo(tenant_id, company_id);
-    const itemsWithVoucher = mergeExpenseItemsMeta(items, { voucherNo });
     const clientScope = await resolveAssignedClientScope(req.user);
-    if (clientScope.enforced && !expenseMatchesAssignedScope({ items: itemsWithVoucher, title }, clientScope)) {
-      return res.status(403).json({
-        success: false,
-        message: '고객사 리스트에 배정된 거래처로만 지출결의서를 작성할 수 있습니다.',
-      });
-    }
-    const generatedId = voucherNo;
-
-    let itemsFinal = itemsWithVoucher;
-    let approvalFlow: any[] = [];
-    let nextApproverId = toPositiveInt(current_approver_id)
-      || toPositiveInt(itemsWithVoucher.meta?.approvedById);
-
-    if (nextApproverId) {
-      const assigned = await assignExpenseApprover({
-        expense: {
-          requester_id,
-          items: mergeExpenseItemsMeta(itemsWithVoucher, { approvedById: '', checkedById: '' }),
-          approval_flow: [],
-          current_approver_id: null,
-        },
-        itemsSource: mergeExpenseItemsMeta(itemsWithVoucher, { approvedById: '', checkedById: '' }),
-        nextApproverId,
-        actor: { id: requester_id, username: req.user.username },
-        tenantId: tenant_id,
-        companyId: company_id,
-        action: 'assigned',
-      });
-      if (assigned.ok === false) {
-        return res.status(assigned.status).json({ success: false, message: assigned.message });
+    if (clientScope.enforced) {
+      const previewItems = mergeExpenseItemsMeta(items, {});
+      if (!expenseMatchesAssignedScope({ items: previewItems, title: safeTitle }, clientScope)) {
+        return res.status(403).json({
+          success: false,
+          message: '고객사 리스트에 배정된 거래처로만 지출결의서를 작성할 수 있습니다.',
+        });
       }
-      if (!assigned.unchanged) {
-        itemsFinal = assigned.items;
-        approvalFlow = assigned.approval_flow;
-        nextApproverId = assigned.current_approver_id;
-      }
-    } else if (createStatus === 'submitted') {
-      return res.status(400).json({ success: false, message: '승인권자를 선택해주세요.' });
     }
 
-    const expense = await (ExpenseReport as any).create({
-      tenant_id,
-      company_id,
-      expense_id: generatedId,
-      title: safeTitle,
-      requester_id,
-      requester_name: requester_name || req.user.username,
-      requester_department,
-      requester_position,
-      total_amount: (() => {
-        const n = Number(total_amount) || 0;
-        return n >= 0 ? Math.floor(n) : Math.ceil(n);
-      })(),
-      currency: 'INR',
-      purpose: safePurpose,
-      items: itemsFinal,
-      status: createStatus,
-      priority,
-      current_approver_id: nextApproverId,
-      approval_flow: approvalFlow,
-      submitted_at: createStatus === 'submitted' ? new Date() : null,
-      due_date,
-      notes,
-      attachments,
-      is_active: true
-    });
+    const maxAttempts = 5;
+    let expense: any = null;
+    let lastCreateError: any = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        expense = await sequelize.transaction(async (transaction) => {
+          await sequelize.query('SELECT pg_advisory_xact_lock(:tenantId, :companyId)', {
+            replacements: { tenantId: tenant_id, companyId: company_id },
+            transaction,
+          });
+
+          const voucherNo = await allocateExpenseVoucherNo(tenant_id, company_id, transaction);
+          const itemsWithVoucher = mergeExpenseItemsMeta(items, { voucherNo });
+          if (
+            clientScope.enforced &&
+            !expenseMatchesAssignedScope({ items: itemsWithVoucher, title: safeTitle }, clientScope)
+          ) {
+            const err: any = new Error('고객사 리스트에 배정된 거래처로만 지출결의서를 작성할 수 있습니다.');
+            err.status = 403;
+            throw err;
+          }
+
+          let itemsFinal = itemsWithVoucher;
+          let approvalFlow: any[] = [];
+          let nextApproverId =
+            toPositiveInt(current_approver_id) ||
+            toPositiveInt(itemsWithVoucher.meta?.approvedById);
+
+          if (nextApproverId) {
+            const assigned = await assignExpenseApprover({
+              expense: {
+                requester_id,
+                items: mergeExpenseItemsMeta(itemsWithVoucher, { approvedById: '', checkedById: '' }),
+                approval_flow: [],
+                current_approver_id: null,
+              },
+              itemsSource: mergeExpenseItemsMeta(itemsWithVoucher, { approvedById: '', checkedById: '' }),
+              nextApproverId,
+              actor: { id: requester_id, username: req.user.username },
+              tenantId: tenant_id,
+              companyId: company_id,
+              action: 'assigned',
+            });
+            if (assigned.ok === false) {
+              const err: any = new Error(assigned.message);
+              err.status = assigned.status;
+              throw err;
+            }
+            if (!assigned.unchanged) {
+              itemsFinal = assigned.items;
+              approvalFlow = assigned.approval_flow;
+              nextApproverId = assigned.current_approver_id;
+            }
+          } else if (createStatus === 'submitted') {
+            const err: any = new Error('승인권자를 선택해주세요.');
+            err.status = 400;
+            throw err;
+          }
+
+          return (ExpenseReport as any).create(
+            {
+              tenant_id,
+              company_id,
+              expense_id: voucherNo,
+              title: safeTitle,
+              requester_id,
+              requester_name: requester_name || req.user.username,
+              requester_department,
+              requester_position,
+              total_amount: (() => {
+                const n = Number(total_amount) || 0;
+                return n >= 0 ? Math.floor(n) : Math.ceil(n);
+              })(),
+              currency: 'INR',
+              purpose: safePurpose,
+              items: itemsFinal,
+              status: createStatus,
+              priority,
+              current_approver_id: nextApproverId,
+              approval_flow: approvalFlow,
+              submitted_at: createStatus === 'submitted' ? new Date() : null,
+              due_date,
+              notes,
+              attachments,
+              is_active: true,
+            },
+            { transaction }
+          );
+        });
+        lastCreateError = null;
+        break;
+      } catch (createError: any) {
+        lastCreateError = createError;
+        if (createError?.status) {
+          return res.status(createError.status).json({
+            success: false,
+            message: createError.message || '지출결의서 생성에 실패했습니다.',
+          });
+        }
+        if (!isExpenseIdUniqueViolation(createError) || attempt === maxAttempts - 1) {
+          throw createError;
+        }
+      }
+    }
+
+    if (!expense) {
+      throw lastCreateError || new Error('지출결의서 생성에 실패했습니다.');
+    }
 
     if (createStatus === 'submitted') {
       notifyExpenseReportSubmitted(req, expense);

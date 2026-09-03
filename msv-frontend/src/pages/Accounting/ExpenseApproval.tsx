@@ -2762,16 +2762,6 @@ const ExpenseApproval: React.FC = () => {
               >
                 <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                   <Box>
-                    <Typography
-                      sx={{
-                        fontWeight: 700,
-                        fontSize: '0.9375rem',
-                        color: '#0F172A',
-                        mb: companyLogo || companyName ? 0.5 : 0,
-                      }}
-                    >
-                      {isEdit ? t('expenseApproval.form.editTitle') : t('expenseApproval.form.createTitle')}
-                    </Typography>
                     <ExpenseCompanyBlock
                       logo={companyLogo}
                       logoAlt={t('expenseApproval.voucher.companyLogoAlt')}

@@ -115,7 +115,7 @@ ExpenseReport.init(
     id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
     tenant_id: { type: DataTypes.INTEGER, allowNull: false },
     company_id: { type: DataTypes.INTEGER, allowNull: false },
-    expense_id: { type: DataTypes.STRING(100), allowNull: false, unique: true },
+    expense_id: { type: DataTypes.STRING(100), allowNull: false },
     title: { type: DataTypes.STRING(255), allowNull: false },
     requester_id: { type: DataTypes.INTEGER, allowNull: false },
     requester_name: { type: DataTypes.STRING(100), allowNull: false },
@@ -167,7 +167,11 @@ ExpenseReport.init(
     tableName: 'expense_reports',
     indexes: [
       { fields: ['tenant_id', 'company_id'] },
-      { fields: ['expense_id'] },
+      {
+        unique: true,
+        fields: ['tenant_id', 'company_id', 'expense_id'],
+        name: 'expense_reports_tenant_company_expense_id_uk',
+      },
       { fields: ['status'] }
     ]
   }
