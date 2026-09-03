@@ -3593,7 +3593,7 @@ const WorkBoardDetailPage: React.FC = () => {
                 listTitleEditing={editingListId === list.id}
                 listTitleDraft={editingListId === list.id ? editingListTitle : list.title}
                 listSaving={listSaving}
-                composerOpen={composerListId === list.id && !cardSearchActive}
+                composerOpen={composerListId === list.id}
                 composerTitle={composerTitle}
                 composerDesc={composerDesc}
                 onListTitleDraftChange={setEditingListTitle}
@@ -3611,7 +3611,7 @@ const WorkBoardDetailPage: React.FC = () => {
                 allowListReorder={menuCanEdit && !cardSearchActive}
                 allowListTitleEdit={menuCanEdit}
                 allowListDelete={menuCanDelete}
-                allowAddCard={menuCanCreate && !cardSearchActive}
+                allowAddCard={menuCanCreate}
               />
             ))}
             </Box>

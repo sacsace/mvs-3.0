@@ -204,22 +204,28 @@ export const accountingService = {
   },
 
   // ?�큰?�로 ?�수�??�로??(?��??�에???�용)
-  uploadExpenseReceipt: async (token: string, file: File) => {
+  uploadExpenseReceipt: async (token: string, file: File, invoiceType: 'tax' | 'proforma' = 'tax') => {
     const formData = new FormData();
     formData.append('token', token);
     formData.append('file', file);
+    formData.append('invoiceType', invoiceType);
     const response = await api.post('/accounting/expenses/upload-receipt', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
   },
 
-  // 지출결?�서 ?�수�??�로??(??
-  uploadExpenseReceiptById: async (id: number, files: File[]) => {
+  // 지출결의서 영수증 업로드 (PC)
+  uploadExpenseReceiptById: async (
+    id: number,
+    files: File[],
+    invoiceType: 'tax' | 'proforma'
+  ) => {
     const formData = new FormData();
     files.forEach((file) => formData.append('files', file));
+    formData.append('invoiceType', invoiceType);
     const response = await api.post(`/accounting/expenses/${id}/upload-receipt`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
   },

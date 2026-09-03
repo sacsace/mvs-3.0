@@ -34,6 +34,8 @@ import {
   DialogActions,
   FormControlLabel,
   Checkbox,
+  Radio,
+  RadioGroup,
   Tabs,
   Tab,
   Autocomplete,
@@ -105,29 +107,79 @@ const isImageReceipt = (filePath: string): boolean =>
 const isPdfReceipt = (filePath: string): boolean =>
   /\.pdf$/i.test(String(filePath || ''));
 
-const normalizeAttachmentPaths = (value: unknown): string[] => {
+type ExpenseInvoiceType = 'tax' | 'proforma';
+
+type ExpenseAttachment = {
+  path: string;
+  invoiceType: ExpenseInvoiceType;
+};
+
+const normalizeExpenseInvoiceType = (value: unknown): ExpenseInvoiceType => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'proforma' || raw === 'proforma_invoice' || raw === 'pi') return 'proforma';
+  return 'tax';
+};
+
+const normalizeExpenseAttachments = (value: unknown): ExpenseAttachment[] => {
   if (!value) return [];
   let parsed: unknown = value;
   if (typeof value === 'string') {
     try {
       parsed = JSON.parse(value);
     } catch {
-      return value.trim() ? [value.trim()] : [];
+      const path = value.trim();
+      return path ? [{ path, invoiceType: 'tax' }] : [];
     }
   }
-  if (Array.isArray(parsed)) {
-    return parsed
-      .map((item) => {
-        if (typeof item === 'string') return item;
-        if (item && typeof item === 'object') {
-          const obj = item as { path?: string; url?: string; file?: string };
-          return obj.path || obj.url || obj.file || '';
-        }
-        return '';
-      })
-      .filter(Boolean);
-  }
-  return [];
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((item) => {
+      if (typeof item === 'string') {
+        const path = item.trim();
+        return path ? { path, invoiceType: 'tax' as const } : null;
+      }
+      if (item && typeof item === 'object') {
+        const obj = item as {
+          path?: string;
+          url?: string;
+          file?: string;
+          invoiceType?: string;
+          invoice_type?: string;
+        };
+        const path = String(obj.path || obj.url || obj.file || '').trim();
+        if (!path) return null;
+        return {
+          path,
+          invoiceType: normalizeExpenseInvoiceType(obj.invoiceType ?? obj.invoice_type),
+        };
+      }
+      return null;
+    })
+    .filter(Boolean) as ExpenseAttachment[];
+};
+
+/** @deprecated use normalizeExpenseAttachments */
+const normalizeAttachmentPaths = (value: unknown): string[] =>
+  normalizeExpenseAttachments(value).map((row) => row.path);
+
+const expenseHasTaxInvoice = (attachments: ExpenseAttachment[] | string[] | unknown) =>
+  normalizeExpenseAttachments(attachments).some((row) => row.invoiceType === 'tax');
+
+const expenseIsAwaitingTaxInvoice = (expense: {
+  attachments?: ExpenseAttachment[] | string[];
+  totalAmount?: number;
+  paidAmount?: number;
+  status?: string;
+  paymentRequestStatus?: string;
+}) => {
+  const total = Number(expense.totalAmount || 0);
+  const paid = Number(expense.paidAmount || 0);
+  const remaining = Math.max(0, total - paid);
+  if (remaining > 0) return false;
+  if (paid <= 0) return false;
+  if (String(expense.paymentRequestStatus || '').toLowerCase() === 'paid') return false;
+  if (expense.status === 'paid') return false;
+  return !expenseHasTaxInvoice(expense.attachments);
 };
 
 interface ExpenseItem {
@@ -177,7 +229,7 @@ interface ExpenseApprovalItem {
   submittedAt: string;
   dueDate: string;
   notes?: string;
-  attachments: string[];
+  attachments: ExpenseAttachment[];
   itemMeta?: Record<string, any>;
   approvalId?: number;
   paymentRequestStatus?: string;
@@ -646,8 +698,9 @@ const STATUS_SORT_ORDER: Record<string, number> = {
   submitted: 1,
   draft: 2,
   approved: 3,
-  paid: 4,
-  rejected: 5,
+  awaiting_tax: 4,
+  paid: 5,
+  rejected: 6,
 };
 
 const paidStatusChipSx = {
@@ -868,7 +921,7 @@ const ExpenseApproval: React.FC = () => {
     notes: ''
   });
   const [lineItems, setLineItems] = useState<ExpenseItem[]>([]);
-  const [currentAttachments, setCurrentAttachments] = useState<string[]>([]);
+  const [currentAttachments, setCurrentAttachments] = useState<ExpenseAttachment[]>([]);
   const [approvers, setApprovers] = useState<Array<{ id: number; name: string }>>([]);
   const [partners, setPartners] = useState<PartnerOption[]>([]);
   const [partnerInputValue, setPartnerInputValue] = useState('');
@@ -905,6 +958,7 @@ const ExpenseApproval: React.FC = () => {
   const [qrImage, setQrImage] = useState('');
   const [qrImageError, setQrImageError] = useState('');
   const [previewAttachment, setPreviewAttachment] = useState<string | null>(null);
+  const [receiptInvoiceType, setReceiptInvoiceType] = useState<ExpenseInvoiceType>('tax');
   const [previewBlobUrl, setPreviewBlobUrl] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewLoadError, setPreviewLoadError] = useState(false);
@@ -966,7 +1020,7 @@ const ExpenseApproval: React.FC = () => {
     submittedAt: expense.submitted_at || '',
     dueDate: expense.due_date || '',
     notes: expense.notes || '',
-    attachments: normalizeAttachmentPaths(expense.attachments),
+    attachments: normalizeExpenseAttachments(expense.attachments),
     itemMeta: parsedItems.meta,
     approvalId: expense.approval_id || undefined,
     paymentRequestStatus: expense.payment_request_status || undefined,
@@ -1051,6 +1105,9 @@ const ExpenseApproval: React.FC = () => {
     if (String(expense.bankTransferStatus || '').toLowerCase() === 'failed') {
       return 'transfer_failed';
     }
+    if (expenseIsAwaitingTaxInvoice(expense)) {
+      return 'awaiting_tax';
+    }
     if (
       remaining <= 0 ||
       String(expense.paymentRequestStatus || '').toLowerCase() === 'paid' ||
@@ -1062,8 +1119,9 @@ const ExpenseApproval: React.FC = () => {
     return 'transfer_pending';
   }, []);
 
-  /** 목록에서 '지급 완료'로 취급 (문서 status와 무관하게 전액 송금 포함) */
+  /** 목록에서 '지급 완료'로 취급 (택스 인보이스 대기 건은 제외) */
   const isExpensePaidForList = useCallback((expense: ExpenseApprovalItem) => {
+    if (expenseIsAwaitingTaxInvoice(expense)) return false;
     const total = floorMoney(Number(expense.totalAmount || 0));
     const paid = floorMoney(Number(expense.paidAmount || 0));
     const remaining = Math.max(0, total - paid);
@@ -1112,7 +1170,7 @@ const ExpenseApproval: React.FC = () => {
         throw new Error(response?.message || t('expenseApproval.errors.createDraftFailed'));
       }
       setDraftId(response.data?.id || null);
-      setCurrentAttachments(normalizeAttachmentPaths(response.data?.attachments));
+      setCurrentAttachments(normalizeExpenseAttachments(response.data?.attachments));
       const assignedNo =
         parseExpenseItems(response.data?.items).meta?.voucherNo ||
         response.data?.expense_id ||
@@ -1469,7 +1527,7 @@ const ExpenseApproval: React.FC = () => {
         setSaving(true);
         const response = await accountingService.updateExpenseReport(activeExpenseId, payload);
         if (response?.success) {
-          setCurrentAttachments(normalizeAttachmentPaths(response.data?.attachments));
+          setCurrentAttachments(normalizeExpenseAttachments(response.data?.attachments));
           const assignedNo = parseExpenseItems(response.data?.items).meta?.voucherNo || '';
           if (assignedNo) {
             setVoucherData((prev) => (prev.voucherNo === assignedNo ? prev : { ...prev, voucherNo: assignedNo }));
@@ -1517,9 +1575,10 @@ const ExpenseApproval: React.FC = () => {
     );
   };
 
-  /** 목록/상세 상태: 송금까지 끝나면 문서 status와 무관하게 지급 완료로 표시 */
+  /** 목록/상세 상태: 전액 송금 + Tax Invoice 있을 때만 지급 완료 */
   const resolveDisplayStatus = useCallback(
     (expense: ExpenseApprovalItem): ExpenseApprovalItem['status'] | string => {
+      if (expenseIsAwaitingTaxInvoice(expense)) return 'awaiting_tax';
       const remaining = getExpenseRemainingAmount(expense);
       const paymentPaid = String(expense.paymentRequestStatus || '').toLowerCase() === 'paid';
       const fullyRemitted =
@@ -1544,6 +1603,14 @@ const ExpenseApproval: React.FC = () => {
         return <Chip label={t('expenseApproval.status.approved')} color="success" size="small" />;
       case 'rejected':
         return <Chip label={t('expenseApproval.status.rejected')} color="error" size="small" />;
+      case 'awaiting_tax':
+        return (
+          <Chip
+            label={t('expenseApproval.status.awaitingTaxInvoice')}
+            color="warning"
+            size="small"
+          />
+        );
       case 'paid':
         return <Chip label={t('expenseApproval.status.paid')} size="small" sx={paidStatusChipSx} />;
       default:
@@ -1558,6 +1625,11 @@ const ExpenseApproval: React.FC = () => {
     const remaining = Math.max(0, Math.round((total - paid) * 100) / 100);
     if (expense.bankTransferStatus === 'failed') {
       return <Chip label={t('expenseApproval.status.transferFailed')} color="error" size="small" />;
+    }
+    if (expenseIsAwaitingTaxInvoice(expense)) {
+      return (
+        <Chip label={t('expenseApproval.status.awaitingTaxInvoice')} color="warning" size="small" />
+      );
     }
     if (remaining <= 0 || expense.paymentRequestStatus === 'paid' || expense.status === 'paid') {
       return <Chip label={t('expenseApproval.status.paid')} size="small" sx={paidStatusChipSx} />;
@@ -1842,7 +1914,7 @@ const ExpenseApproval: React.FC = () => {
       try {
         const response = await accountingService.getExpenseReport(activeExpenseId);
         if (cancelled || !response?.success) return;
-        const next = normalizeAttachmentPaths(response.data?.attachments);
+        const next = normalizeExpenseAttachments(response.data?.attachments);
         if (lastCount >= 0 && next.length > lastCount) {
           setSuccess(t('expenseApproval.success.receiptAttached'));
         }
@@ -1925,7 +1997,7 @@ const ExpenseApproval: React.FC = () => {
     };
   }, [previewAttachment]);
 
-  const renderAttachmentList = (files: string[]) => (
+  const renderAttachmentList = (files: ExpenseAttachment[] | string[]) => (
     <Box
       sx={{
         display: 'grid',
@@ -1934,15 +2006,20 @@ const ExpenseApproval: React.FC = () => {
         justifyContent: 'flex-start',
       }}
     >
-      {files.map((file, index) => {
-        const displayName = getReceiptDisplayName(file);
-        const image = isImageReceipt(file);
+      {normalizeExpenseAttachments(files).map((file, index) => {
+        const displayName = getReceiptDisplayName(file.path);
+        const image = isImageReceipt(file.path);
+        const typeLabel =
+          file.invoiceType === 'proforma'
+            ? t('expenseApproval.voucher.invoiceTypeProforma')
+            : t('expenseApproval.voucher.invoiceTypeTax');
+        const showTypeBadge = !file.path.includes('expense-remittance-proofs');
         return (
           <Box
-            key={`${file}-${index}`}
+            key={`${file.path}-${index}`}
             component="button"
             type="button"
-            onClick={() => openAttachment(file)}
+            onClick={() => openAttachment(file.path)}
             sx={{
               all: 'unset',
               cursor: 'pointer',
@@ -1978,7 +2055,7 @@ const ExpenseApproval: React.FC = () => {
             >
               {image ? (
                 <AuthMedia
-                  src={file}
+                  src={file.path}
                   alt={displayName}
                   sx={{
                     width: '100%',
@@ -1989,10 +2066,29 @@ const ExpenseApproval: React.FC = () => {
               ) : (
                 <FileIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
               )}
+              {showTypeBadge ? (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    left: 4,
+                    top: 4,
+                    px: 0.5,
+                    py: 0.15,
+                    borderRadius: '2px',
+                    bgcolor: file.invoiceType === 'proforma' ? '#FEF3C7' : '#DCFCE7',
+                    color: file.invoiceType === 'proforma' ? '#92400E' : '#166534',
+                    fontSize: '0.62rem',
+                    fontWeight: 700,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {typeLabel}
+                </Box>
+              ) : null}
             </Box>
             <Typography
               variant="caption"
-              title={displayName}
+              title={`${displayName} (${typeLabel})`}
               sx={{
                 px: 0.25,
                 fontWeight: 600,
@@ -2014,21 +2110,41 @@ const ExpenseApproval: React.FC = () => {
 
   const handleUploadReceipts = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const activeExpenseId = viewMode === 'edit' ? selectedExpense?.id : draftId;
+    if (!receiptInvoiceType) {
+      setError(t('expenseApproval.errors.invoiceTypeRequired'));
+      return;
+    }
+    const activeExpenseId = viewMode === 'edit' || viewMode === 'view' ? selectedExpense?.id : draftId;
     if (!activeExpenseId) {
       setError(t('expenseApproval.errors.draftNotReady'));
       return;
     }
     try {
       setUploadingReceipts(true);
-      const response = await accountingService.uploadExpenseReceiptById(activeExpenseId, Array.from(files));
+      const response = await accountingService.uploadExpenseReceiptById(
+        activeExpenseId,
+        Array.from(files),
+        receiptInvoiceType
+      );
       if (!response?.success) {
         throw new Error(response?.message || t('expenseApproval.errors.receiptUploadFailed'));
       }
-      setCurrentAttachments(normalizeAttachmentPaths(response.data?.attachments));
-      setSuccess(t('expenseApproval.success.receiptAttached'));
-    } catch (uploadError) {
-      setError(t('expenseApproval.errors.receiptUploadFailed'));
+      const next = normalizeExpenseAttachments(response.data?.attachments);
+      setCurrentAttachments(next);
+      if (selectedExpense && selectedExpense.id === activeExpenseId) {
+        setSelectedExpense({ ...selectedExpense, attachments: next });
+      }
+      setSuccess(
+        receiptInvoiceType === 'proforma'
+          ? t('expenseApproval.success.proformaAttached')
+          : t('expenseApproval.success.taxInvoiceAttached')
+      );
+    } catch (uploadError: any) {
+      setError(
+        uploadError?.response?.data?.message ||
+          uploadError?.message ||
+          t('expenseApproval.errors.receiptUploadFailed')
+      );
     } finally {
       setUploadingReceipts(false);
     }
@@ -2271,7 +2387,13 @@ const ExpenseApproval: React.FC = () => {
       setPaymentDialogOpen(false);
       setRemittanceProofFile(null);
       const remaining = Number(response?.remaining_amount);
-      if (Number.isFinite(remaining) && remaining > 0) {
+      if (response?.awaiting_tax_invoice) {
+        setSuccess(t('expenseApproval.success.remittanceAwaitingTax'));
+        if (response?.data) {
+          setSelectedExpense(mapExpense(response.data));
+        }
+        setViewMode('view');
+      } else if (Number.isFinite(remaining) && remaining > 0) {
         setSuccess(t('expenseApproval.success.partialPaymentCompleted', { remaining }));
         if (response?.data) {
           setSelectedExpense(mapExpense(response.data));
@@ -3541,6 +3663,26 @@ const ExpenseApproval: React.FC = () => {
               <Typography variant="subtitle2" sx={sectionTitleSx}>
                 {t('expenseApproval.voucher.sectionReceipts')}
               </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                {t('expenseApproval.voucher.invoiceTypeHint')}
+              </Typography>
+              <RadioGroup
+                row
+                value={receiptInvoiceType}
+                onChange={(e) => setReceiptInvoiceType(e.target.value as ExpenseInvoiceType)}
+                sx={{ mb: 1 }}
+              >
+                <FormControlLabel
+                  value="tax"
+                  control={<Radio size="small" />}
+                  label={t('expenseApproval.voucher.invoiceTypeTax')}
+                />
+                <FormControlLabel
+                  value="proforma"
+                  control={<Radio size="small" />}
+                  label={t('expenseApproval.voucher.invoiceTypeProforma')}
+                />
+              </RadioGroup>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
                 <Button variant="outlined" startIcon={<QrCodeIcon />} onClick={handleOpenQr} disabled={qrLoading} sx={{ textTransform: 'none', borderRadius: '8px' }}>
                   {qrLoading ? t('expenseApproval.voucher.receiptQrLoading') : t('expenseApproval.voucher.receiptQr')}
@@ -3552,7 +3694,10 @@ const ExpenseApproval: React.FC = () => {
                     multiple
                     type="file"
                     accept="image/*,application/pdf"
-                    onChange={(e) => handleUploadReceipts(e.target.files)}
+                    onChange={(e) => {
+                      void handleUploadReceipts(e.target.files);
+                      e.target.value = '';
+                    }}
                   />
                 </Button>
                 <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadExpenseData} sx={{ textTransform: 'none', borderRadius: '8px' }}>
@@ -4265,12 +4410,106 @@ const ExpenseApproval: React.FC = () => {
             </Box>
 
             {/* 첨부파일 */}
-            {selectedExpense.attachments.length > 0 && (
-              <Box>
-                <Typography variant="subtitle2" sx={sectionTitleSx}>{t('expenseApproval.detail.attachments')}</Typography>
-                {renderAttachmentList(selectedExpense.attachments)}
-              </Box>
-            )}
+            <Box>
+              <Typography variant="subtitle2" sx={sectionTitleSx}>{t('expenseApproval.detail.attachments')}</Typography>
+              {expenseIsAwaitingTaxInvoice(selectedExpense) && (
+                <Alert severity="warning" sx={{ mb: 1.5, py: 0.5 }}>
+                  {t('expenseApproval.detail.awaitingTaxInvoiceHint')}
+                </Alert>
+              )}
+              {(() => {
+                // 송금 탭/송금 담당 화면에서는 인보이스 유형 선택·파일 첨부 UI를 숨김
+                // (송금 확인증은 '송금하기' 다이얼로그에서만 첨부)
+                const isRemittanceView = listTab === 'transfer';
+                const awaitingTax = expenseIsAwaitingTaxInvoice(selectedExpense);
+                const hasProforma = normalizeExpenseAttachments(selectedExpense.attachments).some(
+                  (row) => row.invoiceType === 'proforma'
+                );
+                const approvedWithProforma =
+                  isExpenseApproved && hasProforma && !expenseHasTaxInvoice(selectedExpense.attachments);
+                // 작성자만, 수정 가능하거나(초안/반려) 택스 인보이스 대기일 때 첨부 가능
+                // 프로포마로 승인된 뒤 송금 단계에서는 첨부 비활성
+                const showInvoiceUpload =
+                  isRequester &&
+                  !isRemittanceView &&
+                  !approvedWithProforma &&
+                  (canEditThis || awaitingTax);
+                const taxOnlyUpload = awaitingTax;
+
+                if (!showInvoiceUpload) {
+                  if (isRemittanceView || approvedWithProforma) {
+                    return (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                        {t('expenseApproval.detail.attachmentLockedOnRemittance')}
+                      </Typography>
+                    );
+                  }
+                  return null;
+                }
+
+                return (
+                  <Box sx={{ mb: 1.5 }}>
+                    {taxOnlyUpload ? (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                        {t('expenseApproval.detail.uploadTaxInvoiceOnly')}
+                      </Typography>
+                    ) : (
+                      <RadioGroup
+                        row
+                        value={receiptInvoiceType}
+                        onChange={(e) => setReceiptInvoiceType(e.target.value as ExpenseInvoiceType)}
+                        sx={{ mb: 0.75 }}
+                      >
+                        <FormControlLabel
+                          value="tax"
+                          control={<Radio size="small" />}
+                          label={t('expenseApproval.voucher.invoiceTypeTax')}
+                        />
+                        <FormControlLabel
+                          value="proforma"
+                          control={<Radio size="small" />}
+                          label={t('expenseApproval.voucher.invoiceTypeProforma')}
+                        />
+                      </RadioGroup>
+                    )}
+                    <Button
+                      variant="outlined"
+                      component="label"
+                      disabled={uploadingReceipts}
+                      size="small"
+                      sx={{ textTransform: 'none', borderRadius: '8px' }}
+                      onClick={() => {
+                        if (taxOnlyUpload) setReceiptInvoiceType('tax');
+                      }}
+                    >
+                      {uploadingReceipts
+                        ? t('expenseApproval.voucher.receiptUploading')
+                        : taxOnlyUpload
+                          ? t('expenseApproval.voucher.uploadTaxInvoice')
+                          : t('expenseApproval.voucher.receiptUpload')}
+                      <input
+                        hidden
+                        multiple
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={(e) => {
+                          if (taxOnlyUpload) setReceiptInvoiceType('tax');
+                          void handleUploadReceipts(e.target.files);
+                          e.target.value = '';
+                        }}
+                      />
+                    </Button>
+                  </Box>
+                );
+              })()}
+              {selectedExpense.attachments.length > 0 ? (
+                renderAttachmentList(selectedExpense.attachments)
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  {t('expenseApproval.voucher.receiptNone')}
+                </Typography>
+              )}
+            </Box>
 
             {/* 송금 확인증 */}
             {(() => {
@@ -4868,6 +5107,7 @@ const ExpenseApproval: React.FC = () => {
                     const transferLabels: Record<string, string> = {
                       transfer_pending: t('expenseApproval.status.transferPending'),
                       transfer_partial: t('expenseApproval.status.partialTransfer'),
+                      awaiting_tax: t('expenseApproval.status.awaitingTaxInvoice'),
                       transfer_completed: t('expenseApproval.status.transferCompleted'),
                       transfer_failed: t('expenseApproval.status.transferFailed'),
                     };
@@ -4892,6 +5132,9 @@ const ExpenseApproval: React.FC = () => {
                     </MenuItem>,
                     <MenuItem key="transfer_partial" value="transfer_partial">
                       {t('expenseApproval.status.partialTransfer')}
+                    </MenuItem>,
+                    <MenuItem key="awaiting_tax" value="awaiting_tax">
+                      {t('expenseApproval.status.awaitingTaxInvoice')}
                     </MenuItem>,
                     <MenuItem key="transfer_completed" value="transfer_completed">
                       {t('expenseApproval.status.transferCompleted')}

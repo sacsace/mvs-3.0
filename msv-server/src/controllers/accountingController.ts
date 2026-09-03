@@ -2228,7 +2228,71 @@ const mergeExpenseItemsMeta = (itemsValue: any, extraMeta: Record<string, any>) 
 };
 
 const expenseHasReceipts = (attachments: any) =>
-  (Array.isArray(attachments) ? attachments : []).some((p: any) => String(p || '').trim());
+  normalizeExpenseAttachments(attachments).length > 0;
+
+type ExpenseInvoiceType = 'tax' | 'proforma';
+
+type ExpenseAttachmentRecord = {
+  path: string;
+  invoiceType: ExpenseInvoiceType;
+};
+
+const normalizeExpenseInvoiceType = (value: unknown): ExpenseInvoiceType => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'proforma' || raw === 'proforma_invoice' || raw === 'pi') return 'proforma';
+  return 'tax';
+};
+
+const normalizeExpenseAttachments = (value: unknown): ExpenseAttachmentRecord[] => {
+  if (!value) return [];
+  let parsed: unknown = value;
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      const path = value.trim();
+      return path ? [{ path, invoiceType: 'tax' }] : [];
+    }
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((item) => {
+      if (typeof item === 'string') {
+        const path = item.trim();
+        return path ? { path, invoiceType: 'tax' as const } : null;
+      }
+      if (item && typeof item === 'object') {
+        const obj = item as { path?: string; url?: string; file?: string; invoiceType?: string; invoice_type?: string };
+        const path = String(obj.path || obj.url || obj.file || '').trim();
+        if (!path) return null;
+        return {
+          path,
+          invoiceType: normalizeExpenseInvoiceType(obj.invoiceType ?? obj.invoice_type),
+        };
+      }
+      return null;
+    })
+    .filter(Boolean) as ExpenseAttachmentRecord[];
+};
+
+const expenseHasTaxInvoice = (attachments: unknown) =>
+  normalizeExpenseAttachments(attachments).some((row) => row.invoiceType === 'tax');
+
+const tryFinalizeExpenseIfReady = async (expense: any, actorUserId?: number) => {
+  const remaining = getExpenseRemainingAmount(expense);
+  if (remaining > 0) return false;
+  if (!expenseHasTaxInvoice(expense.attachments)) return false;
+  const paymentStatus = String(expense.payment_request_status || '').toLowerCase();
+  const docStatus = String(expense.status || '').toLowerCase();
+  if (paymentStatus === 'paid' && docStatus === 'paid') return false;
+  await expense.update({
+    status: 'paid',
+    payment_request_status: 'paid',
+    payment_completed_at: expense.payment_completed_at || new Date(),
+    payment_completed_by: expense.payment_completed_by || actorUserId || null,
+  });
+  return true;
+};
 
 const expenseHasRemarks = (itemsValue: any, notes?: string) => {
   const remarks = String(mergeExpenseItemsMeta(itemsValue, {}).meta?.remarks || notes || '').trim();
@@ -3118,16 +3182,29 @@ export const uploadExpenseReceiptByToken = async (req: Request, res: Response) =
     if (expense.requester_id !== decoded.userId) {
       return res.status(403).json({ success: false, message: '권한이 없습니다.' });
     }
+    const invoiceType = normalizeExpenseInvoiceType(
+      (req.query && (req.query as any).invoiceType) ||
+        (req.body && (req.body as any).invoiceType) ||
+        (req.body && (req.body as any).invoice_type)
+    );
     const relativePath = path.join('expense-receipts', file.filename).replace(/\\/g, '/');
     const absolutePath = path.join(getUploadRoot(), relativePath);
     if (!fs.existsSync(absolutePath)) {
       console.error('[upload] receipt missing on disk after multer:', absolutePath);
       return res.status(500).json({ success: false, message: '파일 저장에 실패했습니다. 잠시 후 다시 시도해주세요.' });
     }
-    const attachments = Array.isArray(expense.attachments) ? [...expense.attachments] : [];
-    attachments.push(relativePath);
+    const attachments = normalizeExpenseAttachments(expense.attachments);
+    attachments.push({ path: relativePath, invoiceType });
     await expense.update({ attachments });
-    res.json({ success: true, message: '영수증이 첨부되었습니다.', path: relativePath });
+    await tryFinalizeExpenseIfReady(expense, decoded.userId);
+    await expense.reload();
+    res.json({
+      success: true,
+      message: '영수증이 첨부되었습니다.',
+      path: relativePath,
+      invoiceType,
+      data: { attachments: expense.attachments },
+    });
   } catch (error: any) {
     console.error('영수증 업로드 오류:', error);
     res.status(500).json({ success: false, message: '영수증 업로드에 실패했습니다.' });
@@ -3138,22 +3215,33 @@ export const uploadExpenseReceiptByToken = async (req: Request, res: Response) =
 export const uploadExpenseReceiptById = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id } = req.user;
+    const { tenant_id, company_id, id: user_id } = req.user;
     const files = ((req as any).files || []) as Array<{ filename?: string }>;
     if (!files.length) {
       return res.status(400).json({ success: false, message: '파일이 필요합니다.' });
     }
+    const rawType =
+      (req.body && (req.body as any).invoiceType) ||
+      (req.body && (req.body as any).invoice_type) ||
+      (req.query && (req.query as any).invoiceType);
+    if (!rawType || !['tax', 'proforma', 'proforma_invoice', 'pi', 'tax_invoice'].includes(String(rawType).trim().toLowerCase())) {
+      return res.status(400).json({
+        success: false,
+        message: '첨부 유형(Tax Invoice / Proforma Invoice)을 선택해주세요.',
+      });
+    }
+    const invoiceType = normalizeExpenseInvoiceType(rawType);
     const expense = await (ExpenseReport as any).findOne({
       where: { id, tenant_id, company_id, is_active: true }
     });
     if (!expense) {
       return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
     }
-    const attachments = Array.isArray(expense.attachments) ? [...expense.attachments] : [];
-    const newPaths = files
-      .filter((file) => file.filename)
-      .map((file) => path.join('expense-receipts', file.filename as string).replace(/\\/g, '/'));
-    for (const relativePath of newPaths) {
+    const attachments = normalizeExpenseAttachments(expense.attachments);
+    const newRows: ExpenseAttachmentRecord[] = [];
+    for (const file of files) {
+      if (!file.filename) continue;
+      const relativePath = path.join('expense-receipts', file.filename).replace(/\\/g, '/');
       const absolutePath = path.join(getUploadRoot(), relativePath);
       if (!fs.existsSync(absolutePath)) {
         console.error('[upload] receipt missing on disk after multer:', absolutePath);
@@ -3162,10 +3250,19 @@ export const uploadExpenseReceiptById = async (req: RequestWithUser, res: Respon
           message: '파일 저장에 실패했습니다. 잠시 후 다시 시도해주세요.',
         });
       }
+      newRows.push({ path: relativePath, invoiceType });
     }
-    attachments.push(...newPaths);
+    attachments.push(...newRows);
     await expense.update({ attachments });
-    res.json({ success: true, message: '영수증이 첨부되었습니다.', paths: newPaths, data: sanitizeExpenseForUser(expense, req.user) });
+    await tryFinalizeExpenseIfReady(expense, user_id);
+    await expense.reload();
+    res.json({
+      success: true,
+      message: '영수증이 첨부되었습니다.',
+      paths: newRows.map((r) => r.path),
+      invoiceType,
+      data: sanitizeExpenseForUser(expense, req.user),
+    });
   } catch (error: any) {
     console.error('영수증 업로드 오류(웹):', error);
     res.status(500).json({ success: false, message: '영수증 업로드에 실패했습니다.' });
@@ -3562,6 +3659,9 @@ export const completeExpensePayment = async (req: RequestWithUser, res: Response
       .replace(/\\/g, '/');
     const paidAfter = roundMoney(paidBefore + requestedAmount);
     const isFullPayment = requestedAmount >= remaining - 0.001;
+    const hasTaxInvoice = expenseHasTaxInvoice(expense.attachments);
+    const canClose = isFullPayment && hasTaxInvoice;
+    const awaitingTaxInvoice = isFullPayment && !hasTaxInvoice;
     const transferLogs = Array.isArray(expense.bank_transfer_logs)
       ? [...expense.bank_transfer_logs]
       : [];
@@ -3581,10 +3681,11 @@ export const completeExpensePayment = async (req: RequestWithUser, res: Response
 
     await expense.update({
       paid_amount: paidAfter,
-      payment_request_status: isFullPayment ? 'paid' : 'approved',
-      payment_completed_at: isFullPayment ? new Date() : expense.payment_completed_at || null,
-      payment_completed_by: isFullPayment ? user_id : expense.payment_completed_by || null,
-      status: isFullPayment ? 'paid' : expense.status,
+      // 프로포마만 있으면 전액 송금해도 지급완료(종료) 처리하지 않음
+      payment_request_status: canClose ? 'paid' : 'approved',
+      payment_completed_at: canClose ? new Date() : expense.payment_completed_at || null,
+      payment_completed_by: canClose ? user_id : expense.payment_completed_by || null,
+      status: canClose ? 'paid' : expense.status,
       bank_transfer_provider: 'manual',
       bank_transfer_status: 'success',
       bank_transfer_reference: proofPath,
@@ -3600,10 +3701,16 @@ export const completeExpensePayment = async (req: RequestWithUser, res: Response
     notifyUser(
       req,
       expense.requester_id,
-      isFullPayment ? 'Remittance recorded' : 'Partial remittance recorded',
-      isFullPayment
+      canClose
+        ? 'Remittance recorded'
+        : awaitingTaxInvoice
+          ? 'Remittance recorded — Tax Invoice required'
+          : 'Partial remittance recorded',
+      canClose
         ? 'Remittance confirmation uploaded and payment marked complete.'
-        : 'Partial remittance ' +
+        : awaitingTaxInvoice
+          ? 'Full remittance recorded, but Tax Invoice must be uploaded before closing.'
+          : 'Partial remittance ' +
             requestedAmount +
             ' recorded. Remaining ' +
             roundMoney(totalAmount - paidAfter) +
@@ -3612,11 +3719,13 @@ export const completeExpensePayment = async (req: RequestWithUser, res: Response
       { expenseId: expense.id, expenseNo: expense.expense_id }
     );
 
+    await expense.reload();
     return res.json({
       success: true,
       data: sanitizeExpenseForUser(expense, req.user),
       paid_amount: paidAfter,
       remaining_amount: roundMoney(totalAmount - paidAfter),
+      awaiting_tax_invoice: awaitingTaxInvoice,
       proof: proofPath
     });
   } catch (error: any) {
