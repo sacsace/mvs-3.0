@@ -2127,7 +2127,7 @@ const ExpenseApproval: React.FC = () => {
       setUploadingReceipts(true);
       const companyLabel =
         String(voucherData.department || '').trim() ||
-        String(selectedExpense?.company_name || '').trim() ||
+        String(selectedExpense?.companyName || '').trim() ||
         'Company';
       const detailLabel =
         String(formData.title || selectedExpense?.title || '').trim() ||
