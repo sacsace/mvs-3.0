@@ -1428,6 +1428,11 @@ export function clearGsEncCostLocalData(): void {
   localStorage.removeItem(LS_TALLY_MAP);
 }
 
+/** 오염된 Tally↔HQ 학습 매핑만 제거 (계정·원가 행은 유지) */
+export function clearGsEncTallyAccountMap(): void {
+  localStorage.removeItem(LS_TALLY_MAP);
+}
+
 export function resolveAmountKrw(amountInr: number, amountKrw: number, fxRate: number): number {
   if (amountKrw) return amountKrw;
   if (fxRate > 0) return amountInr * fxRate;

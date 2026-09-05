@@ -147,8 +147,9 @@ const receiptStorage = multer.diskStorage({
     }
   },
   filename: (_req, file, cb) => {
-    const safeName = (file.originalname || 'file').replace(/[^a-zA-Z0-9.\-_]/g, '_');
-    const finalName = `${Date.now()}_${safeName}`;
+    // 임시 고유명으로 저장 후 controller에서 yyyyMMdd_PV (회사) (세부).ext 로 개명
+    const ext = path.extname(file.originalname || '') || '';
+    const finalName = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}${ext}`;
     cb(null, finalName);
   }
 });

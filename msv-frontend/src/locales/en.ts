@@ -3194,7 +3194,7 @@ export default {
     gsEncCostAnalysis: {
       title: 'GS E&C Cost Analysis',
       subtitle:
-        'Match GAS chart of accounts with Tally cumulative ledger for cost review. (browser local only) Spot tool — data is not saved to the server DB.',
+        'Match GAS chart of accounts with Tally cumulative ledger for cost review. (browser local only) Spot tool — data is not saved to the server DB. If mapping looks wrong, use Reset learned mapping then re-import/rematch.',
       spotNotice:
         'Uploaded GAS accounts and cumulative ledger (Journal) Excel files are stored on this PC browser only.',
       tabs: {
@@ -3208,6 +3208,7 @@ export default {
         appendLedger: 'Append monthly import (Excel/PDF)',
         rematch: 'Rematch Korean names',
         clearAccounts: 'Delete all accounts',
+        clearTallyMap: 'Reset learned mapping',
         clearLocal: 'Clear local data',
         exportExcel: 'Download Excel',
         showMore: 'Show more ({{shown}} / {{total}})',
@@ -3281,6 +3282,8 @@ export default {
         ledgerLoaded: 'Imported {{count}} ledger rows · mapped {{mapped}} / {{total}}.',
         rematched: 'Korean names remapped from prior ledger and GAS. (mapped {{mapped}} / {{total}})',
         accountsCleared: 'All GAS accounts deleted.',
+        tallyMapCleared:
+          'Cleared Tally↔HQ learned mapping and rematched ledger rows. If bad labels remain, edit cells then run Rematch.',
         cleared: 'Local cost-analysis data cleared.',
         excelDownloaded: 'Excel file downloaded.',
       },

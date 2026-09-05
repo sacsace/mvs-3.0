@@ -33,7 +33,7 @@ import {
   expenseMatchesAssignedScope,
   invoiceMatchesAssignedScope,
 } from '../services/workAssigneeScope';
-import { getUploadRoot } from '../utils/uploadPath';
+import { finalizeExpenseReceiptFilename } from '../utils/documentDownloadFilename';
 
 const ensureInvoiceColumns = async () => {
   try {
@@ -3187,10 +3187,19 @@ export const uploadExpenseReceiptByToken = async (req: Request, res: Response) =
         (req.body && (req.body as any).invoiceType) ||
         (req.body && (req.body as any).invoice_type)
     );
-    const relativePath = path.join('expense-receipts', file.filename).replace(/\\/g, '/');
-    const absolutePath = path.join(getUploadRoot(), relativePath);
-    if (!fs.existsSync(absolutePath)) {
-      console.error('[upload] receipt missing on disk after multer:', absolutePath);
+    let relativePath: string;
+    try {
+      const naming = await resolveExpenseReceiptNaming(expense);
+      const finalized = finalizeExpenseReceiptFilename({
+        multerFilename: file.filename,
+        companyName: naming.companyName,
+        detail: naming.detail,
+        date: naming.date,
+        originalName: (file as any).originalname,
+      });
+      relativePath = finalized.relativePath;
+    } catch (renameErr: any) {
+      console.error('[upload] receipt rename failed:', renameErr?.message || renameErr);
       return res.status(500).json({ success: false, message: '파일 저장에 실패했습니다. 잠시 후 다시 시도해주세요.' });
     }
     const attachments = normalizeExpenseAttachments(expense.attachments);
@@ -3239,18 +3248,25 @@ export const uploadExpenseReceiptById = async (req: RequestWithUser, res: Respon
     }
     const attachments = normalizeExpenseAttachments(expense.attachments);
     const newRows: ExpenseAttachmentRecord[] = [];
+    const naming = await resolveExpenseReceiptNaming(expense);
     for (const file of files) {
       if (!file.filename) continue;
-      const relativePath = path.join('expense-receipts', file.filename).replace(/\\/g, '/');
-      const absolutePath = path.join(getUploadRoot(), relativePath);
-      if (!fs.existsSync(absolutePath)) {
-        console.error('[upload] receipt missing on disk after multer:', absolutePath);
+      try {
+        const finalized = finalizeExpenseReceiptFilename({
+          multerFilename: file.filename,
+          companyName: naming.companyName,
+          detail: naming.detail,
+          date: naming.date,
+          originalName: (file as any).originalname,
+        });
+        newRows.push({ path: finalized.relativePath, invoiceType });
+      } catch (renameErr: any) {
+        console.error('[upload] receipt rename failed:', renameErr?.message || renameErr);
         return res.status(500).json({
           success: false,
           message: '파일 저장에 실패했습니다. 잠시 후 다시 시도해주세요.',
         });
       }
-      newRows.push({ path: relativePath, invoiceType });
     }
     attachments.push(...newRows);
     await expense.update({ attachments });
@@ -3283,6 +3299,59 @@ const parseExpenseItemsMeta = (itemsValue: any) => {
     return itemsValue.meta || {};
   }
   return {};
+};
+
+const parseExpenseItemsList = (itemsValue: any): any[] => {
+  if (!itemsValue) return [];
+  let raw: any = itemsValue;
+  if (typeof itemsValue === 'string') {
+    try {
+      raw = JSON.parse(itemsValue);
+    } catch {
+      return [];
+    }
+  }
+  if (Array.isArray(raw)) return raw;
+  if (Array.isArray(raw?.items)) return raw.items;
+  if (Array.isArray(raw?.rows)) return raw.rows;
+  return [];
+};
+
+/** 첨부 저장 파일명용: 회사명·세부·기준일 */
+const resolveExpenseReceiptNaming = async (expense: any) => {
+  const meta = parseExpenseItemsMeta(expense?.items);
+  const items = parseExpenseItemsList(expense?.items);
+  const firstDesc = String(items[0]?.description || items[0]?.item || '').trim();
+
+  let companyName =
+    String(meta.department || meta.companyName || meta.company_name || '').trim() ||
+    String(expense?.company_name || '').trim();
+
+  if (!companyName && expense?.company_id) {
+    try {
+      const company = await (Company as any).findByPk(expense.company_id, {
+        attributes: ['id', 'name'],
+      });
+      companyName = String(company?.name || '').trim();
+    } catch {
+      // ignore
+    }
+  }
+
+  const detail =
+    String(expense?.title || '').trim() ||
+    String(expense?.purpose || '').trim() ||
+    firstDesc ||
+    String(expense?.expense_id || '').trim() ||
+    'PV';
+
+  const date =
+    expense?.submitted_at ||
+    expense?.created_at ||
+    expense?.due_date ||
+    new Date();
+
+  return { companyName: companyName || 'Company', detail, date };
 };
 
 const notifyUser = (

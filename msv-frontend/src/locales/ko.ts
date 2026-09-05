@@ -3266,7 +3266,7 @@ export default {
     gsEncCostAnalysis: {
       title: 'GS E&C 원가분석',
       subtitle:
-        'GAS 표준계정과 Tally 누계 보조부를 매칭해 원가를 조회·합산합니다. (브라우저 로컬 저장) 서버 DB에 저장되지 않는 스팟 기능입니다.',
+        'GAS 표준계정과 Tally 누계 보조부를 매칭해 원가를 조회·합산합니다. (브라우저 로컬 저장) 서버 DB에 저장되지 않는 스팟 기능입니다. 매핑이 어긋나면 「학습 매핑만 초기화」 후 재업로드·재매핑하세요.',
       spotNotice:
         'GAS 표준계정과 누계 보조부(Journal) 엑셀을 업로드하면 이 PC 브라우저에만 보관됩니다.',
       tabs: {
@@ -3280,6 +3280,7 @@ export default {
         appendLedger: '월별 추가 import (엑셀/PDF)',
         rematch: '한글명 재매핑',
         clearAccounts: '전체 계정과목 삭제',
+        clearTallyMap: '학습 매핑만 초기화',
         clearLocal: '로컬 데이터 삭제',
         exportExcel: 'Excel 다운로드',
         showMore: '더 보기 ({{shown}} / {{total}})',
@@ -3353,6 +3354,8 @@ export default {
         ledgerLoaded: '보조부 {{count}}건 import · 매핑 {{mapped}} / {{total}}건.',
         rematched: '이전 누계 보조부·GAS 기준으로 한글명 재매핑했습니다. (매핑 {{mapped}} / {{total}})',
         accountsCleared: '전체 계정과목을 삭제했습니다.',
+        tallyMapCleared:
+          'Tally↔HQ 학습 매핑을 지우고 현재 원가 행을 다시 매칭했습니다. 잘못 학습된 값이 남았다면 셀을 수정한 뒤 「한글명 재매핑」을 눌러 주세요.',
         cleared: '로컬 원가분석 데이터를 삭제했습니다.',
         excelDownloaded: 'Excel 파일을 다운로드했습니다.',
       },

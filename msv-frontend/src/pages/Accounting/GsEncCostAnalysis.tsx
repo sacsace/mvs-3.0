@@ -49,6 +49,7 @@ import {
 import {
   buildSummary,
   clearGsEncCostLocalData,
+  clearGsEncTallyAccountMap,
   formatInr,
   formatLedgerDate,
   formatLedgerMonth,
@@ -686,6 +687,31 @@ const GsEncCostAnalysis: React.FC = () => {
     setSuccess(t('gsEncCostAnalysis.success.cleared'));
   };
 
+  /** 오염된 Tally↔HQ 학습만 지우고, 현재 행은 맵 없이 다시 매칭 */
+  const handleClearTallyMap = () => {
+    clearGsEncTallyAccountMap();
+    const raw = ledger.map((row) => ({
+      voucherNo: row.voucherNo,
+      voucherDate: row.voucherDate,
+      accountCode: row.accountCode,
+      accountNameTally: row.accountNameTally,
+      accountNameHqKo: row.accountNameHqKo,
+      accountNameHqEn: row.accountNameHqEn,
+      amountInr: row.amountInr,
+      amountKrw: row.amountKrw,
+      costCategory: row.costCategory,
+      clientName: row.clientName,
+      narration: row.narration,
+      division: row.division,
+      month: row.month,
+      gsIndiaCost: row.gsIndiaCost,
+    }));
+    const rematched = matchLedgerRows(raw, accounts);
+    setLedger(rematched);
+    saveLedgerRows(rematched);
+    setSuccess(t('gsEncCostAnalysis.success.tallyMapCleared'));
+  };
+
   const handleClearAccounts = () => {
     rematchAndSave([], ledger);
     setSuccess(t('gsEncCostAnalysis.success.accountsCleared'));
@@ -1017,6 +1043,15 @@ const GsEncCostAnalysis: React.FC = () => {
               onClick={handleClearAccounts}
             >
               {t('gsEncCostAnalysis.actions.clearAccounts')}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<ClearIcon fontSize="small" />}
+              disabled={busy || (!accounts.length && !ledger.length)}
+              sx={mvsBodyOutlinedBtnSx}
+              onClick={handleClearTallyMap}
+            >
+              {t('gsEncCostAnalysis.actions.clearTallyMap')}
             </Button>
             <Button
               variant="outlined"

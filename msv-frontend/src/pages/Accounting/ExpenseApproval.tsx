@@ -90,6 +90,7 @@ import {
   downloadExpenseApprovalPdf,
   EXPENSE_DOCUMENT_EXPORT_CSS,
 } from '../../utils/expenseApprovalPdf';
+import { buildDocumentDownloadFilename } from '../../utils/pdf';
 
 const expenseApprovalFilterFieldSx = {
   ...(mvsSearchFieldSx as Record<string, unknown>),
@@ -98,6 +99,9 @@ const expenseApprovalFilterFieldSx = {
 /** expense-receipts/1784..._IMG.jpg → IMG.jpg */
 const getReceiptDisplayName = (filePath: string): string => {
   const base = String(filePath || '').split(/[/\\]/).pop() || String(filePath || '');
+  // 표준명 yyyyMMdd_PV|RT|RI (...) 은 그대로 표시
+  if (/^\d{8}_[A-Za-z]/.test(base)) return base;
+  // 레거시 timestamp_원본명
   return base.replace(/^\d+_/, '') || base;
 };
 
@@ -2121,9 +2125,28 @@ const ExpenseApproval: React.FC = () => {
     }
     try {
       setUploadingReceipts(true);
+      const companyLabel =
+        String(voucherData.department || '').trim() ||
+        String(selectedExpense?.company_name || '').trim() ||
+        'Company';
+      const detailLabel =
+        String(formData.title || selectedExpense?.title || '').trim() ||
+        String(formData.purpose || selectedExpense?.purpose || '').trim() ||
+        String(lineItems[0]?.description || '').trim() ||
+        'PV';
+      const renamed = Array.from(files).map((file) => {
+        const ext = getFileExtension(file.name) || (file.type.includes('pdf') ? 'pdf' : 'jpg');
+        const nextName = buildDocumentDownloadFilename({
+          code: 'PV',
+          companyName: companyLabel,
+          detail: detailLabel,
+          extension: ext,
+        });
+        return renameFileKeepingExtension(file, nextName);
+      });
       const response = await accountingService.uploadExpenseReceiptById(
         activeExpenseId,
-        Array.from(files),
+        renamed,
         receiptInvoiceType
       );
       if (!response?.success) {
