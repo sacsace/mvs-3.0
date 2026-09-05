@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import { DataTypes, Op } from 'sequelize';
-import { User, Company, LoginLog, Tenant, Menu, UserPermission, CompanyGstNumber } from '../models';
+import { User, Company, LoginLog, Tenant, Menu, UserPermission, CompanyGstNumber, Department, Position } from '../models';
 import { AuthRequest } from '../types';
 import sequelize from '../config/database';
 import { invalidateAuthUser } from '../utils/authCache';
@@ -15,6 +15,28 @@ import {
 
 const comparePassword = async (password: string, hash: string): Promise<boolean> => {
   return await bcrypt.compare(password, hash);
+};
+
+/** 로그인/프로필용 부서·직책 표시명 (문자열 비어 있으면 id 마스터에서 보강) */
+const resolveUserOrgLabels = async (user: any): Promise<{ department: string | null; position: string | null }> => {
+  let department = String(user?.department || '').trim();
+  let position = String(user?.position || '').trim();
+  try {
+    if (!department && user?.department_id) {
+      const dept = await (Department as any).findByPk(user.department_id, { attributes: ['id', 'name'] });
+      department = String(dept?.name || '').trim();
+    }
+    if (!position && user?.position_id) {
+      const pos = await (Position as any).findByPk(user.position_id, { attributes: ['id', 'name'] });
+      position = String(pos?.name || '').trim();
+    }
+  } catch (err) {
+    console.warn('[auth] resolveUserOrgLabels failed:', (err as any)?.message || err);
+  }
+  return {
+    department: department || null,
+    position: position || null,
+  };
 };
 
 const getClientIp = (req: Request): string | null => {
@@ -529,7 +551,8 @@ export const login = async (req: Request, res: Response) => {
       where: { userid: normalizedUserId, status: 'active' },
       attributes: [
         'id', 'tenant_id', 'company_id', 'userid', 'username', 'email',
-        'password_hash', 'role', 'department', 'position', 'status', 'last_login',
+        'password_hash', 'role', 'department', 'department_id', 'position', 'position_id',
+        'status', 'last_login',
         'is_payment_officer', 'session_version', 'avatar_url'
       ]
     });
@@ -692,6 +715,8 @@ export const login = async (req: Request, res: Response) => {
       user_agent: userAgent
     });
 
+    const org = await resolveUserOrgLabels(user);
+
     res.json({
       success: true,
       data: {
@@ -702,8 +727,8 @@ export const login = async (req: Request, res: Response) => {
           username: user.username,
           email: user.email,
           role: user.role,
-          department: user.department,
-          position: user.position,
+          department: org.department,
+          position: org.position,
           tenant_id: user.tenant_id,
           company_id: user.company_id,
           is_payment_officer: user.is_payment_officer,
@@ -725,6 +750,7 @@ export const login = async (req: Request, res: Response) => {
 export const getProfile = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
+    const org = await resolveUserOrgLabels(user);
 
     res.json({
       success: true,
@@ -734,8 +760,8 @@ export const getProfile = async (req: Request, res: Response) => {
         username: user.username,
         email: user.email,
         role: user.role,
-        department: user.department,
-        position: user.position,
+        department: org.department,
+        position: org.position,
         last_login: user.last_login,
         is_payment_officer: user.is_payment_officer,
         avatar_url: user.avatar_url || null

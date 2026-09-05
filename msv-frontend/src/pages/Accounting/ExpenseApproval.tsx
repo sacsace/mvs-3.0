@@ -1143,6 +1143,9 @@ const ExpenseApproval: React.FC = () => {
       purpose: formData.purpose,
       total_amount: floorMoney(totalAmount),
       currency: 'INR',
+      requester_name: user?.username || '',
+      requester_department: user?.department || '',
+      requester_position: user?.position || '',
       current_approver_id: voucherData.approvedById ? Number(voucherData.approvedById) : null,
       priority: formData.priority,
       due_date: formData.dueDate || null,
@@ -1160,7 +1163,7 @@ const ExpenseApproval: React.FC = () => {
       },
       status: statusOverride,
     }),
-    [formData, lineItems, voucherData, totalAmount]
+    [formData, lineItems, voucherData, totalAmount, user]
   );
 
   const ensureDraftExpense = useCallback(async () => {
