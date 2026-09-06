@@ -69,11 +69,18 @@ export const MY_WORKSPACE_CHILDREN = [
     order: 8,
   },
   {
+    route: '/my/company-policies',
+    name_ko: '회사 정책',
+    name_en: 'Company Policies',
+    icon: 'policy',
+    order: 9,
+  },
+  {
     route: '/my/mail-settings',
     name_ko: '설정',
     name_en: 'Settings',
     icon: 'settings',
-    order: 9,
+    order: 10,
   },
 ] as const;
 

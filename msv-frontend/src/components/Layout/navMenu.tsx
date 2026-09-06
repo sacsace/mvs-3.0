@@ -37,6 +37,7 @@ import {
   Campaign,
   Assignment,
   ListAlt,
+  Policy,
 } from '@mui/icons-material';
 import type { Menu } from '../../services/menuService';
 import { isRemovedNavMenuRoute } from '../../utils/isRemovedNavMenuRoute';
@@ -323,6 +324,7 @@ const getIconByRoute = (route: string): React.ReactElement | null => {
     return <Campaign />;
   }
   if (normalized.includes('/my/work-list')) return <Assignment />;
+  if (normalized.includes('/my/company-policies')) return <Policy />;
   if (normalized.includes('/my/mail-settings')) return <Settings />;
   if (normalized === '/my' || normalized.startsWith('/my/')) return <Person />;
   if (normalized.includes('/communication/desktop-notifier')) return <Download />;

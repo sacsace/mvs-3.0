@@ -31,6 +31,7 @@ import {
   TrendingUp,
   ViewKanban,
   AssignmentInd,
+  Policy,
 } from '@mui/icons-material';
 import type { Menu } from '../services/menuService';
 
@@ -65,6 +66,7 @@ const MENU_ICON_MAP: Record<string, React.ReactElement> = {
   business: <Business />,
   email: <Email />,
   trending_up: <TrendingUp />,
+  policy: <Policy />,
 };
 
 export function getMenuIconByName(iconName?: string | null): React.ReactElement {
@@ -139,6 +141,7 @@ export function getPageIconByRoute(route: string): React.ReactElement | null {
   if (normalized.includes('/my/contracts')) return <Description />;
   if (normalized.includes('/my/notices') || normalized.includes('/notice')) return <Campaign />;
   if (normalized.includes('/my/work-list')) return <Assignment />;
+  if (normalized.includes('/my/company-policies')) return <Policy />;
   if (normalized.includes('/my/mail-settings')) return <Settings />;
   if (normalized === '/my' || normalized.startsWith('/my/')) return <Person />;
   if (normalized.includes('/attendance')) return <Schedule />;

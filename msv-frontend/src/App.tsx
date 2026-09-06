@@ -63,6 +63,7 @@ const MyPayslips = lazyPage(() => import('./pages/My/MyPayslips'));
 const MyMailSettings = lazyPage(() => import('./pages/My/MyMailSettings'));
 const MyWorkList = lazyPage(() => import('./pages/My/MyWorkList'));
 const MyPersonalInfo = lazyPage(() => import('./pages/My/MyPersonalInfo'));
+const MyCompanyPolicies = lazyPage(() => import('./pages/My/MyCompanyPolicies'));
 const NotificationManagement = lazyPage(() => import('./pages/Notifications/NotificationManagement'));
 const EmailManagement = lazyPage(() => import('./pages/Communication/EmailManagement'));
 const SMSManagement = lazyPage(() => import('./pages/Communication/SMSManagement'));
@@ -270,6 +271,7 @@ function App() {
             <Route path="my/leave/request" element={<VacationRequest />} />
             <Route path="my/leave/request/:id" element={<VacationRequest />} />
             <Route path="my/work-list" element={<MyWorkList />} />
+            <Route path="my/company-policies" element={<MyCompanyPolicies />} />
             <Route path="my/mail-settings" element={<MyMailSettings />} />
             
             {/* 업무관리 */}

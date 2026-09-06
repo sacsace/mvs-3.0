@@ -94,6 +94,49 @@ export default {
       },
       selectPlaceholder: '선택하세요'
     },
+
+    companyPolicies: {
+      title: '회사 정책',
+      subtitle: '고용·근태·휴가·급여·기밀·POSH·퇴직 정책을 확인합니다. 회사 관리자는 수정할 수 있으며 변경 이력이 기록됩니다.',
+      empty: '표시할 정책이 없습니다.',
+      emptyContent: '등록된 내용이 없습니다.',
+      readOnlyHint: '일반 직원은 조회만 가능합니다. 수정은 회사 관리자(admin)만 할 수 있습니다.',
+      version: '버전 {{version}}',
+      updatedBy: '수정: {{name}}',
+      historyTitle: '변경 이력',
+      historyEmpty: '변경 이력이 없습니다.',
+      revisionTitle: '버전 {{version}} 내용',
+      tabs: {
+        employment: 'Employment Policy',
+        attendance: 'Attendance Policy',
+        leave: 'Leave Policy',
+        salaryPayroll: 'Salary & Payroll Policy',
+        confidentialityData: 'Confidentiality & Data',
+        posh: 'POSH',
+        separation: 'Separation Policy',
+      },
+      fields: {
+        titleKo: '제목 (한국어)',
+        titleEn: '제목 (English)',
+        contentKo: '내용 (한국어)',
+        contentEn: '내용 (English)',
+        changeSummary: '변경 요약',
+        changeSummaryPlaceholder: '예: 근무시간 조항 업데이트',
+      },
+      actions: {
+        edit: '수정',
+        save: '저장',
+        history: '변경 이력',
+        viewRevision: '내용 보기',
+      },
+      success: { saved: '회사 정책을 저장했습니다.' },
+      errors: {
+        loadFailed: '회사 정책을 불러오지 못했습니다.',
+        saveFailed: '회사 정책 저장에 실패했습니다.',
+        historyFailed: '변경 이력을 불러오지 못했습니다.',
+      },
+    },
+
     app: {
       accountingTitle: '회계관리',
       accountingDesc: '종합적인 회계 및 재무 관리 기능을 제공하는 페이지입니다.',

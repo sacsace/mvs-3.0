@@ -94,6 +94,49 @@ export default {
       },
       selectPlaceholder: 'Select'
     },
+
+    companyPolicies: {
+      title: 'Company Policies',
+      subtitle: 'View employment, attendance, leave, payroll, confidentiality, POSH, and separation policies. Company admins can edit; all changes are logged.',
+      empty: 'No policies to display.',
+      emptyContent: 'No content has been registered.',
+      readOnlyHint: 'Employees can view only. Editing is limited to company admins.',
+      version: 'Version {{version}}',
+      updatedBy: 'Updated by {{name}}',
+      historyTitle: 'Change history',
+      historyEmpty: 'No change history yet.',
+      revisionTitle: 'Version {{version}} content',
+      tabs: {
+        employment: 'Employment Policy',
+        attendance: 'Attendance Policy',
+        leave: 'Leave Policy',
+        salaryPayroll: 'Salary & Payroll Policy',
+        confidentialityData: 'Confidentiality & Data',
+        posh: 'POSH',
+        separation: 'Separation Policy',
+      },
+      fields: {
+        titleKo: 'Title (Korean)',
+        titleEn: 'Title (English)',
+        contentKo: 'Content (Korean)',
+        contentEn: 'Content (English)',
+        changeSummary: 'Change summary',
+        changeSummaryPlaceholder: 'e.g. Updated working-hours clause',
+      },
+      actions: {
+        edit: 'Edit',
+        save: 'Save',
+        history: 'History',
+        viewRevision: 'View',
+      },
+      success: { saved: 'Company policy saved.' },
+      errors: {
+        loadFailed: 'Failed to load company policies.',
+        saveFailed: 'Failed to save company policy.',
+        historyFailed: 'Failed to load change history.',
+      },
+    },
+
     app: {
       accountingTitle: 'Accounting',
       accountingDesc: 'This page provides comprehensive accounting and financial management features.',
