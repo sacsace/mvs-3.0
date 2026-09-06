@@ -630,11 +630,26 @@ const formatLocalYmd = (value?: Date | string | null) => {
   return `${y}-${m}-${day}`;
 };
 
-const takeFileNameSnippet = (value: string, maxChars: number) => {
-  const cleaned = String(value || '')
-    .replace(/[\\/:*?"<>|]/g, ' ')
-    .replace(/\s+/g, ' ')
+/** 파일명에서 Private Limited / Pvt Ltd 등 법인 접미사 항상 제거 */
+const stripCorporateSuffixFromFilename = (value: string) =>
+  String(value || '')
+    .replace(/\bprivate\s+limited\b\.?/gi, '')
+    .replace(/\bprivate\s+ltd\.?\b/gi, '')
+    .replace(/\bpvt\.?\s*ltd\.?\b/gi, '')
+    .replace(/\bpvt\.?\s*limited\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\(\s+/g, '(')
+    .replace(/\s+\)/g, ')')
+    .replace(/\s+\./g, '.')
     .trim();
+
+const takeFileNameSnippet = (value: string, maxChars: number) => {
+  const cleaned = stripCorporateSuffixFromFilename(
+    String(value || '')
+      .replace(/[\\/:*?"<>|]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
   if (!cleaned) return '';
   return Array.from(cleaned).slice(0, maxChars).join('');
 };
@@ -661,10 +676,12 @@ const getFileExtension = (fileName: string) => {
 
 /** 확장자는 유지하고 표시 파일명만 변경 */
 const renameFileKeepingExtension = (file: File, nextName: string): File => {
-  const cleaned = String(nextName || '')
-    .replace(/[\\/:*?"<>|]/g, '_')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const cleaned = stripCorporateSuffixFromFilename(
+    String(nextName || '')
+      .replace(/[\\/:*?"<>|]/g, '_')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
   if (!cleaned) return file;
   const ext = getFileExtension(file.name);
   const withoutExt = cleaned.replace(/\.[^.]+$/, '').trim() || cleaned;
@@ -4810,7 +4827,9 @@ const ExpenseApproval: React.FC = () => {
                         fullWidth
                         value={proofNameDraft}
                         disabled={paymentSubmitting}
-                        onChange={(e) => setProofNameDraft(e.target.value)}
+                        onChange={(e) =>
+                          setProofNameDraft(stripCorporateSuffixFromFilename(e.target.value))
+                        }
                         onFocus={(e) => e.target.select()}
                         onBlur={() => applyProofFileName(proofNameDraft)}
                         onKeyDown={(e) => {
