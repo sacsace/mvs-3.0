@@ -211,11 +211,14 @@ export type ComputeProfessionalTaxInput = {
 
 export function computeProfessionalTaxByState(input: ComputeProfessionalTaxInput): number {
   const gross = Math.max(0, Number(input.grossMonthly) || 0);
+  // 지급합계(Sum Total)가 25,000 이하이면 PT 차감 없음
+  if (gross <= 25000) return 0;
+
   const code = normalizeIndianStateCode(input.stateCode);
   if (!code || PT_EXEMPT_STATE_CODES.has(code)) return 0;
 
   const slabs = STATE_PT_SLABS[code];
-  if (!slabs) return gross >= 25000 ? 200 : 0;
+  if (!slabs) return 200;
 
   let amount = lookupSlabAmount(gross, slabs);
   const monthNum = /^(\d{4})-(\d{2})/.exec(String(input.payrollMonth ?? '').trim())?.[2];

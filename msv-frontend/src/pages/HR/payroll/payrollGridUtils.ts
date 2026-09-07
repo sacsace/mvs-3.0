@@ -429,6 +429,7 @@ function resolvePfModeFromExtra(x: Record<string, unknown>): PfMode {
  * - PF(직원·사업주) = ROUND(MIN(Basic Salary × 12%, 1,800), 0) — 인사정보에서 상한 해제 시 12%만 적용
  * - ESIC(직원) = IF(지급합계>21,000, 0, 지급합계×0.75%)
  * - TDS = 신규 세제 LET 수식(지급합계×12, 표준공제 75,000, 87A 리베이트·한계완화, 4% cess) / 12
+ * - PT = 지급합계 > 25,000 일 때만 주별 슬랩(또는 200) 적용, 이하이면 0
  * - Net = Sum Total − PF(직원) − ESIC(직원) − TDS − PT − 선지급
  */
 function slabTax(taxable: number, cap: number, floor: number, rate: number): number {

@@ -170,7 +170,8 @@ export function computeEsiEmployer(gross: number, esiSumCeiling = 21000): number
 }
 
 export function computePt(gross: number, threshold: number, ptAmount: number): number {
-  if (gross >= threshold) return rupee(ptAmount);
+  // 지급합계가 threshold를 초과할 때만 PT (기본 threshold 25,000)
+  if (gross > threshold) return rupee(ptAmount);
   return 0;
 }
 

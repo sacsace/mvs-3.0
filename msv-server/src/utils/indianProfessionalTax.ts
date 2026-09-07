@@ -245,16 +245,18 @@ export type ComputeProfessionalTaxInput = {
   payrollMonth?: string | null;
 };
 
-/** 주별 PT 월액 (미등록·면제 주는 0) */
+/** 주별 PT 월액. 지급합계 ≤ 25,000 이면 0 (미등록·면제 주도 0) */
 export function computeProfessionalTaxByState(input: ComputeProfessionalTaxInput): number {
   const gross = Math.max(0, Number(input.grossMonthly) || 0);
+  // 지급합계(Sum Total)가 25,000 이하이면 PT 차감 없음
+  if (gross <= 25000) return 0;
+
   const code = normalizeIndianStateCode(input.stateCode);
   if (!code || PT_EXEMPT_STATE_CODES.has(code)) return 0;
 
   const slabs = STATE_PT_SLABS[code];
   if (!slabs) {
-    // 알 수 없는 주: 기존 단순 규칙(25,000 이상 200) 폴백
-    return gross >= 25000 ? 200 : 0;
+    return 200;
   }
 
   let amount = lookupSlabAmount(gross, slabs);
