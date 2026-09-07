@@ -549,7 +549,7 @@ export default {
       pfCap: 'PF 상한',
       pfCap1800: '상한 1,800',
       pfCap12pct: '기본급 12%',
-      pfCapTotal12pct: '총급여의 12%',
+      pfCapTotal12pct: '총급여의 12% (직원·사업주 각 50%)',
       careerHint: '이전 직장 경력을 추가할 수 있습니다. 회사명이 있는 항목만 저장됩니다.',
       careerCompany: '회사명',
       careerPosition: '직위',

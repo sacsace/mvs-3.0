@@ -135,15 +135,18 @@ export function normalizeUserPfCalcMode(raw: unknown): UserPfCalcMode {
   return 'cap_1800';
 }
 
-/** 인사정보 PF 계산: 상한 1800 / 기본급 12% / 총급여 12% */
+/** 인사정보 PF 계산: 상한 1800 / 기본급 12% / 총급여 12%(직원·사업주 각 50%) */
 export function computePfFromCalcMode(
   basicSalary: number,
   totalSalary: number,
   mode: UserPfCalcMode = 'cap_1800'
 ): { pf_employee: number; pf_employer: number } {
   if (mode === 'total_12pct') {
-    const amount = Math.round(Math.max(0, totalSalary) * 0.12);
-    return { pf_employee: amount, pf_employer: amount };
+    // 총급여×12% 를 직원·사업주가 반반 (각 6%)
+    const totalPf = Math.round(Math.max(0, totalSalary) * 0.12);
+    const pf_employee = Math.round(totalPf / 2);
+    const pf_employer = totalPf - pf_employee;
+    return { pf_employee, pf_employer };
   }
   return computePfFromBasicSalary(basicSalary, mode !== 'basic_12pct');
 }

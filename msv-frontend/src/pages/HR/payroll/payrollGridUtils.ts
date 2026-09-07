@@ -372,8 +372,11 @@ export function computePfContributions(
           ? 'total_12pct'
           : 'cap_1800';
   if (resolved === 'total_12pct') {
-    const amount = Math.round(Math.max(0, num(totalSalary)) * PF_BASIC_RATE);
-    return { pf_employee: amount, pf_employer: amount };
+    // 총급여×12% 를 직원·사업주가 반반 (각 6%)
+    const totalPf = Math.round(Math.max(0, num(totalSalary)) * PF_BASIC_RATE);
+    const pf_employee = Math.round(totalPf / 2);
+    const pf_employer = totalPf - pf_employee;
+    return { pf_employee, pf_employer };
   }
   const basic = Math.max(0, num(basicSalary));
   const raw = basic * PF_BASIC_RATE;
