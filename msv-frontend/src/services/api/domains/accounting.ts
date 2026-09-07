@@ -843,7 +843,20 @@ export const payrollService = {
     const response = await api.get(`/hr/my/payslips/${id}/download`, {
       responseType: 'blob',
     });
-    return response.data as Blob;
+    const data = response.data as Blob;
+    const contentType = String(response.headers?.['content-type'] || data?.type || '');
+    if (contentType.includes('application/json') || contentType.includes('text/')) {
+      const text = await data.text();
+      let message = '명세서 파일을 불러오지 못했습니다.';
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed?.message) message = String(parsed.message);
+      } catch {
+        /* ignore */
+      }
+      throw new Error(message);
+    }
+    return data;
   },
 
   // 급여 ?�정

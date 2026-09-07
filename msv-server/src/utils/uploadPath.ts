@@ -67,3 +67,42 @@ export function ensureUploadSubdir(...parts: string[]): string {
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
+
+/**
+ * DB에 저장된 pdf_path / pdf_url 로 실제 파일 경로 해석.
+ * 절대경로가 없거나(재배포·다른 머신) 깨진 경우 `/uploads/...` URL로 재해석한다.
+ */
+export function resolveStoredUploadFile(
+  pdfPath?: string | null,
+  pdfUrl?: string | null
+): string | null {
+  const stored = String(pdfPath || '').trim();
+  if (stored && fs.existsSync(stored)) return stored;
+
+  const url = String(pdfUrl || '').trim().replace(/\\/g, '/');
+  if (url.startsWith('/uploads/')) {
+    const rel = url.slice('/uploads/'.length);
+    const candidate = path.join(getUploadRoot(), ...rel.split('/').filter(Boolean));
+    if (fs.existsSync(candidate)) return candidate;
+  }
+
+  // 예전 절대경로 끝부분(payslips/...)만 남아 있는 경우
+  if (stored) {
+    const normalized = stored.replace(/\\/g, '/');
+    const marker = '/uploads/';
+    const idx = normalized.toLowerCase().lastIndexOf(marker);
+    if (idx >= 0) {
+      const rel = normalized.slice(idx + marker.length);
+      const candidate = path.join(getUploadRoot(), ...rel.split('/').filter(Boolean));
+      if (fs.existsSync(candidate)) return candidate;
+    }
+    const payslipIdx = normalized.toLowerCase().lastIndexOf('/payslips/');
+    if (payslipIdx >= 0) {
+      const rel = normalized.slice(payslipIdx + 1); // payslips/...
+      const candidate = path.join(getUploadRoot(), ...rel.split('/').filter(Boolean));
+      if (fs.existsSync(candidate)) return candidate;
+    }
+  }
+
+  return null;
+}

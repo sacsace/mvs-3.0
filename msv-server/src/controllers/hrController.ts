@@ -6,7 +6,7 @@ import { Op, Sequelize } from 'sequelize';
 import sequelize from '../config/database';
 import fs from 'fs';
 import path from 'path';
-import { ensureUploadSubdir } from '../utils/uploadPath';
+import { ensureUploadSubdir, resolveStoredUploadFile } from '../utils/uploadPath';
 import { buildNodemailerTransportOptions, getResolvedMailTransportOptions } from '../utils/mailConfig';
 import {
   parsePayrollPeriod,
@@ -362,6 +362,7 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
           'bank_account',
           'bank_ifsc',
           'employment_type',
+          'employee_number',
           'ot_eligible',
           'pf_calc_mode'
         ],
@@ -471,6 +472,7 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
         const bankName = emp.bank_name != null ? String(emp.bank_name).trim() : '';
 
         const extra_fields = {
+          emp_id: String((emp as any).employee_number || '').trim(),
           bank_account: bankAccount,
           ifsc: bankIfsc,
           bank_name: bankName,
@@ -888,10 +890,18 @@ export const sendPayrollPayslip = async (req: RequestWithUser, res: Response) =>
       String(extra.employee_name || '').trim() ||
       String(emp?.username || '').trim() ||
       'Employee';
-    const empId =
+    let empId =
       String(extra.emp_id || '').trim() ||
-      String(emp?.employee_number || '').trim() ||
-      '';
+      String(emp?.employee_number || emp?.get?.('employee_number') || '').trim();
+    if (!empId) {
+      const empPk = Number(emp?.id || (payroll as any).employee_id);
+      if (Number.isFinite(empPk) && empPk > 0) {
+        const fresh = await (User as any).findByPk(empPk, {
+          attributes: ['id', 'employee_number']
+        });
+        empId = String(fresh?.employee_number || fresh?.get?.('employee_number') || '').trim();
+      }
+    }
     const netRaw = (payroll as any).net_salary;
     const netSalary =
       netRaw === undefined || netRaw === null || netRaw === ''
@@ -1269,8 +1279,8 @@ export const downloadMyPayslip = async (req: RequestWithUser, res: Response) => 
       return res.status(404).json({ success: false, message: '급여 명세서를 찾을 수 없습니다.' });
     }
 
-    const filePath = String(row.pdf_path || '');
-    if (!filePath || !fs.existsSync(filePath)) {
+    const filePath = resolveStoredUploadFile(row.pdf_path, row.pdf_url);
+    if (!filePath) {
       return res.status(404).json({ success: false, message: '명세서 파일이 없습니다.' });
     }
 
