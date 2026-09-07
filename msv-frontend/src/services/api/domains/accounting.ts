@@ -840,23 +840,51 @@ export const payrollService = {
   },
 
   downloadMyPayslip: async (id: number) => {
-    const response = await api.get(`/hr/my/payslips/${id}/download`, {
-      responseType: 'blob',
-    });
-    const data = response.data as Blob;
-    const contentType = String(response.headers?.['content-type'] || data?.type || '');
-    if (contentType.includes('application/json') || contentType.includes('text/')) {
-      const text = await data.text();
-      let message = '명세서 파일을 불러오지 못했습니다.';
-      try {
-        const parsed = JSON.parse(text);
-        if (parsed?.message) message = String(parsed.message);
-      } catch {
-        /* ignore */
+    try {
+      const response = await api.get(`/hr/my/payslips/${id}/download`, {
+        responseType: 'blob',
+        headers: { 'x-skip-error-popup': 'true' },
+      });
+      const data = response.data as Blob;
+      if (!data || typeof (data as any).arrayBuffer !== 'function') {
+        throw new Error('명세서 파일을 불러오지 못했습니다.');
       }
-      throw new Error(message);
+      const contentType = String(response.headers?.['content-type'] || data.type || '');
+      const buf = await data.arrayBuffer();
+      const bytes = new Uint8Array(buf.slice(0, 8));
+      const head = String.fromCharCode(...bytes);
+      const looksLikePdf = head.startsWith('%PDF');
+      if (
+        !looksLikePdf ||
+        contentType.includes('application/json') ||
+        contentType.includes('text/') ||
+        buf.byteLength < 64
+      ) {
+        let message = '명세서 파일이 없습니다. 급여 관리에서 명세서를 다시 발송해 주세요.';
+        try {
+          const text = new TextDecoder().decode(buf);
+          const parsed = JSON.parse(text);
+          if (parsed?.message) message = String(parsed.message);
+        } catch {
+          /* ignore */
+        }
+        throw new Error(message);
+      }
+      return new Blob([buf], { type: 'application/pdf' });
+    } catch (e: any) {
+      const errData = e?.response?.data;
+      if (errData && typeof errData.arrayBuffer === 'function') {
+        try {
+          const text = await (errData as Blob).text();
+          const parsed = JSON.parse(text);
+          if (parsed?.message) throw new Error(String(parsed.message));
+        } catch (inner: any) {
+          if (inner?.message && !String(inner.message).startsWith('Unexpected')) throw inner;
+        }
+      }
+      if (e?.message) throw e;
+      throw new Error('명세서 파일을 불러오지 못했습니다.');
     }
-    return data;
   },
 
   // 급여 ?�정

@@ -947,6 +947,17 @@ export const sendPayrollPayslip = async (req: RequestWithUser, res: Response) =>
     const fileName = `payslip-${period || 'na'}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`;
     const absPath = path.join(dir, fileName);
     await fs.promises.writeFile(absPath, pdfBuffer);
+    if (pdfBuffer.length < 64 || pdfBuffer.subarray(0, 5).toString('utf8') !== '%PDF-') {
+      try {
+        await fs.promises.unlink(absPath);
+      } catch {
+        /* ignore */
+      }
+      return res.status(500).json({
+        success: false,
+        message: 'PDF 저장에 실패했습니다. 다시 발송해 주세요.'
+      });
+    }
     const pdfUrl = `/uploads/payslips/${tenant_id}/${company_id}/${fileName}`;
 
     const previousRows = await (PayslipDelivery as any).findAll({
@@ -1281,14 +1292,46 @@ export const downloadMyPayslip = async (req: RequestWithUser, res: Response) => 
 
     const filePath = resolveStoredUploadFile(row.pdf_path, row.pdf_url);
     if (!filePath) {
-      return res.status(404).json({ success: false, message: '명세서 파일이 없습니다.' });
+      return res.status(404).json({
+        success: false,
+        message: '명세서 파일이 없습니다. 급여 관리에서 명세서를 다시 발송해 주세요.'
+      });
+    }
+
+    // 손상·빈 파일 방지
+    try {
+      const st = await fs.promises.stat(filePath);
+      if (!st.isFile() || st.size < 64) {
+        return res.status(404).json({
+          success: false,
+          message: '명세서 파일이 없습니다. 급여 관리에서 명세서를 다시 발송해 주세요.'
+        });
+      }
+      const fd = await fs.promises.open(filePath, 'r');
+      try {
+        const header = Buffer.alloc(5);
+        await fd.read(header, 0, 5, 0);
+        if (header.toString('utf8') !== '%PDF-') {
+          return res.status(404).json({
+            success: false,
+            message: '명세서 파일이 손상되었습니다. 급여 관리에서 명세서를 다시 발송해 주세요.'
+          });
+        }
+      } finally {
+        await fd.close();
+      }
+    } catch {
+      return res.status(404).json({
+        success: false,
+        message: '명세서 파일이 없습니다. 급여 관리에서 명세서를 다시 발송해 주세요.'
+      });
     }
 
     const downloadName = `Payslip (${row.payroll_period || 'Unknown'}) (${row.employee_name || 'Employee'})`
       .replace(/[\\/:*?"<>|]/g, '_')
       .slice(0, 120) + '.pdf';
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+    res.setHeader('Content-Disposition', `inline; filename="${downloadName}"`);
     return fs.createReadStream(filePath).pipe(res);
   } catch (error) {
     console.error('내 급여 명세서 다운로드 오류:', error);

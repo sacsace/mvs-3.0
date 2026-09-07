@@ -1,7 +1,7 @@
 import type { InternalAxiosRequestConfig } from 'axios';
 
 const NON_LIST_GET_SUFFIX =
-  /\/(?:export|sample|download|next-number|today|check-in|check-out|health|status|preview|mail|pdf|chart|stats|summary|inbox|unread-count|me|profile|permissions|refresh)(?:\/|\?|$)/i;
+  /\/(?:export|sample|download|next-number|today|check-in|check-out|health|status|preview|mail|pdf|chart|stats|summary|inbox|unread-count|me|profile|permissions|refresh|payslips\/\d+\/download)(?:\/|\?|$)/i;
 
 /** 헤더/알림 페이지 백그라운드 폴링 — 실패 시 팝업 없이 빈 목록 처리 */
 export const isNotificationFeedGet = (
