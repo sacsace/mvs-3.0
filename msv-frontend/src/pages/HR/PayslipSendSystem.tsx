@@ -1168,7 +1168,19 @@ const PayslipSendSystem: React.FC = () => {
                   {t(`${p}.deleteSelected`, { count: selectedCount })}
                 </Button>
               </Box>
-              <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx, maxHeight: 420, border: 'none', boxShadow: 'none', borderRadius: 0 }}>
+              <TableContainer
+                sx={{
+                  ...mvsBodyListTableSx,
+                  ...mvsTableScrollSx,
+                  maxHeight: 560,
+                  // mvsBodyListTableSx 의 overflow:hidden 이 overflow-y 를 막아
+                  // maxHeight 아래에서 행이 잘리므로 세로 스크롤을 명시
+                  overflow: 'auto',
+                  border: 'none',
+                  boxShadow: 'none',
+                  borderRadius: 0,
+                }}
+              >
                 <Table
                   size="small"
                   stickyHeader
