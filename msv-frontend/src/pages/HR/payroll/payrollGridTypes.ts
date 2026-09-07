@@ -37,7 +37,7 @@ export type PayrollGridRow = {
   ot_rate: number;
   day_ot_hour: number;
   night_ot_hour: number;
-  /** 인사정보 OT 적용 대상 (false면 자동 OT 미반영) */
+  /** 인사정보 OT 적용 대상 (기본 false — 체크한 직원만 자동 OT 반영) */
   ot_eligible?: boolean;
   /** 그리드에서 OT 시간을 수동 입력한 경우 — 미적용 직원이어도 OT 계산 허용 */
   ot_manual?: boolean;

@@ -1081,7 +1081,7 @@ const UserManagement: React.FC = () => {
           : ('' as number | ''),
       employment_type: (user as any).employment_type || 'fulltime',
       salary: '',
-      ot_eligible: (user as any).ot_eligible !== false,
+      ot_eligible: (user as any).ot_eligible === true,
       bank_name: (user as any).bank_name || '',
       bank_account: normalizeBankAccountDigits((user as any).bank_account || ''),
       bank_ifsc: normalizeIfsc((user as any).bank_ifsc || ''),
@@ -3816,7 +3816,7 @@ const UserManagement: React.FC = () => {
                         {t('userManagement.otEligible')}
                       </Typography>
                       <Typography variant="body1" sx={userDetailValueSx}>
-                        {su.ot_eligible !== false
+                        {su.ot_eligible === true
                           ? t('userManagement.otEligibleYes')
                           : t('userManagement.otEligibleNo')}
                       </Typography>

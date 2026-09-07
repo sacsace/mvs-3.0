@@ -1517,7 +1517,8 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
       }
       const createdByUserId =
         (card as any).created_by != null ? Number((card as any).created_by) : null;
-      const canReopen = createdByUserId === uid || isAssignee;
+      const canReopen =
+        user.role === 'root' || createdByUserId === uid || isAssignee;
       if (isMovingOutOfCompleted && !canReopen) {
         throw new Error('FORBIDDEN_REOPEN');
       }
@@ -1660,7 +1661,7 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
     if (error?.message === 'FORBIDDEN_REOPEN') {
       return res.status(403).json({
         success: false,
-        message: '담당자 또는 업무를 지시한 사람만 완료된 업무를 재오픈할 수 있습니다.'
+        message: '담당자, 업무를 지시한 사람 또는 root만 완료된 업무를 재오픈할 수 있습니다.'
       });
     }
     console.error('moveWorkBoardCard:', error);

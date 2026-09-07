@@ -195,7 +195,7 @@ function mergeOtHours(day: unknown, night: unknown): number {
   return roundOtHour(Math.max(0, num(day)) + Math.max(0, num(night)));
 }
 
-/** extra_fields·직원 정보의 OT 적용 대상 여부 (기본: 적용) */
+/** 인사정보 OT 적용 대상 여부 (기본: 미적용). 직원 프로필을 extra_fields 스냅샷보다 우선 */
 export function isOtEligible(
   extra?: Record<string, unknown> | null,
   employee?: Record<string, unknown> | null
@@ -205,11 +205,12 @@ export function isOtEligible(
     if (value === false || value === 'false' || value === 0 || value === '0') return false;
     return null;
   };
-  const fromExtra = extra ? parse(extra.ot_eligible) : null;
-  if (fromExtra !== null) return fromExtra;
+  // 인사정보(현재 설정)가 급여 생성 당시 extra 스냅샷보다 우선
   const fromEmployee = employee ? parse(employee.ot_eligible) : null;
   if (fromEmployee !== null) return fromEmployee;
-  return true;
+  const fromExtra = extra ? parse(extra.ot_eligible) : null;
+  if (fromExtra !== null) return fromExtra;
+  return false;
 }
 
 /** 수동 OT 입력 플래그 (extra_fields.ot_manual) */
@@ -229,7 +230,7 @@ function resolveOtInputsFromExtra(
   x: Record<string, unknown>,
   basic: number,
   overtimePayFromApi: number,
-  otEligible = true,
+  otEligible = false,
   otManual = false
 ): { ot_rate: number; day_ot_hour: number; night_ot_hour: number } {
   const defaultRate = basic > 0 ? defaultOtRateFromBasic(basic) : 0;
@@ -531,7 +532,7 @@ export function recalculatePayrollRow(
   const days_worked = String(worked);
 
   const otRate = basic > 0 ? defaultOtRateFromBasic(basic) : 0;
-  const otEligible = row.ot_eligible !== false;
+  const otEligible = row.ot_eligible === true;
   const otManual = Boolean(row.ot_manual);
   const applyOt = shouldApplyOtPay(otEligible, otManual);
   const dayOtHour = applyOt ? roundOtHour(num(row.day_ot_hour)) : 0;
@@ -853,7 +854,7 @@ export function gridRowToPayload(
     ot_rate: recalculated.ot_rate,
     day_ot_hour: recalculated.day_ot_hour,
     night_ot_hour: 0,
-    ot_eligible: recalculated.ot_eligible !== false,
+    ot_eligible: recalculated.ot_eligible === true,
     ot_manual: Boolean(recalculated.ot_manual),
     day_ot: otPay.day_ot_pay,
     night_ot: 0,

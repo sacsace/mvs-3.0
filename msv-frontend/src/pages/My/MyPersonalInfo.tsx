@@ -835,7 +835,7 @@ const MyPersonalInfo: React.FC = () => {
                       </Box>
                     </Box>
                     <ReadField label={t('userManagement.otEligible')}>
-                      {profile.ot_eligible !== false
+                      {profile.ot_eligible === true
                         ? t('userManagement.otEligibleYes')
                         : t('userManagement.otEligibleNo')}
                     </ReadField>

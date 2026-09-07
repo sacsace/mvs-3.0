@@ -2832,6 +2832,7 @@ const WorkBoardDetailPage: React.FC = () => {
   const canReopenCardDetail =
     isCardDetailCompleted &&
     (() => {
+      if (isRootUser) return true;
       const uid = Number(user?.id);
       if (!uid) return false;
       const isCreator =
@@ -2842,6 +2843,7 @@ const WorkBoardDetailPage: React.FC = () => {
     })();
 
   const canReopenCard = (card: BoardCard) => {
+    if (isRootUser) return true;
     const uid = Number(user?.id);
     if (!uid) return false;
     const isCreator = card.created_by != null && Number(card.created_by) === uid;
@@ -4178,8 +4180,8 @@ const WorkBoardDetailPage: React.FC = () => {
                 title={
                   isCardDetailCompleted && !canReopenCardDetail
                     ? txt(
-                        '담당자 또는 업무를 지시한 사람만 재오픈할 수 있습니다.',
-                        'Only the assignee or task creator can reopen it.'
+                        '담당자, 업무를 지시한 사람 또는 root만 재오픈할 수 있습니다.',
+                        'Only the assignee, task creator, or root can reopen it.'
                       )
                     : ''
                 }
@@ -4966,8 +4968,8 @@ const WorkBoardDetailPage: React.FC = () => {
                         reopenAllowed
                           ? txt('업무를 다시 진행 상태로 이동합니다.', 'Move this task back to active work.')
                           : txt(
-                              '담당자 또는 업무를 지시한 사람만 재오픈할 수 있습니다.',
-                              'Only the assignee or task creator can reopen it.'
+                              '담당자, 업무를 지시한 사람 또는 root만 재오픈할 수 있습니다.',
+                              'Only the assignee, task creator, or root can reopen it.'
                             )
                       }
                     >

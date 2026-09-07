@@ -384,12 +384,11 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
 
         const att = await aggregateAttendanceForPeriod(tenant_id, company_id, emp.id, bounds);
         const rawOtEligible = (emp as any).ot_eligible ?? (emp as any).get?.('ot_eligible');
-        const otEligible = !(
-          rawOtEligible === false ||
-          rawOtEligible === 0 ||
-          rawOtEligible === '0' ||
-          rawOtEligible === 'false'
-        );
+        const otEligible =
+          rawOtEligible === true ||
+          rawOtEligible === 1 ||
+          rawOtEligible === '1' ||
+          rawOtEligible === 'true';
         const dayOtHours = otEligible ? att.dayOtHours : 0;
         const nightOtHours = otEligible ? att.nightOtHours : 0;
         const overtimeHoursForPay = otEligible ? att.overtimeHours : 0;
