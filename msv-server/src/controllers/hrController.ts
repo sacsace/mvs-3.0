@@ -859,7 +859,7 @@ export const sendPayrollPayslip = async (req: RequestWithUser, res: Response) =>
         {
           model: User,
           as: 'employee',
-          attributes: ['email', 'username']
+          attributes: ['id', 'email', 'username', 'employee_number']
         }
       ]
     });
@@ -888,6 +888,15 @@ export const sendPayrollPayslip = async (req: RequestWithUser, res: Response) =>
       String(extra.employee_name || '').trim() ||
       String(emp?.username || '').trim() ||
       'Employee';
+    const empId =
+      String(extra.emp_id || '').trim() ||
+      String(emp?.employee_number || '').trim() ||
+      '';
+    const netRaw = (payroll as any).net_salary;
+    const netSalary =
+      netRaw === undefined || netRaw === null || netRaw === ''
+        ? null
+        : Number(netRaw);
     const companyLabel = shortCompanyNameForMail((companyRow as any)?.name);
     const mailVars = { name: uname, company: companyLabel, period };
     const subject = fillPayslipMailTemplate(DEFAULT_PAYSLIP_MAIL_SUBJECT, mailVars);
@@ -917,7 +926,66 @@ export const sendPayrollPayslip = async (req: RequestWithUser, res: Response) =>
       ]
     });
 
-    res.json({ success: true, message: '메일을 발송했습니다.' });
+    // 내 급여 명세서 목록 보관 (엑셀 발송 경로와 동일)
+    const emailLower = to.toLowerCase();
+    const recipientUserId =
+      Number(emp?.id || (payroll as any).employee_id) > 0
+        ? Number(emp?.id || (payroll as any).employee_id)
+        : null;
+
+    const dir = ensureUploadSubdir('payslips', String(tenant_id), String(company_id));
+    const fileName = `payslip-${period || 'na'}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`;
+    const absPath = path.join(dir, fileName);
+    await fs.promises.writeFile(absPath, pdfBuffer);
+    const pdfUrl = `/uploads/payslips/${tenant_id}/${company_id}/${fileName}`;
+
+    const previousRows = await (PayslipDelivery as any).findAll({
+      where: {
+        tenant_id,
+        company_id,
+        payroll_period: period || '',
+        is_active: true,
+        [Op.and]: [
+          Sequelize.where(Sequelize.fn('LOWER', Sequelize.col('recipient_email')), emailLower)
+        ]
+      }
+    });
+    const oldPaths: string[] = [];
+    for (const prev of previousRows) {
+      const oldPath = String(prev.pdf_path || '');
+      if (oldPath) oldPaths.push(oldPath);
+      await prev.update({ is_active: false });
+    }
+
+    await (PayslipDelivery as any).create({
+      tenant_id,
+      company_id,
+      user_id: recipientUserId,
+      payroll_period: period || '',
+      employee_name: uname,
+      recipient_email: to,
+      emp_id: empId || null,
+      net_salary: Number.isFinite(netSalary as number) ? netSalary : null,
+      pdf_path: absPath,
+      pdf_url: pdfUrl,
+      sent_by: senderId,
+      sent_at: new Date(),
+      is_active: true
+    });
+
+    for (const oldPath of oldPaths) {
+      if (oldPath === absPath) continue;
+      try {
+        await fs.promises.unlink(oldPath);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    res.json({
+      success: true,
+      message: '메일을 발송했고, 내 급여 명세서에 저장했습니다.'
+    });
   } catch (error) {
     console.error('급여 명세서 메일 오류:', error);
     res.status(500).json({ success: false, message: '메일 발송에 실패했습니다.' });
