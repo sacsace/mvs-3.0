@@ -202,6 +202,9 @@ interface User {
   salary?: number;
   has_salary?: boolean;
   ot_eligible?: boolean;
+  pf_calc_mode?: 'cap_1800' | 'basic_12pct' | 'total_12pct';
+  /** @deprecated pf_calc_mode 사용 */
+  pf_cap_1800?: boolean;
   bank_name?: string;
   bank_account?: string;
   bank_ifsc?: string;
@@ -651,6 +654,7 @@ const UserManagement: React.FC = () => {
     employment_type: 'fulltime',
     salary: '',
     ot_eligible: false,
+    pf_calc_mode: 'cap_1800' as 'cap_1800' | 'basic_12pct' | 'total_12pct',
     bank_name: '',
     bank_account: '',
     bank_ifsc: '',
@@ -682,6 +686,7 @@ const UserManagement: React.FC = () => {
     employment_type: string;
     salary: string;
     ot_eligible: boolean;
+    pf_calc_mode: 'cap_1800' | 'basic_12pct' | 'total_12pct';
     bank_name: string;
     bank_account: string;
     bank_ifsc: string;
@@ -944,6 +949,7 @@ const UserManagement: React.FC = () => {
       employment_type: 'fulltime',
       salary: '',
       ot_eligible: false,
+      pf_calc_mode: 'cap_1800',
       bank_name: '',
       bank_account: '',
       bank_ifsc: '',
@@ -1032,6 +1038,7 @@ const UserManagement: React.FC = () => {
       employment_type: 'fulltime',
       salary: '',
       ot_eligible: false,
+      pf_calc_mode: 'cap_1800',
       bank_name: '',
       bank_account: '',
       bank_ifsc: '',
@@ -1082,6 +1089,12 @@ const UserManagement: React.FC = () => {
       employment_type: (user as any).employment_type || 'fulltime',
       salary: '',
       ot_eligible: (user as any).ot_eligible === true,
+      pf_calc_mode: (() => {
+        const m = String((user as any).pf_calc_mode ?? '').trim();
+        if (m === 'basic_12pct' || m === 'total_12pct' || m === 'cap_1800') return m;
+        if ((user as any).pf_cap_1800 === false) return 'basic_12pct';
+        return 'cap_1800';
+      })(),
       bank_name: (user as any).bank_name || '',
       bank_account: normalizeBankAccountDigits((user as any).bank_account || ''),
       bank_ifsc: normalizeIfsc((user as any).bank_ifsc || ''),
@@ -2707,7 +2720,16 @@ const UserManagement: React.FC = () => {
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                      gap: 1.5,
+                      alignItems: 'start',
+                      width: '100%',
+                    }}
+                  >
+                    {/* 1행: 입사일 | 근무형태 */}
                     <TextField
                       fullWidth
                       size="small"
@@ -2717,246 +2739,243 @@ const UserManagement: React.FC = () => {
                       value={formData.hire_date}
                       onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
                     />
-                    <Box
-                      sx={{
-                        ...highlightPayrollFieldsSx,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 1.5,
-                        width: '100%',
-                        boxSizing: 'border-box'
+                    <TextField
+                      fullWidth
+                      size="small"
+                      select
+                      label={t('userManagement.employmentType')}
+                      {...OUTLINED_FIELD}
+                      value={formData.employment_type}
+                      onChange={(e) => setFormData({ ...formData, employment_type: e.target.value })}
+                      SelectProps={{
+                        displayEmpty: true,
+                        MenuProps: {
+                          PaperProps: {
+                            sx: { maxHeight: 320, '& .MuiMenuItem-root': { fontSize: '0.8125rem' } },
+                          },
+                          anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+                          transformOrigin: { vertical: 'top', horizontal: 'left' },
+                        },
                       }}
                     >
-                      <Box
-                        sx={{
-                          display: 'grid',
-                          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-                          gap: 1.5,
-                          alignItems: 'start',
-                          width: '100%'
-                        }}
-                      >
-                        <TextField
-                          fullWidth
-                          size="small"
-                          select
-                          label={t('userManagement.employmentType')}
-                          {...OUTLINED_FIELD}
-                          value={formData.employment_type}
-                          onChange={(e) => setFormData({ ...formData, employment_type: e.target.value })}
-                          SelectProps={{
-                            displayEmpty: true,
-                            MenuProps: {
-                              PaperProps: {
-                                sx: { maxHeight: 320, '& .MuiMenuItem-root': { fontSize: '0.8125rem' } }
-                              },
-                              anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
-                              transformOrigin: { vertical: 'top', horizontal: 'left' }
-                            },
-                          }}
-                        >
-                          <MenuItem value="fulltime">{t('userManagement.empFulltime')}</MenuItem>
-                          <MenuItem value="daily">{t('userManagement.empDaily')}</MenuItem>
-                          <MenuItem value="contract">{t('userManagement.empContract')}</MenuItem>
-                          <MenuItem value="parttime">{t('userManagement.empParttime')}</MenuItem>
-                          <MenuItem value="intern">{t('userManagement.empIntern')}</MenuItem>
-                        </TextField>
-                        <TextField
-                          fullWidth
-                          size="small"
-                          type="number"
-                          label={t('userManagement.salary')}
-                          {...OUTLINED_FIELD}
-                          value={salaryUnlocked ? formData.salary : ''}
-                          onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-                          placeholder={
-                            salaryUnlocked
-                              ? t('userManagement.placeholderMonthlySalary')
-                              : originalHasSalary || formData.salary
-                                ? t('userManagement.salaryMasked')
-                                : t('userManagement.salaryLockedHint')
-                          }
-                          disabled={!salaryUnlocked}
-                          helperText={
-                            salaryUnlocked
-                              ? undefined
-                              : t('userManagement.salaryUnlockHint')
-                          }
-                          InputProps={{
-                            endAdornment: (
-                              <InputAdornment position="end">
-                                <Typography sx={{ fontSize: '0.75rem', mr: 0.5 }}>INR</Typography>
-                                <IconButton
-                                  size="small"
-                                  edge="end"
-                                  aria-label={t('userManagement.salaryUnlock')}
-                                  onClick={() => {
-                                    if (salaryUnlocked) {
-                                      setSalaryUnlocked(false);
-                                      setSalaryPasswordForSubmit('');
-                                      setSalaryBaseline('');
-                                      setFormData((prev) => ({ ...prev, salary: '' }));
-                                    } else {
-                                      openSalaryUnlock('edit');
-                                    }
-                                  }}
-                                >
-                                  {salaryUnlocked ? (
-                                    <VisibilityOffIcon fontSize="small" />
-                                  ) : (
-                                    <LockOutlinedIcon fontSize="small" />
-                                  )}
-                                </IconButton>
-                              </InputAdornment>
-                            )
-                          }}
-                        />
-                      </Box>
-                      <Box sx={{ ...highlightDeptPositionRowSx }}>
-                        <Box
-                          sx={{
-                            display: 'grid',
-                            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-                            gap: 1.5,
-                            alignItems: 'start',
-                            width: '100%'
-                          }}
-                        >
-                          <Box sx={{ width: '100%', minWidth: 0 }}>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              select
-                              label={t('userManagement.department')}
-                              {...OUTLINED_FIELD}
-                              value={formData.department_id === '' ? '' : String(formData.department_id)}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                if (v === '') {
-                                  setFormData({ ...formData, department_id: '', department: '' });
-                                } else {
-                                  const id = Number(v);
-                                  const d = departments.find((x) => x.id === id);
-                                  setFormData({
-                                    ...formData,
-                                    department_id: id,
-                                    department: d?.name || ''
-                                  });
-                                }
-                              }}
-                              SelectProps={{
-                                displayEmpty: true,
-                                renderValue: (selected) => {
-                                  if (selected === '') {
-                                    return (
-                                      <Typography component="span" color="text.secondary" sx={{ fontStyle: 'italic', fontSize: '0.8125rem' }}>
-                                        {t('departmentManagement.noDepartment')}
-                                      </Typography>
-                                    );
-                                  }
-                                  const d = departments.find((x) => String(x.id) === selected);
-                                  return d?.name ?? '';
-                                },
-                                MenuProps: {
-                                  PaperProps: {
-                                    sx: { maxHeight: 320, '& .MuiMenuItem-root': { fontSize: '0.8125rem' } }
-                                  },
-                                  anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
-                                  transformOrigin: { vertical: 'top', horizontal: 'left' }
-                                },
-                              }}
-                            >
-                              <MenuItem value="">
-                                <em>{t('departmentManagement.noDepartment')}</em>
-                              </MenuItem>
-                              {departments.map((d) => (
-                                <MenuItem key={d.id} value={String(d.id)}>
-                                  {d.name}
-                                </MenuItem>
-                              ))}
-                            </TextField>
-                            <Typography color="text.secondary" sx={hrHintSx}>
-                              {t('userManagement.deptFromMasterHint')}
-                            </Typography>
-                          </Box>
-                          <Box sx={{ width: '100%', minWidth: 0 }}>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              select
-                              label={t('userManagement.positionTitle')}
-                              {...OUTLINED_FIELD}
-                              value={formData.position_id === '' ? '' : String(formData.position_id)}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                if (v === '') {
-                                  setFormData({ ...formData, position_id: '', position: '' });
-                                } else {
-                                  const id = Number(v);
-                                  const p = positions.find((x) => x.id === id);
-                                  setFormData({
-                                    ...formData,
-                                    position_id: id,
-                                    position: p?.name || ''
-                                  });
-                                }
-                              }}
-                              SelectProps={{
-                                displayEmpty: true,
-                                renderValue: (selected) => {
-                                  if (selected === '') {
-                                    return (
-                                      <Typography component="span" color="text.secondary" sx={{ fontStyle: 'italic', fontSize: '0.8125rem' }}>
-                                        {t('positionManagement.noPosition')}
-                                      </Typography>
-                                    );
-                                  }
-                                  const p = positions.find((x) => String(x.id) === selected);
-                                  const label = p?.name ?? formData.position ?? '';
-                                  return formatPositionLabel(label, i18n.language) || label;
-                                },
-                                MenuProps: {
-                                  PaperProps: {
-                                    sx: { maxHeight: 320, '& .MuiMenuItem-root': { fontSize: '0.8125rem' } }
-                                  },
-                                  anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
-                                  transformOrigin: { vertical: 'top', horizontal: 'left' }
-                                },
-                              }}
-                            >
-                              <MenuItem value="">
-                                <em>{t('positionManagement.noPosition')}</em>
-                              </MenuItem>
-                              {positions.map((p, idx) => (
-                                <MenuItem key={p.id} value={String(p.id)}>
-                                  {t('positionManagement.rankBadge', { level: idx + 1 })} ·{' '}
-                                  {formatPositionLabel(p.name, i18n.language)}
-                                </MenuItem>
-                              ))}
-                              {formData.position_id !== '' &&
-                                !positions.some((p) => p.id === formData.position_id) &&
-                                formData.position && (
-                                  <MenuItem value={String(formData.position_id)}>
-                                    {formatPositionLabel(formData.position, i18n.language)}
-                                  </MenuItem>
-                                )}
-                            </TextField>
-                            <Typography color="text.secondary" sx={hrHintSx}>
-                              {t('userManagement.positionFromMasterHint')}
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </Box>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={Boolean(formData.ot_eligible)}
-                            onChange={(e) => setFormData({ ...formData, ot_eligible: e.target.checked })}
-                          />
+                      <MenuItem value="fulltime">{t('userManagement.empFulltime')}</MenuItem>
+                      <MenuItem value="daily">{t('userManagement.empDaily')}</MenuItem>
+                      <MenuItem value="contract">{t('userManagement.empContract')}</MenuItem>
+                      <MenuItem value="parttime">{t('userManagement.empParttime')}</MenuItem>
+                      <MenuItem value="intern">{t('userManagement.empIntern')}</MenuItem>
+                    </TextField>
+
+                    {/* 2행: 급여 | 부서 */}
+                    <Box sx={{ ...highlightPayrollFieldsSx, width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        type="number"
+                        label={t('userManagement.salary')}
+                        {...OUTLINED_FIELD}
+                        value={salaryUnlocked ? formData.salary : ''}
+                        onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
+                        placeholder={
+                          salaryUnlocked
+                            ? t('userManagement.placeholderMonthlySalary')
+                            : originalHasSalary || formData.salary
+                              ? t('userManagement.salaryMasked')
+                              : t('userManagement.salaryLockedHint')
                         }
-                        label={t('userManagement.otEligible')}
+                        disabled={!salaryUnlocked}
+                        helperText={salaryUnlocked ? undefined : t('userManagement.salaryUnlockHint')}
+                        InputProps={{
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <Typography sx={{ fontSize: '0.75rem', mr: 0.5 }}>INR</Typography>
+                              <IconButton
+                                size="small"
+                                edge="end"
+                                aria-label={t('userManagement.salaryUnlock')}
+                                onClick={() => {
+                                  if (salaryUnlocked) {
+                                    setSalaryUnlocked(false);
+                                    setSalaryPasswordForSubmit('');
+                                    setSalaryBaseline('');
+                                    setFormData((prev) => ({ ...prev, salary: '' }));
+                                  } else {
+                                    openSalaryUnlock('edit');
+                                  }
+                                }}
+                              >
+                                {salaryUnlocked ? (
+                                  <VisibilityOffIcon fontSize="small" />
+                                ) : (
+                                  <LockOutlinedIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        }}
                       />
                     </Box>
+                    <Box sx={{ width: '100%', minWidth: 0 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        select
+                        label={t('userManagement.department')}
+                        {...OUTLINED_FIELD}
+                        value={formData.department_id === '' ? '' : String(formData.department_id)}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === '') {
+                            setFormData({ ...formData, department_id: '', department: '' });
+                          } else {
+                            const id = Number(v);
+                            const d = departments.find((x) => x.id === id);
+                            setFormData({
+                              ...formData,
+                              department_id: id,
+                              department: d?.name || '',
+                            });
+                          }
+                        }}
+                        SelectProps={{
+                          displayEmpty: true,
+                          renderValue: (selected) => {
+                            if (selected === '') {
+                              return (
+                                <Typography
+                                  component="span"
+                                  color="text.secondary"
+                                  sx={{ fontStyle: 'italic', fontSize: '0.8125rem' }}
+                                >
+                                  {t('departmentManagement.noDepartment')}
+                                </Typography>
+                              );
+                            }
+                            const d = departments.find((x) => String(x.id) === selected);
+                            return d?.name ?? '';
+                          },
+                          MenuProps: {
+                            PaperProps: {
+                              sx: { maxHeight: 320, '& .MuiMenuItem-root': { fontSize: '0.8125rem' } },
+                            },
+                            anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+                            transformOrigin: { vertical: 'top', horizontal: 'left' },
+                          },
+                        }}
+                      >
+                        <MenuItem value="">
+                          <em>{t('departmentManagement.noDepartment')}</em>
+                        </MenuItem>
+                        {departments.map((d) => (
+                          <MenuItem key={d.id} value={String(d.id)}>
+                            {d.name}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      <Typography color="text.secondary" sx={hrHintSx}>
+                        {t('userManagement.deptFromMasterHint')}
+                      </Typography>
+                    </Box>
+
+                    {/* 3행: 직책 | PF 선택 */}
+                    <Box sx={{ width: '100%', minWidth: 0 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        select
+                        label={t('userManagement.positionTitle')}
+                        {...OUTLINED_FIELD}
+                        value={formData.position_id === '' ? '' : String(formData.position_id)}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === '') {
+                            setFormData({ ...formData, position_id: '', position: '' });
+                          } else {
+                            const id = Number(v);
+                            const p = positions.find((x) => x.id === id);
+                            setFormData({
+                              ...formData,
+                              position_id: id,
+                              position: p?.name || '',
+                            });
+                          }
+                        }}
+                        SelectProps={{
+                          displayEmpty: true,
+                          renderValue: (selected) => {
+                            if (selected === '') {
+                              return (
+                                <Typography
+                                  component="span"
+                                  color="text.secondary"
+                                  sx={{ fontStyle: 'italic', fontSize: '0.8125rem' }}
+                                >
+                                  {t('positionManagement.noPosition')}
+                                </Typography>
+                              );
+                            }
+                            const p = positions.find((x) => String(x.id) === selected);
+                            const label = p?.name ?? formData.position ?? '';
+                            return formatPositionLabel(label, i18n.language) || label;
+                          },
+                          MenuProps: {
+                            PaperProps: {
+                              sx: { maxHeight: 320, '& .MuiMenuItem-root': { fontSize: '0.8125rem' } },
+                            },
+                            anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+                            transformOrigin: { vertical: 'top', horizontal: 'left' },
+                          },
+                        }}
+                      >
+                        <MenuItem value="">
+                          <em>{t('positionManagement.noPosition')}</em>
+                        </MenuItem>
+                        {positions.map((p, idx) => (
+                          <MenuItem key={p.id} value={String(p.id)}>
+                            {t('positionManagement.rankBadge', { level: idx + 1 })} ·{' '}
+                            {formatPositionLabel(p.name, i18n.language)}
+                          </MenuItem>
+                        ))}
+                        {formData.position_id !== '' &&
+                          !positions.some((p) => p.id === formData.position_id) &&
+                          formData.position && (
+                            <MenuItem value={String(formData.position_id)}>
+                              {formatPositionLabel(formData.position, i18n.language)}
+                            </MenuItem>
+                          )}
+                      </TextField>
+                      <Typography color="text.secondary" sx={hrHintSx}>
+                        {t('userManagement.positionFromMasterHint')}
+                      </Typography>
+                    </Box>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      select
+                      label={t('userManagement.pfCap')}
+                      {...OUTLINED_FIELD}
+                      value={formData.pf_calc_mode || 'cap_1800'}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          pf_calc_mode: e.target.value as 'cap_1800' | 'basic_12pct' | 'total_12pct',
+                        })
+                      }
+                    >
+                      <MenuItem value="cap_1800">{t('userManagement.pfCap1800')}</MenuItem>
+                      <MenuItem value="basic_12pct">{t('userManagement.pfCap12pct')}</MenuItem>
+                      <MenuItem value="total_12pct">{t('userManagement.pfCapTotal12pct')}</MenuItem>
+                    </TextField>
+
+                    <FormControlLabel
+                      sx={{ gridColumn: { xs: '1 / -1', sm: '1 / -1' }, m: 0 }}
+                      control={
+                        <Checkbox
+                          checked={Boolean(formData.ot_eligible)}
+                          onChange={(e) => setFormData({ ...formData, ot_eligible: e.target.checked })}
+                        />
+                      }
+                      label={t('userManagement.otEligible')}
+                    />
                   </Box>
                 </AccordionDetails>
               </Accordion>
@@ -3772,12 +3791,6 @@ const UserManagement: React.FC = () => {
                     {renderDetailField(t('userManagement.employmentType'), employmentLabel, {
                       show: hasDetailValue(employmentLabel),
                     })}
-                    {renderDetailField(t('userManagement.department'), selectedUser.department, {
-                      show: hasDetailValue(selectedUser.department),
-                    })}
-                    {renderDetailField(t('userManagement.positionTitle'), positionLabel, {
-                      show: hasDetailValue(positionLabel),
-                    })}
                     {hasSalary ? (
                       <Box>
                         <Typography variant="body2" sx={userDetailLabelSx}>
@@ -3811,6 +3824,26 @@ const UserManagement: React.FC = () => {
                         </Box>
                       </Box>
                     ) : null}
+                    {renderDetailField(t('userManagement.department'), selectedUser.department, {
+                      show: hasDetailValue(selectedUser.department),
+                    })}
+                    {renderDetailField(t('userManagement.positionTitle'), positionLabel, {
+                      show: hasDetailValue(positionLabel),
+                    })}
+                    <Box>
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.pfCap')}
+                      </Typography>
+                      <Typography variant="body1" sx={userDetailValueSx}>
+                        {(() => {
+                          const m = String(su.pf_calc_mode ?? '').trim();
+                          if (m === 'total_12pct') return t('userManagement.pfCapTotal12pct');
+                          if (m === 'basic_12pct' || su.pf_cap_1800 === false)
+                            return t('userManagement.pfCap12pct');
+                          return t('userManagement.pfCap1800');
+                        })()}
+                      </Typography>
+                    </Box>
                     <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / -1' } }}>
                       <Typography variant="body2" sx={userDetailLabelSx}>
                         {t('userManagement.otEligible')}

@@ -17,6 +17,8 @@ import { computeProfessionalTaxByState } from '../utils/indianProfessionalTax';
 
 export type PfMode = 'basic_12pct' | 'gross_6pct' | 'epf_12pct_half';
 
+export type UserPfCalcMode = 'cap_1800' | 'basic_12pct' | 'total_12pct';
+
 export type IndianStatutoryOptions = {
   /** AD="A" 에 해당: PF/ESI/PT 적용 (false면 모두 0) */
   statutoryApplicable?: boolean;
@@ -24,6 +26,10 @@ export type IndianStatutoryOptions = {
   pfMode?: PfMode;
   /** epf_12pct_half 일 때만: true면 min(50%×Gross×12%, 1800) */
   pfCapAt1800?: boolean;
+  /** 인사정보 PF 계산 방식 (basic_12pct 시트 모드에서 사용) */
+  pfCalcMode?: UserPfCalcMode;
+  /** 총급여(패키지) — total_12pct 산정용. 생략 시 basicSalary/gross */
+  totalSalary?: number;
   /** ESI: 지급합계(Q)가 이 금액을 초과하면 면제. 기본 21000 */
   esiBasicCeiling?: number;
   /** @deprecated 주별 PT 사용 — registeredStateCode 권장 */
@@ -111,11 +117,35 @@ export function computePfEmployerMatchEmployee(pfEmployee: number): number {
   return rupee(pfEmployee);
 }
 
-/** PF 직원·사업주 = ROUND(MIN(Basic × 12%, 1,800), 0) */
-export function computePfFromBasicSalary(basicSalary: number): { pf_employee: number; pf_employer: number } {
+/** PF 직원·사업주 = ROUND(MIN(Basic × 12%, 1,800), 0). capAt1800=false면 상한 없이 12% */
+export function computePfFromBasicSalary(
+  basicSalary: number,
+  pfCapAt1800 = true
+): { pf_employee: number; pf_employer: number } {
   const basic = Math.max(0, basicSalary);
-  const amount = Math.round(Math.min(basic * 0.12, 1800));
+  const raw = basic * 0.12;
+  const amount = Math.round(pfCapAt1800 ? Math.min(raw, 1800) : raw);
   return { pf_employee: amount, pf_employer: amount };
+}
+
+export function normalizeUserPfCalcMode(raw: unknown): UserPfCalcMode {
+  if (raw === false || raw === 0 || raw === '0' || raw === 'false') return 'basic_12pct';
+  const s = String(raw ?? '').trim();
+  if (s === 'basic_12pct' || s === 'total_12pct' || s === 'cap_1800') return s;
+  return 'cap_1800';
+}
+
+/** 인사정보 PF 계산: 상한 1800 / 기본급 12% / 총급여 12% */
+export function computePfFromCalcMode(
+  basicSalary: number,
+  totalSalary: number,
+  mode: UserPfCalcMode = 'cap_1800'
+): { pf_employee: number; pf_employer: number } {
+  if (mode === 'total_12pct') {
+    const amount = Math.round(Math.max(0, totalSalary) * 0.12);
+    return { pf_employee: amount, pf_employer: amount };
+  }
+  return computePfFromBasicSalary(basicSalary, mode !== 'basic_12pct');
 }
 
 /** 참고 시트: PF 직원·고용주 각각 Sum Total의 6% */
@@ -239,7 +269,14 @@ export function computeIndianStatutoryPayroll(
       o.basicSalary != null && Number.isFinite(o.basicSalary) ? rupee(o.basicSalary as number) : epfWageBase(gross);
 
     if (mode === 'basic_12pct') {
-      const pf = computePfFromBasicSalary(basicForPf);
+      const totalForPf =
+        o.totalSalary != null && Number.isFinite(o.totalSalary)
+          ? rupee(o.totalSalary as number)
+          : basicForPf;
+      const calcMode =
+        o.pfCalcMode ??
+        (o.pfCapAt1800 === false ? 'basic_12pct' : 'cap_1800');
+      const pf = computePfFromCalcMode(basicForPf, totalForPf, calcMode);
       pf_employee = pf.pf_employee;
       pf_employer = pf.pf_employer;
     } else if (mode === 'gross_6pct') {

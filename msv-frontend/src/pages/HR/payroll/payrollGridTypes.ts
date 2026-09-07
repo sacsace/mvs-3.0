@@ -41,6 +41,10 @@ export type PayrollGridRow = {
   ot_eligible?: boolean;
   /** 그리드에서 OT 시간을 수동 입력한 경우 — 미적용 직원이어도 OT 계산 허용 */
   ot_manual?: boolean;
+  /** true면 PF 상한 1,800 (기본), false면 기본급×12% — deprecated, pf_calc_mode 사용 */
+  pf_cap_1800?: boolean;
+  /** 인사정보 PF 계산: cap_1800 | basic_12pct | total_12pct */
+  pf_calc_mode?: 'cap_1800' | 'basic_12pct' | 'total_12pct';
   transport_allowance: number;
   overtime: number;
   sum_total: number;

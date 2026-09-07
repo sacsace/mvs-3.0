@@ -23,6 +23,7 @@ import {
   breakdownToExtraFields,
   computeProratedSumTotal,
   computeDailyWorkerSumTotal,
+  normalizeUserPfCalcMode,
   type PfMode
 } from '../services/indianStatutoryPayroll';
 import { resolveCompanyRegisteredStateCode } from '../utils/indianProfessionalTax';
@@ -189,7 +190,8 @@ export const getPayrolls = async (req: RequestWithUser, res: Response) => {
             'employee_number',
             'birth_date',
             'hire_date',
-            'ot_eligible'
+            'ot_eligible',
+            'pf_calc_mode'
           ]
         }
       ],
@@ -246,7 +248,9 @@ export const getPayroll = async (req: RequestWithUser, res: Response) => {
             'position',
             'employee_number',
             'birth_date',
-            'hire_date'
+            'hire_date',
+            'ot_eligible',
+            'pf_calc_mode'
           ]
         }
       ]
@@ -358,7 +362,8 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
           'bank_account',
           'bank_ifsc',
           'employment_type',
-          'ot_eligible'
+          'ot_eligible',
+          'pf_calc_mode'
         ],
         transaction
       });
@@ -428,7 +433,14 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
 
         const bodyOpts = (req.body || {}) as Record<string, unknown>;
         const statutoryApplicable = bodyOpts.statutory_india !== false;
-        const pfCapAt1800 = bodyOpts.pf_cap_1800 !== false;
+        const rawPfCalc =
+          (emp as any).pf_calc_mode ??
+          (emp as any).get?.('pf_calc_mode') ??
+          (emp as any).pf_cap_1800 ??
+          (emp as any).get?.('pf_cap_1800') ??
+          bodyOpts.pf_calc_mode ??
+          bodyOpts.pf_cap_1800;
+        const pfCalcMode = normalizeUserPfCalcMode(rawPfCalc);
         const estimateTds = bodyOpts.estimate_tds !== false;
         const pfMode: PfMode =
           bodyOpts.pf_mode === 'gross_6pct'
@@ -437,12 +449,15 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
               ? 'epf_12pct_half'
               : 'basic_12pct';
 
+        const packageForPf = isDaily ? monthlyEquivForDaily : basic_salary;
         const stat = computeIndianStatutoryPayroll(gross_salary, {
           statutoryApplicable,
           pfMode,
-          pfCapAt1800,
+          pfCalcMode,
+          pfCapAt1800: pfCalcMode === 'cap_1800',
           estimateTds,
-          basicSalary: isDaily ? monthlyEquivForDaily : basic_salary,
+          basicSalary: packageForPf,
+          totalSalary: packageForPf,
           registeredStateCode,
           payrollMonth: payroll_period
         });
@@ -489,6 +504,7 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
           day_ot_hour: String(dayOtHours),
           night_ot_hour: String(nightOtHours),
           ot_eligible: String(otEligible),
+          pf_calc_mode: pfCalcMode,
           indian_pf_mode: statutoryApplicable ? pfMode : '',
           indian_statutory_version: 'sheet_ref_6pct_prorate_v2'
         };

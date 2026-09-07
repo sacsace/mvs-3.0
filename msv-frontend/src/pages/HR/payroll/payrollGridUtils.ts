@@ -354,13 +354,60 @@ function resolveOtInputsFromExtra(
 
 export type PfMode = 'basic_12pct' | 'gross_6pct' | 'epf_12pct_half';
 
-/** PF 직원·사업주 = ROUND(MIN(Basic Salary × 12%, 1,800), 0) — 엑셀 K9 기준 */
+/** PF 계산 방식 (인사정보). 기본 cap_1800 */
+export type UserPfCalcMode = 'cap_1800' | 'basic_12pct' | 'total_12pct';
+
+/** PF 직원·사업주 — 모드별 산정 */
 export function computePfContributions(
-  basicSalary: number
+  basicSalary: number,
+  mode: UserPfCalcMode | boolean = 'cap_1800',
+  totalSalary = 0
 ): { pf_employee: number; pf_employer: number } {
+  const resolved: UserPfCalcMode =
+    mode === true || mode === 'cap_1800'
+      ? 'cap_1800'
+      : mode === false || mode === 'basic_12pct'
+        ? 'basic_12pct'
+        : mode === 'total_12pct'
+          ? 'total_12pct'
+          : 'cap_1800';
+  if (resolved === 'total_12pct') {
+    const amount = Math.round(Math.max(0, num(totalSalary)) * PF_BASIC_RATE);
+    return { pf_employee: amount, pf_employer: amount };
+  }
   const basic = Math.max(0, num(basicSalary));
-  const amount = Math.round(Math.min(basic * PF_BASIC_RATE, PF_CAP_INR));
+  const raw = basic * PF_BASIC_RATE;
+  const amount = Math.round(resolved === 'cap_1800' ? Math.min(raw, PF_CAP_INR) : raw);
   return { pf_employee: amount, pf_employer: amount };
+}
+
+/** 인사정보 PF 계산 방식 (기본 cap_1800). 직원 프로필을 extra 스냅샷보다 우선 */
+export function resolvePfCalcMode(
+  extra?: Record<string, unknown> | null,
+  employee?: Record<string, unknown> | null
+): UserPfCalcMode {
+  const parse = (value: unknown): UserPfCalcMode | null => {
+    if (value === false || value === 'false' || value === 0 || value === '0') return 'basic_12pct';
+    if (value === true || value === 'true' || value === 1 || value === '1') return 'cap_1800';
+    const s = String(value ?? '').trim();
+    if (s === 'cap_1800' || s === 'basic_12pct' || s === 'total_12pct') return s;
+    return null;
+  };
+  const fromEmployee = employee
+    ? parse(employee.pf_calc_mode ?? employee.pf_cap_1800)
+    : null;
+  if (fromEmployee !== null) return fromEmployee;
+  const fromExtra = extra ? parse(extra.pf_calc_mode ?? extra.pf_cap_1800) : null;
+  if (fromExtra !== null) return fromExtra;
+  return 'cap_1800';
+}
+
+/** @deprecated resolvePfCalcMode 사용 */
+export function isPfCap1800(
+  extra?: Record<string, unknown> | null,
+  employee?: Record<string, unknown> | null
+): boolean {
+  return resolvePfCalcMode(extra, employee) === 'cap_1800';
 }
 
 function resolvePfModeFromExtra(x: Record<string, unknown>): PfMode {
@@ -376,7 +423,7 @@ function resolvePfModeFromExtra(x: Record<string, unknown>): PfMode {
  * - Sum Total = (근무일 × Total Salary / 월총일) + OT + Extra Allowance
  * - OT Rate = Basic Salary ÷ 26 ÷ 8 × 2
  * - OT = 주간 OT시간 × OT Rate
- * - PF(직원·사업주) = ROUND(MIN(Basic Salary × 12%, 1,800), 0)
+ * - PF(직원·사업주) = ROUND(MIN(Basic Salary × 12%, 1,800), 0) — 인사정보에서 상한 해제 시 12%만 적용
  * - ESIC(직원) = IF(지급합계>21,000, 0, 지급합계×0.75%)
  * - TDS = 신규 세제 LET 수식(지급합계×12, 표준공제 75,000, 87A 리베이트·한계완화, 4% cess) / 12
  * - Net = Sum Total − PF(직원) − ESIC(직원) − TDS − PT − 선지급
@@ -544,7 +591,8 @@ export function recalculatePayrollRow(
   const proratedPackage = roundInr((totalSalary * worked) / calendarDays);
   const sum_total = roundInr(proratedPackage + overtime + transport + customSum);
 
-  const pf = computePfContributions(basic);
+  const pfCalcMode = row.pf_calc_mode ?? 'cap_1800';
+  const pf = computePfContributions(basic, pfCalcMode, totalSalary);
   const pfEmployeeStr = String(pf.pf_employee);
   const pfEmployerStr = String(pf.pf_employer);
 
@@ -580,6 +628,7 @@ export function recalculatePayrollRow(
     ot_manual: otManual && dayOtHour > 0,
     overtime,
     sum_total,
+    pf_calc_mode: pfCalcMode,
     pf_employee: pfEmployeeStr,
     pf_employer: pfEmployerStr,
     esic_employee: esicEmployeeStr,
@@ -754,6 +803,7 @@ export function payrollRecordToGridRow(
 
   const otEligible = isOtEligible(x, emp);
   const otManual = isOtManualOverride(x);
+  const pfCalcMode = resolvePfCalcMode(x, emp);
   const { ot_rate: otRateInitial, day_ot_hour: dayOtHour } = resolveOtInputsFromExtra(
     x,
     basic,
@@ -806,6 +856,7 @@ export function payrollRecordToGridRow(
     overtime: 0,
     sum_total: num(p.gross_salary),
     indian_pf_mode: indianPfMode,
+    pf_calc_mode: pfCalcMode,
     pf_employee: '',
     pf_employer: '',
     esic_employee: '',
@@ -856,6 +907,7 @@ export function gridRowToPayload(
     night_ot_hour: 0,
     ot_eligible: recalculated.ot_eligible === true,
     ot_manual: Boolean(recalculated.ot_manual),
+    pf_calc_mode: recalculated.pf_calc_mode ?? 'cap_1800',
     day_ot: otPay.day_ot_pay,
     night_ot: 0,
     transport_allowance: recalculated.transport_allowance,
