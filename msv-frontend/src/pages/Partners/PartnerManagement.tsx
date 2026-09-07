@@ -33,6 +33,9 @@ import {
   Checkbox,
   Pagination,
   TableSortLabel,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
 } from '@mui/material';
 import { alpha, useTheme, type SxProps, type Theme } from '@mui/material/styles';
 import {
@@ -48,6 +51,7 @@ import {
   FileDownload as FileDownloadIcon,
   RestartAlt as ResetIcon,
   MoreHoriz as MoreHorizIcon,
+  MergeType as MergeTypeIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { api, partnerService } from '../../services/api';
@@ -252,6 +256,9 @@ const PartnerManagement: React.FC = () => {
   } | null>(null);
   const [toolbarMenuAnchor, setToolbarMenuAnchor] = useState<null | HTMLElement>(null);
   const [selectedPartnerIds, setSelectedPartnerIds] = useState<number[]>([]);
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [mergeKeepId, setMergeKeepId] = useState<number | null>(null);
+  const [merging, setMerging] = useState(false);
   const [page, setPage] = useState(1);
 
   const formatPartners = useCallback((partnersData: any[]): Partner[] => {
@@ -500,18 +507,14 @@ const PartnerManagement: React.FC = () => {
       return;
     }
 
-    // GST 번호 검증: 최소 1개 이상, 빈 값 제거 (파트너 마스터만)
+    // GST 번호: 빈 값 제거 (필수 아님 — 건물주/소상공인 등)
     const validGstNumbers = formData.gstNumbers.filter(gst => gst.trim() !== '');
     const isLegacyCustomer = selectedPartner?.recordSource === 'customer';
 
-    if (!isLegacyCustomer && validGstNumbers.length === 0) {
-      setNotify({ message: t('partnerManagement.gstMinOneRequired'), severity: 'warning' });
-      return;
-    }
-    
     const formDataWithValidGst = {
       ...formData,
       companyName: normalizePartnerCompanyName(formData.companyName),
+      businessNumber: String(formData.businessNumber || '').trim(),
       gstNumbers: validGstNumbers.length > 0 ? validGstNumbers : [''],
     };
 
@@ -587,7 +590,7 @@ const PartnerManagement: React.FC = () => {
 
   const handleRemoveGstNumber = (index: number) => {
     if (formData.gstNumbers.length <= 1) {
-      setNotify({ message: t('partnerManagement.gstMinOneNeeded'), severity: 'warning' });
+      setFormData({ ...formData, gstNumbers: [''] });
       return;
     }
     const newGstNumbers = formData.gstNumbers.filter((_, i) => i !== index);

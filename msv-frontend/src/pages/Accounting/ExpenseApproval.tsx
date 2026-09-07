@@ -195,7 +195,41 @@ interface ExpenseItem {
   total: number;
   date?: string;
   amount?: number;
+  /** TDS 양식 전용 */
+  pan?: string;
+  tdsRate?: number;
+  deducteeType?: 'company' | 'other';
+  tdsSection?: string;
+  tdsCode?: string;
+  tdsAmount?: number;
+  tdsInterest?: number;
+  remarks?: string;
 }
+
+type ExpenseFormType = 'general' | 'gst' | 'tds';
+
+const resolveExpenseFormType = (meta?: Record<string, any> | null): ExpenseFormType => {
+  const raw = String(meta?.formType || meta?.form_type || '').trim().toLowerCase();
+  if (raw === 'general' || raw === 'gst' || raw === 'tds') return raw;
+  return 'gst';
+};
+
+const calcTdsLineAmounts = (item: {
+  amount?: number;
+  unitPrice?: number;
+  qty?: number;
+  tdsRate?: number;
+  tdsInterest?: number;
+}) => {
+  const base = floorMoney(
+    Number(item.amount ?? 0) || Number(item.unitPrice || 0) * Number(item.qty || 1)
+  );
+  const rate = Number(item.tdsRate || 0);
+  const tdsAmt = floorMoney(base * (rate / 100));
+  const interest = floorMoney(Number(item.tdsInterest || 0));
+  const payable = floorMoney(Math.max(0, base - tdsAmt));
+  return { base, tdsAmt, interest, payable, lineTotal: floorMoney(tdsAmt + interest) };
+};
 
 interface PartnerOption {
   id: number;
@@ -561,7 +595,7 @@ const ExpenseCompanyBlock = ({
           src={logo}
           alt={logoAlt}
           sx={{
-            display: 'block',
+  display: 'block',
             alignSelf: 'flex-start',
             maxHeight: 36,
             maxWidth: 160,
@@ -815,19 +849,79 @@ const readMetaNumber = (meta: Record<string, any> | undefined, ...keys: string[]
 };
 
 const calcExpenseTax = (
-  items: Array<{ total?: number; amount?: number }> | undefined,
+  items: Array<{
+    total?: number;
+    amount?: number;
+    unitPrice?: number;
+    qty?: number;
+    tdsRate?: number;
+    tdsAmount?: number;
+    tdsInterest?: number;
+  }> | undefined,
   meta: Record<string, any> | undefined,
   companyGstNumber = '',
   companyGstState = ''
 ) => {
+  const formType = resolveExpenseFormType(meta);
+  const rows = items || [];
+
+  if (formType === 'tds') {
+    let gross = 0;
+    let tdsSum = 0;
+    let interestSum = 0;
+    for (const item of rows) {
+      const calc = calcTdsLineAmounts(item);
+      gross += calc.base;
+      tdsSum += Number(item.tdsAmount ?? calc.tdsAmt);
+      interestSum += calc.interest;
+    }
+    gross = floorMoney(gross);
+    tdsSum = floorMoney(tdsSum);
+    interestSum = floorMoney(interestSum);
+    return {
+      formType,
+      subtotal: gross,
+      igstRate: 0,
+      cgstRate: 0,
+      sgstRate: 0,
+      tdsEnabled: true,
+      tdsRate: 0,
+      igstAmount: 0,
+      cgstAmount: 0,
+      sgstAmount: 0,
+      tdsAmount: tdsSum,
+      tdsInterestAmount: interestSum,
+      grandTotal: floorMoney(Math.max(0, gross - tdsSum)),
+    };
+  }
+
   const subtotal = floorMoney(
-    (items || []).reduce((sum, item) => sum + Number(item.total ?? item.amount ?? 0), 0)
+    rows.reduce((sum, item) => sum + Number(item.total ?? item.amount ?? 0), 0)
   );
+
+  if (formType === 'general') {
+    return {
+      formType,
+      subtotal,
+      igstRate: 0,
+      cgstRate: 0,
+      sgstRate: 0,
+      tdsEnabled: false,
+      tdsRate: 0,
+      igstAmount: 0,
+      cgstAmount: 0,
+      sgstAmount: 0,
+      tdsAmount: 0,
+      tdsInterestAmount: 0,
+      grandTotal: subtotal,
+    };
+  }
+
   let igstRate = readMetaNumber(meta, 'igstRate', 'igst_rate');
   let cgstRate = readMetaNumber(meta, 'cgstRate', 'cgst_rate');
   let sgstRate = readMetaNumber(meta, 'sgstRate', 'sgst_rate');
-  const tdsEnabled = Boolean(meta?.tdsEnabled ?? meta?.tds_enabled);
-  const tdsRate = tdsEnabled ? readMetaNumber(meta, 'tdsRate', 'tds_rate') : 0;
+  const legacyTds = Boolean(meta?.tdsEnabled ?? meta?.tds_enabled);
+  const tdsRate = legacyTds ? readMetaNumber(meta, 'tdsRate', 'tds_rate') : 0;
   const gstNumber = String(meta?.gstNumber || meta?.gst_number || '').trim();
   if (igstRate === 0 && cgstRate === 0 && sgstRate === 0 && looksLikeGstin(gstNumber)) {
     const resolved = resolveGstRatesFromGstin(gstNumber, companyGstNumber, companyGstState);
@@ -840,16 +934,18 @@ const calcExpenseTax = (
   const sgstAmount = floorMoney(subtotal * (sgstRate / 100));
   const tdsAmount = floorMoney(subtotal * (tdsRate / 100));
   return {
+    formType,
     subtotal,
     igstRate,
     cgstRate,
     sgstRate,
-    tdsEnabled,
+    tdsEnabled: legacyTds,
     tdsRate,
     igstAmount,
     cgstAmount,
     sgstAmount,
     tdsAmount,
+    tdsInterestAmount: 0,
     grandTotal: floorMoney(subtotal + igstAmount + cgstAmount + sgstAmount - tdsAmount),
   };
 };
@@ -947,6 +1043,7 @@ const ExpenseApproval: React.FC = () => {
   const [partners, setPartners] = useState<PartnerOption[]>([]);
   const [partnerInputValue, setPartnerInputValue] = useState('');
   const [voucherData, setVoucherData] = useState({
+    formType: 'gst' as ExpenseFormType,
     department: '',
     partnerId: '',
     voucherNo: '',
@@ -1067,33 +1164,67 @@ const ExpenseApproval: React.FC = () => {
     };
   };
 
-  const subtotalAmount = useMemo(
-    () => floorMoney(lineItems.reduce((sum, item) => sum + Number(item.total || 0), 0)),
-    [lineItems]
-  );
+  const subtotalAmount = useMemo(() => {
+    if (voucherData.formType === 'tds') {
+      return floorMoney(
+        lineItems.reduce((sum, item) => sum + calcTdsLineAmounts(item).base, 0)
+      );
+    }
+    return floorMoney(lineItems.reduce((sum, item) => sum + Number(item.total || 0), 0));
+  }, [lineItems, voucherData.formType]);
   const igstAmount = useMemo(
-    () => floorMoney(subtotalAmount * (Number(voucherData.igstRate || 0) / 100)),
-    [subtotalAmount, voucherData.igstRate]
+    () =>
+      voucherData.formType === 'gst'
+        ? floorMoney(subtotalAmount * (Number(voucherData.igstRate || 0) / 100))
+        : 0,
+    [subtotalAmount, voucherData.formType, voucherData.igstRate]
   );
   const cgstAmount = useMemo(
-    () => floorMoney(subtotalAmount * (Number(voucherData.cgstRate || 0) / 100)),
-    [subtotalAmount, voucherData.cgstRate]
+    () =>
+      voucherData.formType === 'gst'
+        ? floorMoney(subtotalAmount * (Number(voucherData.cgstRate || 0) / 100))
+        : 0,
+    [subtotalAmount, voucherData.formType, voucherData.cgstRate]
   );
   const sgstAmount = useMemo(
-    () => floorMoney(subtotalAmount * (Number(voucherData.sgstRate || 0) / 100)),
-    [subtotalAmount, voucherData.sgstRate]
-  );
-  const tdsAmount = useMemo(
     () =>
-      voucherData.tdsEnabled
-        ? floorMoney(subtotalAmount * (Number(voucherData.tdsRate || 0) / 100))
+      voucherData.formType === 'gst'
+        ? floorMoney(subtotalAmount * (Number(voucherData.sgstRate || 0) / 100))
         : 0,
-    [subtotalAmount, voucherData.tdsEnabled, voucherData.tdsRate]
+    [subtotalAmount, voucherData.formType, voucherData.sgstRate]
   );
-  const totalAmount = useMemo(
-    () => floorMoney(subtotalAmount + igstAmount + cgstAmount + sgstAmount - tdsAmount),
-    [subtotalAmount, igstAmount, cgstAmount, sgstAmount, tdsAmount]
-  );
+  const tdsAmount = useMemo(() => {
+    if (voucherData.formType === 'tds') {
+      return floorMoney(
+        lineItems.reduce((sum, item) => {
+          const calc = calcTdsLineAmounts(item);
+          return sum + Number(item.tdsAmount ?? calc.tdsAmt);
+        }, 0)
+      );
+    }
+    if (voucherData.formType === 'gst' && voucherData.tdsEnabled) {
+      return floorMoney(subtotalAmount * (Number(voucherData.tdsRate || 0) / 100));
+    }
+    return 0;
+  }, [lineItems, subtotalAmount, voucherData.formType, voucherData.tdsEnabled, voucherData.tdsRate]);
+  const tdsInterestAmount = useMemo(() => {
+    if (voucherData.formType !== 'tds') return 0;
+    return floorMoney(lineItems.reduce((sum, item) => sum + Number(item.tdsInterest || 0), 0));
+  }, [lineItems, voucherData.formType]);
+  const totalAmount = useMemo(() => {
+    if (voucherData.formType === 'tds') {
+      return floorMoney(Math.max(0, subtotalAmount - tdsAmount));
+    }
+    if (voucherData.formType === 'general') return subtotalAmount;
+    return floorMoney(subtotalAmount + igstAmount + cgstAmount + sgstAmount - tdsAmount);
+  }, [
+    voucherData.formType,
+    subtotalAmount,
+    igstAmount,
+    cgstAmount,
+    sgstAmount,
+    tdsAmount,
+  ]);
 
   const loadExpenseData = useCallback(async () => {
     setLoading(true);
@@ -1156,17 +1287,17 @@ const ExpenseApproval: React.FC = () => {
 
   const buildExpensePayload = useCallback(
     (statusOverride?: ExpenseApprovalItem['status']) => ({
-      title: formData.title,
-      purpose: formData.purpose,
+    title: formData.title,
+    purpose: formData.purpose,
       total_amount: floorMoney(totalAmount),
       currency: 'INR',
       requester_name: user?.username || '',
       requester_department: user?.department || '',
       requester_position: user?.position || '',
       current_approver_id: voucherData.approvedById ? Number(voucherData.approvedById) : null,
-      priority: formData.priority,
-      due_date: formData.dueDate || null,
-      notes: formData.notes || '',
+    priority: formData.priority,
+    due_date: formData.dueDate || null,
+    notes: formData.notes || '',
       items: {
         rows: lineItems.map((item) => ({
           ...item,
@@ -1700,6 +1831,32 @@ const ExpenseApproval: React.FC = () => {
     const savedItems = (expense.items || []).map((item) => {
       const qty = Number(item.qty || 1);
       const unitPrice = floorMoney(Number(item.unitPrice || item.amount || 0));
+      const formType = resolveExpenseFormType(meta);
+      if (formType === 'tds') {
+        const base = floorMoney(Number(item.amount ?? item.total ?? unitPrice));
+        const tdsRate = Number(item.tdsRate || 0);
+        const tdsInterest = floorMoney(Number(item.tdsInterest || 0));
+        const tdsAmt = floorMoney(
+          Number(item.tdsAmount ?? base * (tdsRate / 100))
+        );
+        return {
+          id: item.id || `${Date.now()}-${Math.random()}`,
+          invoiceDate: formatLocalYmd(item.invoiceDate || item.date) || todayDate,
+          description: item.description || '',
+          qty: 1,
+          unitPrice: base,
+          amount: base,
+          pan: item.pan || '',
+          tdsRate,
+          deducteeType: item.deducteeType === 'company' ? 'company' as const : 'other' as const,
+          tdsSection: item.tdsSection || '',
+          tdsCode: item.tdsCode || '',
+          tdsAmount: tdsAmt,
+          tdsInterest,
+          remarks: item.remarks || '',
+          total: floorMoney(Math.max(0, base - tdsAmt)),
+        };
+      }
       return {
         id: item.id || `${Date.now()}-${Math.random()}`,
         invoiceDate: formatLocalYmd(item.invoiceDate || item.date) || todayDate,
@@ -1709,9 +1866,10 @@ const ExpenseApproval: React.FC = () => {
         total: floorMoney(Number(item.total || item.amount || qty * unitPrice)),
       };
     });
-    setLineItems(savedItems.length > 0 ? savedItems : [createEmptyLineItem()]);
+    setLineItems(savedItems.length > 0 ? savedItems : [createEmptyLineItem(resolveExpenseFormType(meta))]);
     setCurrentAttachments(expense.attachments || []);
     setVoucherData({
+      formType: resolveExpenseFormType(meta),
       department: meta.department || linkedPartner?.company_name || '',
       partnerId: meta.partnerId != null ? String(meta.partnerId) : '',
       voucherNo: meta.voucherNo || '',
@@ -1759,10 +1917,11 @@ const ExpenseApproval: React.FC = () => {
       dueDate: todayDate,
       notes: ''
     });
-    setLineItems([createEmptyLineItem()]);
+    setLineItems([createEmptyLineItem('gst')]);
     setCurrentAttachments([]);
     setPartnerInputValue('');
     setVoucherData({
+      formType: 'gst',
       department: '',
       partnerId: '',
       voucherNo: '',
@@ -1835,14 +1994,49 @@ const ExpenseApproval: React.FC = () => {
     }
   };
 
-  const createEmptyLineItem = (): ExpenseItem => ({
-    id: `${Date.now()}-${Math.random()}`,
-    invoiceDate: todayDate,
-    description: '',
-    qty: 1,
-    unitPrice: 0,
-    total: 0
-  });
+  const createEmptyLineItem = (formType: ExpenseFormType = voucherData.formType): ExpenseItem => {
+    if (formType === 'tds') {
+      return {
+        id: `${Date.now()}-${Math.random()}`,
+        invoiceDate: todayDate,
+        description: '',
+        qty: 1,
+        unitPrice: 0,
+        amount: 0,
+        pan: '',
+        tdsRate: 0,
+        deducteeType: 'other',
+        tdsSection: '',
+        tdsCode: '',
+        tdsAmount: 0,
+        tdsInterest: 0,
+        remarks: '',
+        total: 0,
+      };
+    }
+    return {
+      id: `${Date.now()}-${Math.random()}`,
+      invoiceDate: todayDate,
+      description: '',
+      qty: 1,
+      unitPrice: 0,
+      total: 0,
+    };
+  };
+
+  const handleChangeFormType = (next: ExpenseFormType) => {
+    if (next === voucherData.formType) return;
+    setVoucherData((prev) => ({
+      ...prev,
+      formType: next,
+      igstRate: next === 'gst' ? prev.igstRate : 0,
+      cgstRate: next === 'gst' ? prev.cgstRate : 0,
+      sgstRate: next === 'gst' ? prev.sgstRate : 0,
+      tdsEnabled: next === 'gst' ? prev.tdsEnabled : false,
+      tdsRate: next === 'gst' ? prev.tdsRate : 0,
+    }));
+    setLineItems([createEmptyLineItem(next)]);
+  };
 
   const handleAddLineItem = () => {
     setLineItems((prev) => [...prev, createEmptyLineItem()]);
@@ -1856,7 +2050,27 @@ const ExpenseApproval: React.FC = () => {
     setLineItems((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item;
-        const nextItem = { ...item, [field]: value };
+        const nextItem: ExpenseItem = { ...item, [field]: value };
+        if (voucherData.formType === 'tds') {
+          if (field === 'amount' || field === 'unitPrice') {
+            const base = floorMoney(Number(value || 0));
+            nextItem.amount = base;
+            nextItem.unitPrice = base;
+            nextItem.qty = 1;
+          }
+          if (field === 'tdsRate') {
+            nextItem.tdsRate = Number(value || 0);
+          }
+          if (field === 'tdsInterest') {
+            nextItem.tdsInterest = floorMoney(Number(value || 0));
+          }
+          const calc = calcTdsLineAmounts(nextItem);
+          nextItem.amount = calc.base;
+          nextItem.unitPrice = calc.base;
+          nextItem.tdsAmount = calc.tdsAmt;
+          nextItem.total = calc.payable;
+          return nextItem;
+        }
         if (field === 'unitPrice') {
           nextItem.unitPrice = floorMoney(Number(value || 0));
         }
@@ -2451,7 +2665,7 @@ const ExpenseApproval: React.FC = () => {
           });
         }
       } else {
-        setSuccess(t('expenseApproval.success.paymentCompleted'));
+      setSuccess(t('expenseApproval.success.paymentCompleted'));
         setSelectedExpense(null);
         setListTab('transfer');
         setViewMode('list');
@@ -2887,26 +3101,26 @@ const ExpenseApproval: React.FC = () => {
           title={isEdit ? t('expenseApproval.form.editTitle') : t('expenseApproval.form.createTitle')}
           mb={2}
           actions={
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              {headerStatusBanner === 'draftCreated' && (
-                <Typography variant="body2" color="text.secondary">
-                  {t('expenseApproval.success.draftCreated')}
-                </Typography>
-              )}
-              {headerStatusBanner === 'autoSaved' && (
-                <Typography variant="body2" color="text.secondary">
-                  {t('expenseApproval.voucher.autoSaveSaved')}
-                </Typography>
-              )}
-              {headerStatusBanner === 'autoSaveFailed' && (
-                <Typography variant="body2" color="error">
-                  {t('expenseApproval.voucher.autoSaveFailed')}
-                </Typography>
-              )}
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            {headerStatusBanner === 'draftCreated' && (
+              <Typography variant="body2" color="text.secondary">
+                {t('expenseApproval.success.draftCreated')}
+              </Typography>
+            )}
+            {headerStatusBanner === 'autoSaved' && (
+              <Typography variant="body2" color="text.secondary">
+                {t('expenseApproval.voucher.autoSaveSaved')}
+              </Typography>
+            )}
+            {headerStatusBanner === 'autoSaveFailed' && (
+              <Typography variant="body2" color="error">
+                {t('expenseApproval.voucher.autoSaveFailed')}
+              </Typography>
+            )}
               <Button variant="outlined" onClick={() => setViewMode('list')} sx={mvsBodyOutlinedBtnSx}>
-                {t('expenseApproval.actions.backToList')}
-              </Button>
-            </Box>
+              {t('expenseApproval.actions.backToList')}
+            </Button>
+          </Box>
           }
         />
 
@@ -2967,9 +3181,9 @@ const ExpenseApproval: React.FC = () => {
                       }}
                     >
                       <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.75rem', color: EXPENSE_STAMP_LABEL }}>
-                        {t('expenseApproval.voucher.prepared')}
-                      </Typography>
-                    </Box>
+                    {t('expenseApproval.voucher.prepared')}
+                  </Typography>
+                </Box>
                     <Box
                       sx={{
                         minHeight: 68,
@@ -2999,8 +3213,8 @@ const ExpenseApproval: React.FC = () => {
                       }}
                     >
                       <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.75rem', color: EXPENSE_STAMP_LABEL }}>
-                        {t('expenseApproval.voucher.approved')}
-                      </Typography>
+                    {t('expenseApproval.voucher.approved')}
+                  </Typography>
                     </Box>
                     <Box
                       sx={{
@@ -3012,11 +3226,11 @@ const ExpenseApproval: React.FC = () => {
                         py: 0.5,
                       }}
                     >
-                      <Autocomplete
+                  <Autocomplete
                         fullWidth
                         size="small"
                         options={selectableApprovers}
-                        getOptionLabel={(option) => option.name}
+                    getOptionLabel={(option) => option.name}
                         isOptionEqualToValue={(a, b) => Number(a.id) === Number(b.id)}
                         value={
                           selectableApprovers.find((item) => String(item.id) === String(voucherData.approvedById))
@@ -3030,7 +3244,7 @@ const ExpenseApproval: React.FC = () => {
                           }
                           setVoucherData({ ...voucherData, approvedById: value ? String(value.id) : '' });
                         }}
-                        renderInput={(params) => (
+                    renderInput={(params) => (
                           <TextField
                             {...params}
                             placeholder={t('expenseApproval.placeholders.searchSimple')}
@@ -3059,6 +3273,41 @@ const ExpenseApproval: React.FC = () => {
 
             <CardContent sx={{ px: { xs: 1.5, sm: 2 }, py: 1.25, bgcolor: '#FFFFFF' }}>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 1,
+                px: 0.25,
+              }}
+            >
+              <Typography variant="body2" sx={{ fontWeight: 700, mr: 0.5 }}>
+                {t('expenseApproval.voucher.formTypeLabel')}
+              </Typography>
+              <RadioGroup
+                row
+                value={voucherData.formType}
+                onChange={(e) => handleChangeFormType(e.target.value as ExpenseFormType)}
+                sx={{ gap: { xs: 0, sm: 1 } }}
+              >
+                <FormControlLabel
+                  value="general"
+                  control={<Radio size="small" />}
+                  label={t('expenseApproval.voucher.formTypeGeneral')}
+                />
+                <FormControlLabel
+                  value="gst"
+                  control={<Radio size="small" />}
+                  label={t('expenseApproval.voucher.formTypeGst')}
+                />
+                <FormControlLabel
+                  value="tds"
+                  control={<Radio size="small" />}
+                  label={t('expenseApproval.voucher.formTypeTds')}
+                />
+              </RadioGroup>
+            </Box>
             {/* 지출 신청 */}
             <Box
               sx={{
@@ -3070,7 +3319,7 @@ const ExpenseApproval: React.FC = () => {
               <Box sx={{ ...sectionHeaderBarSx, bgcolor: EXPENSE_MUTED_BG }}>
                 <Typography sx={{ fontWeight: 700, fontSize: '0.8125rem', color: EXPENSE_REQUEST_ACCENT }}>
                   {t('expenseApproval.voucher.sectionRequest')}
-                </Typography>
+              </Typography>
               </Box>
               <TableContainer>
                 <Table size="small" sx={compactTableSx}>
@@ -3092,53 +3341,53 @@ const ExpenseApproval: React.FC = () => {
 
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1 }}>
                   <Box sx={{ gridColumn: { md: '1 / -1' } }}>
-                    <TextField
+                  <TextField
                       label={t('expenseApproval.voucher.labelTitle')}
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      required
-                      fullWidth
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    required
+                    fullWidth
                       size="small"
                       sx={softFieldSx}
-                    />
-                  </Box>
+                  />
+                </Box>
                   <Box sx={{ gridColumn: { md: '1 / -1' } }}>
-                    <TextField
+                  <TextField
                       label={t('expenseApproval.voucher.labelPurpose')}
-                      value={formData.purpose}
-                      onChange={(e) => setFormData({ ...formData, purpose: e.target.value })}
-                      required
-                      fullWidth
+                    value={formData.purpose}
+                    onChange={(e) => setFormData({ ...formData, purpose: e.target.value })}
+                    required
+                    fullWidth
                       size="small"
-                      multiline
-                      minRows={2}
+                    multiline
+                    minRows={2}
                       sx={softFieldSx}
-                    />
-                  </Box>
+                  />
+                </Box>
                   <FormControl fullWidth size="small" sx={softFieldSx}>
                     <InputLabel>{t('expenseApproval.filters.priority')}</InputLabel>
-                    <Select
+                      <Select
                       label={t('expenseApproval.filters.priority')}
-                      value={formData.priority}
+                        value={formData.priority}
                       onChange={(e) => setFormData({ ...formData, priority: e.target.value as 'low' | 'medium' | 'high' | 'urgent' })}
-                    >
-                      <MenuItem value="low">{t('expenseApproval.priority.low')}</MenuItem>
-                      <MenuItem value="medium">{t('expenseApproval.priority.medium')}</MenuItem>
-                      <MenuItem value="high">{t('expenseApproval.priority.high')}</MenuItem>
-                      <MenuItem value="urgent">{t('expenseApproval.priority.urgent')}</MenuItem>
-                    </Select>
-                  </FormControl>
-                  <TextField
+                      >
+                        <MenuItem value="low">{t('expenseApproval.priority.low')}</MenuItem>
+                        <MenuItem value="medium">{t('expenseApproval.priority.medium')}</MenuItem>
+                        <MenuItem value="high">{t('expenseApproval.priority.high')}</MenuItem>
+                        <MenuItem value="urgent">{t('expenseApproval.priority.urgent')}</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <TextField
                     label={t('expenseApproval.voucher.labelDateCreated')}
-                    type="date"
-                    value={formData.dueDate}
-                    onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                    InputLabelProps={{ shrink: true }}
-                    fullWidth
+                      type="date"
+                      value={formData.dueDate}
+                      onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                      InputLabelProps={{ shrink: true }}
+                      fullWidth
                     size="small"
-                    inputProps={{ lang: formLangAttr }}
+                      inputProps={{ lang: formLangAttr }}
                     sx={softFieldSx}
-                  />
+                    />
                 </Box>
               </Box>
             </Box>
@@ -3154,8 +3403,8 @@ const ExpenseApproval: React.FC = () => {
             >
               <Box sx={{ ...sectionHeaderBarSx, bgcolor: EXPENSE_VENDOR_HEADER, borderBottomColor: EXPENSE_VENDOR_LINE }}>
                 <Typography sx={{ fontWeight: 700, fontSize: '0.8125rem', color: EXPENSE_VENDOR_ACCENT }}>
-                  {t('expenseApproval.voucher.sectionVendor')}
-                </Typography>
+                {t('expenseApproval.voucher.sectionVendor')}
+              </Typography>
               </Box>
               <Box sx={{ p: 1.25 }}>
               <Typography
@@ -3165,10 +3414,10 @@ const ExpenseApproval: React.FC = () => {
                 {t('expenseApproval.voucher.vendorGroupDoc')}
               </Typography>
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1, mb: 1.25 }}>
-                <Autocomplete
+                  <Autocomplete
                   sx={softFieldSx}
                   fullWidth
-                  options={partners}
+                    options={partners}
                   filterOptions={filterPartnerOptions}
                   getOptionLabel={(option) => option.company_name || ''}
                   isOptionEqualToValue={(a, b) => Number(a.id) === Number(b.id)}
@@ -3177,51 +3426,51 @@ const ExpenseApproval: React.FC = () => {
                   selectOnFocus
                   handleHomeEndKeys
                   noOptionsText={t('partners.empty.noResults')}
-                  value={partners.find((item) => String(item.id) === String(voucherData.partnerId)) || null}
+                    value={partners.find((item) => String(item.id) === String(voucherData.partnerId)) || null}
                   inputValue={partnerInputValue}
                   onInputChange={(_, newInput) => setPartnerInputValue(newInput)}
-                  onChange={(_, value) => {
-                    if (!value) {
+                    onChange={(_, value) => {
+                      if (!value) {
                       setPartnerInputValue('');
-                      setVoucherData({
-                        ...voucherData,
-                        partnerId: '',
-                        department: '',
-                        gstNumber: '',
+                        setVoucherData({
+                          ...voucherData,
+                          partnerId: '',
+                          department: '',
+                          gstNumber: '',
                         partnerRepresentative: '',
                         partnerAddress: '',
                         partnerPhone: '',
                         partnerEmail: '',
                         partnerPan: '',
-                        bank: '',
-                        accountNumber: '',
-                        ifsc: '',
+                          bank: '',
+                          accountNumber: '',
+                          ifsc: '',
                         acHolder: '',
                         igstRate: 0,
                         cgstRate: 0,
                         sgstRate: 0,
-                      });
-                      return;
-                    }
+                        });
+                        return;
+                      }
                     setPartnerInputValue(value.company_name || '');
                     const gstNumber = pickPartnerGstNumber(value);
-                    setVoucherData({
-                      ...voucherData,
-                      partnerId: String(value.id),
-                      department: value.company_name || '',
-                      gstNumber,
+                      setVoucherData({
+                        ...voucherData,
+                        partnerId: String(value.id),
+                        department: value.company_name || '',
+                        gstNumber,
                       partnerRepresentative: value.representative || '',
                       partnerAddress: value.address || '',
                       partnerPhone: value.phone || '',
                       partnerEmail: value.email || '',
                       partnerPan: value.pan_number || '',
-                      bank: value.bank_name || '',
-                      accountNumber: value.account_number || '',
-                      ifsc: value.bank_ifsc || '',
+                        bank: value.bank_name || '',
+                        accountNumber: value.account_number || '',
+                        ifsc: value.bank_ifsc || '',
                       acHolder: value.account_holder || value.representative || value.company_name || '',
                       ...resolveGstRatesFromGstin(gstNumber, companyGstNumber, companyGstState),
-                    });
-                  }}
+                      });
+                    }}
                   renderOption={(props, option) => (
                     <li {...props} key={option.id}>
                       <Box sx={{ minWidth: 0, py: 0.25 }}>
@@ -3236,7 +3485,7 @@ const ExpenseApproval: React.FC = () => {
                       </Box>
                     </li>
                   )}
-                  renderInput={(params) => (
+                    renderInput={(params) => (
                     <TextField
                       {...params}
                       label={t('expenseApproval.voucher.labelPartner')}
@@ -3245,18 +3494,18 @@ const ExpenseApproval: React.FC = () => {
                     />
                   )}
                 />
-                <TextField
+                  <TextField
                   label={t('expenseApproval.voucher.labelVoucherNumber')}
-                  value={voucherData.voucherNo}
+                    value={voucherData.voucherNo}
                   placeholder={t('expenseApproval.voucher.autoGenerated')}
-                  fullWidth
+                    fullWidth
                   size="small"
                   InputProps={{ readOnly: true }}
                   sx={softFieldSx}
-                />
-                <TextField
+                  />
+                  <TextField
                   label={t('expenseApproval.voucher.labelGstNumber')}
-                  value={voucherData.gstNumber}
+                    value={voucherData.gstNumber}
                   onChange={(e) => {
                     const gstNumber = e.target.value;
                     setVoucherData({
@@ -3265,19 +3514,19 @@ const ExpenseApproval: React.FC = () => {
                       ...resolveGstRatesFromGstin(gstNumber, companyGstNumber, companyGstState),
                     });
                   }}
-                  fullWidth
+                    fullWidth
                   size="small"
                   sx={softFieldSx}
-                />
-                <TextField
+                  />
+                  <TextField
                   label={t('expenseApproval.voucher.labelVoucherDate')}
-                  type="date"
-                  value={voucherData.voucherDate}
-                  onChange={(e) => setVoucherData({ ...voucherData, voucherDate: e.target.value })}
-                  InputLabelProps={{ shrink: true }}
-                  fullWidth
+                    type="date"
+                    value={voucherData.voucherDate}
+                    onChange={(e) => setVoucherData({ ...voucherData, voucherDate: e.target.value })}
+                    InputLabelProps={{ shrink: true }}
+                    fullWidth
                   size="small"
-                  inputProps={{ lang: formLangAttr }}
+                    inputProps={{ lang: formLangAttr }}
                   sx={softFieldSx}
                 />
                 <TextField
@@ -3312,46 +3561,6 @@ const ExpenseApproval: React.FC = () => {
                   size="small"
                   sx={softFieldSx}
                 />
-              </Box>
-              <Typography
-                variant="caption"
-                sx={{ fontWeight: 600, display: 'block', mb: 0.75, color: EXPENSE_VENDOR_SUB }}
-              >
-                {t('expenseApproval.voucher.vendorGroupPayout')}
-              </Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1 }}>
-                <TextField
-                  label={t('expenseApproval.voucher.labelAccountHolder')}
-                  value={voucherData.acHolder}
-                  onChange={(e) => setVoucherData({ ...voucherData, acHolder: e.target.value })}
-                  fullWidth
-                  size="small"
-                  sx={softFieldSx}
-                />
-                <TextField
-                  label={t('expenseApproval.voucher.labelBankName')}
-                  value={voucherData.bank}
-                  onChange={(e) => setVoucherData({ ...voucherData, bank: e.target.value })}
-                  fullWidth
-                  size="small"
-                  sx={softFieldSx}
-                />
-                <TextField
-                  label={t('expenseApproval.voucher.labelAccountNumber')}
-                  value={voucherData.accountNumber}
-                  onChange={(e) => setVoucherData({ ...voucherData, accountNumber: e.target.value })}
-                  fullWidth
-                  size="small"
-                  sx={softFieldSx}
-                />
-                <TextField
-                  label={t('expenseApproval.voucher.labelIfsc')}
-                  value={voucherData.ifsc}
-                  onChange={(e) => setVoucherData({ ...voucherData, ifsc: e.target.value })}
-                  fullWidth
-                  size="small"
-                  sx={softFieldSx}
-                />
                 <TextField
                   label={t('expenseApproval.voucher.labelPartnerAddress')}
                   value={voucherData.partnerAddress}
@@ -3360,7 +3569,47 @@ const ExpenseApproval: React.FC = () => {
                   size="small"
                   sx={{ ...softFieldSx, gridColumn: { md: '1 / -1' } }}
                 />
-              </Box>
+                </Box>
+              <Typography
+                variant="caption"
+                sx={{ fontWeight: 600, display: 'block', mb: 0.75, color: EXPENSE_VENDOR_SUB }}
+              >
+                {t('expenseApproval.voucher.vendorGroupPayout')}
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1 }}>
+                  <TextField
+                  label={t('expenseApproval.voucher.labelAccountHolder')}
+                    value={voucherData.acHolder}
+                    onChange={(e) => setVoucherData({ ...voucherData, acHolder: e.target.value })}
+                    fullWidth
+                  size="small"
+                  sx={softFieldSx}
+                  />
+                  <TextField
+                  label={t('expenseApproval.voucher.labelBankName')}
+                    value={voucherData.bank}
+                    onChange={(e) => setVoucherData({ ...voucherData, bank: e.target.value })}
+                    fullWidth
+                  size="small"
+                  sx={softFieldSx}
+                  />
+                  <TextField
+                  label={t('expenseApproval.voucher.labelAccountNumber')}
+                    value={voucherData.accountNumber}
+                    onChange={(e) => setVoucherData({ ...voucherData, accountNumber: e.target.value })}
+                    fullWidth
+                  size="small"
+                  sx={softFieldSx}
+                  />
+                  <TextField
+                  label={t('expenseApproval.voucher.labelIfsc')}
+                    value={voucherData.ifsc}
+                    onChange={(e) => setVoucherData({ ...voucherData, ifsc: e.target.value })}
+                    fullWidth
+                  size="small"
+                  sx={softFieldSx}
+                />
+                </Box>
               </Box>
             </Box>
 
@@ -3957,7 +4206,7 @@ const ExpenseApproval: React.FC = () => {
             </>
           }
         />
-        </Box>
+          </Box>
 
         <Card
           elevation={0}
@@ -3995,7 +4244,7 @@ const ExpenseApproval: React.FC = () => {
                       : '-'
                   }
                 />
-              </Box>
+        </Box>
 
               <Box
                 sx={{
@@ -4120,14 +4369,14 @@ const ExpenseApproval: React.FC = () => {
                           {showArrow ? (
                             <ArrowForwardIcon sx={{ color: '#94A3B8', fontSize: 20 }} />
                           ) : null}
-                        </Box>
-                      </Box>
+                </Box>
+              </Box>
                     );
                   })}
                 </Box>
               </Box>
+              </Box>
             </Box>
-          </Box>
 
           <CardContent sx={{ px: { xs: 1.5, sm: 2 }, py: 1.25, display: 'flex', flexDirection: 'column', gap: 1.25 }}>
             <Box
@@ -4162,11 +4411,11 @@ const ExpenseApproval: React.FC = () => {
               >
                 <Typography sx={{ fontWeight: 700, fontSize: '1rem', color: '#0F172A', lineHeight: 1.4 }}>
                   {selectedExpense.title || t('expenseApproval.detail.title')}
-                </Typography>
+                  </Typography>
                 {getStatusChip(resolveDisplayStatus(selectedExpense))}
                 {getPriorityChip(selectedExpense.priority)}
+                </Box>
               </Box>
-            </Box>
 
             {/* 지출 신청 */}
             <Box
@@ -4263,6 +4512,16 @@ const ExpenseApproval: React.FC = () => {
                       </TableCell>
                     </TableRow>
                     <TableRow>
+                      <TableCell sx={kvLabelCellSx}>
+                        {t('expenseApproval.voucher.labelPartnerAddress')}
+                      </TableCell>
+                      <TableCell colSpan={3} sx={{ fontWeight: 600, ...wrapCellSx }}>
+                        <ClampText title={String(partnerDetail.partnerAddress || '')}>
+                          {partnerDetail.partnerAddress}
+                        </ClampText>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
                       <TableCell sx={kvLabelCellSx}>{t('expenseApproval.voucher.labelAccountHolder')}</TableCell>
                       <TableCell sx={{ fontWeight: 600, ...wrapCellSx }}>
                         <ClampText title={String(partnerDetail.acHolder || '')}>{partnerDetail.acHolder}</ClampText>
@@ -4280,16 +4539,6 @@ const ExpenseApproval: React.FC = () => {
                       <TableCell sx={kvLabelCellSx}>{t('expenseApproval.voucher.labelIfsc')}</TableCell>
                       <TableCell sx={{ fontWeight: 600, ...wrapCellSx }}>
                         <ClampText>{partnerDetail.ifsc}</ClampText>
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ ...kvLabelCellSx, borderBottom: 'none' }}>
-                        {t('expenseApproval.voucher.labelPartnerAddress')}
-                      </TableCell>
-                      <TableCell colSpan={3} sx={{ fontWeight: 600, borderBottom: 'none', ...wrapCellSx }}>
-                        <ClampText title={String(partnerDetail.partnerAddress || '')}>
-                          {partnerDetail.partnerAddress}
-                        </ClampText>
                       </TableCell>
                     </TableRow>
                   </TableBody>
@@ -4334,8 +4583,8 @@ const ExpenseApproval: React.FC = () => {
                       </TableRow>
                     ) : (
                       selectedExpense.items.map((item) => (
-                        <TableRow key={item.id || item.description}>
-                          <TableCell>{item.invoiceDate || '-'}</TableCell>
+                      <TableRow key={item.id || item.description}>
+                        <TableCell>{item.invoiceDate || '-'}</TableCell>
                           <TableCell sx={wrapCellSx}>
                             <ClampText title={String(item.description || '')}>{item.description || '-'}</ClampText>
                           </TableCell>
@@ -4484,7 +4733,7 @@ const ExpenseApproval: React.FC = () => {
                     return (
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                         {t('expenseApproval.detail.attachmentLockedOnRemittance')}
-                      </Typography>
+                        </Typography>
                     );
                   }
                   return null;
@@ -4542,16 +4791,16 @@ const ExpenseApproval: React.FC = () => {
                         }}
                       />
                     </Button>
-                  </Box>
+                      </Box>
                 );
               })()}
               {selectedExpense.attachments.length > 0 ? (
                 renderAttachmentList(selectedExpense.attachments)
               ) : (
-                <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" color="text.secondary">
                   {t('expenseApproval.voucher.receiptNone')}
-                </Typography>
-              )}
+                        </Typography>
+                      )}
             </Box>
 
             {/* 송금 확인증 */}
@@ -4564,9 +4813,9 @@ const ExpenseApproval: React.FC = () => {
                 <Box>
                   <Typography variant="subtitle2" sx={sectionTitleSx}>
                     {t('expenseApproval.detail.remittanceProofs')}
-                  </Typography>
+                        </Typography>
                   {renderAttachmentList(proofPaths)}
-                </Box>
+            </Box>
               );
             })()}
 
@@ -4993,21 +5242,21 @@ const ExpenseApproval: React.FC = () => {
         title={t('expenseApproval.title')}
         mb={2}
         actions={
-          <Button
-            variant="contained"
-            disableElevation
-            startIcon={<AddIcon fontSize="small" />}
-            onClick={handleCreateExpense}
+        <Button
+          variant="contained"
+          disableElevation
+          startIcon={<AddIcon fontSize="small" />}
+          onClick={handleCreateExpense}
             sx={mvsBodyPrimaryBtnSx}
-          >
-            {t('expenseApproval.actions.requestExpense')}
-          </Button>
+        >
+          {t('expenseApproval.actions.requestExpense')}
+        </Button>
         }
       />
 
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
-        <Tabs
-          value={listTab}
+      <Tabs
+        value={listTab}
           onChange={(_, value) => {
             setListTab(value);
             setStatusFilter('');
@@ -5034,19 +5283,19 @@ const ExpenseApproval: React.FC = () => {
               letterSpacing: '-0.01em',
               color: 'text.secondary' },
             '& .MuiTab-root.Mui-selected': { color: 'primary.main', fontWeight: 700 } }}
-        >
-          <Tab label={t('expenseApproval.tabs.written')} value="written" />
-          <Tab label={t('expenseApproval.tabs.received')} value="received" />
-          {hasTransferAccess && <Tab label={t('expenseApproval.tabs.transfer')} value="transfer" />}
-        </Tabs>
+      >
+        <Tab label={t('expenseApproval.tabs.written')} value="written" />
+        <Tab label={t('expenseApproval.tabs.received')} value="received" />
+        {hasTransferAccess && <Tab label={t('expenseApproval.tabs.transfer')} value="transfer" />}
+      </Tabs>
       </Card>
 
       {/* 통계 카드 */}
-      <Box sx={{
-        display: 'grid',
+      <Box sx={{ 
+        display: 'grid', 
         gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
         gap: 2.5,
-        mb: 3
+        mb: 3 
       }}>
         <Card elevation={0} sx={mvsKpiCardSx}>
           <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
@@ -5097,7 +5346,7 @@ const ExpenseApproval: React.FC = () => {
             px: { xs: 2, sm: 2.5 },
             py: 2,
             bgcolor: '#FFFFFF',
-            display: 'grid',
+            display: 'grid', 
             gridTemplateColumns: {
               xs: '1fr',
               sm:
@@ -5105,28 +5354,28 @@ const ExpenseApproval: React.FC = () => {
                   ? 'minmax(160px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(140px, 1.2fr) auto'
                   : 'minmax(180px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) auto',
             },
-            gap: 2,
+            gap: 2, 
             alignItems: 'flex-end',
           }}
         >
-            <TextField
-              fullWidth
-              size="small"
+              <TextField
+                fullWidth
+                size="small"
               label={t('expenseApproval.placeholders.searchSimple')}
               placeholder={
                 isRootUser && listTab === 'transfer'
                   ? t('expenseApproval.placeholders.searchWithCompany')
                   : t('expenseApproval.placeholders.search')
               }
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
               InputLabelProps={{ shrink: true }}
               sx={expenseApprovalFilterFieldSx}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
                     <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
-                  </InputAdornment>
+                    </InputAdornment>
                 ) }}
             />
             <TextField
@@ -5134,7 +5383,7 @@ const ExpenseApproval: React.FC = () => {
               size="small"
               select
               label={t('expenseApproval.filters.status')}
-              value={statusFilter}
+                value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value);
                 setPage(1);
@@ -5214,8 +5463,8 @@ const ExpenseApproval: React.FC = () => {
               size="small"
               select
               label={t('expenseApproval.filters.priority')}
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value)}
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value)}
               InputLabelProps={{ shrink: true }}
               SelectProps={{
                 displayEmpty: true,
@@ -5229,12 +5478,12 @@ const ExpenseApproval: React.FC = () => {
                   return priorityLabels[String(selected)] ?? String(selected);
                 } }}
               sx={expenseApprovalFilterFieldSx}
-            >
-              <MenuItem value="">{t('expenseApproval.filters.all')}</MenuItem>
-              <MenuItem value="low">{t('expenseApproval.priority.low')}</MenuItem>
-              <MenuItem value="medium">{t('expenseApproval.priority.medium')}</MenuItem>
-              <MenuItem value="high">{t('expenseApproval.priority.high')}</MenuItem>
-              <MenuItem value="urgent">{t('expenseApproval.priority.urgent')}</MenuItem>
+              >
+                <MenuItem value="">{t('expenseApproval.filters.all')}</MenuItem>
+                <MenuItem value="low">{t('expenseApproval.priority.low')}</MenuItem>
+                <MenuItem value="medium">{t('expenseApproval.priority.medium')}</MenuItem>
+                <MenuItem value="high">{t('expenseApproval.priority.high')}</MenuItem>
+                <MenuItem value="urgent">{t('expenseApproval.priority.urgent')}</MenuItem>
             </TextField>
             {isRootUser && listTab === 'transfer' && (
               <TextField
@@ -5269,21 +5518,21 @@ const ExpenseApproval: React.FC = () => {
                 ))}
               </TextField>
             )}
-            <Button
-              variant="outlined"
+              <Button
+                variant="outlined"
               startIcon={<FilterIcon sx={{ fontSize: 18 }} />}
-              onClick={() => {
-                setSearchTerm('');
-                setStatusFilter('');
-                setPriorityFilter('');
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('');
+                  setPriorityFilter('');
                 setCompanyFilterId('');
                 setPage(1);
-              }}
+                }}
               sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
-            >
+              >
                 {t('expenseApproval.actions.reset')}
               </Button>
-        </Box>
+            </Box>
       </Card>
 
       {/* 지출결의서 목록 테이블 */}
@@ -5393,12 +5642,12 @@ const ExpenseApproval: React.FC = () => {
                   {t('expenseApproval.columns.actions')}
                 </TableCell>
               </TableRow>
-              </TableHead>
+            </TableHead>
               <TableBody sx={mvsTableBodyRowSx}>
                 {paginatedExpenses.map((expense, index) => (
-                  <TableRow
-                    key={expense.id}
-                    onClick={() => handleViewExpense(expense)}
+                <TableRow
+                  key={expense.id}
+                  onClick={() => handleViewExpense(expense)}
                     sx={{ cursor: 'pointer', '&:active': { bgcolor: 'action.selected' } }}
                   >
                   <TableCell sx={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums', width: 52, minWidth: 52, maxWidth: 52 }}>
@@ -5411,8 +5660,8 @@ const ExpenseApproval: React.FC = () => {
                   </TableCell>
                   <TableCell sx={{ minWidth: 0 }}>
                     <Typography variant="subtitle2" fontWeight="bold" noWrap>
-                      {expense.title}
-                    </Typography>
+                        {expense.title}
+                      </Typography>
                     {isRootUser && listTab === 'transfer' && expense.companyName ? (
                       <Typography variant="caption" color="text.secondary" display="block" noWrap>
                         {expense.companyName}
@@ -5430,9 +5679,9 @@ const ExpenseApproval: React.FC = () => {
                         <PersonIcon fontSize="small" />
                       </Avatar>
                       <Typography variant="body2" fontWeight="bold" noWrap>
-                        {expense.requesterName}
-                      </Typography>
-                    </Box>
+                          {expense.requesterName}
+                        </Typography>
+                      </Box>
                     )}
                   </TableCell>
                   <TableCell sx={{ width: 136, minWidth: 136, maxWidth: 136 }}>

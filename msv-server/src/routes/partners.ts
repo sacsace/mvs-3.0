@@ -1,7 +1,15 @@
 import express from 'express';
 import { Request, Response } from 'express';
 import { Op } from 'sequelize';
-import { Partner, PartnerGstNumber } from '../models';
+import {
+  Partner,
+  PartnerGstNumber,
+  Product,
+  WorkAssigneeItem,
+  GlVoucher,
+  GlVoucherLine,
+  AcImportMapping,
+} from '../models';
 import sequelize from '../config/database';
 import { authenticateToken } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
@@ -19,6 +27,27 @@ import {
 
 const router = express.Router();
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const PARTNER_FILL_FIELDS = [
+  'pan_number',
+  'representative',
+  'industry',
+  'address',
+  'phone',
+  'website',
+  'bank_name',
+  'account_number',
+  'bank_ifsc',
+  'account_holder',
+  'contract_start_date',
+  'contract_end_date',
+] as const;
+
+const isBlankPartnerValue = (value: unknown) => {
+  if (value == null) return true;
+  if (value instanceof Date) return Number.isNaN(value.getTime());
+  return String(value).trim() === '' || String(value).trim() === '-';
+};
 
 const invalidatePartnersCache = async () => {
   await referenceCacheDel('ref:partners:*');
@@ -152,6 +181,189 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * 중복 파트너 합치기
+ * - keepId 유지, mergeIds 는 soft-delete
+ * - GST·상품·전표·업무담당 등 참조를 keepId 로 이관
+ */
+router.post('/merge', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const tenantId = (req as any).user.tenant_id;
+    const companyId = (req as any).user.company_id;
+    const keepId = Number(req.body?.keepId);
+    const mergeIdsRaw = Array.isArray(req.body?.mergeIds) ? req.body.mergeIds : [];
+    const mergeIds = [...new Set(
+      mergeIdsRaw
+        .map((id: unknown) => Number(id))
+        .filter((id: number) => Number.isFinite(id) && id > 0 && id !== keepId)
+    )];
+
+    if (!Number.isFinite(keepId) || keepId <= 0) {
+      return res.status(400).json({ success: false, message: '유지할 파트너를 선택해주세요.' });
+    }
+    if (mergeIds.length === 0) {
+      return res.status(400).json({ success: false, message: '합칠 파트너를 1개 이상 선택해주세요.' });
+    }
+
+    const allIds = [keepId, ...mergeIds];
+    const partners = await (Partner as any).findAll({
+      where: {
+        id: { [Op.in]: allIds },
+        tenant_id: tenantId,
+        company_id: companyId,
+        is_active: true,
+      },
+    });
+
+    if (partners.length !== allIds.length) {
+      return res.status(404).json({
+        success: false,
+        message: '선택한 파트너 중 일부를 찾을 수 없습니다. 목록을 새로고침 후 다시 시도하세요.',
+      });
+    }
+
+    const keep = partners.find((p: any) => Number(p.id) === keepId);
+    const sources = partners.filter((p: any) => Number(p.id) !== keepId);
+    if (!keep) {
+      return res.status(404).json({ success: false, message: '유지할 파트너를 찾을 수 없습니다.' });
+    }
+
+    await sequelize.transaction(async (transaction) => {
+      const keepGstRows = await (PartnerGstNumber as any).findAll({
+        where: { partner_id: keepId },
+        transaction,
+      });
+      const keepGstMap = new Map<string, any>(
+        keepGstRows.map((row: any) => [String(row.gst_number).trim().toUpperCase(), row])
+      );
+
+      for (const srcId of mergeIds) {
+        const srcGstRows = await (PartnerGstNumber as any).findAll({
+          where: { partner_id: srcId },
+          transaction,
+        });
+        for (const row of srcGstRows) {
+          const key = String(row.gst_number || '').trim().toUpperCase();
+          if (!key) {
+            await row.update({ is_active: false }, { transaction });
+            continue;
+          }
+          const existing = keepGstMap.get(key);
+          if (existing) {
+            if (!existing.is_active) {
+              await existing.update({ is_active: true }, { transaction });
+            }
+            await row.update({ is_active: false }, { transaction });
+          } else {
+            await row.update({ partner_id: keepId, is_active: true }, { transaction });
+            keepGstMap.set(key, row);
+          }
+        }
+      }
+
+      await (Product as any).update(
+        { partner_id: keepId },
+        { where: { partner_id: { [Op.in]: mergeIds } }, transaction }
+      );
+      await (WorkAssigneeItem as any).update(
+        { partner_id: keepId },
+        { where: { partner_id: { [Op.in]: mergeIds } }, transaction }
+      );
+      await (GlVoucher as any).update(
+        { party_id: keepId },
+        { where: { party_id: { [Op.in]: mergeIds } }, transaction }
+      );
+      await (GlVoucherLine as any).update(
+        { party_id: keepId },
+        { where: { party_id: { [Op.in]: mergeIds } }, transaction }
+      );
+      await (AcImportMapping as any).update(
+        { target_partner_id: keepId },
+        { where: { target_partner_id: { [Op.in]: mergeIds } }, transaction }
+      );
+
+      const patch: Record<string, unknown> = {};
+      for (const field of PARTNER_FILL_FIELDS) {
+        if (!isBlankPartnerValue(keep[field])) continue;
+        for (const src of sources) {
+          if (!isBlankPartnerValue(src[field])) {
+            patch[field] = src[field];
+            break;
+          }
+        }
+      }
+
+      if (isBlankPartnerValue(keep.business_number) || String(keep.business_number).trim() === '-') {
+        for (const src of sources) {
+          if (!isBlankPartnerValue(src.business_number) && String(src.business_number).trim() !== '-') {
+            patch.business_number = src.business_number;
+            break;
+          }
+        }
+      }
+
+      const keepEmail = String(keep.email || '').trim().toLowerCase();
+      const extraEmails = sources
+        .map((src: any) => String(src.email || '').trim())
+        .filter((email: string) => email && email.toLowerCase() !== keepEmail);
+      const mergeNoteLines = sources.map((src: any) => {
+        const email = String(src.email || '').trim();
+        return `Merged #${src.id}${email ? ` (${email})` : ''}`;
+      });
+      const noteParts = [
+        String(keep.notes || '').trim(),
+        ...sources.map((src: any) => String(src.notes || '').trim()).filter(Boolean),
+        extraEmails.length ? `Alt emails: ${extraEmails.join(', ')}` : '',
+        mergeNoteLines.join('; '),
+      ].filter(Boolean);
+      if (noteParts.length) {
+        patch.notes = noteParts.join('\n');
+      }
+
+      if (Object.keys(patch).length) {
+        await keep.update(patch, { transaction });
+      }
+
+      for (const src of sources) {
+        await src.update({ is_active: false }, { transaction });
+      }
+    });
+
+    await invalidatePartnersCache();
+
+    const merged = await (Partner as any).findByPk(keepId, {
+      include: [partnerGstInclude],
+    });
+    const data = merged?.toJSON ? merged.toJSON() : merged;
+    if (data) {
+      data.gstNumbers = data.gstNumbers?.map((gst: any) => gst.gst_number || gst) || [];
+    }
+
+    return res.json({
+      success: true,
+      message: `${mergeIds.length}건을 합쳤습니다.`,
+      data: {
+        keepId,
+        mergedIds: mergeIds,
+        partner: data,
+      },
+    });
+  } catch (error: any) {
+    console.error('파트너 합치기 오류:', error);
+    if (isMissingTableError(error)) {
+      return res.status(500).json({
+        success: false,
+        message: '관련 테이블이 없어 합치기에 실패했습니다.',
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      message: '파트너 합치기 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+});
+
 // 파트너 상세 조회
 router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
@@ -204,7 +416,7 @@ router.post(
   authenticateToken,
   validateBody({
     companyName: { required: true, type: 'string', minLength: 1, maxLength: 200 },
-    businessNumber: { required: true, type: 'string', minLength: 4, maxLength: 50 },
+    businessNumber: { type: 'string', maxLength: 50 },
     email: { required: true, type: 'string', maxLength: 255, pattern: emailPattern },
     status: { type: 'string', maxLength: 50 },
     phone: { type: 'string', maxLength: 50 },
@@ -220,15 +432,16 @@ router.post(
     const companyId = (req as any).user.company_id;
     const { gstNumbers, ...partnerFormData } = req.body;
 
-    // GST 번호 검증
-    if (!gstNumbers || !Array.isArray(gstNumbers) || gstNumbers.length === 0) {
+    // GST 번호 검증 (선택 — 건물주/소상공인 등 미등록 가능)
+    if (gstNumbers !== undefined && gstNumbers !== null && !Array.isArray(gstNumbers)) {
       return res.status(400).json({
         success: false,
-        message: 'GST 번호를 최소 1개 이상 입력해주세요.'
+        message: 'GST 번호 형식이 올바르지 않습니다.'
       });
     }
 
-    if (gstNumbers.length > 10) {
+    const gstList = Array.isArray(gstNumbers) ? gstNumbers : [];
+    if (gstList.length > 10) {
       return res.status(400).json({
         success: false,
         message: 'GST 번호는 최대 10개까지 등록할 수 있습니다.'
@@ -256,12 +469,15 @@ router.post(
       });
     }
 
+    const businessNumber =
+      String(partnerFormData.businessNumber || '').trim() || '-';
+
     const partner = await (Partner as any).create({
       ...partnerFormData,
       tenant_id: tenantId,
       company_id: companyId,
       company_name: normalizedCompanyName,
-      business_number: partnerFormData.businessNumber,
+      business_number: businessNumber,
       pan_number: partnerFormData.panNumber || null,
       representative: partnerFormData.representative || null,
       business_type: partnerFormData.businessType || 'partner',
@@ -281,7 +497,7 @@ router.post(
     });
 
     // GST 번호 저장
-    const validGstNumbers = gstNumbers.filter((gst: string) => gst && gst.trim() !== '');
+    const validGstNumbers = gstList.filter((gst: string) => gst && gst.trim() !== '');
     for (const gstNumber of validGstNumbers) {
       await (PartnerGstNumber as any).create({
         partner_id: partner.id,
@@ -335,7 +551,7 @@ router.put(
   authenticateToken,
   validateBody({
     companyName: { type: 'string', minLength: 1, maxLength: 200 },
-    businessNumber: { type: 'string', minLength: 4, maxLength: 50 },
+    businessNumber: { type: 'string', maxLength: 50 },
     email: { type: 'string', maxLength: 255, pattern: emailPattern },
     status: { type: 'string', maxLength: 50 },
     phone: { type: 'string', maxLength: 50 },
@@ -367,12 +583,12 @@ router.put(
       });
     }
 
-    // GST 번호 검증
+    // GST 번호 검증 (선택)
     if (gstNumbers !== undefined) {
-      if (!Array.isArray(gstNumbers) || gstNumbers.length === 0) {
+      if (!Array.isArray(gstNumbers)) {
         return res.status(400).json({
           success: false,
-          message: 'GST 번호를 최소 1개 이상 입력해주세요.'
+          message: 'GST 번호 형식이 올바르지 않습니다.'
         });
       }
 
@@ -388,12 +604,6 @@ router.put(
           .filter((gst: string) => gst && gst.trim() !== '')
           .map((gst: string) => gst.trim().toUpperCase())
       )];
-      if (validGstNumbers.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'GST 번호를 최소 1개 이상 입력해주세요.'
-        });
-      }
 
       await sequelize.transaction(async (transaction) => {
         const existingNumbers = await (PartnerGstNumber as any).findAll({
@@ -451,7 +661,10 @@ router.put(
 
     await partner.update({
       company_name: nextCompanyName,
-      business_number: partnerData.businessNumber || partner.business_number,
+      business_number:
+        partnerData.businessNumber !== undefined
+          ? String(partnerData.businessNumber || '').trim() || '-'
+          : partner.business_number,
       pan_number: partnerData.panNumber !== undefined ? partnerData.panNumber : partner.pan_number,
       representative: partnerData.representative !== undefined ? partnerData.representative : partner.representative,
       business_type: partnerData.businessType || partner.business_type,
@@ -773,31 +986,22 @@ router.post('/excel/import', authenticateToken, upload.single('file'), async (re
     for (let i = 0; i < data.length; i++) {
       const row = data[i] as any;
       try {
-        // 필수 필드 검증
-        if (!row['회사명'] || !row['사업자번호'] || !row['이메일']) {
+        // 필수 필드 검증 (회사명·이메일만 — CIN/GST 는 선택)
+        if (!row['회사명'] || !row['이메일']) {
           results.failed.push({
             row: i + 2, // Excel 행 번호 (헤더 제외)
             data: row,
-            error: '필수 필드(회사명, 사업자번호, 이메일)가 누락되었습니다.'
+            error: '필수 필드(회사명, 이메일)가 누락되었습니다.'
           });
           continue;
         }
 
-        // GST 번호 파싱 (쉼표로 구분)
+        // GST 번호 파싱 (쉼표로 구분) — 없으면 빈 배열 허용
         const gstNumbersStr = row['GST 번호 (쉼표로 구분)'] || '';
         const gstNumbers = gstNumbersStr
           .split(',')
           .map((gst: string) => gst.trim())
           .filter((gst: string) => gst !== '');
-
-        if (gstNumbers.length === 0) {
-          results.failed.push({
-            row: i + 2,
-            data: row,
-            error: 'GST 번호를 최소 1개 이상 입력해주세요.'
-          });
-          continue;
-        }
 
         if (gstNumbers.length > 10) {
           results.failed.push({
@@ -808,9 +1012,9 @@ router.post('/excel/import', authenticateToken, upload.single('file'), async (re
           continue;
         }
 
-        // 중복 사업자번호 확인
-        const businessNumber = row['사업자번호'].toString().trim();
-        if (seenBusinessNumbers.has(businessNumber.toLowerCase())) {
+        // 중복 사업자번호 확인 (비어 있으면 '-' 로 저장, 중복 검사 생략)
+        const businessNumber = String(row['사업자번호'] || '').trim() || '-';
+        if (businessNumber !== '-' && seenBusinessNumbers.has(businessNumber.toLowerCase())) {
           results.failed.push({
             row: i + 2,
             data: row,
@@ -905,7 +1109,9 @@ router.post('/excel/import', authenticateToken, upload.single('file'), async (re
           businessNumber: row['사업자번호']
         });
         seenCompanyNames.add(companyNameKey);
-        seenBusinessNumbers.add(businessNumber.toLowerCase());
+        if (businessNumber !== '-') {
+          seenBusinessNumbers.add(businessNumber.toLowerCase());
+        }
       } catch (error: any) {
         results.failed.push({
           row: i + 2,

@@ -94,7 +94,13 @@ export const partnerService = {
     return response.data;
   },
 
-  // ?�트????��
+  // 파트너 합치기 (keepId 유지, mergeIds soft-delete)
+  mergePartners: async (keepId: number, mergeIds: number[]) => {
+    const response = await api.post('/partners/merge', { keepId, mergeIds });
+    return response.data;
+  },
+
+  // 파트너 삭제
   deletePartner: async (id: number) => {
     const response = await api.delete(`/partners/${id}`);
     return response.data;
