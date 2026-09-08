@@ -14,6 +14,8 @@ interface ConfirmDialogOptions {
   cancelText?: string;
   cancelTextKey?: string;
   confirmColor?: 'primary' | 'error' | 'warning';
+  /** danger: 본문 빨간 굵은 경고 문구 */
+  messageTone?: 'default' | 'danger';
 }
 
 export interface ConfirmDialogState {
@@ -27,6 +29,7 @@ export interface ConfirmDialogState {
   cancelText?: string;
   cancelTextKey?: string;
   confirmColor?: 'primary' | 'error' | 'warning';
+  messageTone?: 'default' | 'danger';
 }
 
 const closedState: ConfirmDialogState = {
@@ -51,6 +54,7 @@ export const useConfirmDialog = () => {
         cancelText: options?.cancelText,
         cancelTextKey: options?.cancelTextKey,
         confirmColor: options?.confirmColor,
+        messageTone: options?.messageTone,
       });
     },
     []

@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { Box, IconButton, Divider, SxProps, Theme, Tooltip } from '@mui/material';
+import React, { useEffect, useRef, useState } from 'react';
+import { Box, IconButton, Divider, Popover, SxProps, Theme, Tooltip } from '@mui/material';
 import {
   FormatBold,
   FormatItalic,
@@ -11,6 +11,8 @@ import {
   FormatAlignCenter,
   FormatAlignRight,
   FormatQuote,
+  FormatColorText,
+  FormatColorReset,
   HorizontalRule,
   Redo,
   TableChart,
@@ -33,6 +35,19 @@ import { Color } from '@tiptap/extension-color';
 import { FontFamily } from '@tiptap/extension-font-family';
 import { TextAlign } from '@tiptap/extension-text-align';
 import { Underline } from '@tiptap/extension-underline';
+
+const FONT_COLOR_PRESETS = [
+  '#111827',
+  '#DC2626',
+  '#EA580C',
+  '#CA8A04',
+  '#16A34A',
+  '#2563EB',
+  '#7C3AED',
+  '#DB2777',
+  '#64748B',
+  '#FFFFFF',
+];
 
 const ResizableImage = Image.extend({
   group: 'block',
@@ -128,6 +143,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 }) => {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
+  const [colorAnchor, setColorAnchor] = useState<HTMLElement | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -146,7 +162,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
       TableHeaderExtension,
       TableCellExtension,
       TextStyle,
-      Color,
+      Color.configure({ types: [TextStyle.name] }),
       FontFamily,
       TextAlign.configure({
         types: ['heading', 'paragraph', 'image'],
@@ -234,6 +250,18 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   }, [editor, value]);
 
+  const [, setToolbarTick] = useState(0);
+  useEffect(() => {
+    if (!editor) return;
+    const refresh = () => setToolbarTick((n) => n + 1);
+    editor.on('selectionUpdate', refresh);
+    editor.on('transaction', refresh);
+    return () => {
+      editor.off('selectionUpdate', refresh);
+      editor.off('transaction', refresh);
+    };
+  }, [editor]);
+
   const handleImagePick = (file: File | undefined) => {
     if (!file || !editor) return;
     const reader = new FileReader();
@@ -266,6 +294,20 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const resetImageWidth = () => {
     if (!editor || !editor.isActive('image')) return;
     editor.chain().focus().updateAttributes('image', { width: null }).run();
+  };
+
+  const activeFontColor = String(editor?.getAttributes('textStyle')?.color || '#111827');
+
+  const applyFontColor = (color: string) => {
+    if (!editor) return;
+    editor.chain().focus().setColor(color).run();
+    setColorAnchor(null);
+  };
+
+  const clearFontColor = () => {
+    if (!editor) return;
+    editor.chain().focus().unsetColor().run();
+    setColorAnchor(null);
   };
 
   return (
@@ -306,6 +348,80 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <ToolbarBtn title="Strike" onClick={() => editor.chain().focus().toggleStrike().run()}>
             <FormatStrikethrough fontSize="small" />
           </ToolbarBtn>
+          <Tooltip title="Font color">
+            <IconButton
+              size="small"
+              onClick={(e) => setColorAnchor(e.currentTarget)}
+              sx={{ borderRadius: 0 }}
+            >
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1 }}>
+                <FormatColorText fontSize="small" sx={{ color: activeFontColor === '#FFFFFF' ? '#111827' : activeFontColor }} />
+                <Box
+                  sx={{
+                    mt: '1px',
+                    width: 14,
+                    height: 3,
+                    borderRadius: 0.5,
+                    bgcolor: activeFontColor,
+                    border: activeFontColor.toLowerCase() === '#ffffff' ? '1px solid #CBD5E1' : 'none',
+                  }}
+                />
+              </Box>
+            </IconButton>
+          </Tooltip>
+          <Popover
+            open={Boolean(colorAnchor)}
+            anchorEl={colorAnchor}
+            onClose={() => setColorAnchor(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+          >
+            <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', gap: 1, minWidth: 168 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 0.5 }}>
+                {FONT_COLOR_PRESETS.map((color) => (
+                  <Box
+                    key={color}
+                    component="button"
+                    type="button"
+                    title={color}
+                    onClick={() => applyFontColor(color)}
+                    sx={{
+                      width: 28,
+                      height: 28,
+                      p: 0,
+                      border:
+                        activeFontColor.toLowerCase() === color.toLowerCase()
+                          ? '2px solid #2563EB'
+                          : '1px solid #CBD5E1',
+                      borderRadius: 0.5,
+                      bgcolor: color,
+                      cursor: 'pointer',
+                    }}
+                  />
+                ))}
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  component="input"
+                  type="color"
+                  value={/^#[0-9A-Fa-f]{6}$/.test(activeFontColor) ? activeFontColor : '#111827'}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => applyFontColor(e.target.value)}
+                  sx={{
+                    width: 36,
+                    height: 28,
+                    border: '1px solid #CBD5E1',
+                    borderRadius: 0.5,
+                    p: 0,
+                    bgcolor: 'transparent',
+                    cursor: 'pointer',
+                  }}
+                />
+                <IconButton size="small" onClick={clearFontColor} title="Reset color" sx={{ borderRadius: 0 }}>
+                  <FormatColorReset fontSize="small" />
+                </IconButton>
+              </Box>
+            </Box>
+          </Popover>
           <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
           <ToolbarBtn title="Heading" onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
             <Title fontSize="small" />

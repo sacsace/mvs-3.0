@@ -44,6 +44,8 @@ export interface ConfirmDialogProps {
   onCancel: () => void;
   /** primary: 일반 확인 / error·warning: 삭제·위험 작업 */
   confirmColor?: 'primary' | 'error' | 'warning';
+  /** danger: 본문을 빨간 굵은 경고로 표시 */
+  messageTone?: 'default' | 'danger';
 }
 
 /**
@@ -64,7 +66,8 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   cancelTextKey,
   onConfirm,
   onCancel,
-  confirmColor = 'primary'
+  confirmColor = 'primary',
+  messageTone = 'default'
 }) => {
   const theme = useTheme();
   const { t } = useTranslation();
@@ -129,7 +132,15 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       </DialogTitle>
 
       <DialogContent id="mvs-confirm-message" sx={getMvsDialogMessageContentSx(theme)}>
-        <Typography variant="body1" sx={{ color: 'text.primary', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
+        <Typography
+          variant="body1"
+          sx={{
+            color: messageTone === 'danger' ? 'error.main' : 'text.primary',
+            fontWeight: messageTone === 'danger' ? 700 : 400,
+            lineHeight: 1.65,
+            whiteSpace: 'pre-wrap',
+          }}
+        >
           {messageText}
         </Typography>
       </DialogContent>

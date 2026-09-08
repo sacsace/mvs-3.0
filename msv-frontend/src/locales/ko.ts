@@ -2024,8 +2024,11 @@ export default {
       },
       deleteConfirm: {
         title: '작업 보드 삭제',
-        message: '「{{name}}」 보드와 모든 목록·카드가 삭제됩니다. 계속할까요?',
-        messageFallback: '이 작업 보드와 모든 목록·카드가 삭제됩니다. 계속할까요?',
+        message: '「{{name}}」 보드를 삭제할까요?',
+        messageFallback: '이 작업 보드를 삭제할까요?',
+        cardsTitle: '카드 전체 삭제 확인',
+        cardsMessage:
+          '경고: 이 보드의 모든 카드(목록·댓글 포함)가 함께 삭제됩니다.\n정말 삭제할까요?',
         thisBoard: '이 보드',
         success: '삭제되었습니다.',
         failed: '삭제 실패'

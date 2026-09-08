@@ -851,8 +851,9 @@ export const payrollService = {
       }
       const contentType = String(response.headers?.['content-type'] || data.type || '');
       const buf = await data.arrayBuffer();
-      const bytes = new Uint8Array(buf.slice(0, 8));
-      const head = String.fromCharCode(...bytes);
+      const bytes = new Uint8Array(buf.slice(0, 5));
+      let head = '';
+      for (let i = 0; i < bytes.length; i += 1) head += String.fromCharCode(bytes[i]);
       const looksLikePdf = head.startsWith('%PDF');
       if (
         !looksLikePdf ||

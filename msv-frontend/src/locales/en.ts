@@ -1952,8 +1952,11 @@ export default {
       },
       deleteConfirm: {
         title: 'Delete Work Board',
-        message: '"{{name}}" and all lists and cards will be deleted. Continue?',
-        messageFallback: 'This work board and all lists and cards will be deleted. Continue?',
+        message: 'Delete board "{{name}}"?',
+        messageFallback: 'Delete this work board?',
+        cardsTitle: 'Confirm deleting all cards',
+        cardsMessage:
+          'Warning: All cards in this board (including lists and comments) will also be deleted.\nDelete for real?',
         thisBoard: 'this board',
         success: 'Deleted.',
         failed: 'Delete failed'

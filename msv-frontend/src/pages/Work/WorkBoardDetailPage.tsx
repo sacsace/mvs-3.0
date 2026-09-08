@@ -2672,25 +2672,40 @@ const WorkBoardDetailPage: React.FC = () => {
     const message = boardName
       ? t('workBoards.deleteConfirm.message', { name: boardName })
       : t('workBoards.deleteConfirm.messageFallback');
+
+    const runDelete = () => {
+      void (async () => {
+        try {
+          const res = await workBoardService.deleteBoard(boardId);
+          if (res.success) {
+            showSuccessPopup(t('workBoards.deleteConfirm.success'));
+            navigate('/work/projects');
+          } else {
+            showErrorPopup(
+              res.message || t('workBoards.deleteConfirm.failed'),
+              t('workBoards.title')
+            );
+          }
+        } catch (e: any) {
+          showErrorPopup(e, t('workBoards.title'));
+        }
+      })();
+    };
+
+    // 1차: 보드 삭제 → 2차: 카드 전체 삭제 재확인
     showConfirm(
       message,
       () => {
-        void (async () => {
-          try {
-            const res = await workBoardService.deleteBoard(boardId);
-            if (res.success) {
-              showSuccessPopup(t('workBoards.deleteConfirm.success'));
-              navigate('/work/projects');
-            } else {
-              showErrorPopup(
-                res.message || t('workBoards.deleteConfirm.failed'),
-                t('workBoards.title')
-              );
-            }
-          } catch (e: any) {
-            showErrorPopup(e, t('workBoards.title'));
-          }
-        })();
+        // ConfirmDialog가 닫힌 뒤 바로 다음 확인을 띄우기 위해 다음 tick에 호출
+        window.setTimeout(() => {
+          showConfirm(t('workBoards.deleteConfirm.cardsMessage'), runDelete, {
+            title: t('workBoards.deleteConfirm.cardsTitle'),
+            confirmText: t('common.delete'),
+            cancelText: t('common.cancel'),
+            confirmColor: 'error',
+            messageTone: 'danger',
+          });
+        }, 0);
       },
       {
         title: t('workBoards.deleteConfirm.title'),
@@ -5140,6 +5155,7 @@ const WorkBoardDetailPage: React.FC = () => {
         cancelText={dialogState.cancelText}
         cancelTextKey={dialogState.cancelTextKey}
         confirmColor={dialogState.confirmColor}
+        messageTone={dialogState.messageTone}
         onConfirm={handleConfirm}
         onCancel={handleCancel}
       />
