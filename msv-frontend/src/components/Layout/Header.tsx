@@ -30,6 +30,7 @@ import {
   ExpandMore as ExpandMoreIcon,
   Inbox as InboxIcon,
   Download as DownloadIcon,
+  Campaign as CampaignIcon,
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
 import { api, userUiPreferencesService, userService, companyCalendarScheduleService } from '../../services/api';
@@ -76,6 +77,9 @@ const Header: React.FC<HeaderProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const isDesktopNotifierRoute = location.pathname.startsWith('/communication/desktop-notifier');
+  const isNoticesRoute =
+    location.pathname.startsWith('/my/notices') ||
+    location.pathname.startsWith('/communication/notice');
   const userAvatarSrc = getUploadUrl(user?.avatar_url) || undefined;
   const { errors, notifications } = useErrorStore();
   const {
@@ -345,7 +349,9 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   const isUpdatesActive =
-    isDesktopNotifierRoute || location.pathname.startsWith('/notifications');
+    isDesktopNotifierRoute ||
+    isNoticesRoute ||
+    location.pathname.startsWith('/notifications');
 
   return (
     <AppBar 
@@ -799,6 +805,25 @@ const Header: React.FC<HeaderProps> = ({
                 primaryTypographyProps={{
                   fontSize: '0.875rem',
                   fontWeight: location.pathname.startsWith('/notifications') ? 600 : 500,
+                }}
+              />
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                navigate('/my/notices');
+                handleUpdatesClose();
+              }}
+              selected={isNoticesRoute}
+              sx={{ borderRadius: '8px', mx: 0.5, my: 0.25, py: 1 }}
+            >
+              <ListItemIcon sx={{ minWidth: 36 }}>
+                <CampaignIcon fontSize="small" color={isNoticesRoute ? 'primary' : 'inherit'} />
+              </ListItemIcon>
+              <ListItemText
+                primary={language === 'en' ? 'Notices' : '공지사항'}
+                primaryTypographyProps={{
+                  fontSize: '0.875rem',
+                  fontWeight: isNoticesRoute ? 600 : 500,
                 }}
               />
             </MenuItem>

@@ -793,6 +793,7 @@ export type LeaveBalanceRow = {
   hireDate: string | null;
   leaveYearLabel: string | null;
   canUseAnnualLeave: boolean;
+  avatarUrl?: string | null;
   balances: Record<string, LeaveBalanceCell>;
 };
 
@@ -825,7 +826,16 @@ function formatHireDate(hireDate: unknown): string | null {
 
 export async function getUserLeaveBalanceSummary(userId: number): Promise<LeaveBalanceRow | null> {
   const user = await (User as any).findByPk(userId, {
-    attributes: ['id', 'username', 'department', 'position', 'hire_date', 'company_id', 'status'],
+    attributes: [
+      'id',
+      'username',
+      'department',
+      'position',
+      'hire_date',
+      'company_id',
+      'status',
+      'avatar_url',
+    ],
   });
 
   if (!user) {
@@ -838,6 +848,7 @@ export async function getUserLeaveBalanceSummary(userId: number): Promise<LeaveB
     department: user.department || '',
     position: user.position || '',
     hireDate: formatHireDate(user.hire_date),
+    avatarUrl: user.avatar_url || null,
   };
 
   const leaveYear = getLeaveYearRange(new Date());

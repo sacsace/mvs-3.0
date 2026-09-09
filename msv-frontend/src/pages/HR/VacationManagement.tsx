@@ -140,6 +140,7 @@ interface LeaveBalanceRow {
   hireDate: string | null;
   leaveYearLabel: string | null;
   canUseAnnualLeave: boolean;
+  avatarUrl?: string | null;
   balances: Record<
     string,
     { quota: number; used: number; remaining: number; vacationUsed?: number; absenceUsed?: number }
@@ -293,6 +294,10 @@ const VacationManagement: React.FC = () => {
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [selectedVacation, setSelectedVacation] = useState<VacationRequest | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [historyEmployee, setHistoryEmployee] = useState<LeaveBalanceRow | null>(null);
+  const [historyVacations, setHistoryVacations] = useState<VacationRequest[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [approverOptions, setApproverOptions] = useState<
     Array<{ id: number; username: string; department?: string; company_id?: number }>
@@ -331,7 +336,11 @@ const VacationManagement: React.FC = () => {
       if (user?.company_id) params.company_id = user.company_id;
       const response = await vacationService.getLeaveBalances(params);
       if (response.success) {
-        setLeaveBalances(Array.isArray(response.data) ? response.data : []);
+        const rows = (Array.isArray(response.data) ? response.data : []).map((row: any) => ({
+          ...row,
+          avatarUrl: row.avatarUrl ?? row.avatar_url ?? null,
+        }));
+        setLeaveBalances(rows);
         const metaTypes = Array.isArray(response.meta?.availableTypes)
           ? (response.meta.availableTypes as string[])
           : [];
@@ -983,6 +992,66 @@ const VacationManagement: React.FC = () => {
     setSelectedVacation(null);
     setRejectReason('');
     setApproverOptions([]);
+  };
+
+  const mapApiVacation = (v: any): VacationRequest => ({
+    id: v.id,
+    employeeId: v.user_id,
+    employeeName: v.user?.username || '알 수 없음',
+    department: v.user?.department || '-',
+    position: v.user?.position || '-',
+    avatar: v.user?.avatar_url || undefined,
+    vacationType: v.vacation_type,
+    startDate: v.start_date,
+    endDate: v.end_date,
+    days: Number(v.days),
+    isHalfDay: Boolean(v.is_half_day),
+    reason: v.reason,
+    status: v.status,
+    appliedDate: v.applied_date,
+    approvedBy: v.approver?.username,
+    approvedByUserId: v.approved_by != null ? Number(v.approved_by) : null,
+    approvedDate: v.approved_date,
+    rejectionReason: v.rejection_reason,
+    attachments: v.attachments
+      ? typeof v.attachments === 'string'
+        ? JSON.parse(v.attachments)
+        : v.attachments
+      : [],
+  });
+
+  const handleOpenLeaveHistory = (row: LeaveBalanceRow) => {
+    setHistoryEmployee(row);
+    setHistoryDialogOpen(true);
+    setHistoryVacations([]);
+    setHistoryLoading(true);
+    void (async () => {
+      try {
+        const params: { user_id: number; company_id?: number } = { user_id: row.userId };
+        if (user?.company_id) params.company_id = user.company_id;
+        const response = await vacationService.getVacations(params);
+        if (response.success) {
+          const list = (response.data || []).map(mapApiVacation) as VacationRequest[];
+          list.sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)));
+          setHistoryVacations(list);
+        } else {
+          setHistoryVacations([]);
+          setError(response.message || t('vacationManagement.leaveHistoryEmpty'));
+        }
+      } catch (e: any) {
+        setHistoryVacations([]);
+        setError(e?.response?.data?.message || t('vacationManagement.leaveHistoryEmpty'));
+      } finally {
+        setHistoryLoading(false);
+      }
+    })();
+  };
+
+  const handleCloseLeaveHistory = () => {
+    setHistoryDialogOpen(false);
+    setHistoryEmployee(null);
+    setHistoryVacations([]);
+    setHistoryLoading(false);
   };
 
   const handleApproveFromDialog = async () => {
@@ -1887,14 +1956,36 @@ const VacationManagement: React.FC = () => {
                           <TableRow key={row.userId} hover>
                             <TableCell>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
-                                <Avatar sx={{ width: 28, height: 28, fontSize: '0.75rem' }}>
+                                <Avatar
+                                  src={row.avatarUrl ? getUploadUrl(row.avatarUrl) : undefined}
+                                  sx={{ width: 28, height: 28, fontSize: '0.75rem', bgcolor: 'primary.main' }}
+                                >
                                   {(row.username || '?').charAt(0)}
                                 </Avatar>
                                 <Box sx={{ minWidth: 0 }}>
-                                  <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+                                  <Typography
+                                    variant="body2"
+                                    component="button"
+                                    type="button"
+                                    onClick={() => handleOpenLeaveHistory(row)}
+                                    sx={{
+                                      fontWeight: 600,
+                                      lineHeight: 1.3,
+                                      p: 0,
+                                      m: 0,
+                                      border: 0,
+                                      background: 'none',
+                                      cursor: 'pointer',
+                                      color: 'primary.main',
+                                      textAlign: 'left',
+                                      textDecoration: 'none',
+                                      '&:hover': { color: 'primary.dark' },
+                                    }}
+                                    title={t('vacationManagement.leaveHistoryHint')}
+                                  >
                                     {row.username}
                                   </Typography>
-                                  <Typography variant="caption" color="text.secondary" noWrap>
+                                  <Typography variant="caption" color="text.secondary" noWrap display="block">
                                     {row.position || '—'}
                                   </Typography>
                                 </Box>
@@ -2728,6 +2819,101 @@ const VacationManagement: React.FC = () => {
       </Card>
 
       {getTabContent()}
+
+      {/* 직원별 휴가 사용 기록 */}
+      <Dialog open={historyDialogOpen} onClose={handleCloseLeaveHistory} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+            {historyEmployee ? (
+              <Avatar
+                src={historyEmployee.avatarUrl ? getUploadUrl(historyEmployee.avatarUrl) : undefined}
+                sx={{ width: 40, height: 40, bgcolor: 'primary.main' }}
+              >
+                {(historyEmployee.username || '?').charAt(0)}
+              </Avatar>
+            ) : null}
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="h6" sx={{ lineHeight: 1.3 }}>
+                {t('vacationManagement.leaveHistoryTitle')}
+              </Typography>
+              {historyEmployee ? (
+                <Typography variant="body2" color="text.secondary" noWrap>
+                  {historyEmployee.username}
+                  {historyEmployee.department ? ` · ${historyEmployee.department}` : ''}
+                  {historyEmployee.position ? ` · ${historyEmployee.position}` : ''}
+                </Typography>
+              ) : null}
+            </Box>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {historyLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
+              <CircularProgress size={32} />
+            </Box>
+          ) : historyVacations.length === 0 ? (
+            <Box sx={{ py: 4, textAlign: 'center' }}>
+              <Typography color="text.secondary">{t('vacationManagement.leaveHistoryEmpty')}</Typography>
+            </Box>
+          ) : (
+            <TableContainer sx={{ width: '100%', overflow: 'auto', boxShadow: 'none', border: 'none' }}>
+              <Table size="small" sx={{ ...mvsBodyListTableSx, tableLayout: 'auto', width: '100%' }}>
+                <TableHead sx={mvsTableHeadHighlightSx}>
+                  <TableRow>
+                    <TableCell>{t('vacationManagement.leaveType')}</TableCell>
+                    <TableCell>{t('vacationManagement.period')}</TableCell>
+                    <TableCell align="right">{t('vacationManagement.days')}</TableCell>
+                    <TableCell>{t('vacationManagement.status')}</TableCell>
+                    <TableCell>{t('vacationManagement.applicationDate')}</TableCell>
+                    <TableCell>{t('vacationManagement.reason')}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody sx={vacationTableBodyRowSx}>
+                  {historyVacations.map((item) => (
+                    <TableRow
+                      key={item.id}
+                      hover
+                      sx={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        setSelectedVacation(item);
+                        setDetailDialogOpen(true);
+                        setRejectReason('');
+                      }}
+                    >
+                      <TableCell>{getTypeChip(item.vacationType, item.isHalfDay)}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2" noWrap title={`${item.startDate} ~ ${item.endDate}`}>
+                          {item.startDate} ~ {item.endDate}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                          {item.days}
+                          {t('vacationManagement.daysUnit')}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{getStatusChip(item.status)}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {item.appliedDate || '—'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" noWrap title={item.reason} sx={{ maxWidth: 220 }}>
+                          {item.reason || '—'}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseLeaveHistory}>{t('common.close')}</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* 휴가 세부사항 Dialog */}
       <Dialog 

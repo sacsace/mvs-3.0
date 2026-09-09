@@ -4998,6 +4998,9 @@ export default {
       leaveBalancesHint:
         'Total annual leave uses the intersection of the India fiscal year (1 Apr – 31 Mar), hire date, and leave eligibility. One day per accrual month; the Leave year column shows each employee’s accrual window. Hire month excluded except 4/1 hires; +1 month skip for 31st hires; mid-month eligibility skips that month.',
       leaveBalancesSearchPlaceholder: 'Search by employee, department, position, join date…',
+      leaveHistoryTitle: 'Leave history',
+      leaveHistoryEmpty: 'No leave requests for this employee.',
+      leaveHistoryHint: 'Click an employee name to view past leave records.',
       sickOptional: 'Optional',
       sickOptionalHint: 'Sick leave is not mandatory.',
       optionalLeave: 'Optional',
