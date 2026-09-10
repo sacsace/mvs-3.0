@@ -1647,7 +1647,7 @@ const PartnerManagement: React.FC = () => {
               </Box>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, flex: 1 }}>
                 <Typography variant="body2" sx={{ fontSize: '0.875rem', fontWeight: 500, color: 'text.primary' }}>
-                  {t('partnerManagement.businessNumber')} <span style={{ color: '#d32f2f' }}>*</span>
+                  {t('partnerManagement.businessNumber')}
                 </Typography>
                 <TextField
                   fullWidth
@@ -1675,7 +1675,7 @@ const PartnerManagement: React.FC = () => {
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Typography variant="body2" sx={{ fontSize: '0.875rem', fontWeight: 500, color: 'text.primary' }}>
-                  {t('partnerManagement.gstNumber')} <span style={{ color: '#d32f2f' }}>*</span>
+                  {t('partnerManagement.gstNumber')}
                   <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
                     {t('partnerManagement.gstNumberMinMax')}
                   </Typography>
@@ -1699,19 +1699,6 @@ const PartnerManagement: React.FC = () => {
                     value={gstNumber}
                     onChange={(e) => handleGstNumberChange(index, e.target.value)}
                     placeholder={t('partnerManagement.placeholderGst', { index: index + 1 })}
-                    required={dialogMode !== 'view'}
-                    error={
-                      dialogMode !== 'view' &&
-                      gstNumber.trim() === '' &&
-                      formData.gstNumbers.filter((g) => g.trim() !== '').length === 0
-                    }
-                    helperText={
-                      dialogMode !== 'view' &&
-                      gstNumber.trim() === '' &&
-                      formData.gstNumbers.filter((g) => g.trim() !== '').length === 0
-                        ? t('partnerManagement.placeholderGstRequired')
-                        : ''
-                    }
                     disabled={dialogMode === 'view'}
                   />
                   {dialogMode !== 'view' && (

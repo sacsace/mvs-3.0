@@ -1076,6 +1076,7 @@ const ExpenseApproval: React.FC = () => {
   const [qrImage, setQrImage] = useState('');
   const [qrImageError, setQrImageError] = useState('');
   const [previewAttachment, setPreviewAttachment] = useState<string | null>(null);
+  const [previewDownloadName, setPreviewDownloadName] = useState('');
   const [receiptInvoiceType, setReceiptInvoiceType] = useState<ExpenseInvoiceType>('tax');
   const [previewBlobUrl, setPreviewBlobUrl] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -2178,14 +2179,31 @@ const ExpenseApproval: React.FC = () => {
   const openAttachment = (file: string) => {
     setPreviewLoadError(false);
     setPreviewAttachment(file);
+    setPreviewDownloadName(getReceiptDisplayName(file));
   };
 
   const closeAttachmentPreview = () => {
     setPreviewAttachment(null);
+    setPreviewDownloadName('');
     setPreviewBlobUrl('');
     setPreviewLoading(false);
     setPreviewLoadError(false);
   };
+
+  const resolvePreviewDownloadName = useCallback(() => {
+    if (!previewAttachment) return 'download';
+    const original = getReceiptDisplayName(previewAttachment);
+    const ext = getFileExtension(original);
+    const draft = stripCorporateSuffixFromFilename(
+      String(previewDownloadName || '')
+        .replace(/[\\/:*?"<>|]/g, '_')
+        .replace(/\s+/g, ' ')
+        .trim()
+    );
+    if (!draft) return original;
+    const withoutExt = draft.replace(/\.[^.]+$/, '').trim() || draft;
+    return ext ? `${withoutExt}.${ext}` : withoutExt;
+  }, [previewAttachment, previewDownloadName]);
 
   useEffect(() => {
     if (!previewAttachment || isImageReceipt(previewAttachment)) {
@@ -2981,15 +2999,40 @@ const ExpenseApproval: React.FC = () => {
       fullWidth
       sx={{ zIndex: (theme) => theme.zIndex.modal + 2 }}
     >
-      <DialogTitle sx={{ pr: 6 }}>
-        {previewAttachment ? getReceiptDisplayName(previewAttachment) : ''}
+      <DialogTitle sx={{ pr: 2, pb: 1.25 }}>
+        <TextField
+          size="small"
+          fullWidth
+          label={t('expenseApproval.detail.attachmentFileName')}
+          value={previewDownloadName}
+          onChange={(e) =>
+            setPreviewDownloadName(stripCorporateSuffixFromFilename(e.target.value))
+          }
+          onFocus={(e) => e.target.select()}
+          onBlur={() => setPreviewDownloadName(resolvePreviewDownloadName())}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              (e.target as HTMLInputElement).blur();
+            }
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              if (previewAttachment) {
+                setPreviewDownloadName(getReceiptDisplayName(previewAttachment));
+              }
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          helperText={t('expenseApproval.detail.attachmentFileNameHint')}
+          InputProps={{ sx: { fontWeight: 600 } }}
+        />
       </DialogTitle>
       <DialogContent dividers sx={{ p: 0, bgcolor: '#F1F5F9', minHeight: { xs: 320, sm: 480 } }}>
         {previewAttachment && isImageReceipt(previewAttachment) ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 1 }}>
             <AuthMedia
               src={previewAttachment}
-              alt={getReceiptDisplayName(previewAttachment)}
+              alt={previewDownloadName || getReceiptDisplayName(previewAttachment)}
               sx={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain' }}
             />
           </Box>
@@ -3008,7 +3051,7 @@ const ExpenseApproval: React.FC = () => {
           >
             <Box
               component="iframe"
-              title={getReceiptDisplayName(previewAttachment)}
+              title={previewDownloadName || getReceiptDisplayName(previewAttachment)}
               src={`${previewBlobUrl}#toolbar=1&navpanes=0`}
               sx={{
                 display: 'block',
@@ -3052,7 +3095,7 @@ const ExpenseApproval: React.FC = () => {
               variant="outlined"
               startIcon={<DownloadIcon fontSize="small" />}
               onClick={() => {
-                void downloadUploadFile(previewAttachment, getReceiptDisplayName(previewAttachment));
+                void downloadUploadFile(previewAttachment, resolvePreviewDownloadName());
               }}
               sx={mvsBodyOutlinedBtnSx}
             >

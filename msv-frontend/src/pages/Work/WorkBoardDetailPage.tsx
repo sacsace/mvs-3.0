@@ -157,6 +157,8 @@ type CardDetailState = {
   assigneeUserId: number | null;
   referenceUserIds: number[];
   createdBy: number | null;
+  boardId: number;
+  originalBoardId: number;
   listId: number;
   originalListId: number;
   listTitle: string;
@@ -1488,6 +1490,9 @@ const WorkBoardDetailPage: React.FC = () => {
   const [memberMenuTarget, setMemberMenuTarget] = useState<any | null>(null);
   const [cardDetail, setCardDetail] = useState<CardDetailState | null>(null);
   const [cardSaving, setCardSaving] = useState(false);
+  const [moveBoardOptions, setMoveBoardOptions] = useState<Array<{ id: number; name: string }>>([]);
+  const [cardMoveLists, setCardMoveLists] = useState<BoardList[]>([]);
+  const [cardMoveListsLoading, setCardMoveListsLoading] = useState(false);
   const [cardComments, setCardComments] = useState<BoardCardComment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [mentionedUserIds, setMentionedUserIds] = useState<number[]>([]);
@@ -2065,10 +2070,13 @@ const WorkBoardDetailPage: React.FC = () => {
           ? card.reference_user_ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
           : [],
         createdBy: card.created_by != null ? Number(card.created_by) : null,
+        boardId,
+        originalBoardId: boardId,
         listId,
         originalListId: listId,
         listTitle
       });
+      setCardMoveLists([]);
       setCardComments(sortBoardCardCommentsThreaded(card.comments || []));
       setNewComment('');
       setReplyParentId(null);
@@ -2078,8 +2086,79 @@ const WorkBoardDetailPage: React.FC = () => {
       setMentionHighlightIndex(0);
       syncCardQueryParam(Number(card.id));
     },
-    [syncCardQueryParam]
+    [boardId, syncCardQueryParam]
   );
+
+  const loadMoveBoardOptions = useCallback(async () => {
+    try {
+      const params: { company_id?: number; light?: boolean } = { light: true };
+      if (board?.company_id != null && Number(board.company_id) > 0) {
+        params.company_id = Number(board.company_id);
+      } else if (user?.company_id != null) {
+        params.company_id = Number(user.company_id);
+      }
+      const res = await workBoardService.getBoards(params);
+      if (res.success && Array.isArray(res.data)) {
+        const options = res.data
+          .map((b: any) => ({
+            id: Number(b.id),
+            name: String(b.name || '').trim() || `#${b.id}`,
+          }))
+          .filter((b: { id: number }) => Number.isInteger(b.id) && b.id > 0);
+        if (board?.id != null && !options.some((b: { id: number }) => b.id === Number(board.id))) {
+          options.unshift({
+            id: Number(board.id),
+            name: String(board.name || '').trim() || `#${board.id}`,
+          });
+        }
+        setMoveBoardOptions(options);
+      }
+    } catch {
+      setMoveBoardOptions(
+        board?.id != null
+          ? [{ id: Number(board.id), name: String(board.name || '').trim() || `#${board.id}` }]
+          : []
+      );
+    }
+  }, [board?.company_id, board?.id, board?.name, user?.company_id]);
+
+  const loadListsForMoveBoard = useCallback(
+    async (targetBoardId: number) => {
+      if (!Number.isInteger(targetBoardId) || targetBoardId <= 0) {
+        setCardMoveLists([]);
+        return [] as BoardList[];
+      }
+      if (targetBoardId === boardId) {
+        setCardMoveLists([]);
+        return (board?.lists || []) as BoardList[];
+      }
+      setCardMoveListsLoading(true);
+      try {
+        const res = await workBoardService.getBoard(targetBoardId, { light: true });
+        if (res.success && res.data) {
+          const normalized = normalizeBoardData(res.data);
+          const nextLists = [...(normalized.lists || [])].sort(
+            (a: BoardList, b: BoardList) => a.position - b.position
+          );
+          setCardMoveLists(nextLists);
+          return nextLists;
+        }
+        setCardMoveLists([]);
+        return [] as BoardList[];
+      } catch {
+        setCardMoveLists([]);
+        return [] as BoardList[];
+      } finally {
+        setCardMoveListsLoading(false);
+      }
+    },
+    [board?.lists, boardId]
+  );
+
+  useEffect(() => {
+    if (!cardDetail || !menuCanEdit) return;
+    void loadMoveBoardOptions();
+  }, [cardDetail?.cardId, menuCanEdit, loadMoveBoardOptions]);
 
   const buildCardDetailLink = useCallback(
     (cardId: number) => {
@@ -2333,6 +2412,8 @@ const WorkBoardDetailPage: React.FC = () => {
   const closeCardDetail = () => {
     deepLinkCardHandledRef.current = null;
     setCardDetail(null);
+    setCardMoveLists([]);
+    setCardMoveListsLoading(false);
     setCardComments([]);
     setNewComment('');
     setReplyParentId(null);
@@ -2357,8 +2438,11 @@ const WorkBoardDetailPage: React.FC = () => {
       return;
     }
 
+    const targetBoardId = Number(cardDetail.boardId) || boardId;
     const targetListId = forcedListId ?? cardDetail.listId;
     const descriptionForSave = cardDetail.description;
+    const boardChanged = targetBoardId !== Number(cardDetail.originalBoardId);
+    const listChanged = targetListId !== cardDetail.originalListId || boardChanged;
     setCardSaving(true);
     try {
       const updateRes = await workBoardService.updateCard(boardId, cardDetail.cardId, {
@@ -2375,17 +2459,26 @@ const WorkBoardDetailPage: React.FC = () => {
         return;
       }
 
-      if (targetListId !== cardDetail.originalListId) {
-        const targetList = (board?.lists || []).find((l: BoardList) => l.id === targetListId);
+      if (listChanged) {
+        const listsForTarget =
+          targetBoardId === boardId
+            ? (board?.lists || [])
+            : cardMoveLists;
+        const targetList = listsForTarget.find((l: BoardList) => l.id === targetListId);
         const targetIndex = targetList?.cards?.length ?? 0;
         const moveRes = await workBoardService.moveCard(
           boardId,
           cardDetail.cardId,
           targetListId,
-          targetIndex
+          targetIndex,
+          targetBoardId
         );
         if (!moveRes.success) {
-          showErrorPopup(moveRes.message || '목록 이동에 실패했습니다.', '카드 세부사항');
+          showErrorPopup(
+            moveRes.message ||
+              txt('업무/목록 이동에 실패했습니다.', 'Failed to move the card to another board/list.'),
+            txt('카드 세부사항', 'Card details')
+          );
           return;
         }
       }
@@ -2399,8 +2492,15 @@ const WorkBoardDetailPage: React.FC = () => {
       }
       if (successMessage) {
         showSuccessToast(successMessage);
+      } else if (boardChanged) {
+        showSuccessToast(
+          txt('다른 업무 보드로 카드를 이동했습니다.', 'Card moved to another work board.')
+        );
       }
       closeCardDetail();
+      if (boardChanged && targetBoardId !== boardId) {
+        navigate(`/work/projects/${targetBoardId}?card=${cardDetail.cardId}`);
+      }
     } catch (error: any) {
       showErrorPopup(error, '카드 세부사항');
     } finally {
@@ -2723,6 +2823,11 @@ const WorkBoardDetailPage: React.FC = () => {
     board?.created_by != null && user?.id != null && Number(board.created_by) === Number(user.id);
   const canDeleteBoard = Boolean(isBoardCreator && menuCanDelete);
   const lists: BoardList[] = [...(board?.lists || [])].sort((a, b) => a.position - b.position);
+  const cardDetailListOptions = useMemo(() => {
+    if (!cardDetail) return lists;
+    if (Number(cardDetail.boardId) === boardId) return lists;
+    return cardMoveLists;
+  }, [boardId, cardDetail, cardMoveLists, lists]);
   /** 「업무 완료」 우선, 없으면 완료/Done 키워드, 그래도 없으면 마지막 열 */
   const completedList = resolveCompletedList(lists);
   const activeLists = completedList
@@ -3831,6 +3936,14 @@ const WorkBoardDetailPage: React.FC = () => {
               py: 0.32,
             }}
           >
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: '7fr 3fr' },
+              gap: 1.58,
+              alignItems: 'start',
+            }}
+          >
           <TextField
             fullWidth
             size="small"
@@ -3847,6 +3960,72 @@ const WorkBoardDetailPage: React.FC = () => {
             placeholder={txt('카드 제목', 'Card Title')}
             sx={cardDetailOutlinedWhiteSx}
           />
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label={txt('업무 보드', 'Work board')}
+              {...CARD_DETAIL_OUTLINED}
+              variant="outlined"
+              value={cardDetail?.boardId || ''}
+              disabled={!menuCanEdit || cardMoveListsLoading}
+              onChange={(e) => {
+                const nextBoardId = Number(e.target.value);
+                void (async () => {
+                  const nextLists = await loadListsForMoveBoard(nextBoardId);
+                  const preferred =
+                    nextLists.find((l) => !isCompletedListTitle(l.title)) || nextLists[0];
+                  setCardDetail((prev) => {
+                    if (!prev) return prev;
+                    if (!preferred) {
+                      return { ...prev, boardId: nextBoardId, listId: prev.listId };
+                    }
+                    const listAssignee = resolveListAssigneeForCard(preferred);
+                    const nextListId = preferred.id;
+                    if (!listAssignee || prev.originalListId === nextListId) {
+                      return {
+                        ...prev,
+                        boardId: nextBoardId,
+                        listId: nextListId,
+                        listTitle: preferred.title,
+                      };
+                    }
+                    const prevAssigneeId =
+                      prev.assigneeUserId != null ? Number(prev.assigneeUserId) : null;
+                    const nextRefs = new Set(
+                      (prev.referenceUserIds || [])
+                        .map((id) => Number(id))
+                        .filter((id) => Number.isInteger(id) && id > 0)
+                    );
+                    if (prevAssigneeId != null && prevAssigneeId !== listAssignee.id) {
+                      nextRefs.add(prevAssigneeId);
+                    }
+                    nextRefs.delete(listAssignee.id);
+                    return {
+                      ...prev,
+                      boardId: nextBoardId,
+                      listId: nextListId,
+                      listTitle: preferred.title,
+                      assigneeUserId: listAssignee.id,
+                      referenceUserIds: Array.from(nextRefs),
+                    };
+                  });
+                })();
+              }}
+              sx={cardDetailOutlinedWhiteSx}
+            >
+              {(moveBoardOptions.length > 0
+                ? moveBoardOptions
+                : board
+                  ? [{ id: Number(board.id), name: String(board.name || board.id) }]
+                  : []
+              ).map((opt) => (
+                <MenuItem key={opt.id} value={opt.id}>
+                  {opt.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Box>
           </Box>
 
           <Box
@@ -3870,15 +4049,19 @@ const WorkBoardDetailPage: React.FC = () => {
               {...CARD_DETAIL_OUTLINED}
               variant="outlined"
               value={cardDetail?.listId || ''}
-              disabled={!menuCanEdit}
+              disabled={!menuCanEdit || cardMoveListsLoading}
               onChange={(e) => {
                 const nextListId = Number(e.target.value);
-                const targetList = lists.find((l) => l.id === nextListId);
+                const targetList = cardDetailListOptions.find((l) => l.id === nextListId);
                 const listAssignee = resolveListAssigneeForCard(targetList);
                 setCardDetail((prev) => {
                   if (!prev) return prev;
                   if (!listAssignee || prev.originalListId === nextListId) {
-                    return { ...prev, listId: nextListId };
+                    return {
+                      ...prev,
+                      listId: nextListId,
+                      listTitle: targetList?.title || prev.listTitle,
+                    };
                   }
                   const prevAssigneeId =
                     prev.assigneeUserId != null ? Number(prev.assigneeUserId) : null;
@@ -3894,6 +4077,7 @@ const WorkBoardDetailPage: React.FC = () => {
                   return {
                     ...prev,
                     listId: nextListId,
+                    listTitle: targetList?.title || prev.listTitle,
                     assigneeUserId: listAssignee.id,
                     referenceUserIds: Array.from(nextRefs)
                   };
@@ -3901,7 +4085,7 @@ const WorkBoardDetailPage: React.FC = () => {
               }}
               sx={cardDetailOutlinedWhiteSx}
             >
-              {lists.map((list) => (
+              {cardDetailListOptions.map((list) => (
                 <MenuItem key={list.id} value={list.id}>
                   {displayBoardListTitle(list.title, language)}
                 </MenuItem>

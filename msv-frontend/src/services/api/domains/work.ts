@@ -96,8 +96,18 @@ export const workBoardService = {
     const response = await api.put(`/work/boards/${boardId}/cards/${cardId}`, data);
     return response.data;
   },
-  moveCard: async (boardId: number, cardId: number, list_id: number, index: number) => {
-    const response = await api.post(`/work/boards/${boardId}/cards/${cardId}/move`, { list_id, index });
+  moveCard: async (
+    boardId: number,
+    cardId: number,
+    list_id: number,
+    index: number,
+    targetBoardId?: number
+  ) => {
+    const body: { list_id: number; index: number; board_id?: number } = { list_id, index };
+    if (targetBoardId != null && Number(targetBoardId) !== Number(boardId)) {
+      body.board_id = Number(targetBoardId);
+    }
+    const response = await api.post(`/work/boards/${boardId}/cards/${cardId}/move`, body);
     return response.data;
   },
   deleteCard: async (boardId: number, cardId: number) => {

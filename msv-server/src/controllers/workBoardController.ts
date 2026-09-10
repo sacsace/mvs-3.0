@@ -1441,15 +1441,37 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
     const user = req.user!;
     const boardId = parseInt(req.params.boardId, 10);
     const cardId = parseInt(req.params.cardId, 10);
-    const { list_id: targetListId, index } = req.body;
+    const { list_id: targetListId, index, board_id: bodyBoardId } = req.body;
 
     if (targetListId === undefined || index === undefined || index < 0) {
       return res.status(400).json({ success: false, message: 'list_id와 index(0부터)가 필요합니다.' });
     }
 
+    const parsedTargetBoardId =
+      bodyBoardId != null && bodyBoardId !== ''
+        ? parseInt(String(bodyBoardId), 10)
+        : boardId;
+    if (!Number.isInteger(parsedTargetBoardId) || parsedTargetBoardId <= 0) {
+      return res.status(400).json({ success: false, message: '대상 보드가 올바르지 않습니다.' });
+    }
+
     const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
+    }
+
+    let destBoard = board;
+    let destMember = member;
+    if (parsedTargetBoardId !== boardId) {
+      const dest = await findBoardForUser(parsedTargetBoardId, user, true);
+      if (!dest.board || (!dest.member && user.role !== 'root')) {
+        return res.status(403).json({
+          success: false,
+          message: '대상 보드로 이동할 권한이 없습니다.',
+        });
+      }
+      destBoard = dest.board;
+      destMember = dest.member;
     }
 
     let assignmentNotify: {
@@ -1476,7 +1498,7 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
       }
 
       const newList = await WorkBoardList.findOne({
-        where: { id: targetListId, board_id: board!.id },
+        where: { id: targetListId, board_id: destBoard!.id },
         include: [
           { model: User, as: 'assignee', attributes: ['id', 'username', 'userid', 'email', 'avatar_url'], required: false }
         ],
@@ -1489,7 +1511,7 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
       const oldListId = card.list_id;
 
       const boardLists = await WorkBoardList.findAll({
-        where: { board_id: board!.id },
+        where: { board_id: destBoard!.id },
         attributes: ['id', 'title', 'position'],
         order: [['position', 'ASC']],
         transaction
@@ -1500,10 +1522,11 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
       const assigneeUserId =
         (card as any).assignee_user_id != null ? Number((card as any).assignee_user_id) : null;
       const uid = Number(user.id);
-      const isBoardOwner = member && (member as any).role === 'owner';
+      const isSourceBoardOwner = member && (member as any).role === 'owner';
+      const isDestBoardOwner = destMember && (destMember as any).role === 'owner';
       const isAssignee = assigneeUserId != null && assigneeUserId === uid;
       const canMoveToCompleted =
-        user.role === 'root' || isBoardOwner || assigneeUserId == null || isAssignee;
+        user.role === 'root' || isSourceBoardOwner || isDestBoardOwner || assigneeUserId == null || isAssignee;
       const isMovingIntoCompleted =
         oldListId !== newList.id &&
         completedListId != null &&
@@ -1512,6 +1535,27 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
         oldListId !== newList.id &&
         completedListId != null &&
         oldListId === completedListId;
+      // 다른 보드로 나갈 때: 출발 보드의 완료열에서 빠져나오는 경우도 재오픈 규칙 적용
+      if (parsedTargetBoardId !== boardId) {
+        const sourceLists = await WorkBoardList.findAll({
+          where: { board_id: board!.id },
+          attributes: ['id', 'title', 'position'],
+          order: [['position', 'ASC']],
+          transaction
+        });
+        const sourceCompletedListId = resolveCompletedListId(
+          sourceLists.map((l) => l.get({ plain: true }) as { id: number; title: string; position: number })
+        );
+        if (sourceCompletedListId != null && oldListId === sourceCompletedListId) {
+          const createdByUserId =
+            (card as any).created_by != null ? Number((card as any).created_by) : null;
+          const canReopen =
+            user.role === 'root' || createdByUserId === uid || isAssignee;
+          if (!canReopen) {
+            throw new Error('FORBIDDEN_REOPEN');
+          }
+        }
+      }
       if (isMovingIntoCompleted && !canMoveToCompleted) {
         throw new Error('FORBIDDEN_COMPLETE');
       }
@@ -1542,11 +1586,16 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
       if (isMovingIntoCompleted) {
         patch.completed_at = new Date();
       } else if (
-        oldListId !== newList.id &&
-        completedListId != null &&
-        oldListId === completedListId
+        (oldListId !== newList.id &&
+          completedListId != null &&
+          oldListId === completedListId) ||
+        parsedTargetBoardId !== boardId
       ) {
-        patch.completed_at = null;
+        // 다른 보드로 이동하거나 완료열에서 나오면 completed_at 초기화
+        // (다른 보드 이동 시 대상이 완료열이 아니면 null)
+        if (!isMovingIntoCompleted) {
+          patch.completed_at = null;
+        }
       }
 
       // 대분류에 담당자가 있으면 카드 업무 담당자를 그 담당자로 맞추고, 기존 담당은 참조로 이동
@@ -1604,14 +1653,16 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
     });
 
     const actorName = user.username || user.userid || '사용자';
+    const notifyBoardId = destBoard.id;
+    const notifyBoardName = destBoard.name;
     if (
       assignmentNotify &&
       Number(assignmentNotify.targetUserId) !== Number(user.id)
     ) {
       sendCardAssignmentNotification(req, {
         targetUserId: assignmentNotify.targetUserId,
-        boardId: board.id,
-        boardName: board.name,
+        boardId: notifyBoardId,
+        boardName: notifyBoardName,
         cardId: assignmentNotify.cardId,
         cardTitle: assignmentNotify.cardTitle,
         actorName
@@ -1624,8 +1675,8 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
     ) {
       sendCardReferenceNotification(req, {
         targetUserId: referenceNotify.targetUserId,
-        boardId: board.id,
-        boardName: board.name,
+        boardId: notifyBoardId,
+        boardName: notifyBoardName,
         cardId: referenceNotify.cardId,
         cardTitle: referenceNotify.cardTitle,
         actorName
@@ -1635,15 +1686,14 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
     res.json({
       success: true,
       message: '이동되었습니다.',
-      data:
-        movedCardAssignee || movedCardReferenceUserIds
-          ? {
-              ...(movedCardAssignee
-                ? { assignee_user_id: movedCardAssignee.id, assignee: movedCardAssignee }
-                : {}),
-              ...(movedCardReferenceUserIds ? { reference_user_ids: movedCardReferenceUserIds } : {})
-            }
-          : undefined
+      data: {
+        board_id: destBoard.id,
+        list_id: Number(targetListId),
+        ...(movedCardAssignee
+          ? { assignee_user_id: movedCardAssignee.id, assignee: movedCardAssignee }
+          : {}),
+        ...(movedCardReferenceUserIds ? { reference_user_ids: movedCardReferenceUserIds } : {}),
+      },
     });
   } catch (error: any) {
     if (error?.message === 'NOT_FOUND') {
