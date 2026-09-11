@@ -95,21 +95,28 @@ const findDuplicatePartnerByCompanyName = async ({
 }) => {
   const normalized = normalizePartnerCompanyName(companyName);
   if (!normalized) return null;
+  const target = normalized.toLowerCase();
+
   const where: Record<string, unknown> = {
     tenant_id: tenantId,
     company_id: companyId,
-    [Op.and]: sequelize.where(
-      sequelize.fn('lower', sequelize.col('company_name')),
-      normalized.toLowerCase()
-    ),
+    is_active: true,
   };
   if (excludeId != null && Number.isFinite(excludeId) && excludeId > 0) {
     where.id = { [Op.ne]: excludeId };
   }
-  return (Partner as any).findOne({
+
+  // DB에 정규화 전 표기가 남아 있어도 normalize 후 비교해 동일 회사명을 잡는다
+  const rows = await (Partner as any).findAll({
     where,
     attributes: ['id', 'company_name', 'business_number', 'email', 'status'],
   });
+  return (
+    rows.find(
+      (row: any) =>
+        normalizePartnerCompanyName(row.company_name).toLowerCase() === target
+    ) || null
+  );
 };
 
 // Multer 설정 (메모리 스토리지)

@@ -189,16 +189,59 @@ export const employmentContractService = {
     const response = await api.post(`/hr/employment-contracts/${id}/send`);
     return response.data;
   },
+  getPendingApprovals: async () => {
+    const response = await api.get('/hr/employment-contracts/pending-approvals');
+    return response.data;
+  },
+  submitForApproval: async (id: number) => {
+    const response = await api.post(`/hr/employment-contracts/${id}/submit-approval`);
+    return response.data;
+  },
+  approveContract: async (id: number) => {
+    const response = await api.post(`/hr/employment-contracts/${id}/approve`);
+    return response.data;
+  },
+  rejectApproval: async (id: number, rejection_reason?: string) => {
+    const response = await api.post(`/hr/employment-contracts/${id}/reject-approval`, {
+      rejection_reason,
+    });
+    return response.data;
+  },
+  completeContract: async (id: number) => {
+    const response = await api.post(`/hr/employment-contracts/${id}/complete`);
+    return response.data;
+  },
   getMyContracts: async (status?: string) => {
     const response = await api.get('/hr/my/employment-contracts', {
     params: status ? { status } : undefined
     });
     return response.data;
   },
+  initiateAadhaarEsign: async (
+    id: number,
+    data: { signer_type?: 'company' | 'employee'; aadhaar_consent: boolean; aadhaar_last4: string; return_url?: string }
+  ) => {
+    const response = await api.post(`/hr/employment-contracts/${id}/aadhaar-esign/initiate`, data);
+    return response.data;
+  },
+  completeAadhaarEsign: async (data: { session_token: string; mock_otp?: string; callback_payload?: any }) => {
+    const response = await api.post('/hr/employment-contracts/aadhaar-esign/complete', data);
+    return response.data;
+  },
+  getAadhaarEsignConfig: async () => {
+    const response = await api.get('/hr/employment-contracts/aadhaar-esign/config');
+    return response.data;
+  },
   getContractAuditLogs: async (id: number, params?: { limit?: number }) => {
     const response = await api.get(`/hr/employment-contracts/${id}/audit-logs`, { params });
     return response.data;
-  }
+  },
+  downloadContractPdf: async (id: number) => {
+    const response = await api.get(`/hr/employment-contracts/${id}/pdf`, {
+      responseType: 'blob',
+    });
+    return response;
+  },
 };
 
 /** ?�사 ??부??관�?*/

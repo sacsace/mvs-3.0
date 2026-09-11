@@ -84,6 +84,7 @@ import WebAuthnCredential from './WebAuthnCredential';
 import EmploymentContractTemplate from './EmploymentContractTemplate';
 import EmploymentContract from './EmploymentContract';
 import EmploymentContractSignature from './EmploymentContractSignature';
+import EmploymentContractEsignSession from './EmploymentContractEsignSession';
 import EmploymentContractAuditLog from './EmploymentContractAuditLog';
 
 // 관계 설정
@@ -583,6 +584,8 @@ AcImportIssue.belongsTo(AcImportSourceDocument, { foreignKey: 'source_document_i
 (EmploymentContract as any).belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 (User as any).hasMany(EmploymentContract, { foreignKey: 'employee_id', as: 'employeeContracts' });
 (EmploymentContract as any).belongsTo(User, { foreignKey: 'employee_id', as: 'employee' });
+(User as any).hasMany(EmploymentContract, { foreignKey: 'approver_id', as: 'approverContracts' });
+(EmploymentContract as any).belongsTo(User, { foreignKey: 'approver_id', as: 'approver' });
 (EmploymentContractTemplate as any).hasMany(EmploymentContract, { foreignKey: 'template_id', as: 'contracts' });
 (EmploymentContract as any).belongsTo(EmploymentContractTemplate, { foreignKey: 'template_id', as: 'template' });
 
@@ -590,6 +593,10 @@ AcImportIssue.belongsTo(AcImportSourceDocument, { foreignKey: 'source_document_i
 (EmploymentContractSignature as any).belongsTo(EmploymentContract, { foreignKey: 'contract_id', as: 'contract' });
 (User as any).hasMany(EmploymentContractSignature, { foreignKey: 'signer_id', as: 'employmentContractSignatures' });
 (EmploymentContractSignature as any).belongsTo(User, { foreignKey: 'signer_id', as: 'signer' });
+(EmploymentContract as any).hasMany(EmploymentContractEsignSession, { foreignKey: 'contract_id', as: 'esignSessions' });
+(EmploymentContractEsignSession as any).belongsTo(EmploymentContract, { foreignKey: 'contract_id', as: 'contract' });
+(User as any).hasMany(EmploymentContractEsignSession, { foreignKey: 'signer_id', as: 'employmentContractEsignSessions' });
+(EmploymentContractEsignSession as any).belongsTo(User, { foreignKey: 'signer_id', as: 'signer' });
 
 (EmploymentContract as any).hasMany(EmploymentContractAuditLog, { foreignKey: 'contract_id', as: 'auditLogs' });
 (EmploymentContractAuditLog as any).belongsTo(EmploymentContract, { foreignKey: 'contract_id', as: 'contract' });
@@ -717,6 +724,7 @@ export {
   EmploymentContractTemplate,
   EmploymentContract,
   EmploymentContractSignature,
+  EmploymentContractEsignSession,
   EmploymentContractAuditLog,
   connectDB 
 };

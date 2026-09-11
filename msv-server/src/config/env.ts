@@ -137,6 +137,15 @@ export const env = {
   GST_GSP_AUTH_VALUE: process.env.GST_GSP_AUTH_VALUE || '',
   GST_GSP_TIMEOUT_MS: parseInt(process.env.GST_GSP_TIMEOUT_MS || '60000', 10),
 
+  /** Aadhaar eSign ASP — mock | live */
+  AADHAAR_ESIGN_MODE: process.env.AADHAAR_ESIGN_MODE || 'mock',
+  AADHAAR_ESIGN_PROVIDER: process.env.AADHAAR_ESIGN_PROVIDER || '',
+  AADHAAR_ESIGN_ASP_BASE_URL: process.env.AADHAAR_ESIGN_ASP_BASE_URL || '',
+  AADHAAR_ESIGN_ASP_API_KEY: process.env.AADHAAR_ESIGN_ASP_API_KEY || '',
+  AADHAAR_ESIGN_ASP_INITIATE_PATH: process.env.AADHAAR_ESIGN_ASP_INITIATE_PATH || '/esign/initiate',
+  AADHAAR_ESIGN_ASP_STATUS_PATH: process.env.AADHAAR_ESIGN_ASP_STATUS_PATH || '/esign/status',
+  AADHAAR_ESIGN_ASP_TIMEOUT_MS: parseInt(process.env.AADHAAR_ESIGN_ASP_TIMEOUT_MS || '60000', 10),
+
   /** 인도 GST E-Way Bill — mock | live (GSP가 NIC E-Way API와 연동된 엔드포인트) */
   GST_EWAY_MODE: process.env.GST_EWAY_MODE || 'mock',
   /** 비어 있으면 GST_GSP_BASE_URL 사용 */

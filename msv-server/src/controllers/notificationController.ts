@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import SocketService from '../services/socketService';
-import { ExpenseReport, Vacation, Quotation, User, Customer, Approval } from '../models';
+import { ExpenseReport, Vacation, Quotation, User, Customer, Approval, EmploymentContract } from '../models';
 import { Op } from 'sequelize';
 import { isMissingTableError } from '../utils/dbErrors';
 import { sendUserNotificationEmail } from '../utils/userNotificationMail';
@@ -72,7 +72,13 @@ export const getActionInbox = async (req: Request, res: Response) => {
 
     const items: Array<{
       id: string;
-      kind: 'expense_payment' | 'vacation_pending' | 'quotation_pending' | 'approval_pending';
+      kind:
+        | 'expense_payment'
+        | 'vacation_pending'
+        | 'quotation_pending'
+        | 'approval_pending'
+        | 'contract_approval_pending'
+        | 'contract_sign_pending';
       timestamp: string;
       href: string;
       payload: Record<string, unknown>;
@@ -262,6 +268,89 @@ export const getActionInbox = async (req: Request, res: Response) => {
     } catch (approvalError) {
       if (!isMissingTableError(approvalError)) throw approvalError;
       console.warn('알림 인박스: approvals 조회 건너뜀 —', (approvalError as Error).message);
+    }
+
+    // 5) 전자근로계약 — 지정 승인자(본인) 승인 대기만
+    try {
+      const contractApprovalWhere: any = {
+        is_active: true,
+        status: { [Op.in]: ['pending_approval', 'in_review'] },
+        approver_id: userId,
+      };
+      baseCompany(contractApprovalWhere);
+
+      const pendingContracts = await (EmploymentContract as any).findAll({
+        where: contractApprovalWhere,
+        include: [
+          {
+            model: User,
+            as: 'employee',
+            attributes: ['id', 'username'],
+            required: false,
+          },
+        ],
+        order: [['updated_at', 'DESC']],
+        limit: 40,
+      });
+
+      for (const c of pendingContracts) {
+        const row = c.toJSON ? c.toJSON() : c;
+        items.push({
+          id: `contract_approval_pending-${row.id}`,
+          kind: 'contract_approval_pending',
+          timestamp: row.updated_at
+            ? new Date(row.updated_at).toISOString()
+            : row.created_at
+              ? new Date(row.created_at).toISOString()
+              : new Date().toISOString(),
+          href: '/hr/employment-contracts',
+          payload: {
+            contractId: row.id,
+            contractTitle: row.title || '',
+            employeeName: (row as any).employee?.username || '',
+          },
+        });
+      }
+    } catch (contractApprovalError) {
+      if (!isMissingTableError(contractApprovalError)) throw contractApprovalError;
+      console.warn('알림 인박스: employment_contracts(승인) 조회 건너뜀 —', (contractApprovalError as Error).message);
+    }
+
+    // 6) 전자근로계약 — 본인(근로자) 서명 대기만
+    try {
+      const contractSignWhere: any = {
+        is_active: true,
+        status: 'awaiting_employee_sign',
+        employee_id: userId,
+      };
+      baseCompany(contractSignWhere);
+
+      const signContracts = await (EmploymentContract as any).findAll({
+        where: contractSignWhere,
+        order: [['updated_at', 'DESC']],
+        limit: 40,
+      });
+
+      for (const c of signContracts) {
+        const row = c.toJSON ? c.toJSON() : c;
+        items.push({
+          id: `contract_sign_pending-${row.id}`,
+          kind: 'contract_sign_pending',
+          timestamp: row.approved_at
+            ? new Date(row.approved_at).toISOString()
+            : row.updated_at
+              ? new Date(row.updated_at).toISOString()
+              : new Date().toISOString(),
+          href: '/my/contracts',
+          payload: {
+            contractId: row.id,
+            contractTitle: row.title || '',
+          },
+        });
+      }
+    } catch (contractSignError) {
+      if (!isMissingTableError(contractSignError)) throw contractSignError;
+      console.warn('알림 인박스: employment_contracts(서명) 조회 건너뜀 —', (contractSignError as Error).message);
     }
 
     items.sort(

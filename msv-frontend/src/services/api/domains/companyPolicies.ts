@@ -7,9 +7,11 @@ export type CompanyPolicyKey =
   | 'salary_payroll'
   | 'confidentiality_data'
   | 'posh'
-  | 'separation';
+  | 'separation'
+  | string;
 
-export const COMPANY_POLICY_TAB_ORDER: CompanyPolicyKey[] = [
+/** 기본 시스템 탭 라벨용 (실제 탭 목록은 API 응답 기준) */
+export const COMPANY_POLICY_SYSTEM_KEYS = [
   'employment',
   'attendance',
   'leave',
@@ -17,7 +19,10 @@ export const COMPANY_POLICY_TAB_ORDER: CompanyPolicyKey[] = [
   'confidentiality_data',
   'posh',
   'separation',
-];
+] as const;
+
+/** @deprecated Use API list; kept for callers that still import the name */
+export const COMPANY_POLICY_TAB_ORDER = [...COMPANY_POLICY_SYSTEM_KEYS];
 
 export interface CompanyPolicyItem {
   id: number;
@@ -31,6 +36,7 @@ export interface CompanyPolicyItem {
   updated_by_name?: string | null;
   updated_at?: string;
   created_at?: string;
+  is_system?: boolean;
   can_edit?: boolean;
 }
 
@@ -60,6 +66,16 @@ export const companyPolicyService = {
     const res = await api.get(`/company-policies/${encodeURIComponent(key)}`);
     return res.data;
   },
+  create: async (payload: {
+    title_ko: string;
+    title_en: string;
+    content_ko?: string;
+    content_en?: string;
+    policy_key?: string;
+  }) => {
+    const res = await api.post('/company-policies', payload);
+    return res.data;
+  },
   update: async (
     key: string,
     payload: {
@@ -71,6 +87,10 @@ export const companyPolicyService = {
     }
   ) => {
     const res = await api.put(`/company-policies/${encodeURIComponent(key)}`, payload);
+    return res.data;
+  },
+  remove: async (key: string) => {
+    const res = await api.delete(`/company-policies/${encodeURIComponent(key)}`);
     return res.data;
   },
   history: async (key: string) => {

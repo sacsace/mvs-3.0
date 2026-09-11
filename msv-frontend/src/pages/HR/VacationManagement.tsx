@@ -90,6 +90,7 @@ import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import PromptDialog from '../../components/Common/PromptDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { usePromptDialog } from '../../hooks/usePromptDialog';
+import { formatPositionLabel } from '../../utils/positionLabels';
 
 interface VacationRequest {
   id: number;
@@ -373,7 +374,7 @@ const VacationManagement: React.FC = () => {
         const vacations: VacationRequest[] = (response.data || []).map((v: any) => ({
           id: v.id,
           employeeId: v.user_id,
-          employeeName: v.user?.username || '알 수 없음',
+          employeeName: v.user?.username || t('vacationManagement.unknownUser'),
           department: v.user?.department || '-',
           position: v.user?.position || '-',
           avatar: v.user?.avatar_url || undefined,
@@ -409,10 +410,10 @@ const VacationManagement: React.FC = () => {
           }
         }
       } else {
-        setError(response.message || '휴가 목록을 불러올 수 없습니다.');
+        setError(response.message || t('vacationManagement.loadListFailed'));
       }
     } catch (error: any) {
-      setError(error.response?.data?.message || '휴가 목록을 불러오는 중 오류가 발생했습니다.');
+      setError(error.response?.data?.message || t('vacationManagement.loadListError'));
     } finally {
       setLoading(false);
     }
@@ -450,7 +451,7 @@ const VacationManagement: React.FC = () => {
         const vacations: VacationRequest[] = (response.data || []).map((v: any) => ({
           id: v.id,
           employeeId: v.user_id,
-          employeeName: v.user?.username || '알 수 없음',
+          employeeName: v.user?.username || t('vacationManagement.unknownUser'),
           department: v.user?.department || '-',
           position: v.user?.position || '-',
           avatar: v.user?.avatar_url || undefined,
@@ -486,10 +487,10 @@ const VacationManagement: React.FC = () => {
           }
         }
       } else {
-        setError(response.message || '휴가 목록을 불러올 수 없습니다.');
+        setError(response.message || t('vacationManagement.loadListFailed'));
       }
     } catch (error: any) {
-      setError(error.response?.data?.message || '휴가 목록을 불러오는 중 오류가 발생했습니다.');
+      setError(error.response?.data?.message || t('vacationManagement.loadListError'));
     } finally {
       setLoading(false);
     }
@@ -535,7 +536,7 @@ const VacationManagement: React.FC = () => {
 
   const handleSavePolicy = async (startDays: number) => {
     if (!canEditPolicy) {
-      setError('관리자만 휴가 형태를 수정할 수 있습니다.');
+      setError(t('vacationManagement.adminOnlyLeaveType'));
       return;
     }
     setSavingPolicy(true);
@@ -545,13 +546,13 @@ const VacationManagement: React.FC = () => {
         buildPolicyPayload({ annualLeaveStartDays: startDays })
       );
       if (response.success) {
-        setSuccess('휴가 정책이 저장되었습니다.');
+        setSuccess(t('vacationManagement.policySaved'));
         setVacationPolicy(response.data);
       } else {
-        setError(response.message || '휴가 정책 저장에 실패했습니다.');
+        setError(response.message || t('vacationManagement.policySaveFailed'));
       }
     } catch (error: any) {
-      setError(error.response?.data?.message || '휴가 정책 저장 중 오류가 발생했습니다.');
+      setError(error.response?.data?.message || t('vacationManagement.policySaveError'));
     } finally {
       setSavingPolicy(false);
     }
@@ -559,7 +560,7 @@ const VacationManagement: React.FC = () => {
 
   const handleToggleAbsenceDeduction = async (checked: boolean) => {
     if (!canEditPolicy) {
-      setError('관리자만 휴가 형태를 수정할 수 있습니다.');
+      setError(t('vacationManagement.adminOnlyLeaveType'));
       return;
     }
     setSavingPolicy(true);
@@ -569,16 +570,16 @@ const VacationManagement: React.FC = () => {
         buildPolicyPayload({ deductAbsenceFromLeave: checked })
       );
       if (response.success) {
-        setSuccess('휴가 정책이 저장되었습니다.');
+        setSuccess(t('vacationManagement.policySaved'));
         setVacationPolicy(response.data);
         if (activeTab === leaveBalanceTab) {
           void loadLeaveBalances();
         }
       } else {
-        setError(response.message || '휴가 정책 저장에 실패했습니다.');
+        setError(response.message || t('vacationManagement.policySaveFailed'));
       }
     } catch (error: any) {
-      setError(error.response?.data?.message || '휴가 정책 저장 중 오류가 발생했습니다.');
+      setError(error.response?.data?.message || t('vacationManagement.policySaveError'));
     } finally {
       setSavingPolicy(false);
     }
@@ -586,7 +587,7 @@ const VacationManagement: React.FC = () => {
 
   const handleToggleForceFixedAnnual = async (checked: boolean) => {
     if (!canEditPolicy) {
-      setError('관리자만 휴가 형태를 수정할 수 있습니다.');
+      setError(t('vacationManagement.adminOnlyLeaveType'));
       return;
     }
     setSavingPolicy(true);
@@ -600,16 +601,16 @@ const VacationManagement: React.FC = () => {
         })
       );
       if (response.success) {
-        setSuccess('휴가 정책이 저장되었습니다.');
+        setSuccess(t('vacationManagement.policySaved'));
         setVacationPolicy(response.data);
         if (activeTab === leaveBalanceTab) {
           void loadLeaveBalances();
         }
       } else {
-        setError(response.message || '휴가 정책 저장에 실패했습니다.');
+        setError(response.message || t('vacationManagement.policySaveFailed'));
       }
     } catch (error: any) {
-      setError(error.response?.data?.message || '휴가 정책 저장 중 오류가 발생했습니다.');
+      setError(error.response?.data?.message || t('vacationManagement.policySaveError'));
     } finally {
       setSavingPolicy(false);
     }
@@ -617,7 +618,7 @@ const VacationManagement: React.FC = () => {
 
   const handleSaveForceFixedAnnualDays = async (days: number) => {
     if (!canEditPolicy) {
-      setError('관리자만 휴가 형태를 수정할 수 있습니다.');
+      setError(t('vacationManagement.adminOnlyLeaveType'));
       return;
     }
     const nextDays = Math.max(1, Math.floor(Number(days) || 12));
@@ -632,16 +633,16 @@ const VacationManagement: React.FC = () => {
         })
       );
       if (response.success) {
-        setSuccess('휴가 정책이 저장되었습니다.');
+        setSuccess(t('vacationManagement.policySaved'));
         setVacationPolicy(response.data);
         if (activeTab === leaveBalanceTab) {
           void loadLeaveBalances();
         }
       } else {
-        setError(response.message || '휴가 정책 저장에 실패했습니다.');
+        setError(response.message || t('vacationManagement.policySaveFailed'));
       }
     } catch (error: any) {
-      setError(error.response?.data?.message || '휴가 정책 저장 중 오류가 발생했습니다.');
+      setError(error.response?.data?.message || t('vacationManagement.policySaveError'));
     } finally {
       setSavingPolicy(false);
     }
@@ -649,7 +650,7 @@ const VacationManagement: React.FC = () => {
 
   const handleToggleVacationType = async (vacationType: string) => {
     if (!canEditPolicy) {
-      setError('관리자만 휴가 형태를 수정할 수 있습니다.');
+      setError(t('vacationManagement.adminOnlyLeaveType'));
       return;
     }
 
@@ -665,13 +666,13 @@ const VacationManagement: React.FC = () => {
         buildPolicyPayload({ availableTypes: newTypes })
       );
       if (response.success) {
-        setSuccess('휴가 정책이 저장되었습니다.');
+        setSuccess(t('vacationManagement.policySaved'));
         setVacationPolicy(response.data);
       } else {
-        setError(response.message || '휴가 정책 저장에 실패했습니다.');
+        setError(response.message || t('vacationManagement.policySaveFailed'));
       }
     } catch (error: any) {
-      setError(error.response?.data?.message || '휴가 정책 저장 중 오류가 발생했습니다.');
+      setError(error.response?.data?.message || t('vacationManagement.policySaveError'));
     } finally {
       setSavingPolicy(false);
     }
@@ -679,7 +680,7 @@ const VacationManagement: React.FC = () => {
 
   const handleSaveLeaveTypeDays = async (vacationType: string, days: number) => {
     if (!canEditPolicy) {
-      setError('관리자만 휴가 형태를 수정할 수 있습니다.');
+      setError(t('vacationManagement.adminOnlyLeaveType'));
       return;
     }
 
@@ -696,13 +697,13 @@ const VacationManagement: React.FC = () => {
         })
       );
       if (response.success) {
-        setSuccess('휴가 정책이 저장되었습니다.');
+        setSuccess(t('vacationManagement.policySaved'));
         setVacationPolicy(response.data);
       } else {
-        setError(response.message || '휴가 정책 저장에 실패했습니다.');
+        setError(response.message || t('vacationManagement.policySaveFailed'));
       }
     } catch (error: any) {
-      setError(error.response?.data?.message || '휴가 정책 저장 중 오류가 발생했습니다.');
+      setError(error.response?.data?.message || t('vacationManagement.policySaveError'));
     } finally {
       setSavingPolicy(false);
     }
@@ -810,34 +811,34 @@ const VacationManagement: React.FC = () => {
         setSuccess(t('vacationManagement.leaveApproved'));
         loadVacations();
       } else {
-        setError(response.message || '휴가 승인에 실패했습니다.');
+        setError(response.message || t('vacationManagement.leaveApproveFailed'));
       }
     } catch (error: any) {
-      setError(error.response?.data?.message || '휴가 승인 중 오류가 발생했습니다.');
+      setError(error.response?.data?.message || t('vacationManagement.leaveApproveError'));
     }
   };
 
   const handleReject = (id: number) => {
     showPrompt(
-      t('vacationManagement.rejectReasonPlaceholder', { defaultValue: '거부 사유를 입력하세요.' }),
+      t('vacationManagement.enterRejectionReasonPrompt'),
       (reason) => {
         void (async () => {
           try {
             const response = await vacationService.rejectVacation(id, reason);
             if (response.success) {
-              setSuccess('휴가가 거부되었습니다.');
+              setSuccess(t('vacationManagement.leaveRejected'));
               loadVacations();
             } else {
-              setError(response.message || '휴가 거부에 실패했습니다.');
+              setError(response.message || t('vacationManagement.leaveRejectFailed'));
             }
           } catch (error: any) {
-            setError(error.response?.data?.message || '휴가 거부 중 오류가 발생했습니다.');
+            setError(error.response?.data?.message || t('vacationManagement.leaveRejectError'));
           }
         })();
       },
       {
         title: t('vacationManagement.reject'),
-        label: t('vacationManagement.rejectReason', { defaultValue: '거부 사유' }),
+        label: t('vacationManagement.rejectionReason'),
         multiline: true,
         minRows: 3,
         confirmText: t('vacationManagement.reject'),
@@ -848,19 +849,19 @@ const VacationManagement: React.FC = () => {
 
   const handleDelete = (id: number) => {
     showConfirm(
-      t('vacationManagement.deleteConfirm', { defaultValue: '정말 이 휴가 신청을 삭제하시겠습니까?' }),
+      t('vacationManagement.confirmDelete'),
       () => {
         void (async () => {
           try {
             const response = await vacationService.deleteVacation(id);
             if (response.success) {
-              setSuccess('휴가 신청이 삭제되었습니다.');
+              setSuccess(t('vacationManagement.leaveDeleted'));
               loadVacations();
             } else {
-              setError(response.message || '휴가 삭제에 실패했습니다.');
+              setError(response.message || t('vacationManagement.leaveDeleteFailed'));
             }
           } catch (error: any) {
-            setError(error.response?.data?.message || '휴가 삭제 중 오류가 발생했습니다.');
+            setError(error.response?.data?.message || t('vacationManagement.leaveDeleteError'));
           }
         })();
       },
@@ -997,7 +998,7 @@ const VacationManagement: React.FC = () => {
   const mapApiVacation = (v: any): VacationRequest => ({
     id: v.id,
     employeeId: v.user_id,
-    employeeName: v.user?.username || '알 수 없음',
+    employeeName: v.user?.username || t('vacationManagement.unknownUser'),
     department: v.user?.department || '-',
     position: v.user?.position || '-',
     avatar: v.user?.avatar_url || undefined,
@@ -1063,10 +1064,10 @@ const VacationManagement: React.FC = () => {
         handleCloseDetailDialog();
         loadVacations();
       } else {
-        setError(response.message || '휴가 승인에 실패했습니다.');
+        setError(response.message || t('vacationManagement.leaveApproveFailed'));
       }
     } catch (error: any) {
-      setError(error.response?.data?.message || '휴가 승인 중 오류가 발생했습니다.');
+      setError(error.response?.data?.message || t('vacationManagement.leaveApproveError'));
     }
   };
 
@@ -1079,14 +1080,14 @@ const VacationManagement: React.FC = () => {
     try {
       const response = await vacationService.rejectVacation(selectedVacation.id, rejectReason);
       if (response.success) {
-        setSuccess('휴가가 거부되었습니다.');
+        setSuccess(t('vacationManagement.leaveRejected'));
         handleCloseDetailDialog();
         loadVacations();
       } else {
-        setError(response.message || '휴가 거부에 실패했습니다.');
+        setError(response.message || t('vacationManagement.leaveRejectFailed'));
       }
     } catch (error: any) {
-      setError(error.response?.data?.message || '휴가 거부 중 오류가 발생했습니다.');
+      setError(error.response?.data?.message || t('vacationManagement.leaveRejectError'));
     }
   };
 
@@ -1490,7 +1491,7 @@ const VacationManagement: React.FC = () => {
                           {request.employeeName}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" noWrap>
-                          {request.department} • {request.position}
+                          {request.department} • {formatPositionLabel(request.position, i18n.language) || request.position}
                         </Typography>
                       </Box>
                     </Box>
@@ -1588,7 +1589,7 @@ const VacationManagement: React.FC = () => {
         // 부서별 통계
         const departmentStats: { [key: string]: { count: number; days: number } } = {};
         vacationRequests.forEach(req => {
-          const dept = req.department || '미지정';
+          const dept = req.department || t('vacationManagement.unspecified');
           if (!departmentStats[dept]) {
             departmentStats[dept] = { count: 0, days: 0 };
           }
@@ -1986,7 +1987,7 @@ const VacationManagement: React.FC = () => {
                                     {row.username}
                                   </Typography>
                                   <Typography variant="caption" color="text.secondary" noWrap display="block">
-                                    {row.position || '—'}
+                                    {formatPositionLabel(row.position, i18n.language) || row.position || '—'}
                                   </Typography>
                                 </Box>
                               </Box>
@@ -2840,7 +2841,9 @@ const VacationManagement: React.FC = () => {
                 <Typography variant="body2" color="text.secondary" noWrap>
                   {historyEmployee.username}
                   {historyEmployee.department ? ` · ${historyEmployee.department}` : ''}
-                  {historyEmployee.position ? ` · ${historyEmployee.position}` : ''}
+                  {historyEmployee.position
+                    ? ` · ${formatPositionLabel(historyEmployee.position, i18n.language) || historyEmployee.position}`
+                    : ''}
                 </Typography>
               ) : null}
             </Box>
@@ -2948,14 +2951,16 @@ const VacationManagement: React.FC = () => {
                         {selectedVacation.employeeName}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {selectedVacation.department} • {selectedVacation.position}
+                        {selectedVacation.department} •{' '}
+                        {formatPositionLabel(selectedVacation.position, i18n.language) ||
+                          selectedVacation.position}
                       </Typography>
                     </Box>
                   </Box>
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    휴가 유형
+                    {t('vacationManagement.leaveType')}
                   </Typography>
                   <Box sx={{ mb: 2 }}>
                     {getTypeChip(selectedVacation.vacationType, selectedVacation.isHalfDay)}
@@ -2963,7 +2968,7 @@ const VacationManagement: React.FC = () => {
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    기간
+                    {t('vacationManagement.period')}
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                     <CalendarIcon sx={{ mr: 1, color: 'text.secondary' }} />

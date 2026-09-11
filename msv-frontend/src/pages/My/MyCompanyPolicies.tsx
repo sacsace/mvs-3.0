@@ -11,17 +11,22 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  IconButton,
   Stack,
   Tab,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import HistoryIcon from '@mui/icons-material/History';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import { useTranslation } from 'react-i18next';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import {
   mvsBodyCardSx,
   mvsBodyOutlinedBtnSx,
@@ -29,16 +34,15 @@ import {
   mvsPageRootSx,
 } from '../../theme/mvsLayout';
 import {
-  COMPANY_POLICY_TAB_ORDER,
   companyPolicyService,
   type CompanyPolicyItem,
-  type CompanyPolicyKey,
   type CompanyPolicyRevisionDetail,
   type CompanyPolicyRevisionSummary,
 } from '../../services/api';
 import { showErrorPopup, showSuccessPopup } from '../../utils/errorHandler';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
-const TAB_LABEL: Record<CompanyPolicyKey, string> = {
+const SYSTEM_TAB_LABEL: Record<string, string> = {
   employment: 'companyPolicies.tabs.employment',
   attendance: 'companyPolicies.tabs.attendance',
   leave: 'companyPolicies.tabs.leave',
@@ -51,13 +55,14 @@ const TAB_LABEL: Record<CompanyPolicyKey, string> = {
 const MyCompanyPolicies: React.FC = () => {
   const { t, i18n } = useTranslation();
   const isEn = Boolean(i18n.language?.startsWith('en'));
+  const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
   const [editing, setEditing] = useState(false);
   const [policies, setPolicies] = useState<CompanyPolicyItem[]>([]);
-  const [tab, setTab] = useState<CompanyPolicyKey>('employment');
+  const [tab, setTab] = useState<string>('');
   const [draft, setDraft] = useState({
     title_ko: '',
     title_en: '',
@@ -70,6 +75,9 @@ const MyCompanyPolicies: React.FC = () => {
   const [historyRows, setHistoryRows] = useState<CompanyPolicyRevisionSummary[]>([]);
   const [revisionOpen, setRevisionOpen] = useState(false);
   const [revision, setRevision] = useState<CompanyPolicyRevisionDetail | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [addDraft, setAddDraft] = useState({ title_ko: '', title_en: '' });
 
   const current = useMemo(
     () => policies.find((row) => row.policy_key === tab) || null,
@@ -83,12 +91,23 @@ const MyCompanyPolicies: React.FC = () => {
     ? current?.content_en || current?.content_ko || ''
     : current?.content_ko || current?.content_en || '';
 
+  const tabLabel = (row: CompanyPolicyItem) => {
+    const key = String(row.policy_key);
+    if (SYSTEM_TAB_LABEL[key]) return t(SYSTEM_TAB_LABEL[key]);
+    return isEn ? row.title_en || row.title_ko || key : row.title_ko || row.title_en || key;
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await companyPolicyService.list();
-      setPolicies((res?.data || []) as CompanyPolicyItem[]);
+      const rows = (res?.data || []) as CompanyPolicyItem[];
+      setPolicies(rows);
       setCanEdit(Boolean(res?.meta?.can_edit));
+      setTab((prev) => {
+        if (prev && rows.some((r) => r.policy_key === prev)) return prev;
+        return rows[0] ? String(rows[0].policy_key) : '';
+      });
     } catch (error: any) {
       showErrorPopup(error, t('companyPolicies.errors.loadFailed'));
     } finally {
@@ -135,6 +154,64 @@ const MyCompanyPolicies: React.FC = () => {
     }
   };
 
+  const handleAddTab = async () => {
+    if (!canEdit) return;
+    const title_ko = addDraft.title_ko.trim();
+    const title_en = addDraft.title_en.trim();
+    if (!title_ko || !title_en) {
+      showErrorPopup(t('companyPolicies.errors.titleRequired'));
+      return;
+    }
+    setAdding(true);
+    try {
+      const res = await companyPolicyService.create({ title_ko, title_en });
+      if (!res?.success) {
+        throw new Error(res?.message || t('companyPolicies.errors.addFailed'));
+      }
+      showSuccessPopup(t('companyPolicies.success.added'));
+      setAddOpen(false);
+      setAddDraft({ title_ko: '', title_en: '' });
+      const newKey = String(res?.data?.policy_key || '');
+      await load();
+      if (newKey) setTab(newKey);
+    } catch (error: any) {
+      showErrorPopup(error, t('companyPolicies.errors.addFailed'));
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleDeleteTab = () => {
+    if (!current || !canEdit) return;
+    showConfirm(
+      t('companyPolicies.confirmDeleteTab', {
+        name: tabLabel(current),
+      }),
+      () => {
+        void (async () => {
+          try {
+            const key = String(current.policy_key);
+            const res = await companyPolicyService.remove(key);
+            if (!res?.success) {
+              throw new Error(res?.message || t('companyPolicies.errors.deleteFailed'));
+            }
+            showSuccessPopup(t('companyPolicies.success.deleted'));
+            setEditing(false);
+            await load();
+          } catch (error: any) {
+            showErrorPopup(error, t('companyPolicies.errors.deleteFailed'));
+          }
+        })();
+      },
+      {
+        title: t('companyPolicies.actions.deleteTab'),
+        confirmColor: 'error',
+        confirmText: t('common.delete'),
+        cancelText: t('common.cancel'),
+      }
+    );
+  };
+
   const handleOpenHistory = async () => {
     if (!current) return;
     setHistoryOpen(true);
@@ -170,29 +247,46 @@ const MyCompanyPolicies: React.FC = () => {
 
       <Card sx={mvsBodyCardSx}>
         <CardContent sx={{ p: { xs: 1.5, sm: 2 } }}>
-          <Tabs
-            value={tab}
-            onChange={(_, next: CompanyPolicyKey) => setTab(next)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{
-              minHeight: 40,
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-              mb: 2,
-              '& .MuiTab-root': {
+          <Stack direction="row" alignItems="flex-end" spacing={0.5} sx={{ mb: 2 }}>
+            <Tabs
+              value={tab || false}
+              onChange={(_, next: string) => setTab(next)}
+              variant="scrollable"
+              scrollButtons="auto"
+              sx={{
+                flex: 1,
                 minHeight: 40,
-                textTransform: 'none',
-                fontSize: '0.8125rem',
-                fontWeight: 600,
-                px: 1.25,
-              },
-            }}
-          >
-            {COMPANY_POLICY_TAB_ORDER.map((key) => (
-              <Tab key={key} value={key} label={t(TAB_LABEL[key])} />
-            ))}
-          </Tabs>
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+                '& .MuiTab-root': {
+                  minHeight: 40,
+                  textTransform: 'none',
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  px: 1.25,
+                },
+              }}
+            >
+              {policies.map((row) => (
+                <Tab key={row.policy_key} value={String(row.policy_key)} label={tabLabel(row)} />
+              ))}
+            </Tabs>
+            {canEdit ? (
+              <Tooltip title={t('companyPolicies.actions.addTab')}>
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    setAddDraft({ title_ko: '', title_en: '' });
+                    setAddOpen(true);
+                  }}
+                  sx={{ mb: 0.5 }}
+                  aria-label={t('companyPolicies.actions.addTab')}
+                >
+                  <AddIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : null}
+          </Stack>
 
           {loading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -236,15 +330,27 @@ const MyCompanyPolicies: React.FC = () => {
                     {t('companyPolicies.actions.history')}
                   </Button>
                   {canEdit && !editing ? (
-                    <Button
-                      size="small"
-                      variant="contained"
-                      startIcon={<EditOutlinedIcon />}
-                      onClick={() => setEditing(true)}
-                      sx={mvsBodyPrimaryBtnSx}
-                    >
-                      {t('companyPolicies.actions.edit')}
-                    </Button>
+                    <>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={<EditOutlinedIcon />}
+                        onClick={() => setEditing(true)}
+                        sx={mvsBodyPrimaryBtnSx}
+                      >
+                        {t('companyPolicies.actions.edit')}
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        startIcon={<DeleteOutlineIcon />}
+                        onClick={handleDeleteTab}
+                        sx={mvsBodyOutlinedBtnSx}
+                        disabled={policies.length <= 1}
+                      >
+                        {t('companyPolicies.actions.deleteTab')}
+                      </Button>
+                    </>
                   ) : null}
                   {canEdit && editing ? (
                     <>
@@ -343,6 +449,40 @@ const MyCompanyPolicies: React.FC = () => {
         </CardContent>
       </Card>
 
+      <Dialog open={addOpen} onClose={() => !adding && setAddOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>{t('companyPolicies.addTabTitle')}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+            <TextField
+              label={t('companyPolicies.fields.titleKo')}
+              size="small"
+              fullWidth
+              value={addDraft.title_ko}
+              onChange={(e) => setAddDraft((prev) => ({ ...prev, title_ko: e.target.value }))}
+              autoFocus
+            />
+            <TextField
+              label={t('companyPolicies.fields.titleEn')}
+              size="small"
+              fullWidth
+              value={addDraft.title_en}
+              onChange={(e) => setAddDraft((prev) => ({ ...prev, title_en: e.target.value }))}
+            />
+            <Typography variant="caption" color="text.secondary">
+              {t('companyPolicies.addTabHint')}
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddOpen(false)} disabled={adding}>
+            {t('common.cancel')}
+          </Button>
+          <Button variant="contained" onClick={() => void handleAddTab()} disabled={adding}>
+            {t('companyPolicies.actions.addTab')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{t('companyPolicies.historyTitle')}</DialogTitle>
         <DialogContent dividers>
@@ -422,6 +562,17 @@ const MyCompanyPolicies: React.FC = () => {
           <Button onClick={() => setRevisionOpen(false)}>{t('common.close')}</Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={dialogState.open}
+        title={dialogState.title}
+        message={dialogState.message}
+        confirmText={dialogState.confirmText}
+        cancelText={dialogState.cancelText}
+        confirmColor={dialogState.confirmColor}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+      />
     </Box>
   );
 };

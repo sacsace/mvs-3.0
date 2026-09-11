@@ -31,11 +31,17 @@ export type EmployeePersonalRecordProps = {
   sections: PersonalRecordSection[];
 };
 
-const BORDER = '#1A1A1A';
-const GRID = '#B4B4B4';
-const LABEL_BG = '#F3F3F3';
-const SECTION_BG = '#C6EFCE';
-const HEADER_BG = '#E8F5E9';
+/** Word pt → CSS px (96dpi: 1pt = 4/3 px) */
+const PT9 = '12px';
+const PT12 = '16px';
+
+const BORDER = '#757575';
+const GRID = '#BDBDBD';
+const LABEL_BG = '#F5F5F5';
+const SECTION_BG = '#E8E8E8';
+const HEADER_BG = '#F0F0F0';
+const TEXT = '#212121';
+const MUTED = '#616161';
 
 function chunkPairs<T>(arr: T[], size = 2): T[][] {
   const out: T[][] = [];
@@ -66,20 +72,22 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
         ref={ref}
         sx={{
           bgcolor: '#FFFFFF',
-          color: '#111',
+          color: TEXT,
           width: '100%',
           boxSizing: 'border-box',
-          p: 2,
+          p: 1.5,
           fontFamily: '"Noto Sans KR", "Segoe UI", Arial, sans-serif',
+          fontSize: PT9,
+          lineHeight: 1.35,
         }}
       >
         <Box
           sx={{
-            border: `2px solid ${BORDER}`,
+            border: `1px solid ${BORDER}`,
             overflow: 'hidden',
           }}
         >
-          {/* 문서 헤더 — 세로(A4) 양식: 회사+사진 / 제목 밴드 */}
+          {/* 문서 헤더 */}
           <Box
             sx={{
               display: 'flex',
@@ -91,13 +99,13 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
             <Box
               sx={{
                 flex: 1,
-                px: 1.5,
-                py: 1.1,
+                px: 1.25,
+                py: 0.85,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'flex-start',
                 justifyContent: 'center',
-                gap: 0.75,
+                gap: 0.5,
                 minWidth: 0,
               }}
             >
@@ -107,8 +115,8 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
                   src={companyLogoUrl}
                   alt={companyName}
                   sx={{
-                    maxHeight: 48,
-                    maxWidth: 160,
+                    maxHeight: 40,
+                    maxWidth: 140,
                     objectFit: 'contain',
                     display: 'block',
                   }}
@@ -117,26 +125,25 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
               <Box sx={{ minWidth: 0, width: '100%' }}>
                 <Typography
                   sx={{
-                    fontWeight: 800,
-                    fontSize: '0.95rem',
-                    lineHeight: 1.25,
-                    letterSpacing: '-0.01em',
+                    fontWeight: 700,
+                    fontSize: PT9,
+                    lineHeight: 1.3,
+                    color: TEXT,
                   }}
                 >
                   {companyName || '—'}
                 </Typography>
                 {companyContact ? (
-                  <Typography sx={{ fontSize: '0.68rem', color: '#444', lineHeight: 1.35, mt: 0.25 }}>
+                  <Typography sx={{ fontSize: PT9, color: MUTED, lineHeight: 1.35, mt: 0.2 }}>
                     {companyContact}
                   </Typography>
                 ) : null}
               </Box>
             </Box>
 
-            {/* 증명사진 칸 */}
             <Box
               sx={{
-                width: 104,
+                width: 96,
                 borderLeft: `1px solid ${BORDER}`,
                 bgcolor: '#FFF',
                 display: 'flex',
@@ -147,13 +154,13 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
               <Box
                 sx={{
                   px: 0.5,
-                  py: 0.3,
+                  py: 0.25,
                   borderBottom: `1px solid ${GRID}`,
                   bgcolor: LABEL_BG,
                   textAlign: 'center',
                 }}
               >
-                <Typography sx={{ fontSize: '0.62rem', fontWeight: 700, color: '#333' }}>
+                <Typography sx={{ fontSize: PT9, fontWeight: 700, color: MUTED, letterSpacing: '0.04em' }}>
                   PHOTO
                 </Typography>
               </Box>
@@ -163,8 +170,8 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  p: 0.6,
-                  minHeight: 128,
+                  p: 0.5,
+                  minHeight: 110,
                 }}
               >
                 {photoUrl ? (
@@ -174,7 +181,7 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
                     alt={photoAlt || employeeName}
                     sx={{
                       width: '100%',
-                      height: 126,
+                      height: 108,
                       objectFit: 'cover',
                       objectPosition: 'center top',
                       border: `1px solid ${GRID}`,
@@ -185,15 +192,15 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
                   <Box
                     sx={{
                       width: '100%',
-                      height: 126,
+                      height: 108,
                       border: `1px dashed ${GRID}`,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       bgcolor: '#FAFAFA',
-                      fontSize: '2rem',
+                      fontSize: PT12,
                       fontWeight: 700,
-                      color: '#888',
+                      color: '#9E9E9E',
                     }}
                   >
                     {initial}
@@ -205,8 +212,8 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
 
           <Box
             sx={{
-              px: 1.25,
-              py: 1,
+              px: 1,
+              py: 0.75,
               borderBottom: `1px solid ${BORDER}`,
               bgcolor: '#FFFFFF',
               textAlign: 'center',
@@ -214,17 +221,17 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
           >
             <Typography
               sx={{
-                fontWeight: 800,
-                fontSize: '1.4rem',
-                letterSpacing: '0.12em',
-                lineHeight: 1.2,
+                fontWeight: 700,
+                fontSize: PT12,
+                letterSpacing: '0.06em',
+                lineHeight: 1.25,
+                color: TEXT,
               }}
             >
               {documentTitle}
             </Typography>
           </Box>
 
-          {/* 본문 섹션 */}
           {sections.map((section) => {
             const fields = (section.fields || []).filter((f) => String(f.value || '').trim());
             const items = (section.items || []).filter((it) => String(it.title || '').trim());
@@ -234,14 +241,14 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
               <Box key={section.title}>
                 <Box
                   sx={{
-                    px: 1.25,
-                    py: 0.55,
+                    px: 1,
+                    py: 0.4,
                     bgcolor: SECTION_BG,
                     borderTop: `1px solid ${BORDER}`,
                     borderBottom: `1px solid ${GRID}`,
                   }}
                 >
-                  <Typography sx={{ fontWeight: 800, fontSize: '0.82rem', letterSpacing: '0.02em' }}>
+                  <Typography sx={{ fontWeight: 700, fontSize: PT9, color: TEXT }}>
                     {section.title}
                   </Typography>
                 </Box>
@@ -259,12 +266,12 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
                                   width: '16%',
                                   border: `1px solid ${GRID}`,
                                   bgcolor: LABEL_BG,
-                                  px: 1,
-                                  py: 0.7,
+                                  px: 0.75,
+                                  py: 0.45,
                                   verticalAlign: 'middle',
-                                  fontSize: '0.72rem',
+                                  fontSize: PT9,
                                   fontWeight: 700,
-                                  color: '#333',
+                                  color: MUTED,
                                   whiteSpace: 'nowrap',
                                 }}
                               >
@@ -275,12 +282,12 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
                                 sx={{
                                   width: '34%',
                                   border: `1px solid ${GRID}`,
-                                  px: 1,
-                                  py: 0.7,
+                                  px: 0.75,
+                                  py: 0.45,
                                   verticalAlign: 'middle',
-                                  fontSize: '0.78rem',
-                                  fontWeight: 600,
-                                  color: '#111',
+                                  fontSize: PT9,
+                                  fontWeight: 400,
+                                  color: TEXT,
                                   wordBreak: 'break-word',
                                 }}
                               >
@@ -321,14 +328,15 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
                           <Box
                             component="td"
                             sx={{
-                              width: '8%',
+                              width: '7%',
                               border: `1px solid ${GRID}`,
                               bgcolor: LABEL_BG,
-                              px: 0.75,
-                              py: 0.7,
+                              px: 0.5,
+                              py: 0.45,
                               textAlign: 'center',
-                              fontSize: '0.72rem',
+                              fontSize: PT9,
                               fontWeight: 700,
+                              color: MUTED,
                               verticalAlign: 'top',
                             }}
                           >
@@ -338,21 +346,21 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
                             component="td"
                             sx={{
                               border: `1px solid ${GRID}`,
-                              px: 1,
-                              py: 0.7,
+                              px: 0.75,
+                              py: 0.45,
                               verticalAlign: 'top',
                             }}
                           >
-                            <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, lineHeight: 1.35 }}>
+                            <Typography sx={{ fontSize: PT9, fontWeight: 700, lineHeight: 1.35, color: TEXT }}>
                               {item.title}
                             </Typography>
                             {item.subtitle ? (
-                              <Typography sx={{ fontSize: '0.7rem', color: '#555', mt: 0.2, lineHeight: 1.35 }}>
+                              <Typography sx={{ fontSize: PT9, color: MUTED, mt: 0.15, lineHeight: 1.35 }}>
                                 {item.subtitle}
                               </Typography>
                             ) : null}
                             {item.body ? (
-                              <Typography sx={{ fontSize: '0.72rem', color: '#222', mt: 0.35, lineHeight: 1.4 }}>
+                              <Typography sx={{ fontSize: PT9, color: TEXT, mt: 0.25, lineHeight: 1.4 }}>
                                 {item.body}
                               </Typography>
                             ) : null}
@@ -366,24 +374,21 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
             );
           })}
 
-          {/* 하단 */}
           <Box
             sx={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              px: 1.25,
-              py: 0.85,
+              px: 1,
+              py: 0.55,
               borderTop: `1px solid ${BORDER}`,
-              bgcolor: '#FAFAFA',
+              bgcolor: LABEL_BG,
             }}
           >
-            <Typography sx={{ fontSize: '0.68rem', color: '#555' }}>
+            <Typography sx={{ fontSize: PT9, color: MUTED }}>
               {generatedAtLabel}: {generatedAt}
             </Typography>
-            <Typography sx={{ fontSize: '0.68rem', color: '#555' }}>
-              {employeeName}
-            </Typography>
+            <Typography sx={{ fontSize: PT9, color: MUTED }}>{employeeName}</Typography>
           </Box>
         </Box>
       </Box>

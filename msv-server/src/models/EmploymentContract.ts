@@ -6,6 +6,7 @@ interface EmploymentContractAttributes {
   tenant_id: number;
   company_id: number;
   employee_id: number;
+  approver_id?: number | null;
   template_id?: number | null;
   title: string;
   contract_type: string;
@@ -23,6 +24,9 @@ interface EmploymentContractAttributes {
   hash_sha256?: string | null;
   company_signed_at?: Date | null;
   employee_signed_at?: Date | null;
+  approved_at?: Date | null;
+  rejection_reason?: string | null;
+  is_active: boolean;
   created_by?: number | null;
   updated_by?: number | null;
   created_at: Date;
@@ -33,6 +37,7 @@ interface EmploymentContractCreationAttributes
   extends Optional<
     EmploymentContractAttributes,
     | 'id'
+    | 'approver_id'
     | 'template_id'
     | 'salary'
     | 'bonus_type'
@@ -45,6 +50,9 @@ interface EmploymentContractCreationAttributes
     | 'hash_sha256'
     | 'company_signed_at'
     | 'employee_signed_at'
+    | 'approved_at'
+    | 'rejection_reason'
+    | 'is_active'
     | 'created_by'
     | 'updated_by'
     | 'created_at'
@@ -59,6 +67,7 @@ class EmploymentContract
   public tenant_id!: number;
   public company_id!: number;
   public employee_id!: number;
+  public approver_id?: number | null;
   public template_id?: number | null;
   public title!: string;
   public contract_type!: string;
@@ -76,6 +85,9 @@ class EmploymentContract
   public hash_sha256?: string | null;
   public company_signed_at?: Date | null;
   public employee_signed_at?: Date | null;
+  public approved_at?: Date | null;
+  public rejection_reason?: string | null;
+  public is_active!: boolean;
   public created_by?: number | null;
   public updated_by?: number | null;
   public readonly created_at!: Date;
@@ -88,6 +100,7 @@ EmploymentContract.init(
     tenant_id: { type: DataTypes.INTEGER, allowNull: false },
     company_id: { type: DataTypes.INTEGER, allowNull: false },
     employee_id: { type: DataTypes.INTEGER, allowNull: false },
+    approver_id: { type: DataTypes.INTEGER, allowNull: true },
     template_id: { type: DataTypes.INTEGER, allowNull: true },
     title: { type: DataTypes.STRING(200), allowNull: false },
     contract_type: { type: DataTypes.STRING(50), allowNull: false, defaultValue: 'regular' },
@@ -105,18 +118,20 @@ EmploymentContract.init(
     hash_sha256: { type: DataTypes.STRING(128), allowNull: true },
     company_signed_at: { type: DataTypes.DATE, allowNull: true },
     employee_signed_at: { type: DataTypes.DATE, allowNull: true },
+    approved_at: { type: DataTypes.DATE, allowNull: true },
+    rejection_reason: { type: DataTypes.STRING(500), allowNull: true },
+    is_active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     created_by: { type: DataTypes.INTEGER, allowNull: true },
     updated_by: { type: DataTypes.INTEGER, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
-    updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
+    updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   },
   {
     sequelize,
     tableName: 'employment_contracts',
     timestamps: true,
-    underscored: true
+    underscored: true,
   }
 );
 
 export default EmploymentContract;
-

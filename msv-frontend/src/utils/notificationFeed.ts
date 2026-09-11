@@ -10,13 +10,19 @@ export interface AppNotification {
   severity: 'info' | 'warning' | 'success' | 'error';
   read: boolean;
   href?: string;
-  inboxChip?: 'payment' | 'vacation' | 'quotation' | 'approval';
+  inboxChip?: 'payment' | 'vacation' | 'quotation' | 'approval' | 'contract';
   source?: 'error' | 'notification' | 'server' | 'inbox';
 }
 
 export interface ActionInboxRow {
   id: string;
-  kind: 'expense_payment' | 'vacation_pending' | 'quotation_pending' | 'approval_pending';
+  kind:
+    | 'expense_payment'
+    | 'vacation_pending'
+    | 'quotation_pending'
+    | 'approval_pending'
+    | 'contract_approval_pending'
+    | 'contract_sign_pending';
   timestamp: string;
   href: string;
   payload: Record<string, unknown>;
@@ -65,6 +71,12 @@ export function hrefFromServerNotificationData(data: unknown): string | undefine
     return typeof d.href === 'string' && d.href.startsWith('/') && !d.href.startsWith('//')
       ? d.href
       : '/work/approval';
+  }
+
+  if (d.feature === 'employment_contract') {
+    return typeof d.href === 'string' && d.href.startsWith('/') && !d.href.startsWith('//')
+      ? d.href
+      : '/hr/employment-contracts';
   }
 
   if (d.feature !== 'work_report') return undefined;
@@ -142,6 +154,39 @@ export const mapInboxRowToNotification = (
     };
   }
 
+  if (row.kind === 'contract_approval_pending') {
+    return {
+      id: `inbox-${row.id}`,
+      title: t('common.notificationInbox.contractApprovalTitle'),
+      message: t('common.notificationInbox.contractApprovalBody', {
+        employee: String(p.employeeName ?? '—'),
+        title: String(p.contractTitle ?? ''),
+      }),
+      timestamp: ts,
+      severity: 'warning',
+      read: false,
+      href: row.href,
+      inboxChip: 'contract',
+      source: 'inbox',
+    };
+  }
+
+  if (row.kind === 'contract_sign_pending') {
+    return {
+      id: `inbox-${row.id}`,
+      title: t('common.notificationInbox.contractSignTitle'),
+      message: t('common.notificationInbox.contractSignBody', {
+        title: String(p.contractTitle ?? ''),
+      }),
+      timestamp: ts,
+      severity: 'warning',
+      read: false,
+      href: row.href,
+      inboxChip: 'contract',
+      source: 'inbox',
+    };
+  }
+
   return {
     id: `inbox-${row.id}`,
     title: t('common.notificationInbox.quotationTitle'),
@@ -164,6 +209,7 @@ function collectInboxEntityIds(inboxActions: ActionInboxRow[]) {
   const expenseIds = new Set<number>();
   const quotationIds = new Set<number>();
   const approvalIds = new Set<number>();
+  const contractIds = new Set<number>();
 
   for (const row of inboxActions) {
     const p = row.payload || {};
@@ -179,10 +225,13 @@ function collectInboxEntityIds(inboxActions: ActionInboxRow[]) {
     } else if (row.kind === 'approval_pending') {
       const id = Number(p.approvalId);
       if (Number.isFinite(id) && id > 0) approvalIds.add(id);
+    } else if (row.kind === 'contract_approval_pending' || row.kind === 'contract_sign_pending') {
+      const id = Number(p.contractId);
+      if (Number.isFinite(id) && id > 0) contractIds.add(id);
     }
   }
 
-  return { vacationIds, expenseIds, quotationIds, approvalIds };
+  return { vacationIds, expenseIds, quotationIds, approvalIds, contractIds };
 }
 
 /** 대기 인박스에 이미 노출 중인 승인 요청이면 서버 푸시는 목록에서 제외 */
@@ -210,6 +259,10 @@ function isServerNotificationCoveredByInbox(
   if (feature === 'approval') {
     const id = Number(d.approval_id ?? d.id);
     return Number.isFinite(id) && ids.approvalIds.has(id);
+  }
+  if (feature === 'employment_contract') {
+    const id = Number(d.contract_id);
+    return Number.isFinite(id) && ids.contractIds.has(id);
   }
   return false;
 }
@@ -295,6 +348,7 @@ export function getNotificationChipLabel(
   if (item.inboxChip === 'vacation') return t('common.notificationInbox.chipVacation');
   if (item.inboxChip === 'quotation') return t('common.notificationInbox.chipQuotation');
   if (item.inboxChip === 'approval') return t('common.notificationInbox.chipApproval');
+  if (item.inboxChip === 'contract') return t('common.notificationInbox.chipContract');
   return item.severity.toUpperCase();
 }
 
@@ -305,6 +359,7 @@ export function getNotificationChipColor(
   if (item.inboxChip === 'vacation') return 'info';
   if (item.inboxChip === 'quotation') return 'secondary';
   if (item.inboxChip === 'approval') return 'warning';
+  if (item.inboxChip === 'contract') return 'warning';
   if (item.severity === 'error') return 'error';
   if (item.severity === 'warning') return 'warning';
   if (item.severity === 'success') return 'success';

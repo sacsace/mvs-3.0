@@ -68,7 +68,16 @@ import {
   signEmploymentContract,
   sendEmploymentContractToEmployee,
   getMyEmploymentContracts,
-  getEmploymentContractAuditLogs
+  getEmploymentContractAuditLogs,
+  getPendingApprovalContracts,
+  submitEmploymentContractForApproval,
+  approveEmploymentContract,
+  rejectEmploymentContractApproval,
+  completeEmploymentContract,
+  downloadEmploymentContractPdf,
+  getAadhaarEsignConfig,
+  initiateAadhaarEsign,
+  completeAadhaarEsign,
 } from '../controllers/employmentContractController';
 import {
   listDepartments,
@@ -401,7 +410,19 @@ router.delete(
 // 전자근로계약
 router.get('/employment-contracts', getEmploymentContracts);
 router.get('/my/employment-contracts', getMyEmploymentContracts);
+router.get('/employment-contracts/pending-approvals', getPendingApprovalContracts);
+router.get('/employment-contracts/aadhaar-esign/config', getAadhaarEsignConfig);
+router.post(
+  '/employment-contracts/aadhaar-esign/complete',
+  restrictAuditToReadOnly,
+  validateBody({
+    session_token: { required: true, type: 'string', minLength: 16, maxLength: 128 },
+    mock_otp: { type: 'string', minLength: 6, maxLength: 6 },
+  }),
+  completeAadhaarEsign
+);
 router.get('/employment-contracts/:id', getEmploymentContract);
+router.get('/employment-contracts/:id/pdf', downloadEmploymentContractPdf);
 router.get('/employment-contracts/:id/audit-logs', getEmploymentContractAuditLogs);
 router.post(
   '/employment-contracts',
@@ -409,6 +430,7 @@ router.post(
   validateBody({
     company_id: { type: 'number' }, // root 전용
     employee_id: { required: true, type: 'number' },
+    approver_id: { type: 'number' },
     template_id: { type: 'number' },
     title: { required: true, type: 'string', minLength: 1, maxLength: 200 },
     contract_type: { type: 'string', maxLength: 50 },
@@ -430,6 +452,8 @@ router.put(
   '/employment-contracts/:id',
   restrictAuditToReadOnly,
   validateBody({
+    employee_id: { type: 'number' },
+    approver_id: { type: 'number' },
     template_id: { type: 'number' },
     title: { type: 'string', minLength: 1, maxLength: 200 },
     contract_type: { type: 'string', maxLength: 50 },
@@ -437,7 +461,9 @@ router.put(
       type: 'string',
       oneOf: [
         'draft',
+        'pending_approval',
         'in_review',
+        'rejected',
         'awaiting_company_sign',
         'awaiting_employee_sign',
         'signed',
@@ -466,9 +492,40 @@ router.delete(
   deleteEmploymentContract
 );
 router.post(
+  '/employment-contracts/:id/submit-approval',
+  restrictAuditToReadOnly,
+  submitEmploymentContractForApproval
+);
+router.post(
+  '/employment-contracts/:id/approve',
+  restrictAuditToReadOnly,
+  approveEmploymentContract
+);
+router.post(
+  '/employment-contracts/:id/reject-approval',
+  restrictAuditToReadOnly,
+  rejectEmploymentContractApproval
+);
+router.post(
+  '/employment-contracts/:id/complete',
+  restrictAuditToReadOnly,
+  completeEmploymentContract
+);
+router.post(
   '/employment-contracts/:id/send',
   restrictAuditToReadOnly,
   sendEmploymentContractToEmployee
+);
+router.post(
+  '/employment-contracts/:id/aadhaar-esign/initiate',
+  restrictAuditToReadOnly,
+  validateBody({
+    signer_type: { type: 'string', oneOf: ['company', 'employee'] },
+    aadhaar_consent: { required: true, type: 'boolean' },
+    aadhaar_last4: { required: true, type: 'string', minLength: 4, maxLength: 4 },
+    return_url: { type: 'string', maxLength: 500 },
+  }),
+  initiateAadhaarEsign
 );
 router.post(
   '/employment-contracts/:id/sign',
