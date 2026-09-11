@@ -211,7 +211,7 @@ type ExpenseFormType = 'general' | 'gst' | 'tds';
 const resolveExpenseFormType = (meta?: Record<string, any> | null): ExpenseFormType => {
   const raw = String(meta?.formType || meta?.form_type || '').trim().toLowerCase();
   if (raw === 'general' || raw === 'gst' || raw === 'tds') return raw;
-  return 'gst';
+  return 'general';
 };
 
 const calcTdsLineAmounts = (item: {
@@ -1043,7 +1043,7 @@ const ExpenseApproval: React.FC = () => {
   const [partners, setPartners] = useState<PartnerOption[]>([]);
   const [partnerInputValue, setPartnerInputValue] = useState('');
   const [voucherData, setVoucherData] = useState({
-    formType: 'gst' as ExpenseFormType,
+    formType: 'general' as ExpenseFormType,
     department: '',
     partnerId: '',
     voucherNo: '',
@@ -1918,11 +1918,11 @@ const ExpenseApproval: React.FC = () => {
       dueDate: todayDate,
       notes: ''
     });
-    setLineItems([createEmptyLineItem('gst')]);
+    setLineItems([createEmptyLineItem('general')]);
     setCurrentAttachments([]);
     setPartnerInputValue('');
     setVoucherData({
-      formType: 'gst',
+      formType: 'general',
       department: '',
       partnerId: '',
       voucherNo: '',

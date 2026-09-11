@@ -2221,7 +2221,9 @@ export default {
         processingTimeChart: '막대는 선택한 지표(중앙값/평균)이며, 세로 오차막대는 최소~최대 범위입니다. 점선은 팀 완료 중앙값입니다.',
         durationDistribution: '완료된 카드의 처리 시간을 구간별로 집계한 분포입니다.',
         processingTimeDetail: '담당자별 중앙값·평균·최소·최대·표준편차로 처리 시간의 분산을 확인할 수 있습니다.',
-        personalEfficiencyChart: '완료율·기한 준수율·이번 달 완료·지연 카드를 반영한 개인 종합 효율 지표입니다.'
+        personalEfficiencyChart: '완료율·기한 준수율·이번 달 완료·지연 카드를 반영한 개인 종합 효율 지표입니다.',
+        onTimeRate:
+          '기한 내 완료 카드 ÷ (기한이 있는 완료 카드 + 현재 지연 중인 미완료 카드). 지연 카드가 있으면 준수율이 낮아집니다.'
       },
       status: {
         todo: '할 일',
@@ -4757,7 +4759,11 @@ export default {
         qrDialogHint: '휴대폰에서 QR 코드를 스캔하고 영수증 사진을 업로드하세요.',
         qrGenerating: 'QR 코드 생성 중...',
         autoSaveSaved: '자동 저장됨',
-        autoSaveFailed: '자동 저장 실패'
+        autoSaveFailed: '자동 저장 실패',
+        formTypeLabel: '전표 유형',
+        formTypeGeneral: '일반',
+        formTypeGst: 'GST',
+        formTypeTds: 'TDS'
       },
       success: {
         draftCreated: '초안이 생성되었습니다.',

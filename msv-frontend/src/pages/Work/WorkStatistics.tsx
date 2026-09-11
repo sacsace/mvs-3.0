@@ -554,9 +554,12 @@ const finalizeStatistic = (stat: StatAccumulator): WorkStatistic => {
   const avgOpenElapsedHours =
     stat.openElapsedCount > 0 ? stat.openElapsedMs / stat.openElapsedCount / 3_600_000 : 0;
   const totalCompletedProcessingHours = stat.completedProcessingMs / 3_600_000;
+  // 기한 준수율: (기한 내 완료) / (기한 있는 완료 + 현재 지연 중인 미완료)
+  // 완료만 보면 미완료 지연이 있어도 100%가 나와 오해를 줌. 분모에 현재 지연을 포함.
+  const deadlineDenom = stat.dueDatedCompleted + stat.overdueCount;
   const onTimeRate =
-    stat.dueDatedCompleted > 0
-      ? Number(((stat.onTimeCompleted / stat.dueDatedCompleted) * 100).toFixed(1))
+    deadlineDenom > 0
+      ? Number(((stat.onTimeCompleted / deadlineDenom) * 100).toFixed(1))
       : 100;
   const completionRate =
     stat.tasksAssigned > 0 ? (stat.tasksCompleted / stat.tasksAssigned) * 100 : 0;
@@ -1474,7 +1477,11 @@ const WorkStatistics: React.FC = () => {
                         direction={assigneeSortBy === key ? assigneeSortDir : 'asc'}
                         onClick={() => handleAssigneeSort(key)}
                         sx={statsSortLabelSx}
-                        title={label}
+                        title={
+                          key === 'onTimeRate'
+                            ? t('workStatistics.tooltips.onTimeRate')
+                            : label
+                        }
                       >
                         <Box
                           component="span"

@@ -2168,7 +2168,9 @@ export default {
         processingTimeChart: 'Bars show the selected metric (median/average). Error bars show min-max range. Dashed line is team median.',
         durationDistribution: 'Distribution of completed card processing times by duration bucket.',
         processingTimeDetail: 'Median, average, min, max, and standard deviation per assignee.',
-        personalEfficiencyChart: 'Composite score from completion rate, on-time rate, monthly throughput, and overdue cards.'
+        personalEfficiencyChart: 'Composite score from completion rate, on-time rate, monthly throughput, and overdue cards.',
+        onTimeRate:
+          'On-time completed cards ÷ (completed cards with a due date + currently overdue open cards). Overdue cards lower this rate.'
       },
       status: {
         todo: 'To Do',
@@ -4707,7 +4709,11 @@ export default {
         qrDialogHint: 'Scan the QR code on your phone and upload receipt photos.',
         qrGenerating: 'Generating QR code…',
         autoSaveSaved: 'Auto-saved',
-        autoSaveFailed: 'Auto-save failed'
+        autoSaveFailed: 'Auto-save failed',
+        formTypeLabel: 'Voucher type',
+        formTypeGeneral: 'General',
+        formTypeGst: 'GST',
+        formTypeTds: 'TDS'
       },
       success: {
         draftCreated: 'Draft has been created.',
