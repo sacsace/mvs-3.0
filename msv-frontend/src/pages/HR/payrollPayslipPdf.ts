@@ -10,11 +10,15 @@ import PayslipContent, {
 } from './PayslipContent';
 import { PAYSLIP_LABELS_EN } from './payslipLabelsEn';
 import type { PayrollGridRow } from './payroll/payrollGridTypes';
+import {
+  A4_PAGE_MM,
+  DOCUMENT_PDF_CAPTURE_ROOT_ATTR,
+  DOCUMENT_PDF_MARGINS_MM,
+  injectDocumentPdfStandardCss,
+} from '../../utils/pdf';
 
-/** A4 인쇄 여백 — 좌우상하 1cm */
-const PDF_MARGIN_MM = 10;
-const A4_WIDTH_MM = 210;
-const A4_HEIGHT_MM = 297;
+const A4_WIDTH_MM = A4_PAGE_MM.width;
+const A4_HEIGHT_MM = A4_PAGE_MM.height;
 
 /** MUI md(900px) 이상 레이아웃과 동일하게 캡처 */
 const PDF_CAPTURE_WIDTH_PX = 900;
@@ -53,7 +57,10 @@ function renderPayslipTree(
     { theme },
     React.createElement(
       Box,
-      { id: rootId, sx: { bgcolor: '#FFFFFF', width: `${PDF_CAPTURE_WIDTH_PX}px`, boxSizing: 'border-box' } },
+      {
+        id: rootId,
+        sx: { bgcolor: '#FFFFFF', width: `${PDF_CAPTURE_WIDTH_PX}px`, boxSizing: 'border-box' },
+      },
       React.createElement(CssBaseline),
       React.createElement(PayslipContent, {
         row,
@@ -144,7 +151,11 @@ export async function generatePayslipPdfBlob(
       width: PDF_CAPTURE_WIDTH_PX,
       windowWidth: PDF_CAPTURE_WIDTH_PX,
       scrollX: 0,
-      scrollY: 0
+      scrollY: 0,
+      onclone: (clonedDoc: Document) => {
+        clonedDoc.getElementById(rootId)?.setAttribute(DOCUMENT_PDF_CAPTURE_ROOT_ATTR, '');
+        injectDocumentPdfStandardCss(clonedDoc);
+      },
     });
 
     const pdf = new jsPDF({
@@ -153,11 +164,11 @@ export async function generatePayslipPdfBlob(
       orientation: 'portrait',
       compress: true
     });
-    const printWidthMm = A4_WIDTH_MM - PDF_MARGIN_MM * 2;
-    const printHeightMm = A4_HEIGHT_MM - PDF_MARGIN_MM * 2;
+    const printWidthMm = A4_WIDTH_MM - DOCUMENT_PDF_MARGINS_MM.left - DOCUMENT_PDF_MARGINS_MM.right;
+    const printHeightMm = A4_HEIGHT_MM - DOCUMENT_PDF_MARGINS_MM.top - DOCUMENT_PDF_MARGINS_MM.bottom;
     const { widthMm, heightMm } = fitImageToPrintArea(canvas.width, canvas.height, printWidthMm, printHeightMm);
-    const x = PDF_MARGIN_MM + (printWidthMm - widthMm) / 2;
-    const y = PDF_MARGIN_MM;
+    const x = DOCUMENT_PDF_MARGINS_MM.left + (printWidthMm - widthMm) / 2;
+    const y = DOCUMENT_PDF_MARGINS_MM.top;
     // PNG는 무손실이라 수~십수 MB가 됨. JPEG로 압축.
     const imgData = canvas.toDataURL('image/jpeg', PDF_JPEG_QUALITY);
 

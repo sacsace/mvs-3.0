@@ -315,6 +315,55 @@ function normalizeQuotationItems(items: unknown): unknown[] {
   return [];
 }
 
+/** PostgreSQL DECIMAL(15,2) — 절대값은 10^13 미만 */
+const QUOTATION_DECIMAL_MAX = 9999999999999.99;
+
+function isWithinQuotationMoneyLimit(value: unknown): boolean {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return false;
+  return Math.abs(n) <= QUOTATION_DECIMAL_MAX;
+}
+
+function isNumericOverflowError(error: unknown): boolean {
+  const e = error as { original?: { code?: string }; parent?: { code?: string } };
+  return (e?.original?.code ?? e?.parent?.code) === '22003';
+}
+
+function validateQuotationAmounts(payload: {
+  subtotal?: unknown;
+  tax_amount?: unknown;
+  discount?: unknown;
+  total_amount?: unknown;
+  items?: unknown;
+}): string | null {
+  const totals: Array<[string, unknown]> = [
+    ['소계', payload.subtotal],
+    ['세액', payload.tax_amount],
+    ['할인', payload.discount],
+    ['합계', payload.total_amount],
+  ];
+  for (const [label, value] of totals) {
+    if (value !== undefined && value !== null && !isWithinQuotationMoneyLimit(value)) {
+      return `금액(${label})이 저장 가능한 최대값(9,999,999,999,999.99)을 초과했습니다. 수량·단가를 확인하세요.`;
+    }
+  }
+
+  const rows = normalizeQuotationItems(payload.items);
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i] as Record<string, unknown>;
+    const qty = Number(row.quantity);
+    const unitPrice = Number(row.unitPrice ?? row.unit_price);
+    if (Number.isFinite(qty) && Number.isFinite(unitPrice) && !isWithinQuotationMoneyLimit(qty * unitPrice)) {
+      return `품목 ${i + 1}의 수량×단가가 저장 가능한 최대값(9,999,999,999,999.99)을 초과했습니다.`;
+    }
+    const lineTotal = Number(row.finalPrice ?? row.totalPrice ?? row.total_price);
+    if (Number.isFinite(lineTotal) && !isWithinQuotationMoneyLimit(lineTotal)) {
+      return `품목 ${i + 1} 금액이 저장 가능한 최대값(9,999,999,999,999.99)을 초과했습니다.`;
+    }
+  }
+  return null;
+}
+
 /** 품목별 수량·단가 필수 (API 직접 호출 대비) */
 function validateQuotationLineItems(items: unknown): string | null {
   const rows = normalizeQuotationItems(items);
@@ -388,6 +437,17 @@ export const createQuotation = async (req: RequestWithUser, res: Response) => {
     const lineErr = validateQuotationLineItems(itemsPayload);
     if (lineErr) {
       return res.status(400).json({ success: false, message: lineErr });
+    }
+
+    const amountErr = validateQuotationAmounts({
+      subtotal,
+      tax_amount,
+      discount,
+      total_amount,
+      items: itemsPayload,
+    });
+    if (amountErr) {
+      return res.status(400).json({ success: false, message: amountErr });
     }
 
     let resolvedCustomerEmail: string | null = null;
@@ -546,6 +606,17 @@ export const updateQuotation = async (req: RequestWithUser, res: Response) => {
         return res.status(400).json({ success: false, message: lineErr });
       }
 
+      const amountErr = validateQuotationAmounts({
+        subtotal: subtotal !== undefined ? subtotal : quotation.subtotal,
+        tax_amount: tax_amount !== undefined ? tax_amount : quotation.tax_amount,
+        discount: discount !== undefined ? discount : quotation.discount,
+        total_amount: total_amount !== undefined ? total_amount : quotation.total_amount,
+        items: itemsPayload,
+      });
+      if (amountErr) {
+        return res.status(400).json({ success: false, message: amountErr });
+      }
+
       // 고객(받는 회사) 정보는 유지 — 요청 값 무시. 수정 시 재승인 필요
       let nextApproverId = quotation.approver_user_id;
       if (approver_user_id !== undefined && approver_user_id !== null) {
@@ -618,6 +689,17 @@ export const updateQuotation = async (req: RequestWithUser, res: Response) => {
     const lineErr = validateQuotationLineItems(itemsPayload);
     if (lineErr) {
       return res.status(400).json({ success: false, message: lineErr });
+    }
+
+    const amountErr = validateQuotationAmounts({
+      subtotal: subtotal !== undefined ? subtotal : quotation.subtotal,
+      tax_amount: tax_amount !== undefined ? tax_amount : quotation.tax_amount,
+      discount: discount !== undefined ? discount : quotation.discount,
+      total_amount: total_amount !== undefined ? total_amount : quotation.total_amount,
+      items: itemsPayload,
+    });
+    if (amountErr) {
+      return res.status(400).json({ success: false, message: amountErr });
     }
 
     let resolvedUpdateEmail: string | null | undefined = undefined;
@@ -693,6 +775,12 @@ export const updateQuotation = async (req: RequestWithUser, res: Response) => {
     return;
   } catch (error: any) {
     console.error('견적서 수정 오류:', error);
+    if (isNumericOverflowError(error)) {
+      return res.status(400).json({
+        success: false,
+        message: '금액이 저장 가능한 최대값(9,999,999,999,999.99)을 초과했습니다. 수량·단가를 확인하세요.',
+      });
+    }
     res.status(500).json({ 
       success: false, 
       message: '견적서 수정 중 오류가 발생했습니다.',

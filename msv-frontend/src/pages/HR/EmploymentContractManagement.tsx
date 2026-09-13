@@ -459,7 +459,7 @@ const EmploymentContractManagement: React.FC = () => {
       const rows = await useReferenceDataStore.getState().fetchUsers(params);
       setUsers(
         rows
-          .filter((u: any) => String(u.status || 'active') === 'active')
+        .filter((u: any) => String(u.status || 'active') === 'active')
           .map((u: any) => ({ id: Number(u.id), username: String(u.username || ''), userid: String(u.userid || '') }))
       );
     } catch {
@@ -480,11 +480,11 @@ const EmploymentContractManagement: React.FC = () => {
 
       if (canManage) {
         const [templateRes, contractRes] = await Promise.all([
-          employmentContractService.getTemplates(queryCompanyId),
-          employmentContractService.getContracts({ company_id: queryCompanyId }),
-        ]);
-        setTemplates(Array.isArray(templateRes?.data) ? templateRes.data : []);
-        setContracts(Array.isArray(contractRes?.data) ? contractRes.data : []);
+        employmentContractService.getTemplates(queryCompanyId),
+        employmentContractService.getContracts({ company_id: queryCompanyId }),
+      ]);
+      setTemplates(Array.isArray(templateRes?.data) ? templateRes.data : []);
+      setContracts(Array.isArray(contractRes?.data) ? contractRes.data : []);
       } else {
         setTemplates([]);
         setContracts([]);
@@ -528,7 +528,7 @@ const EmploymentContractManagement: React.FC = () => {
     payload.working_days = contractForm.working_days || null;
     if (contractForm.working_hours) payload.working_hours = contractForm.working_hours;
     if (contractForm.probation_months) payload.probation_months = Number(contractForm.probation_months);
-    if (isRoot && selectedCompanyId) payload.company_id = Number(selectedCompanyId);
+      if (isRoot && selectedCompanyId) payload.company_id = Number(selectedCompanyId);
     return payload;
   };
 
@@ -591,20 +591,20 @@ const EmploymentContractManagement: React.FC = () => {
   const openWizard = (row?: any) => {
     if (row) {
       setWizardContractId(Number(row.id));
-      setContractForm({
-        template_id: String(row.template_id || ''),
+    setContractForm({
+      template_id: String(row.template_id || ''),
         title: toEnglishContractTitle(row.title) || String(row.title || ''),
         employee_id: String(row.employee_id || ''),
         approver_id: String(row.approver_id || ''),
-        contract_type: String(row.contract_type || 'regular'),
-        start_date: String(row.start_date || ''),
-        end_date: String(row.end_date || ''),
+      contract_type: String(row.contract_type || 'regular'),
+      start_date: String(row.start_date || ''),
+      end_date: String(row.end_date || ''),
         salary: row.salary != null ? String(row.salary) : '',
-        bonus_type: String(row.bonus_type || ''),
+      bonus_type: String(row.bonus_type || ''),
         bonus_value: row.bonus_value != null ? String(row.bonus_value) : '',
-        work_location: String(row.work_location || ''),
-        working_days: String(row.working_days || ''),
-        working_hours: String(row.working_hours || ''),
+      work_location: String(row.work_location || ''),
+      working_days: String(row.working_days || ''),
+      working_hours: String(row.working_hours || ''),
         probation_months: row.probation_months != null ? String(row.probation_months) : '',
       });
     } else {
@@ -681,8 +681,8 @@ const EmploymentContractManagement: React.FC = () => {
           const res = await employmentContractService.submitForApproval(contractId);
           if (!res?.success) throw new Error(res?.message || '승인 제출 실패');
           setMessage({ type: 'success', text: t('employmentContractManagement.success.submitted') });
-          void loadData();
-        } catch (error: any) {
+      void loadData();
+    } catch (error: any) {
           setMessage({ type: 'error', text: error?.message || t('employmentContractManagement.submitFailed', { defaultValue: '승인 제출 중 오류가 발생했습니다.' }) });
         }
       },
@@ -698,8 +698,8 @@ const EmploymentContractManagement: React.FC = () => {
           const res = await employmentContractService.completeContract(contractId);
           if (!res?.success) throw new Error(res?.message || '완료 처리 실패');
           setMessage({ type: 'success', text: t('employmentContractManagement.success.completed') });
-          void loadData();
-        } catch (error: any) {
+      void loadData();
+    } catch (error: any) {
           setMessage({ type: 'error', text: error?.message || t('employmentContractManagement.completeFailed', { defaultValue: '완료 처리 중 오류가 발생했습니다.' }) });
         }
       },
@@ -717,8 +717,8 @@ const EmploymentContractManagement: React.FC = () => {
           setMessage({ type: 'success', text: t('employmentContractManagement.success.approved') });
           setDetailOpen(false);
           setDetailContract(null);
-          void loadData();
-        } catch (error: any) {
+      void loadData();
+    } catch (error: any) {
           setMessage({ type: 'error', text: error?.message || t('employmentContractManagement.approveFailed', { defaultValue: '승인 처리 중 오류가 발생했습니다.' }) });
         }
       },
@@ -817,8 +817,8 @@ const EmploymentContractManagement: React.FC = () => {
           setAadhaarBusy(true);
           const init = await employmentContractService.initiateAadhaarEsign(signContractId, {
             signer_type: 'employee',
-            aadhaar_consent: signForm.aadhaar_consent,
-            aadhaar_last4: signForm.aadhaar_last4.trim(),
+              aadhaar_consent: signForm.aadhaar_consent,
+              aadhaar_last4: signForm.aadhaar_last4.trim(),
             return_url: `${window.location.origin}/hr/employment-contracts`,
           });
           if (!init?.success) throw new Error(init?.message || 'Aadhaar 인증 시작 실패');
@@ -950,7 +950,7 @@ const EmploymentContractManagement: React.FC = () => {
         s === 'signed' || s === 'active'
           ? 'success'
           : s === 'rejected'
-            ? 'error'
+              ? 'error'
             : s.includes('awaiting') || s === 'pending_approval'
               ? 'warning'
               : 'default';
@@ -1016,7 +1016,7 @@ const EmploymentContractManagement: React.FC = () => {
     <TableCell
       className={opts?.action ? 'action-cell' : undefined}
       align={opts?.action ? 'center' : 'left'}
-      sx={{
+        sx={{
         overflow: opts?.action ? 'visible' : 'hidden',
         verticalAlign: 'middle',
         ...(width != null ? { width, minWidth: width, maxWidth: width, boxSizing: 'border-box' } : {}),
@@ -1025,8 +1025,8 @@ const EmploymentContractManagement: React.FC = () => {
       {opts?.action ? label : (
         <Box component="span" sx={thLabelEllipsisSx} title={label}>
           {label}
-        </Box>
-      )}
+          </Box>
+        )}
     </TableCell>
   );
 
@@ -1046,7 +1046,7 @@ const EmploymentContractManagement: React.FC = () => {
             e.stopPropagation();
             onClick();
           }}
-          sx={{
+            sx={{
             ...iconBtnSx,
             '&:hover':
               hoverColor === 'error'
@@ -1128,7 +1128,7 @@ const EmploymentContractManagement: React.FC = () => {
     return (
       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center', flexWrap: 'nowrap' }}>
         {icons}
-      </Box>
+                    </Box>
     );
   };
 
@@ -1137,20 +1137,20 @@ const EmploymentContractManagement: React.FC = () => {
       {opts.icon}
       <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary' }}>
         {opts.title}
-      </Typography>
+                </Typography>
       {opts.hint ? (
         <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
           {opts.hint}
-        </Typography>
+                          </Typography>
       ) : null}
       {opts.action}
-    </Box>
+                    </Box>
   );
 
   const renderPagination = (count: number, page: number, onChange: (v: number) => void) => (
     <Box sx={mvsBodyPaginationSx}>
       <Pagination count={count} page={page} onChange={(_, v) => onChange(v)} color="primary" shape="rounded" />
-    </Box>
+              </Box>
   );
 
   const selectedEmployee = users.find((u) => String(u.id) === contractForm.employee_id) || null;
@@ -1161,33 +1161,33 @@ const EmploymentContractManagement: React.FC = () => {
     if (wizardStep === 0) {
       return (
         <Stack spacing={2}>
-          <FormControl fullWidth>
+            <FormControl fullWidth>
             <InputLabel>{t('employmentContractManagement.template', { defaultValue: '템플릿' })}</InputLabel>
-            <Select
-              value={contractForm.template_id}
+              <Select
+                value={contractForm.template_id}
               label={t('employmentContractManagement.template', { defaultValue: '템플릿' })}
-              onChange={(e) => {
+                onChange={(e) => {
                 const tpl = templates.find((t) => String(t.id) === String(e.target.value));
                 const enTitle = toEnglishContractTitle(tpl?.name) || String(tpl?.name || '');
-                setContractForm((prev) => ({
-                  ...prev,
+                  setContractForm((prev) => ({
+                    ...prev,
                   template_id: String(e.target.value),
                   contract_type: String(tpl?.contract_type || prev.contract_type || 'regular'),
                   title: enTitle || prev.title,
-                }));
-              }}
-            >
-              {templates.map((tpl) => (
+                  }));
+                }}
+              >
+                {templates.map((tpl) => (
                 <MenuItem key={tpl.id} value={String(tpl.id)}>
                   {templateDisplayName(tpl)}
                 </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <TextField
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
             label={t('employmentContractManagement.contractTitle', { defaultValue: '계약 제목' })}
-            value={contractForm.title}
-            onChange={(e) => setContractForm((prev) => ({ ...prev, title: e.target.value }))}
+              value={contractForm.title}
+              onChange={(e) => setContractForm((prev) => ({ ...prev, title: e.target.value }))}
             helperText={t('employmentContractManagement.titleEnglishOnly', {
               defaultValue: '전자계약서 제목은 영문으로 입력하세요.',
             })}
@@ -1231,84 +1231,84 @@ const EmploymentContractManagement: React.FC = () => {
     if (wizardStep === 3) {
       return (
         <Stack spacing={2}>
-          <Stack direction="row" spacing={2}>
-            <TextField
-              type="date"
-              label={t('employmentContractManagement.startDate', { defaultValue: '시작일' })}
-              value={contractForm.start_date}
-              onChange={(e) => setContractForm((prev) => ({ ...prev, start_date: e.target.value }))}
-              InputLabelProps={{ shrink: true }}
-              sx={{ flex: 1 }}
-            />
-            <TextField
-              type="date"
-              label={t('employmentContractManagement.endDate', { defaultValue: '종료일' })}
-              value={contractForm.end_date}
-              onChange={(e) => setContractForm((prev) => ({ ...prev, end_date: e.target.value }))}
-              InputLabelProps={{ shrink: true }}
-              sx={{ flex: 1 }}
-            />
-          </Stack>
-          <Stack direction="row" spacing={2}>
-            <TextField
-              label={t('employmentContractManagement.salary', { defaultValue: '연봉/급여' })}
-              type="number"
-              value={contractForm.salary}
-              onChange={(e) => setContractForm((prev) => ({ ...prev, salary: e.target.value }))}
-              sx={{ flex: 1 }}
-            />
-            <TextField
-              label={t('employmentContractManagement.probation', { defaultValue: '수습(개월)' })}
-              type="number"
-              value={contractForm.probation_months}
-              onChange={(e) => setContractForm((prev) => ({ ...prev, probation_months: e.target.value }))}
-              sx={{ flex: 1 }}
-            />
-          </Stack>
-          {isSalaryTemplate && (
             <Stack direction="row" spacing={2}>
-              <FormControl sx={{ flex: 1 }}>
-                <InputLabel>{t('employmentContractManagement.bonusType', { defaultValue: '보너스 방식' })}</InputLabel>
-                <Select
-                  value={contractForm.bonus_type}
-                  label={t('employmentContractManagement.bonusType', { defaultValue: '보너스 방식' })}
-                  onChange={(e) => setContractForm((prev) => ({ ...prev, bonus_type: String(e.target.value) }))}
-                >
-                  <MenuItem value="percent">{t('employmentContractManagement.bonusPercent', { defaultValue: '연 %' })}</MenuItem>
-                  <MenuItem value="fixed">{t('employmentContractManagement.bonusFixed', { defaultValue: '금액' })}</MenuItem>
-                </Select>
-              </FormControl>
               <TextField
-                label={
-                  contractForm.bonus_type === 'percent'
-                    ? t('employmentContractManagement.bonusRate', { defaultValue: '보너스 비율(%)' })
-                    : t('employmentContractManagement.bonusAmount', { defaultValue: '보너스 금액' })
-                }
-                type="number"
-                value={contractForm.bonus_value}
-                onChange={(e) => setContractForm((prev) => ({ ...prev, bonus_value: e.target.value }))}
+                type="date"
+              label={t('employmentContractManagement.startDate', { defaultValue: '시작일' })}
+                value={contractForm.start_date}
+                onChange={(e) => setContractForm((prev) => ({ ...prev, start_date: e.target.value }))}
+                InputLabelProps={{ shrink: true }}
                 sx={{ flex: 1 }}
-                disabled={!contractForm.bonus_type}
+              />
+              <TextField
+                type="date"
+              label={t('employmentContractManagement.endDate', { defaultValue: '종료일' })}
+                value={contractForm.end_date}
+                onChange={(e) => setContractForm((prev) => ({ ...prev, end_date: e.target.value }))}
+                InputLabelProps={{ shrink: true }}
+                sx={{ flex: 1 }}
               />
             </Stack>
-          )}
-          <TextField
+            <Stack direction="row" spacing={2}>
+              <TextField
+              label={t('employmentContractManagement.salary', { defaultValue: '연봉/급여' })}
+                type="number"
+                value={contractForm.salary}
+                onChange={(e) => setContractForm((prev) => ({ ...prev, salary: e.target.value }))}
+                sx={{ flex: 1 }}
+              />
+              <TextField
+              label={t('employmentContractManagement.probation', { defaultValue: '수습(개월)' })}
+                type="number"
+                value={contractForm.probation_months}
+                onChange={(e) => setContractForm((prev) => ({ ...prev, probation_months: e.target.value }))}
+                sx={{ flex: 1 }}
+              />
+            </Stack>
+          {isSalaryTemplate && (
+              <Stack direction="row" spacing={2}>
+                <FormControl sx={{ flex: 1 }}>
+                <InputLabel>{t('employmentContractManagement.bonusType', { defaultValue: '보너스 방식' })}</InputLabel>
+                  <Select
+                    value={contractForm.bonus_type}
+                  label={t('employmentContractManagement.bonusType', { defaultValue: '보너스 방식' })}
+                    onChange={(e) => setContractForm((prev) => ({ ...prev, bonus_type: String(e.target.value) }))}
+                  >
+                  <MenuItem value="percent">{t('employmentContractManagement.bonusPercent', { defaultValue: '연 %' })}</MenuItem>
+                  <MenuItem value="fixed">{t('employmentContractManagement.bonusFixed', { defaultValue: '금액' })}</MenuItem>
+                  </Select>
+                </FormControl>
+                <TextField
+                  label={
+                    contractForm.bonus_type === 'percent'
+                    ? t('employmentContractManagement.bonusRate', { defaultValue: '보너스 비율(%)' })
+                    : t('employmentContractManagement.bonusAmount', { defaultValue: '보너스 금액' })
+                  }
+                  type="number"
+                  value={contractForm.bonus_value}
+                  onChange={(e) => setContractForm((prev) => ({ ...prev, bonus_value: e.target.value }))}
+                  sx={{ flex: 1 }}
+                  disabled={!contractForm.bonus_type}
+                />
+              </Stack>
+            )}
+            <TextField
             label={t('employmentContractManagement.workLocation', { defaultValue: '근무지' })}
-            value={contractForm.work_location}
-            onChange={(e) => setContractForm((prev) => ({ ...prev, work_location: e.target.value }))}
-          />
-          <Autocomplete
-            freeSolo
-            options={workingDayOptions}
-            value={contractForm.working_days || ''}
+              value={contractForm.work_location}
+              onChange={(e) => setContractForm((prev) => ({ ...prev, work_location: e.target.value }))}
+            />
+            <Autocomplete
+              freeSolo
+              options={workingDayOptions}
+              value={contractForm.working_days || ''}
             onChange={(_, v) => setContractForm((prev) => ({ ...prev, working_days: String(v || '') }))}
             onInputChange={(_, v) => setContractForm((prev) => ({ ...prev, working_days: v }))}
             renderInput={(params) => <TextField {...params} label={t('employmentContractManagement.workingDays', { defaultValue: '근무일' })} />}
-          />
-          <Autocomplete
-            freeSolo
-            options={workingHourOptions}
-            value={contractForm.working_hours || ''}
+            />
+            <Autocomplete
+              freeSolo
+              options={workingHourOptions}
+              value={contractForm.working_hours || ''}
             onChange={(_, v) => setContractForm((prev) => ({ ...prev, working_hours: String(v || '') }))}
             onInputChange={(_, v) => setContractForm((prev) => ({ ...prev, working_hours: v }))}
             renderInput={(params) => <TextField {...params} label={t('employmentContractManagement.workingHours', { defaultValue: '근무시간' })} />}
@@ -1450,7 +1450,7 @@ const EmploymentContractManagement: React.FC = () => {
             }}
           >
             {isRoot && (tab === 'contracts' || tab === 'templates') ? (
-              <TextField
+                <TextField
                 select
                 size="small"
                 fullWidth
@@ -1763,7 +1763,7 @@ const EmploymentContractManagement: React.FC = () => {
                                 {t('employmentContractManagement.savePdf', { defaultValue: 'PDF 저장' })}
                               </Button>
                             ) : null}
-                          </Stack>
+          </Stack>
                         </TableCell>
                       </TableRow>
                     );
@@ -1794,7 +1794,7 @@ const EmploymentContractManagement: React.FC = () => {
           {wizardStep > 0 && wizardStep < 5 ? (
             <Button onClick={() => setWizardStep((s) => s - 1)} disabled={wizardSaving}>
               {t('employmentContractManagement.wizard.back')}
-            </Button>
+          </Button>
           ) : null}
           {wizardStep < 5 ? (
             <Button variant="contained" onClick={() => void handleWizardNext()} disabled={wizardSaving}>
@@ -1822,14 +1822,14 @@ const EmploymentContractManagement: React.FC = () => {
               <TextField label={t('employmentContractManagement.type', { defaultValue: '유형' })} value={templateForm.contract_type} onChange={(e) => setTemplateForm((p) => ({ ...p, contract_type: e.target.value }))} sx={{ flex: 1 }} />
               <FormControl sx={{ minWidth: 150 }}>
                 <InputLabel>{t('employmentContractManagement.language', { defaultValue: '언어' })}</InputLabel>
-                <Select
+              <Select
                   value="en"
                   label={t('employmentContractManagement.language', { defaultValue: '언어' })}
                   disabled
                 >
                   <MenuItem value="en">en (English only)</MenuItem>
-                </Select>
-              </FormControl>
+              </Select>
+            </FormControl>
             </Stack>
             <TextField label={t('employmentContractManagement.bodyHtml', { defaultValue: '본문(HTML)' })} multiline minRows={8} value={templateForm.content_html} onChange={(e) => setTemplateForm((p) => ({ ...p, content_html: e.target.value }))} />
           </Stack>
@@ -1853,7 +1853,7 @@ const EmploymentContractManagement: React.FC = () => {
               <Typography variant="body2">
                 <strong>{te('employmentContractManagement.contractTitle', { defaultValue: 'Title' })}:</strong>{' '}
                 {toEnglishContractTitle(detailContract.title) || detailContract.title}
-              </Typography>
+            </Typography>
               <Typography variant="body2">
                 <strong>{te('employmentContractManagement.employee', { defaultValue: 'Employee' })}:</strong>{' '}
                 {detailContract.employee?.username || userLabel(detailContract.employee_id)}
@@ -1896,32 +1896,32 @@ const EmploymentContractManagement: React.FC = () => {
               ) : null}
               <Typography variant="subtitle2" sx={{ fontWeight: 700, pt: 0.5 }}>
                 {te('employmentContractManagement.contractBody', { defaultValue: 'Contract body' })}
-              </Typography>
-              <Box
-                sx={{
-                  p: 1.5,
-                  border: '1px solid',
-                  borderColor: 'divider',
+                </Typography>
+                <Box
+                  sx={{
+                    p: 1.5,
+                    border: '1px solid',
+                    borderColor: 'divider',
                   minHeight: 280,
                   maxHeight: '55vh',
-                  overflowY: 'auto',
+                    overflowY: 'auto',
                   bgcolor: '#FAFAFA',
                   fontSize: '0.875rem',
                   lineHeight: 1.6,
-                }}
-                dangerouslySetInnerHTML={{
-                  __html: String(
+                  }}
+                  dangerouslySetInnerHTML={{
+                    __html: String(
                     detailContract.rendered_content_html ||
                       detailContract.template?.content_html ||
                       `<p>${te('employmentContractManagement.noBody', { defaultValue: 'No contract body is registered.' })}</p>`
-                  ),
-                }}
-              />
+                    ),
+                  }}
+                />
             </Stack>
           ) : (
             <Typography variant="body2" color="text.secondary">
               {te('employmentContractManagement.noDetail', { defaultValue: 'No contract details available.' })}
-            </Typography>
+                </Typography>
           )}
         </DialogContent>
         <DialogActions sx={{ px: 2, py: 1.5, gap: 1, flexWrap: 'wrap' }}>
@@ -2007,7 +2007,7 @@ const EmploymentContractManagement: React.FC = () => {
           <Stack spacing={2} sx={{ mt: 1 }}>
             <FormControl fullWidth>
               <InputLabel>{t('employmentContractManagement.signMethod', { defaultValue: '서명 방식' })}</InputLabel>
-              <Select
+                    <Select
                 value={signForm.sign_method}
                 label={t('employmentContractManagement.signMethod', { defaultValue: '서명 방식' })}
                 disabled={Boolean(aadhaarSession) || aadhaarBusy}
@@ -2023,8 +2023,8 @@ const EmploymentContractManagement: React.FC = () => {
               >
                 <MenuItem value="aadhaar_esign">Aadhaar eSign</MenuItem>
                 <MenuItem value="internal_ack">Internal Acknowledgement</MenuItem>
-              </Select>
-            </FormControl>
+                    </Select>
+                  </FormControl>
             {signForm.sign_method === 'aadhaar_esign' && (
               <>
                 <Typography variant="body2" color="text.secondary">
@@ -2035,7 +2035,7 @@ const EmploymentContractManagement: React.FC = () => {
                 </Typography>
                 {!aadhaarSession ? (
                   <>
-                    <TextField
+                  <TextField
                       label={t('employmentContractManagement.aadhaarLast4', { defaultValue: 'Aadhaar 마지막 4자리' })}
                       value={signForm.aadhaar_last4}
                       onChange={(e) =>
@@ -2083,7 +2083,7 @@ const EmploymentContractManagement: React.FC = () => {
                 )}
               </>
             )}
-          </Stack>
+            </Stack>
         </DialogContent>
         <DialogActions>
           <Button

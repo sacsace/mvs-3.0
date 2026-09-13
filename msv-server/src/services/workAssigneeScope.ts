@@ -79,7 +79,8 @@ async function findAssigneeForUser(user: any): Promise<WorkAssignee | null> {
  * 로그인 사용자의 고객사 리스트 배정 범위.
  * - 강제 대상이 아니면 enforced=false
  * - 담당자 컬럼이 없으면 enforced=false (미배정 직원은 회사 전체 유지)
- * - 담당자 컬럼은 있으나 고객사 0건이면 enforced=true + empty ids
+ * - 담당자로 등록됐지만 고객사 0건이면 enforced=false (작성·검색 불가 잠금 방지)
+ * - 담당자 + 고객사 1건 이상이면 enforced=true
  */
 export async function resolveAssignedClientScope(user: any): Promise<WorkAssigneeClientScope> {
   const empty: WorkAssigneeClientScope = {
@@ -98,6 +99,10 @@ export async function resolveAssignedClientScope(user: any): Promise<WorkAssigne
     where: { assignee_id: assignee.id, is_active: true },
     attributes: ['id', 'name', 'partner_id'],
   });
+
+  if (!items.length) {
+    return empty;
+  }
 
   const partnerIds = Array.from(
     new Set(
@@ -152,6 +157,11 @@ export async function resolveAssignedClientScope(user: any): Promise<WorkAssigne
   const customerIds = customers
     .filter((c) => allNameKeys.includes(normalizeKey(c.name)))
     .map((c) => c.id);
+
+  // 배정 행은 있으나 매칭 가능한 거래처가 하나도 없으면 잠그지 않음
+  if (partnerIds.length === 0 && allNameKeys.length === 0) {
+    return empty;
+  }
 
   return {
     enforced: true,

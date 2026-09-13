@@ -5,6 +5,11 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { ensureUploadSubdir } from './uploadPath';
+import {
+  DOCUMENT_PDF_FONT_SIZE_PT,
+  DOCUMENT_PDF_LINE_GAP_PT,
+  DOCUMENT_PDF_MARGINS_PT,
+} from './documentPdfStandard';
 
 const TITLE_KO_TO_EN: Record<string, string> = {
   '고용 계약서': 'Employment Contract',
@@ -161,7 +166,7 @@ export async function createEmploymentContractPdfFile(
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const PDFDocument = require('pdfkit');
   const doc = new PDFDocument({
-    margin: 48,
+    margins: DOCUMENT_PDF_MARGINS_PT,
     size: 'A4',
     bufferPages: true,
     info: {
@@ -298,9 +303,9 @@ export async function createEmploymentContractPdfFile(
   for (const [label, value] of rows) {
     const rowTop = doc.y;
     useBold();
-    doc.fillColor('#374151').fontSize(9.5).text(label, left, rowTop, { width: labelW });
+    doc.fillColor('#374151').fontSize(DOCUMENT_PDF_FONT_SIZE_PT).text(label, left, rowTop, { width: labelW });
     useRegular();
-    doc.fillColor('#111827').fontSize(9.5).text(String(value || '-'), left + labelW, rowTop, {
+    doc.fillColor('#111827').fontSize(DOCUMENT_PDF_FONT_SIZE_PT).text(String(value || '-'), left + labelW, rowTop, {
       width: contentW - labelW,
     });
     doc.y = Math.max(doc.y, rowTop + 16);
@@ -318,9 +323,9 @@ export async function createEmploymentContractPdfFile(
   doc.y += 10;
 
   useRegular();
-  doc.fillColor('#1F2937').fontSize(9.5);
+  doc.fillColor('#1F2937').fontSize(DOCUMENT_PDF_FONT_SIZE_PT);
   if (bodyText) {
-    doc.text(bodyText, left, doc.y, { width: contentW, align: 'justify', lineGap: 2 });
+    doc.text(bodyText, left, doc.y, { width: contentW, align: 'justify', lineGap: DOCUMENT_PDF_LINE_GAP_PT });
   } else {
     doc.text('No contract body content was registered.', left, doc.y, { width: contentW });
   }

@@ -23,9 +23,6 @@ export async function downloadEmploymentContractPdf(
         body, body * {
           color: #000000 !important;
           -webkit-text-fill-color: #000000 !important;
-          font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif !important;
-          font-size: 8.55pt !important;
-          line-height: 1.45 !important;
         }
       `;
       clonedDoc.head.appendChild(style);

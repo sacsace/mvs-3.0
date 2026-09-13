@@ -75,7 +75,12 @@ import {
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import AuthMedia from '../../components/Common/AuthMedia';
 import { generateRoomBookingId } from '../../utils/bookingId';
-import { buildDocumentDownloadFilename } from '../../utils/pdf';
+import {
+  buildDocumentDownloadFilename,
+  DOCUMENT_PDF_FONT_SIZE_PT,
+  DOCUMENT_PDF_LINE_HEIGHT_PT,
+  DOCUMENT_PDF_MARGINS_MM,
+} from '../../utils/pdf';
 
 const ROOM_BOOKING_MENU_ROUTES = [
   '/hotel/room-reservation',
@@ -2076,9 +2081,9 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
           clonedDoc.body.classList.add('pdf-export');
           const style = clonedDoc.createElement('style');
           style.textContent = `
-            body { margin: 0; padding: 0; font-size: 8pt; }
-            .tax-invoice-print { width: 180mm; margin: 0; padding: 0; box-sizing: border-box; font-size: 8pt; }
-            .tax-invoice-print * { font-size: 8pt; }
+            body { margin: 0; padding: 0; font-size: ${DOCUMENT_PDF_FONT_SIZE_PT}pt; line-height: ${DOCUMENT_PDF_LINE_HEIGHT_PT}pt; }
+            .tax-invoice-print { width: 180mm; margin: 0; padding: 0; box-sizing: border-box; font-size: ${DOCUMENT_PDF_FONT_SIZE_PT}pt; line-height: ${DOCUMENT_PDF_LINE_HEIGHT_PT}pt; }
+            .tax-invoice-print * { font-size: ${DOCUMENT_PDF_FONT_SIZE_PT}pt; line-height: ${DOCUMENT_PDF_LINE_HEIGHT_PT}pt; }
           `;
           clonedDoc.head.appendChild(style);
         }
@@ -2090,10 +2095,10 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pageWidth = 210;
     const pageHeight = 297;
-    const marginTop = options?.marginTop ?? 5;
-    const marginRight = options?.marginRight ?? 5;
-    const marginBottom = options?.marginBottom ?? 5;
-    const marginLeft = options?.marginLeft ?? 5;
+    const marginTop = options?.marginTop ?? DOCUMENT_PDF_MARGINS_MM.top;
+    const marginRight = options?.marginRight ?? DOCUMENT_PDF_MARGINS_MM.right;
+    const marginBottom = options?.marginBottom ?? DOCUMENT_PDF_MARGINS_MM.bottom;
+    const marginLeft = options?.marginLeft ?? DOCUMENT_PDF_MARGINS_MM.left;
     const imgWidth = pageWidth - marginLeft - marginRight;
     const imgHeight = (canvas.height * imgWidth) / canvas.width;
     const printableHeight = pageHeight - marginTop - marginBottom;
@@ -2122,8 +2127,10 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
 
   const handleDownloadPdf = async () => {
     const result = await buildInvoicePdf({
-      marginLeft: 20,
-      marginRight: 10
+      marginTop: DOCUMENT_PDF_MARGINS_MM.top,
+      marginRight: DOCUMENT_PDF_MARGINS_MM.right,
+      marginBottom: DOCUMENT_PDF_MARGINS_MM.bottom,
+      marginLeft: DOCUMENT_PDF_MARGINS_MM.left,
     });
     if (!result) return;
     const { pdf, filename } = result;
@@ -2665,7 +2672,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
           {`
             @page {
               size: A4;
-              margin: 10mm;
+              margin: 10mm 10mm 10mm 20mm;
             }
             @media print {
               html,
@@ -2699,7 +2706,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                 position: fixed !important;
                 inset: 0 !important;
                 margin: 0 !important;
-                padding: 10mm !important;
+                padding: 10mm 10mm 10mm 20mm !important;
                 border-radius: 0 !important;
                 min-height: auto !important;
                 width: 100% !important;
@@ -2737,13 +2744,14 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
               padding: 5mm;
               box-sizing: border-box;
               background: #fff;
-              font-size: 8pt;
-              line-height: 1.25;
+              font-size: ${DOCUMENT_PDF_FONT_SIZE_PT}pt;
+              line-height: ${DOCUMENT_PDF_LINE_HEIGHT_PT}pt;
             }
             body.pdf-export .tax-invoice-print table,
             body.pdf-export .tax-invoice-print th,
             body.pdf-export .tax-invoice-print td {
-              font-size: 8pt;
+              font-size: ${DOCUMENT_PDF_FONT_SIZE_PT}pt;
+              line-height: ${DOCUMENT_PDF_LINE_HEIGHT_PT}pt;
             }
           `}
         </style>

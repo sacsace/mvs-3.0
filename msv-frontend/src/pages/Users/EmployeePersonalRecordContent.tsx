@@ -31,9 +31,9 @@ export type EmployeePersonalRecordProps = {
   sections: PersonalRecordSection[];
 };
 
-/** Word pt → CSS px (96dpi: 1pt = 4/3 px) */
-const PT9 = '12px';
-const PT12 = '16px';
+const PT9 = '9pt';
+const PT12 = '12pt';
+const LINE_18 = '18pt';
 
 const BORDER = '#757575';
 const GRID = '#BDBDBD';
@@ -78,7 +78,7 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
           p: 1.5,
           fontFamily: '"Noto Sans KR", "Segoe UI", Arial, sans-serif',
           fontSize: PT9,
-          lineHeight: 1.35,
+          lineHeight: LINE_18,
         }}
       >
         <Box
@@ -127,14 +127,14 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
                   sx={{
                     fontWeight: 700,
                     fontSize: PT9,
-                    lineHeight: 1.3,
+                    lineHeight: LINE_18,
                     color: TEXT,
                   }}
                 >
                   {companyName || '—'}
                 </Typography>
                 {companyContact ? (
-                  <Typography sx={{ fontSize: PT9, color: MUTED, lineHeight: 1.35, mt: 0.2 }}>
+                  <Typography sx={{ fontSize: PT9, color: MUTED, lineHeight: LINE_18, mt: 0.2 }}>
                     {companyContact}
                   </Typography>
                 ) : null}
@@ -224,7 +224,7 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
                 fontWeight: 700,
                 fontSize: PT12,
                 letterSpacing: '0.06em',
-                lineHeight: 1.25,
+                lineHeight: LINE_18,
                 color: TEXT,
               }}
             >
@@ -351,16 +351,16 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
                               verticalAlign: 'top',
                             }}
                           >
-                            <Typography sx={{ fontSize: PT9, fontWeight: 700, lineHeight: 1.35, color: TEXT }}>
+                            <Typography sx={{ fontSize: PT9, fontWeight: 700, lineHeight: LINE_18, color: TEXT }}>
                               {item.title}
                             </Typography>
                             {item.subtitle ? (
-                              <Typography sx={{ fontSize: PT9, color: MUTED, mt: 0.15, lineHeight: 1.35 }}>
+                              <Typography sx={{ fontSize: PT9, color: MUTED, mt: 0.15, lineHeight: LINE_18 }}>
                                 {item.subtitle}
                               </Typography>
                             ) : null}
                             {item.body ? (
-                              <Typography sx={{ fontSize: PT9, color: TEXT, mt: 0.25, lineHeight: 1.4 }}>
+                              <Typography sx={{ fontSize: PT9, color: TEXT, mt: 0.25, lineHeight: LINE_18 }}>
                                 {item.body}
                               </Typography>
                             ) : null}

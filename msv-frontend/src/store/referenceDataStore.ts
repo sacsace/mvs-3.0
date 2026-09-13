@@ -107,7 +107,11 @@ export const useReferenceDataStore = create<ReferenceDataState>((set, get) => ({
 
   fetchPartners: async (force = false) => {
     const existing = get().partners;
-    if (!force && isFresh(existing)) return existing!.data;
+    // 진행 중이면 빈 캐시를 그대로 반환하지 말고 같은 promise를 기다림
+    if (!force && existing?.promise) return existing.promise;
+    if (!force && existing && isFresh(existing) && existing.promise == null) {
+      return existing.data;
+    }
 
     const promise = (async () => {
       const res = await partnerService.getPartners();
@@ -117,7 +121,8 @@ export const useReferenceDataStore = create<ReferenceDataState>((set, get) => ({
     set({
       partners: {
         data: force ? [] : (existing?.data ?? []),
-        fetchedAt: Date.now(),
+        // 완료 전에는 fresh로 취급하지 않음 (빈 배열이 캐시로 굳는 것 방지)
+        fetchedAt: existing?.fetchedAt ?? 0,
         promise,
       },
     });

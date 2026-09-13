@@ -66,7 +66,7 @@ import AuthMedia from '../../components/Common/AuthMedia';
 import { useTranslation } from 'react-i18next';
 import { companyService, quotationService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
-import { downloadQuotationPdf, buildQuotationPdfFilename, formatAddressTwoLines } from '../../utils/quotationPdf';
+import { downloadQuotationPdf, buildQuotationPdfFilename, formatAddressTwoLines, QUOTATION_SCREEN_TOTALS_MIN_WIDTH_PX } from '../../utils/quotationPdf';
 import { parseEmailRecipientsList } from '../../utils/emailRecipients';
 
 interface QuotationItem {
@@ -141,7 +141,7 @@ function mapQuotationFromApi(row: any): Quotation {
 
   const createdRaw = row.created_at ?? row.createdAt;
   const updatedRaw = row.updated_at ?? row.updatedAt;
-  const created = createdRaw ? String(createdRaw).split('T')[0] : '';
+  const created = formatIsoToLocalDate(createdRaw);
   const updated = updatedRaw ? String(updatedRaw).replace('T', ' ').substring(0, 19) : '';
 
   return {
@@ -195,6 +195,17 @@ function addDaysLocalIso(days: number): string {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** API ISO 날짜/시간 → 로컬 YYYY-MM-DD (발행일 표시) */
+function formatIsoToLocalDate(iso: string | Date | null | undefined): string {
+  if (!iso) return '';
+  const d = iso instanceof Date ? iso : new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso).split('T')[0] || '';
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -1793,16 +1804,8 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
 
   const selectedCustomer = customers.find(customer => customer.name === formData.customerName);
   const quoteNumber = quotation?.quotationNumber || nextQuotationNumber;
-  const metaCustomerName = selectedCustomer?.name || formData.customerName || '-';
-  /** 메타 박스 전 행 동일 칸 비율 — 고객명이 길수록 왼쪽 칸 확대 */
-  const metaGridColumns = (() => {
-    const len = String(metaCustomerName).trim().length;
-    if (len <= 14) return 'minmax(0, 1fr) minmax(0, 1fr)';
-    if (len <= 22) return 'minmax(0, 1.2fr) minmax(0, 0.9fr)';
-    if (len <= 32) return 'minmax(0, 1.4fr) minmax(0, 0.8fr)';
-    if (len <= 44) return 'minmax(0, 1.6fr) minmax(0, 0.7fr)';
-    return 'minmax(0, 1.75fr) minmax(0, 0.65fr)';
-  })();
+  const quoteIssueDate = quotation?.issueDate || addDaysLocalIso(0);
+  const metaGridColumns = 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)';
 
   /** 승인·발송 보기 모드에서는 승인자 숨김. 수정 모드에서는 재선택 가능 */
   const hideApproverForCustomerView =
@@ -1858,7 +1861,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
       taxRate: cgstRate + sgstRate + igstRate,
       totalAmount,
       items,
-      issueDate: new Date().toISOString().split('T')[0],
+      issueDate: quoteIssueDate,
       quotationNumber: quoteNumber,
       approverUserId: Number(formData.approverUserId)
     });
@@ -1942,7 +1945,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
             <Typography variant="caption" color="text.secondary" className="quotation-pdf-hide">
               Company name
             </Typography>
-            <Typography variant="subtitle2" sx={{ mt: 0.5, mb: 1 }}>
+            <Typography variant="subtitle2" className="quotation-pdf-company-name" sx={{ mt: 0.5, mb: 1, fontSize: '1.0625rem', fontWeight: 700 }}>
               {issuingCompany?.name || '-'}
             </Typography>
             <Typography
@@ -1954,17 +1957,21 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
             >
               {formatAddressTwoLines(issuingCompany?.address || '-')}
             </Typography>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Phone: {issuingCompany?.phone || '-'}
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              display="block"
+              className="quotation-pdf-company-contact"
+              sx={{ whiteSpace: 'nowrap', mt: 0.5 }}
+            >
+              {[
+                `Phone: ${issuingCompany?.phone || '-'}`,
+                `Email: ${issuingCompany?.email || '-'}`,
+                ...(issuingCompany?.gst_numbers && issuingCompany.gst_numbers.length > 0
+                  ? [`GST: ${issuingCompany.gst_numbers.join(', ')}`]
+                  : []),
+              ].join(' | ')}
             </Typography>
-            <Typography variant="caption" color="text.secondary" display="block">
-              E-mail: {issuingCompany?.email || '-'}
-            </Typography>
-            {issuingCompany?.gst_numbers && issuingCompany.gst_numbers.length > 0 ? (
-              <Typography variant="caption" color="text.secondary" display="block">
-                GST: {issuingCompany.gst_numbers.join(', ')}
-              </Typography>
-            ) : null}
           </Box>
           <Box
             className="quotation-pdf-header-right"
@@ -1975,17 +1982,16 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
               flexDirection: 'column',
               alignItems: 'stretch',
               alignSelf: 'stretch',
-              minHeight: '100%'
+              minHeight: '100%',
             }}
           >
             <Typography className="quotation-pdf-title" sx={{ letterSpacing: 0.3, fontWeight: 700, fontSize: '22px' }}>
               Quotation
             </Typography>
+            <Box className="quotation-pdf-header-spacer" sx={{ flex: 1, minHeight: 14 }} />
             <Box
               className="quotation-pdf-meta"
               sx={{
-                mt: 1,
-                flex: 1,
                 display: 'flex',
                 flexDirection: 'column',
                 border: '1px solid #cfcfcf',
@@ -1993,7 +1999,6 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                 overflow: 'hidden',
                 minWidth: 340,
                 textAlign: 'center',
-                // 행마다 독립 grid여도 동일 비율 + minmax(0)로 세로 구분선 정렬
                 '--quotation-meta-cols': metaGridColumns,
                 '& > .MuiBox-root': {
                   display: 'grid',
@@ -2002,38 +2007,58 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                 },
                 '& > .MuiBox-root > .MuiBox-root': {
                   minWidth: 0,
+                  py: 0.9,
+                  px: 0.75,
+                  minHeight: 43,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 },
                 '& .MuiTypography-root': { textAlign: 'center', width: '100%' },
                 '& .MuiTypography-body2': {
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  fontSize: '0.8125rem'
-                }
+                  fontSize: '0.8125rem',
+                  lineHeight: 1.1,
+                },
+                '& .MuiTypography-caption': {
+                  lineHeight: 1.1,
+                },
               }}
             >
               <Box sx={{ bgcolor: '#f5f5f5' }}>
-                <Box sx={{ p: 1, borderRight: '1px solid #cfcfcf' }}><Typography variant="caption">Quote #</Typography></Box>
-                <Box sx={{ p: 1 }}><Typography variant="caption">Date</Typography></Box>
+                <Box sx={{ borderRight: '1px solid #cfcfcf' }}><Typography variant="caption">Quote #</Typography></Box>
+                <Box sx={{ borderRight: '1px solid #cfcfcf' }}><Typography variant="caption">Date</Typography></Box>
+                <Box className="quotation-pdf-meta-valid-label"><Typography variant="caption">Valid until</Typography></Box>
               </Box>
-              <Box sx={{ borderTop: '1px solid #cfcfcf', flex: 1 }}>
-                <Box sx={{ p: 1, borderRight: '1px solid #cfcfcf', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Box sx={{ borderTop: '1px solid #cfcfcf' }}>
+                <Box sx={{ borderRight: '1px solid #cfcfcf' }}>
                   <Typography variant="body2">{quoteNumber}</Typography>
                 </Box>
-                <Box sx={{ p: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Typography variant="body2">{new Date().toISOString().split('T')[0]}</Typography>
+                <Box sx={{ borderRight: '1px solid #cfcfcf' }}>
+                  <Typography variant="body2">{quoteIssueDate}</Typography>
                 </Box>
-              </Box>
-              <Box sx={{ borderTop: '1px solid #cfcfcf', bgcolor: '#f5f5f5' }}>
-                <Box sx={{ p: 1, borderRight: '1px solid #cfcfcf' }}><Typography variant="caption">Customer</Typography></Box>
-                <Box sx={{ p: 1 }}><Typography variant="caption">Valid until</Typography></Box>
-              </Box>
-              <Box sx={{ borderTop: '1px solid #cfcfcf', flex: 1 }}>
-                <Box sx={{ p: 1, borderRight: '1px solid #cfcfcf', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Typography variant="body2">{metaCustomerName}</Typography>
-                </Box>
-                <Box sx={{ p: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Typography variant="body2">{formData.validUntil || '-'}</Typography>
+                <Box className="quotation-pdf-meta-valid-value" sx={{ minWidth: 0 }}>
+                  {lockContent ? (
+                    <Typography variant="body2">{formData.validUntil || '-'}</Typography>
+                  ) : (
+                    <TextField
+                      type="date"
+                      size="small"
+                      variant="standard"
+                      fullWidth
+                      required
+                      value={formData.validUntil}
+                      onChange={(e) => setFormData({ ...formData, validUntil: e.target.value })}
+                      inputProps={{ style: { textAlign: 'center', fontSize: '0.8125rem' } }}
+                      sx={{
+                        minWidth: 0,
+                        '& .MuiInput-root:before, & .MuiInput-root:after': { display: 'none' },
+                        '& .MuiInputBase-input': { py: 0.5, px: 0.5, textAlign: 'center' },
+                      }}
+                    />
+                  )}
                 </Box>
               </Box>
             </Box>
@@ -2048,154 +2073,160 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
             sx={{
               px: 1.5,
               py: 1,
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
-              columnGap: 1.5,
-              rowGap: 0.75,
-              alignItems: 'start',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0.75,
               '& .MuiFormHelperText-root': { mt: 0.25, mb: 0, lineHeight: 1.3 },
               '& .MuiTypography-caption': { display: 'block', mb: 0.25, lineHeight: 1.2 }
             }}
             className="quotation-pdf-section-body"
           >
-            <Box>
-              <Typography variant="caption" color="text.secondary">Name *</Typography>
-              <Autocomplete
-                options={customers}
-                size="small"
-                fullWidth
-                disabled={lockCustomer}
-                autoHighlight
-                clearOnBlur={false}
-                isOptionEqualToValue={(option, value) => option.name === value.name}
-                getOptionLabel={(option) => option.name || ''}
-                filterOptions={(options, { inputValue }) => {
-                  const q = inputValue.trim().toLowerCase();
-                  if (!q) return options;
-                  return options.filter((c) => {
-                    const name = String(c.name || '').toLowerCase();
-                    const email = String(c.email || '').toLowerCase();
-                    const phone = String(c.phone || '').toLowerCase();
-                    return name.includes(q) || email.includes(q) || phone.includes(q);
-                  });
-                }}
-                value={
-                  customers.find((c) => c.name === formData.customerName) ||
-                  (formData.customerName
-                    ? {
-                        name: formData.customerName,
-                        email: formData.customerEmail || '',
-                        phone: formData.customerPhone || '',
-                        address: formData.customerAddress || '',
-                        gstNumbers: normalizeGstList(formData.customerGst),
-                      }
-                    : null)
-                }
-                onChange={(_event, newValue) => {
-                  handleCustomerSelect(newValue?.name || '');
-                }}
-                renderOption={(props, option) => (
-                  <Box component="li" {...props} key={option.name}>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', py: 0.25, minWidth: 0 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
-                        {option.name}
-                      </Typography>
-                      {(option.email || option.phone) && (
-                        <Typography variant="caption" color="text.secondary" noWrap>
-                          {[option.email, option.phone].filter(Boolean).join(' · ')}
+            <Box
+              className="quotation-pdf-customer-line quotation-pdf-customer-line-1"
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' },
+                columnGap: 1,
+                alignItems: 'start',
+              }}
+            >
+              <Box>
+                <Typography variant="caption" color="text.secondary">Name *</Typography>
+                <Autocomplete
+                  options={customers}
+                  size="small"
+                  fullWidth
+                  disabled={lockCustomer}
+                  autoHighlight
+                  clearOnBlur={false}
+                  isOptionEqualToValue={(option, value) => option.name === value.name}
+                  getOptionLabel={(option) => option.name || ''}
+                  filterOptions={(options, { inputValue }) => {
+                    const q = inputValue.trim().toLowerCase();
+                    if (!q) return options;
+                    return options.filter((c) => {
+                      const name = String(c.name || '').toLowerCase();
+                      const email = String(c.email || '').toLowerCase();
+                      const phone = String(c.phone || '').toLowerCase();
+                      return name.includes(q) || email.includes(q) || phone.includes(q);
+                    });
+                  }}
+                  value={
+                    customers.find((c) => c.name === formData.customerName) ||
+                    (formData.customerName
+                      ? {
+                          name: formData.customerName,
+                          email: formData.customerEmail || '',
+                          phone: formData.customerPhone || '',
+                          address: formData.customerAddress || '',
+                          gstNumbers: normalizeGstList(formData.customerGst),
+                        }
+                      : null)
+                  }
+                  onChange={(_event, newValue) => {
+                    handleCustomerSelect(newValue?.name || '');
+                  }}
+                  renderOption={(props, option) => (
+                    <Box component="li" {...props} key={option.name}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', py: 0.25, minWidth: 0 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                          {option.name}
                         </Typography>
-                      )}
+                        {(option.email || option.phone) && (
+                          <Typography variant="caption" color="text.secondary" noWrap>
+                            {[option.email, option.phone].filter(Boolean).join(' · ')}
+                          </Typography>
+                        )}
+                      </Box>
                     </Box>
-                  </Box>
-                )}
-                renderInput={(params) => (
+                  )}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      required
+                      disabled={lockCustomer}
+                      placeholder={t('quotationManagement.customerSearchPlaceholder')}
+                    />
+                  )}
+                  noOptionsText={t('common.noResults', { defaultValue: '검색 결과가 없습니다.' })}
+                />
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">GST</Typography>
+                {showCustomerGstSelect ? (
+                  <FormControl fullWidth size="small" disabled={lockCustomer}>
+                    <Select
+                      displayEmpty
+                      value={formData.customerGst || ''}
+                      onChange={(e) =>
+                        setFormData({ ...formData, customerGst: String(e.target.value || '') })
+                      }
+                      renderValue={(selected) =>
+                        selected ? String(selected) : 'GSTIN 선택'
+                      }
+                    >
+                      {customerGstOptions.map((gst) => (
+                        <MenuItem key={gst} value={gst}>
+                          {gst}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                ) : (
                   <TextField
-                    {...params}
-                    required
+                    fullWidth
+                    size="small"
                     disabled={lockCustomer}
-                    placeholder={t('quotationManagement.customerSearchPlaceholder')}
+                    value={formData.customerGst}
+                    onChange={(e) => setFormData({ ...formData, customerGst: e.target.value })}
+                    placeholder="GSTIN"
                   />
                 )}
-                noOptionsText={t('common.noResults', { defaultValue: '검색 결과가 없습니다.' })}
-              />
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Email *</Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="email"
+                  disabled={lockCustomer}
+                  inputProps={{ multiple: true }}
+                  value={formData.customerEmail}
+                  onChange={(e) => setFormData({ ...formData, customerEmail: e.target.value })}
+                  required
+                  helperText={lockCustomer ? undefined : t('quotationManagement.customerEmailMultipleHint')}
+                />
+              </Box>
             </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">Email *</Typography>
-              <TextField
-                fullWidth
-                size="small"
-                type="email"
-                disabled={lockCustomer}
-                inputProps={{ multiple: true }}
-                value={formData.customerEmail}
-                onChange={(e) => setFormData({ ...formData, customerEmail: e.target.value })}
-                required
-                helperText={lockCustomer ? undefined : t('quotationManagement.customerEmailMultipleHint')}
-              />
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">Phone</Typography>
-              <TextField
-                fullWidth
-                size="small"
-                disabled={lockCustomer}
-                value={formData.customerPhone}
-                onChange={(e) => setFormData({ ...formData, customerPhone: e.target.value })}
-              />
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">Valid Until *</Typography>
-              <TextField
-                fullWidth
-                size="small"
-                type="date"
-                disabled={lockContent}
-                value={formData.validUntil}
-                onChange={(e) => setFormData({ ...formData, validUntil: e.target.value })}
-                required
-              />
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">Address</Typography>
-              <TextField
-                fullWidth
-                size="small"
-                disabled={lockCustomer}
-                value={formData.customerAddress}
-                onChange={(e) => setFormData({ ...formData, customerAddress: e.target.value })}
-              />
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">GST</Typography>
-              {showCustomerGstSelect ? (
-                <FormControl fullWidth size="small" disabled={lockCustomer}>
-                  <Select
-                    displayEmpty
-                    value={formData.customerGst || ''}
-                    onChange={(e) =>
-                      setFormData({ ...formData, customerGst: String(e.target.value || '') })
-                    }
-                    renderValue={(selected) =>
-                      selected ? String(selected) : 'GSTIN 선택'
-                    }
-                  >
-                    {customerGstOptions.map((gst) => (
-                      <MenuItem key={gst} value={gst}>
-                        {gst}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              ) : (
+            <Box
+              className="quotation-pdf-customer-line quotation-pdf-customer-line-2"
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' },
+                columnGap: 1,
+                alignItems: 'start',
+              }}
+            >
+              <Box className="quotation-pdf-customer-phone">
+                <Typography variant="caption" color="text.secondary">Phone</Typography>
                 <TextField
                   fullWidth
                   size="small"
                   disabled={lockCustomer}
-                  value={formData.customerGst}
-                  onChange={(e) => setFormData({ ...formData, customerGst: e.target.value })}
-                  placeholder="GSTIN"
+                  value={formData.customerPhone}
+                  onChange={(e) => setFormData({ ...formData, customerPhone: e.target.value })}
                 />
-              )}
+              </Box>
+              <Box className="quotation-pdf-customer-address" sx={{ gridColumn: { xs: '1 / -1', md: 'span 2' } }}>
+                <Typography variant="caption" color="text.secondary">Address</Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  disabled={lockCustomer}
+                  value={formData.customerAddress}
+                  onChange={(e) => setFormData({ ...formData, customerAddress: e.target.value })}
+                />
+              </Box>
             </Box>
             {!hideApproverForCustomerView && (
               <Box className="quotation-pdf-hide">
@@ -2635,19 +2666,23 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1fr) auto',
-            gap: 2,
+            gridTemplateColumns: 'minmax(0, 1fr) max-content',
+            gap: 1.5,
             alignItems: 'stretch',
             mb: 2,
-            width: '100%'
+            width: '100%',
           }}
           className="quotation-pdf-totals-wrap"
         >
           <Box
             className="quotation-pdf-bank"
             sx={{
-              minWidth: 0,
+              width: '100%',
+              maxWidth: '100%',
+              justifySelf: 'stretch',
               height: '100%',
+              alignSelf: 'stretch',
+              minWidth: 0,
               boxSizing: 'border-box',
               border: '1px solid #000',
               borderRadius: '4px',
@@ -2663,8 +2698,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                 issuingCompany?.bank_name ||
                 issuingCompany?.account_number ||
                 issuingCompany?.ifsc_code ||
-                issuingCompany?.account_holder_name ||
-                issuingCompany?.swift_code
+                issuingCompany?.account_holder_name
                   ? 'visible'
                   : 'hidden'
             }}
@@ -2692,30 +2726,20 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                 IFSC: {issuingCompany.ifsc_code}
               </Typography>
             ) : null}
-            {issuingCompany?.swift_code ? (
-              <Typography variant="caption" color="text.secondary" display="block">
-                SWIFT: {issuingCompany.swift_code}
-              </Typography>
-            ) : null}
-            {issuingCompany?.bank_address ? (
-              <Typography variant="caption" color="text.secondary" display="block">
-                Bank address: {issuingCompany.bank_address}
-              </Typography>
-            ) : null}
           </Box>
           <Box
             sx={{
-              width: 'auto',
-              minWidth: 312,
-              maxWidth: '100%',
+              width: 'max-content',
+              minWidth: QUOTATION_SCREEN_TOTALS_MIN_WIDTH_PX,
+              justifySelf: 'end',
               height: '100%',
+              alignSelf: 'stretch',
               boxSizing: 'border-box',
               display: 'flex',
               flexDirection: 'column',
               border: '1px solid #000',
               borderRadius: '4px',
               overflow: 'hidden',
-              flexShrink: 0,
               '& .MuiTypography-body2': { fontSize: '0.825rem', lineHeight: 1.35 },
               '& .MuiTypography-subtitle2': { fontSize: '0.88rem', lineHeight: 1.35, fontWeight: 700 }
             }}

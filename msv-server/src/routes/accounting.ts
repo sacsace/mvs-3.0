@@ -29,6 +29,7 @@ import {
   updateExpenseReportStatus,
   changeExpenseApprover,
   uploadExpenseReceiptById,
+  deleteExpenseReceipt,
   requestExpensePayment,
   rejectExpensePayment,
   approveExpensePayment,
@@ -624,6 +625,7 @@ router.get('/expenses', getExpenseReports);
 router.get('/expenses/:id', getExpenseReportById);
 router.get('/expenses/:id/receipt-upload-token', getReceiptUploadToken);
 router.post('/expenses/:id/upload-receipt', restrictAuditToReadOnly, receiptUpload.array('files'), uploadExpenseReceiptById);
+router.delete('/expenses/:id/receipt', restrictAuditToReadOnly, deleteExpenseReceipt);
 router.post(
   '/expenses',
   restrictAuditToReadOnly,

@@ -1,6 +1,13 @@
 /**
  * 일반 세금계산서 메일 첨부용 — pdfkit 텍스트/벡터 PDF (클라이언트 html2canvas 경로와 무관)
  */
+import {
+  DOCUMENT_PDF_FONT_SIZE_PT,
+  DOCUMENT_PDF_LINE_GAP_PT,
+  DOCUMENT_PDF_MARGINS_PT,
+  DOCUMENT_PDF_TITLE_FONT_SIZE_PT,
+  getPdfKitContentWidth,
+} from './documentPdfStandard';
 
 export type RegularInvoiceMailItem = {
   item_name: string;
@@ -61,19 +68,20 @@ export async function buildRegularInvoicePdfBuffer(params: {
   const items = (params.items || []).filter((it) => it && (Number(it.quantity) !== 0 || Number(it.total_price) !== 0));
 
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ margin: 48, size: 'A4' });
+    const doc = new PDFDocument({ margins: DOCUMENT_PDF_MARGINS_PT, size: 'A4' });
+    const contentW = getPdfKitContentWidth(doc.page.width);
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(c));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    doc.fontSize(20).text('TAX INVOICE', { align: 'center' });
+    doc.fontSize(DOCUMENT_PDF_TITLE_FONT_SIZE_PT).text('TAX INVOICE', { align: 'center' });
     doc.moveDown(0.5);
-    doc.fontSize(10).fillColor('#444').text(`Invoice No. ${inv.invoice_number}`, { align: 'center' });
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT).fillColor('#444').text(`Invoice No. ${inv.invoice_number}`, { align: 'center', lineGap: DOCUMENT_PDF_LINE_GAP_PT });
     doc.fillColor('#000');
     doc.moveDown(1);
 
-    doc.fontSize(11);
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT);
     doc.text(`From: ${params.companyName || '—'}`);
     if (params.companyAddress) doc.text(String(params.companyAddress));
     if (params.companyGstin) doc.text(`GSTIN: ${params.companyGstin}`);
@@ -83,8 +91,8 @@ export async function buildRegularInvoicePdfBuffer(params: {
     doc.text(`Due date: ${dueDate}`);
     doc.moveDown(0.8);
 
-    doc.fontSize(12).text('Bill to', { underline: true });
-    doc.fontSize(10).moveDown(0.3);
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT).text('Bill to', { underline: true });
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT).moveDown(0.3);
     doc.text(params.customerName || '—');
     if (params.customerAddress) doc.text(String(params.customerAddress));
     if (params.customerEmail) doc.text(`Email: ${params.customerEmail}`);
@@ -92,9 +100,9 @@ export async function buildRegularInvoicePdfBuffer(params: {
     if (params.customerGstin) doc.text(`GSTIN: ${params.customerGstin}`);
     doc.moveDown(0.9);
 
-    doc.fontSize(12).text('Line items', { underline: true });
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT).text('Line items', { underline: true });
     doc.moveDown(0.4);
-    doc.fontSize(9);
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT);
 
     items.forEach((it, i) => {
       const line = [it.item_name, it.description].filter(Boolean).join(' — ') || 'Item';
@@ -103,17 +111,17 @@ export async function buildRegularInvoicePdfBuffer(params: {
       const lineTot = Number(it.total_price) || 0;
       doc.text(
         `${i + 1}. ${line}\n   Qty: ${qty}   Unit: ${cur} ${up.toLocaleString('en-IN', { minimumFractionDigits: 2 })}   Line total: ${cur} ${lineTot.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
-        { width: doc.page.width - 96 }
+        { width: contentW, lineGap: DOCUMENT_PDF_LINE_GAP_PT }
       );
       doc.moveDown(0.35);
     });
 
     if (items.length === 0) {
-      doc.text('(No line items)', { width: doc.page.width - 96 });
+      doc.text('(No line items)', { width: contentW });
     }
 
     doc.moveDown(0.6);
-    doc.fontSize(10);
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT);
     doc.text(`Subtotal: ${cur} ${sub.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, { align: 'right' });
     // PDFKit 기본 Helvetica는 ≈(U+2248) 등 일부 유니코드를 깨뜨리므로 ASCII만 사용
     const taxLabel =
@@ -121,23 +129,23 @@ export async function buildRegularInvoicePdfBuffer(params: {
         ? `Tax (${impliedTaxPct.toFixed(2)}%): ${cur} ${tax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
         : `Tax: ${cur} ${tax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
     doc.text(taxLabel, { align: 'right' });
-    doc.fontSize(12).text(`Total: ${cur} ${total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, {
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT).text(`Total: ${cur} ${total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, {
       align: 'right'
     });
-    doc.fontSize(10);
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT);
     doc.moveDown(1);
 
     const notesForPdf = sanitizeInvoiceNotesForPdf(inv.notes);
     if (notesForPdf) {
       doc.text('Notes', { underline: true });
-      doc.fontSize(9).text(notesForPdf, { align: 'left' });
+      doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT).text(notesForPdf, { align: 'left', lineGap: DOCUMENT_PDF_LINE_GAP_PT });
       doc.moveDown(0.6);
     }
 
     doc.moveDown(0.8);
-    doc.fontSize(8).fillColor('#666').text(
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT).fillColor('#666').text(
       'This document was generated electronically and is valid without a signature unless otherwise agreed.',
-      { align: 'center', width: doc.page.width - 96 }
+      { align: 'center', width: contentW }
     );
 
     doc.end();

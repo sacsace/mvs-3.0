@@ -60,6 +60,8 @@ const buildCsp = () => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: blob: https:",
+    // blob: PDF 미리보기(iframe) — default-src만 있으면 blob iframe이 차단됨
+    "frame-src 'self' blob:",
     `connect-src ${connectSrc}`,
     "worker-src 'self' blob:",
     "manifest-src 'self'",

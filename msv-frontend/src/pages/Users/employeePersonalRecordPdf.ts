@@ -5,10 +5,15 @@ import { theme } from '../../theme';
 import EmployeePersonalRecordContent, {
   type EmployeePersonalRecordProps,
 } from './EmployeePersonalRecordContent';
+import {
+  A4_PAGE_MM,
+  DOCUMENT_PDF_CAPTURE_ROOT_ATTR,
+  DOCUMENT_PDF_MARGINS_MM,
+  injectDocumentPdfStandardCss,
+} from '../../utils/pdf';
 
-const PDF_MARGIN_MM = 12;
-const A4_WIDTH_MM = 210;
-const A4_HEIGHT_MM = 297;
+const A4_WIDTH_MM = A4_PAGE_MM.width;
+const A4_HEIGHT_MM = A4_PAGE_MM.height;
 /** A4 세로 본문 폭(~186mm)에 맞춘 캡처 너비 */
 const PDF_CAPTURE_WIDTH_PX = 720;
 const PDF_CAPTURE_SCALE = 1.85;
@@ -93,6 +98,10 @@ export async function generateEmployeePersonalRecordPdfBlob(
       logging: false,
       width: PDF_CAPTURE_WIDTH_PX,
       windowWidth: PDF_CAPTURE_WIDTH_PX,
+      onclone: (clonedDoc: Document) => {
+        clonedDoc.getElementById(rootId)?.setAttribute(DOCUMENT_PDF_CAPTURE_ROOT_ATTR, '');
+        injectDocumentPdfStandardCss(clonedDoc);
+      },
     });
 
     // 항상 A4 세로 — 가로 폭에 맞추고 길면 페이지 분할
@@ -105,16 +114,17 @@ export async function generateEmployeePersonalRecordPdfBlob(
 
     const pageW = A4_WIDTH_MM;
     const pageH = A4_HEIGHT_MM;
-    const printWidthMm = pageW - PDF_MARGIN_MM * 2;
-    const usableH = pageH - PDF_MARGIN_MM * 2;
+    const printWidthMm = pageW - DOCUMENT_PDF_MARGINS_MM.left - DOCUMENT_PDF_MARGINS_MM.right;
+    const usableH = pageH - DOCUMENT_PDF_MARGINS_MM.top - DOCUMENT_PDF_MARGINS_MM.bottom;
     const widthMm = printWidthMm;
     const heightMm = (canvas.height / canvas.width) * widthMm;
     const pxPerMm = canvas.height / heightMm;
+    const offsetX = DOCUMENT_PDF_MARGINS_MM.left;
+    const offsetY = DOCUMENT_PDF_MARGINS_MM.top;
 
     if (heightMm <= usableH) {
-      const x = (pageW - widthMm) / 2;
       const imgData = canvas.toDataURL('image/jpeg', PDF_JPEG_QUALITY);
-      pdf.addImage(imgData, 'JPEG', x, PDF_MARGIN_MM, widthMm, heightMm, undefined, 'MEDIUM');
+      pdf.addImage(imgData, 'JPEG', offsetX, offsetY, widthMm, heightMm, undefined, 'MEDIUM');
     } else {
       let offsetMm = 0;
       let page = 0;
@@ -133,8 +143,7 @@ export async function generateEmployeePersonalRecordPdfBlob(
           ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
         }
         const sliceData = sliceCanvas.toDataURL('image/jpeg', PDF_JPEG_QUALITY);
-        const x = (pageW - widthMm) / 2;
-        pdf.addImage(sliceData, 'JPEG', x, PDF_MARGIN_MM, widthMm, sliceHMm, undefined, 'MEDIUM');
+        pdf.addImage(sliceData, 'JPEG', offsetX, offsetY, widthMm, sliceHMm, undefined, 'MEDIUM');
         offsetMm += sliceHMm;
         page += 1;
       }

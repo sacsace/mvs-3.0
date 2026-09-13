@@ -4,6 +4,7 @@ import {
   DOCUMENT_PDF_MARGINS_MM,
   DOCUMENT_PDF_SCALE_DOWNLOAD,
   DOCUMENT_PDF_SCALE_EMAIL,
+  injectDocumentPdfStandardCss,
   type DocumentPdfMarginsMm,
 } from './documentPdfStandard';
 import {
@@ -49,6 +50,7 @@ async function captureElementToCanvas(
     backgroundColor: '#ffffff',
     logging: false,
     onclone: (clonedDoc: Document) => {
+      injectDocumentPdfStandardCss(clonedDoc);
       options.onClone?.(clonedDoc);
     },
   };

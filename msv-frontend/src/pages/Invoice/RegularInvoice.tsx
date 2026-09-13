@@ -72,7 +72,12 @@ import { useStore } from '../../store';
 import { accountingService, partnerService, companyService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import AuthMedia from '../../components/Common/AuthMedia';
-import { buildDocumentDownloadFilename } from '../../utils/pdf';
+import {
+  buildDocumentDownloadFilename,
+  DOCUMENT_PDF_FONT_SIZE_PT,
+  DOCUMENT_PDF_LINE_HEIGHT_PT,
+  DOCUMENT_PDF_MARGINS_MM,
+} from '../../utils/pdf';
 
 interface InvoiceItem {
   id?: number;
@@ -197,10 +202,9 @@ interface CompanyInfo {
   ifsc_code?: string;
 }
 
-const EXCEL_BASE_FONT_SIZE = '9pt';
-const EXCEL_BASE_LINE_HEIGHT = '20px';
-/** 합계·GST 요약 블록 — 기본 대비 약간 축소, 가독성 유지 */
-const TAX_SUMMARY_LINE_HEIGHT = '18px';
+const EXCEL_BASE_FONT_SIZE = `${DOCUMENT_PDF_FONT_SIZE_PT}pt`;
+const EXCEL_BASE_LINE_HEIGHT = `${DOCUMENT_PDF_LINE_HEIGHT_PT}pt`;
+const TAX_SUMMARY_LINE_HEIGHT = `${DOCUMENT_PDF_LINE_HEIGHT_PT}pt`;
 const TAX_SUMMARY_CELL_PADDING = '5px 8px';
 
 const taxSummaryTableSx = {
@@ -801,11 +805,10 @@ const RegularInvoice: React.FC = () => {
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
-    // 요구사항: 좌측 2cm, 우측 1cm 여백
-    const marginLeft = 20;
-    const marginTop = 6;
-    const marginRight = 10;
-    const marginBottom = 6;
+    const marginLeft = DOCUMENT_PDF_MARGINS_MM.left;
+    const marginTop = DOCUMENT_PDF_MARGINS_MM.top;
+    const marginRight = DOCUMENT_PDF_MARGINS_MM.right;
+    const marginBottom = DOCUMENT_PDF_MARGINS_MM.bottom;
     const contentWidth = pdfWidth - marginLeft - marginRight;
     const contentHeight = pdfHeight - marginTop - marginBottom;
     /** PNG 무손실 + scale 2 는 A4 한 장이 수~십 MB로 불어남 → 메일 5MB 한도 초과. JPEG·적정 해상도로 압축 */
@@ -824,8 +827,8 @@ const RegularInvoice: React.FC = () => {
             box-sizing: border-box !important;
           }
           .invoice-page * {
-            font-size: ${EXCEL_BASE_FONT_SIZE};
-            line-height: ${EXCEL_BASE_LINE_HEIGHT};
+            font-size: ${EXCEL_BASE_FONT_SIZE} !important;
+            line-height: ${EXCEL_BASE_LINE_HEIGHT} !important;
           }
             .invoice-page .tax-summary-label {
               white-space: nowrap !important;

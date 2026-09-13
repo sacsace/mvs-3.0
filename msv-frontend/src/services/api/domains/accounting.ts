@@ -182,10 +182,15 @@ export const accountingService = {
   },
 
   // 지출결?�서 ?�태 변�?
-  updateExpenseReportStatus: async (id: number, status: string, extra?: { reason?: string }) => {
+  updateExpenseReportStatus: async (
+    id: number,
+    status: string,
+    extra?: { reason?: string; reject_kind?: 'final' | 'revision' }
+  ) => {
     const response = await api.put(`/accounting/expenses/${id}/status`, {
       status,
       ...(extra?.reason ? { reason: extra.reason } : {}),
+      ...(extra?.reject_kind ? { reject_kind: extra.reject_kind } : {}),
     });
     return response.data;
   },
@@ -227,6 +232,11 @@ export const accountingService = {
     const response = await api.post(`/accounting/expenses/${id}/upload-receipt`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    return response.data;
+  },
+
+  deleteExpenseReceipt: async (id: number, path: string) => {
+    const response = await api.delete(`/accounting/expenses/${id}/receipt`, { data: { path } });
     return response.data;
   },
 

@@ -1,6 +1,13 @@
 /**
  * 견적서 메일용: 법인 접미어 제거, PDF 생성(pdfkit)
  */
+import {
+  DOCUMENT_PDF_FONT_SIZE_PT,
+  DOCUMENT_PDF_LINE_GAP_PT,
+  DOCUMENT_PDF_MARGINS_PT,
+  DOCUMENT_PDF_TITLE_FONT_SIZE_PT,
+  getPdfKitContentWidth,
+} from './documentPdfStandard';
 
 /** 메일 제목용 — Private Limited 등 법인 접미어 제거 */
 export function stripLegalEntitySuffixesForSubject(name: string): string {
@@ -113,25 +120,26 @@ export async function buildQuotationPdfBuffer(quotation: {
     : new Date().toISOString().split('T')[0];
 
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ margin: 48, size: 'A4' });
+    const doc = new PDFDocument({ margins: DOCUMENT_PDF_MARGINS_PT, size: 'A4' });
+    const contentW = getPdfKitContentWidth(doc.page.width);
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(c));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    doc.fontSize(20).text('QUOTATION', { align: 'center' });
+    doc.fontSize(DOCUMENT_PDF_TITLE_FONT_SIZE_PT).text('QUOTATION', { align: 'center' });
     doc.moveDown(0.5);
-    doc.fontSize(10).fillColor('#444').text(`Quotation No. ${quotation.quotation_number}`, { align: 'center' });
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT).fillColor('#444').text(`Quotation No. ${quotation.quotation_number}`, { align: 'center', lineGap: DOCUMENT_PDF_LINE_GAP_PT });
     doc.fillColor('#000');
     doc.moveDown(1.2);
 
-    doc.fontSize(11);
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT);
     doc.text(`Issue date: ${issueDate}`, { continued: false });
     doc.text(`Valid until: ${validUntil}`);
     doc.moveDown(0.8);
 
-    doc.fontSize(12).text('Bill to', { underline: true });
-    doc.fontSize(10).moveDown(0.3);
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT).text('Bill to', { underline: true });
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT).moveDown(0.3);
     doc.text(quotation.customer_name || '—');
     if (quotation.customer_address) doc.text(String(quotation.customer_address));
     if (quotation.customer_email) doc.text(`Email: ${quotation.customer_email}`);
@@ -139,9 +147,9 @@ export async function buildQuotationPdfBuffer(quotation: {
     if (quotation.customer_gst) doc.text(`GST: ${quotation.customer_gst}`);
     doc.moveDown(0.9);
 
-    doc.fontSize(12).text('Line items', { underline: true });
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT).text('Line items', { underline: true });
     doc.moveDown(0.4);
-    doc.fontSize(9);
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT);
 
     items.forEach((it, i) => {
       const line = [it.productName, it.description].filter(Boolean).join(' — ') || 'Item';
@@ -149,17 +157,17 @@ export async function buildQuotationPdfBuffer(quotation: {
         `${i + 1}. ${line}\n   Qty: ${it.quantity}   Unit: ${cur} ${it.unitPrice.toLocaleString('en-IN', {
           minimumFractionDigits: 2
         })}   Line total: ${cur} ${it.finalPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
-        { width: doc.page.width - 96 }
+        { width: contentW, lineGap: DOCUMENT_PDF_LINE_GAP_PT }
       );
       doc.moveDown(0.35);
     });
 
     if (items.length === 0) {
-      doc.text('(No line items)', { width: doc.page.width - 96 });
+      doc.text('(No line items)', { width: contentW });
     }
 
     doc.moveDown(0.6);
-    doc.fontSize(10);
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT);
     doc.text(`Subtotal: ${cur} ${quotation.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, {
       align: 'right'
     });
@@ -171,28 +179,28 @@ export async function buildQuotationPdfBuffer(quotation: {
       `Discount: ${cur} ${quotation.discount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
       { align: 'right' }
     );
-    doc.fontSize(12).text(
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT).text(
       `Total: ${cur} ${quotation.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
       { align: 'right' }
     );
-    doc.fontSize(10);
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT);
     doc.moveDown(1);
 
     if (quotation.notes) {
       doc.text('Notes', { underline: true });
-      doc.fontSize(9).text(String(quotation.notes), { align: 'left' });
+      doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT).text(String(quotation.notes), { align: 'left', lineGap: DOCUMENT_PDF_LINE_GAP_PT });
       doc.moveDown(0.6);
     }
     if (quotation.terms) {
-      doc.fontSize(10).text('Terms & conditions', { underline: true });
-      doc.fontSize(9).text(String(quotation.terms), { align: 'left' });
+      doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT).text('Terms & conditions', { underline: true });
+      doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT).text(String(quotation.terms), { align: 'left', lineGap: DOCUMENT_PDF_LINE_GAP_PT });
     }
 
-    doc.fontSize(8).fillColor('#666').text(
+    doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT).fillColor('#666').text(
       'This document was generated electronically and is valid without a signature unless otherwise agreed.',
-      48,
-      doc.page.height - 72,
-      { align: 'center', width: doc.page.width - 96 }
+      DOCUMENT_PDF_MARGINS_PT.left,
+      doc.page.height - DOCUMENT_PDF_MARGINS_PT.bottom - DOCUMENT_PDF_FONT_SIZE_PT,
+      { align: 'center', width: contentW }
     );
 
     doc.end();
