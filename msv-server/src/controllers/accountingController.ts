@@ -3288,11 +3288,35 @@ export const updateExpenseReportStatus = async (req: RequestWithUser, res: Respo
       }
     }
 
-    if (status === 'approved' || status === 'rejected') {
+    if (status === 'approved') {
       if (!['submitted', 'in_review'].includes(String(prevStatus))) {
         return res.status(400).json({
           success: false,
           message: '반려된 문서는 재요청 후에만 승인할 수 있습니다.',
+        });
+      }
+      if (!designatedId || designatedId !== Number(user_id)) {
+        return res.status(403).json({ success: false, message: '지정된 승인권자만 처리할 수 있습니다.' });
+      }
+    }
+
+    if (status === 'rejected') {
+      const isRevisionReject = String(rejectKindRaw || 'final').toLowerCase() === 'revision';
+      if (isRevisionReject && isExpensePaymentCompleted(expense)) {
+        return res.status(400).json({
+          success: false,
+          message: '지급이 완료된 문서는 수정 반려할 수 없습니다.',
+        });
+      }
+      const allowedPrevStatuses = isRevisionReject
+        ? ['submitted', 'in_review', 'approved']
+        : ['submitted', 'in_review'];
+      if (!allowedPrevStatuses.includes(String(prevStatus))) {
+        return res.status(400).json({
+          success: false,
+          message: isRevisionReject
+            ? '수정 반려할 수 없는 상태입니다.'
+            : '반려된 문서는 재요청 후에만 승인할 수 있습니다.',
         });
       }
       if (!designatedId || designatedId !== Number(user_id)) {
@@ -3319,6 +3343,12 @@ export const updateExpenseReportStatus = async (req: RequestWithUser, res: Respo
       patch.payment_request_status = 'not_requested';
       patch.payment_requested_at = null;
       patch.payment_requested_by = null;
+      patch.payment_approved_reason = null;
+      patch.payment_approved_at = null;
+      patch.payment_approved_by = null;
+      patch.payment_rejected_reason = null;
+      patch.payment_rejected_at = null;
+      patch.payment_rejected_by = null;
       if (isRevisionReject) {
         patch.items = mergeExpenseItemsMeta(expense.items, {
           revisionRejected: true,
@@ -3839,6 +3869,16 @@ const getExpenseRemainingAmount = (expense: any) => {
   const total = roundMoney(Number(expense.total_amount || 0));
   const paid = roundMoney(Number(expense.paid_amount || 0));
   return roundMoney(Math.max(0, total - paid));
+};
+
+const isExpensePaymentCompleted = (expense: any) => {
+  const paymentStatus = String(expense.payment_request_status || '').toLowerCase();
+  const remaining = getExpenseRemainingAmount(expense);
+  return (
+    String(expense.status) === 'paid' ||
+    paymentStatus === 'paid' ||
+    (Number(expense.paid_amount || 0) > 0 && remaining <= 0)
+  );
 };
 
 const loadCompanyBankTransferSettings = async (

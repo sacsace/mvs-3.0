@@ -2909,9 +2909,25 @@ const ExpenseApproval: React.FC = () => {
     );
   };
 
+  const isExpensePaymentCompleted = (expense: ExpenseApprovalItem) => {
+    const remaining = getExpenseRemainingAmount(expense);
+    const paymentPaid = String(expense.paymentRequestStatus || '').toLowerCase() === 'paid';
+    return (
+      paymentPaid ||
+      expense.status === 'paid' ||
+      (Number(expense.paidAmount || 0) > 0 && remaining <= 0 && ['approved', 'paid'].includes(expense.status))
+    );
+  };
+
   const canUserApproveExpense = (expense: ExpenseApprovalItem) => {
     if (!isDesignatedApprover(expense)) return false;
     return ['submitted', 'in_review'].includes(expense.status);
+  };
+
+  const canUserRevisionRejectExpense = (expense: ExpenseApprovalItem) => {
+    if (!isDesignatedApprover(expense)) return false;
+    if (isExpensePaymentCompleted(expense)) return false;
+    return ['submitted', 'in_review', 'approved'].includes(expense.status);
   };
 
   const canChangeExpenseApprover = (expense: ExpenseApprovalItem) => {
@@ -4645,6 +4661,7 @@ const ExpenseApproval: React.FC = () => {
     const isPaymentApproved = selectedExpense.paymentRequestStatus === 'approved';
     const isPaymentPaid = selectedExpense.paymentRequestStatus === 'paid';
     const canApproveThis = listTab !== 'transfer' && canUserApproveExpense(selectedExpense);
+    const canRevisionRejectThis = listTab !== 'transfer' && canUserRevisionRejectExpense(selectedExpense);
     const canEditThis = canEditExpense(selectedExpense);
     const canResubmitThis = canResubmitExpense(selectedExpense);
     const canChangeApproverThis = listTab !== 'transfer' && canChangeExpenseApprover(selectedExpense);
@@ -4746,6 +4763,17 @@ const ExpenseApproval: React.FC = () => {
                   {t('expenseApproval.actions.reject')}
                 </Button>
               </>
+            )}
+            {!canApproveThis && canRevisionRejectThis && (
+              <Button
+                variant="contained"
+                color="warning"
+                disableElevation
+                startIcon={<EditIcon fontSize="small" />}
+                onClick={() => openReasonDialog('expense-revision-reject', selectedExpense.id)}
+              >
+                {t('expenseApproval.actions.revisionReject')}
+              </Button>
             )}
             {canEditThis && (
             <Button
@@ -5574,6 +5602,16 @@ const ExpenseApproval: React.FC = () => {
                   </Button>
                 </>
               )}
+              {!canApproveThis && canRevisionRejectThis && (
+                <Button
+                  variant="contained"
+                  color="warning"
+                  startIcon={<EditIcon />}
+                  onClick={() => openReasonDialog('expense-revision-reject', selectedExpense.id)}
+                >
+                  {t('expenseApproval.actions.revisionReject')}
+                </Button>
+              )}
             </Box>
 
             <Dialog open={reasonDialogOpen} onClose={closeReasonDialog} maxWidth="sm" fullWidth>
@@ -6385,6 +6423,20 @@ const ExpenseApproval: React.FC = () => {
                             </IconButton>
                           </Tooltip>
                         </>
+                      )}
+                      {listTab === 'received'
+                        && !canUserApproveExpense(expense)
+                        && canUserRevisionRejectExpense(expense) && (
+                        <Tooltip title={t('expenseApproval.actions.revisionReject')}>
+                          <IconButton
+                            size="small"
+                            onClick={() => openReasonDialog('expense-revision-reject', expense.id)}
+                            color="warning"
+                            sx={{ borderRadius: '10px' }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                       )}
                       {listTab !== 'transfer' && canDeleteExpense(expense) && (
                       <Tooltip title={t('common.delete')}>
