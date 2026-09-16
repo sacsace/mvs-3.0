@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { DataGrid, GridRowModel } from '@mui/x-data-grid';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { DataGrid, GridCellParams, GridRowModel, useGridApiRef } from '@mui/x-data-grid';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@mui/material/styles';
 import Box from '@mui/material/Box';
@@ -41,7 +41,11 @@ import {
   shouldPreferTotalSplit,
   type PayrollRecalcContext,
 } from './payroll/payrollGridUtils';
-import { buildPayrollGridColumns, PAYROLL_GRID_MIN_WIDTH } from './payroll/payrollGridColumns';
+import { buildPayrollGridColumns } from './payroll/payrollGridColumns';
+import {
+  applyPayrollAutoColumnWidths,
+  sumPayrollGridWidth,
+} from './payroll/payrollGridAutoColumnWidths';
 import { payrollDataGridSx } from './payroll/payrollGridStyles';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
@@ -77,6 +81,14 @@ import {
 import {
   persistPayrollGridSettings,
 } from './payroll/payrollGridSettingsSync';
+import {
+  getPayrollCellCopyText,
+  isPayrollGridCellEditable,
+  parsePayrollColumnPasteLines,
+  parsePayrollFieldInput,
+  patchPayrollRowField,
+  type PayrollCellAnchor,
+} from './payroll/payrollGridCellEdit';
 
 export type { PayrollGridRow } from './payroll/payrollGridTypes';
 export { computeTenureMonths, payrollRecordToGridRow } from './payroll';
@@ -121,6 +133,8 @@ const PayrollExcelGrid: React.FC<Props> = ({
   const { t, i18n } = useTranslation();
   const theme = useTheme();
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
+  const apiRef = useGridApiRef();
+  const lastFocusRef = useRef<PayrollCellAnchor | null>(null);
   const [prefs, setPrefs] = useState<PayrollColumnPrefs>(() => {
     const loaded = loadPayrollColumnPrefs(companyId);
     const customFields = loaded.customColumns.map((c) => customColumnField(c.id));
@@ -214,43 +228,194 @@ const PayrollExcelGrid: React.FC<Props> = ({
     [onError, onReload, onSuccess, showConfirm, t]
   );
 
-  const processRowUpdate = useCallback(
-    async (newRow: GridRowModel, oldRow: GridRowModel) => {
-      if (!allowCellEdit) {
-        return oldRow as PayrollGridRow;
-      }
-      const next = { ...(newRow as PayrollGridRow) };
-      const prev = oldRow as PayrollGridRow;
+  const commitPayrollRowUpdate = useCallback(
+    async (
+      newRow: PayrollGridRow,
+      oldRow: PayrollGridRow,
+      options?: { notifySuccess?: boolean; reload?: boolean }
+    ) => {
+      const next = { ...newRow };
+      const prev = oldRow;
       const prevOt = roundOtHour(Number(prev.day_ot_hour) || 0);
       const nextOt = roundOtHour(Number(next.day_ot_hour) || 0);
       if (prevOt !== nextOt) {
-        // OT 미적용 직원이어도 그리드에서 시간을 바꾸면 수동 반영
         next.ot_manual = nextOt > 0;
       }
       const row = recalculatePayrollRow(next, recalcCtx, {
         preferTotalSplit: shouldPreferTotalSplit(prev, next),
         salaryRatios,
       });
-      try {
-        onError(null);
-        const payload = gridRowToPayload(row, recalcCtx);
-        const res = await payrollService.updatePayroll(row.id, payload);
-        if (!res.success) {
-          throw new Error((res as any).message || t('payrollManagement.errors.saveFailed'));
-        }
+      onError(null);
+      const payload = gridRowToPayload(row, recalcCtx);
+      const res = await payrollService.updatePayroll(row.id, payload);
+      if (!res.success) {
+        throw new Error((res as any).message || t('payrollManagement.errors.saveFailed'));
+      }
+      if (options?.notifySuccess !== false) {
         onSuccess(t('payrollManagement.success.saved'));
+      }
+      if (options?.reload !== false) {
         await onReload();
-        return row;
+      }
+      return row;
+    },
+    [onError, onReload, onSuccess, recalcCtx, salaryRatios, t]
+  );
+
+  const processRowUpdate = useCallback(
+    async (newRow: GridRowModel, oldRow: GridRowModel) => {
+      if (!allowCellEdit) {
+        return oldRow as PayrollGridRow;
+      }
+      try {
+        return await commitPayrollRowUpdate(newRow as PayrollGridRow, oldRow as PayrollGridRow);
       } catch (e: any) {
         const msg = e?.message || t('payrollManagement.errors.saveFailed');
         onError(msg);
         throw e;
       }
     },
-    [allowCellEdit, onError, onReload, onSuccess, recalcCtx, salaryRatios, t]
+    [allowCellEdit, commitPayrollRowUpdate, onError, t]
   );
 
-  const columns = useMemo(
+  const cellEditOptions = useMemo(
+    () => ({
+      allowCellEdit,
+      allowConstantsEdit,
+      isRoot,
+      lockedPeriods,
+    }),
+    [allowCellEdit, allowConstantsEdit, isRoot, lockedPeriods]
+  );
+
+  const isCellEditable = useCallback(
+    (params: { field: string; row: PayrollGridRow }) =>
+      isPayrollGridCellEditable(params.field, params.row, cellEditOptions),
+    [cellEditOptions]
+  );
+
+  const handleCellClick = useCallback(
+    (params: GridCellParams<PayrollGridRow>) => {
+      if (params.field !== 'actions' && params.field !== 'row_no') {
+        lastFocusRef.current = { rowId: params.id, field: params.field };
+      }
+      if (!allowCellEdit || !params.isEditable) return;
+      const api = apiRef.current;
+      if (!api) return;
+      const editState = api.getCellMode(params.id, params.field);
+      if (editState === 'edit') return;
+      api.startCellEditMode({ id: params.id, field: params.field });
+    },
+    [allowCellEdit, apiRef]
+  );
+
+  const handleCopy = useCallback(
+    (e: React.ClipboardEvent) => {
+      if (!allowCellEdit) return;
+      const el = e.target as HTMLElement;
+      if (el.closest('.MuiDataGrid-cell--editing')) return;
+      const anchor = lastFocusRef.current;
+      if (!anchor) return;
+      const row = rows.find((r) => r.id === anchor.rowId);
+      if (!row || !isCellEditable({ field: anchor.field, row })) return;
+      const text = getPayrollCellCopyText(row, anchor.field, prefs.customColumns);
+      e.clipboardData.setData('text/plain', text);
+      e.preventDefault();
+    },
+    [allowCellEdit, isCellEditable, prefs.customColumns, rows]
+  );
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      if (!allowCellEdit) return;
+      const el = e.target as HTMLElement;
+      if (el.closest('.MuiDataGrid-columnHeader') || el.closest('.MuiDataGrid-columnSeparator')) {
+        return;
+      }
+
+      const text = e.clipboardData?.getData('text/plain');
+      if (!text) return;
+      const rawLines = parsePayrollColumnPasteLines(text);
+      if (rawLines.length === 0) return;
+
+      const inEditing = Boolean(el.closest('.MuiDataGrid-cell--editing'));
+      if (inEditing && rawLines.length <= 1) return;
+
+      const focusCell = apiRef.current?.state.focus.cell;
+      const pasteAnchor: PayrollCellAnchor | null =
+        lastFocusRef.current ??
+        (focusCell?.id != null && focusCell.field
+          ? { rowId: focusCell.id, field: focusCell.field }
+          : null);
+      if (!pasteAnchor) return;
+
+      const startRowIdx = rows.findIndex((r) => r.id === pasteAnchor.rowId);
+      if (startRowIdx < 0) return;
+      const startRow = rows[startRowIdx];
+      if (!startRow || !isCellEditable({ field: pasteAnchor.field, row: startRow })) return;
+
+      if (inEditing && rawLines.length > 1) {
+        apiRef.current?.stopCellEditMode({
+          id: pasteAnchor.rowId,
+          field: pasteAnchor.field,
+          ignoreModifications: true,
+        });
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      void (async () => {
+        let saved = 0;
+        let failed = 0;
+        onError(null);
+        for (let i = 0; i < rawLines.length; i += 1) {
+          const rowIdx = startRowIdx + i;
+          if (rowIdx >= rows.length) break;
+          const oldRow = rows[rowIdx];
+          if (!isCellEditable({ field: pasteAnchor.field, row: oldRow })) {
+            failed += 1;
+            continue;
+          }
+          const parsed = parsePayrollFieldInput(pasteAnchor.field, rawLines[i], prefs.customColumns);
+          const patched = patchPayrollRowField(oldRow, pasteAnchor.field, parsed, prefs.customColumns);
+          if (JSON.stringify(patched) === JSON.stringify(oldRow)) continue;
+          try {
+            await commitPayrollRowUpdate(patched, oldRow, {
+              notifySuccess: false,
+              reload: false,
+            });
+            saved += 1;
+          } catch {
+            failed += 1;
+          }
+        }
+        if (saved > 0) {
+          await onReload();
+          if (failed > 0) {
+            onError(t('payrollManagement.errors.pastePartial', { ok: saved, fail: failed }));
+          } else {
+            onSuccess(t('payrollManagement.success.pasteSaved', { count: saved }));
+          }
+        } else if (failed > 0) {
+          onError(t('payrollManagement.errors.pasteFailed'));
+        }
+      })();
+    },
+    [
+      allowCellEdit,
+      commitPayrollRowUpdate,
+      isCellEditable,
+      onError,
+      onReload,
+      onSuccess,
+      prefs.customColumns,
+      rows,
+      t,
+    ]
+  );
+
+  const baseColumns = useMemo(
     () =>
       buildPayrollGridColumns({
         t,
@@ -281,6 +446,13 @@ const PayrollExcelGrid: React.FC<Props> = ({
       t,
     ]
   );
+
+  const columns = useMemo(
+    () => applyPayrollAutoColumnWidths(baseColumns, rows),
+    [baseColumns, rows]
+  );
+
+  const gridMinWidth = useMemo(() => sumPayrollGridWidth(columns), [columns]);
 
   const orderedFieldsForDialog = useMemo(() => {
     const fields = columns.map((c) => c.field);
@@ -539,7 +711,7 @@ const PayrollExcelGrid: React.FC<Props> = ({
   const ratioSumOk = Math.abs(ratioSum - 100) < 0.05;
 
   const PAYROLL_ROW_HEIGHT = 36;
-  const PAYROLL_HEADER_HEIGHT = 56;
+  const PAYROLL_HEADER_HEIGHT = 48;
   const PAYROLL_LIST_BOTTOM_GAP = PAYROLL_ROW_HEIGHT;
   const gridBodyHeight =
     PAYROLL_HEADER_HEIGHT + Math.max(rows.length, 1) * PAYROLL_ROW_HEIGHT + PAYROLL_LIST_BOTTOM_GAP;
@@ -617,6 +789,8 @@ const PayrollExcelGrid: React.FC<Props> = ({
       </Box>
 
       <Box
+      onPasteCapture={handlePaste}
+      onCopy={handleCopy}
         sx={{
           width: '100%',
           minWidth: 0,
@@ -626,49 +800,20 @@ const PayrollExcelGrid: React.FC<Props> = ({
         }}
       >
         <DataGrid
+          apiRef={apiRef}
           key={`${i18n.language}-${prefs.order.join('|')}-${prefs.customColumns.map((c) => `${c.id}:${c.inputMode || 'amount'}:${c.formula || ''}`).join(',')}-${salaryRatios.parts.map((p) => `${p.id}:${p.label}`).join(',')}`}
           rows={rows}
           columns={columns}
           loading={loading}
           getRowId={(r) => r.id}
-          isCellEditable={(params) => {
-            if (!allowCellEdit) return false;
-            if (
-              params.field === 'pf_employer' ||
-              params.field === 'days_worked' ||
-              params.field === 'sum_total' ||
-              params.field === 'net_salary_payable' ||
-              params.field === 'pt' ||
-              params.field === 'ot_rate' ||
-              params.field === 'esic_employee' ||
-              params.field === 'esic_employer' ||
-              params.field === 'pf_employee' ||
-              params.field === 'emp_id' ||
-              params.field === 'employee_email' ||
-              params.field === 'working_month' ||
-              params.field === 'row_no' ||
-              params.field === 'actions'
-            ) {
-              return false;
-            }
-            if (
-              (params.field === 'basic_salary' ||
-                params.field === 'house_rent_allowance' ||
-                params.field === 'other_allowance' ||
-                String(params.field).startsWith('const__')) &&
-              !allowConstantsEdit
-            ) {
-              return false;
-            }
-            const row = params.row as PayrollGridRow;
-            if (isRoot) return true;
-            const period = String(row.working_month || '').trim();
-            if (!period) return true;
-            return !lockedPeriods.has(period);
-          }}
+          isCellEditable={(params) => isCellEditable({ field: params.field, row: params.row as PayrollGridRow })}
           processRowUpdate={processRowUpdate}
           editMode="cell"
+          onCellClick={handleCellClick}
           disableRowSelectionOnClick
+          disableColumnMenu
+          showCellVerticalBorder
+          showColumnVerticalBorder
           rowHeight={PAYROLL_ROW_HEIGHT}
           columnHeaderHeight={PAYROLL_HEADER_HEIGHT}
           paginationModel={{ page: 0, pageSize: Math.max(rows.length, 1) }}
@@ -677,7 +822,7 @@ const PayrollExcelGrid: React.FC<Props> = ({
           sx={{
             ...(typeof payrollDataGridSx === 'function' ? payrollDataGridSx(theme) : payrollDataGridSx),
             width: '100%',
-            minWidth: PAYROLL_GRID_MIN_WIDTH + prefs.customColumns.length * 120,
+            minWidth: gridMinWidth,
             height: gridBodyHeight,
             minHeight: gridBodyHeight,
             maxHeight: gridBodyHeight,

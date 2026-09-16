@@ -26,10 +26,39 @@ import {
   type PayrollConstantPart,
 } from './payrollSalaryRatios';
 
-/** 엑셀 Salary Details 시트 기준 최소 가로 너비 */
-export const PAYROLL_GRID_MIN_WIDTH = 3440;
+const colDef = <T extends GridColDef<PayrollGridRow>>(col: T): T => col;
 
-const stretchCol = <T extends GridColDef<PayrollGridRow>>(col: T): T => ({ flex: 1, ...col });
+function appendCellClass(
+  existing: GridColDef<PayrollGridRow>['cellClassName'],
+  extra: string
+): GridColDef<PayrollGridRow>['cellClassName'] {
+  if (!existing) return extra;
+  if (typeof existing === 'string') {
+    return existing.includes(extra) ? existing : `${existing} ${extra}`;
+  }
+  return (params) => {
+    const base = existing(params);
+    return base.includes(extra) ? base : `${base} ${extra}`.trim();
+  };
+}
+
+const LEFT_TEXT_FIELDS = new Set(['employee_email', 'department', 'employee_name']);
+
+function withPayrollGridDefaults(cols: GridColDef<PayrollGridRow>[]): GridColDef<PayrollGridRow>[] {
+  return cols.map((col) => {
+    const leftText = LEFT_TEXT_FIELDS.has(col.field);
+    return {
+      ...col,
+      sortable: col.sortable ?? false,
+      align: leftText ? 'left' : 'center',
+      headerAlign: 'center',
+      cellClassName: appendCellClass(
+        col.cellClassName,
+        leftText ? 'payroll-col-text-left' : 'payroll-col-center'
+      ),
+    };
+  });
+}
 
 type PayrollTranslate = (key: string) => string;
 
@@ -80,15 +109,17 @@ export function buildPayrollGridColumns({
   const constantCols: GridColDef<PayrollGridRow>[] = parts.map((part, idx) => {
     const field = constantPartField(part.id);
     const isSystem = isSystemConstantId(part.id);
-    return stretchCol({
+    return colDef({
       field,
       headerName: part.label,
-      minWidth: 100,
+      minWidth: 72,
       editable: allowCellEdit && allowConstantsEdit,
       headerClassName:
         idx === 0 ? 'payroll-col-salary payroll-col-salary-start' : 'payroll-col-salary',
       cellClassName:
-        idx === 0 ? 'payroll-col-salary payroll-col-salary-start' : 'payroll-col-salary',
+        idx === 0
+          ? 'payroll-col-salary payroll-col-salary-start payroll-col-center'
+          : 'payroll-col-salary payroll-col-center',
       ...numberEditProps,
       ...(isSystem
         ? {}
@@ -115,14 +146,14 @@ export function buildPayrollGridColumns({
   const customCols: GridColDef<PayrollGridRow>[] = customColumns.map((col) => {
     const isCountFormula = col.inputMode === 'count' && Boolean(String(col.formula || '').trim());
     if (isCountFormula) {
-      return stretchCol({
+      return colDef({
         field: customColumnField(col.id),
         headerName: col.label,
         description: String(col.formula || ''),
-        minWidth: 120,
+        minWidth: 64,
         editable: allowCellEdit,
         headerClassName: 'payroll-col-extra',
-        cellClassName: 'payroll-col-extra payroll-col-user-input',
+        cellClassName: 'payroll-col-extra payroll-col-user-input payroll-col-center',
         ...countEditProps,
         valueGetter: (_value, row) => row.custom_allowance_inputs?.[col.id] ?? 0,
         valueSetter: (value, row) => {
@@ -144,7 +175,11 @@ export function buildPayrollGridColumns({
           const title = count > 0 ? `${count} × (${col.formula}) = ${formatNumberDisplay(amount)}` : String(col.formula || '');
           return (
             <Tooltip title={title}>
-              <Typography variant="body2" noWrap sx={{ maxWidth: '100%', fontVariantNumeric: 'tabular-nums' }}>
+              <Typography
+                variant="body2"
+                noWrap
+                sx={{ maxWidth: '100%', fontVariantNumeric: 'tabular-nums', textAlign: 'center', width: '100%' }}
+              >
                 {countEditProps.valueFormatter(params.value)}
               </Typography>
             </Tooltip>
@@ -153,13 +188,13 @@ export function buildPayrollGridColumns({
       });
     }
 
-    return stretchCol({
+    return colDef({
       field: customColumnField(col.id),
       headerName: col.label,
-      minWidth: 120,
+      minWidth: 64,
       editable: allowCellEdit,
       headerClassName: 'payroll-col-extra',
-      cellClassName: 'payroll-col-extra payroll-col-user-input',
+      cellClassName: 'payroll-col-extra payroll-col-user-input payroll-col-center',
       ...numberEditProps,
       valueGetter: (_value, row) => row.custom_allowances?.[col.id] ?? 0,
       valueSetter: (value, row) => {
@@ -182,55 +217,53 @@ export function buildPayrollGridColumns({
     {
       field: 'row_no',
       headerName: t('payrollManagement.gridColumns.rowNo'),
-      flex: 0,
-      width: 56,
-      minWidth: 56,
-      maxWidth: 56,
+      minWidth: 48,
       editable: false,
-      sortable: false
+      sortable: false,
     },
-    stretchCol({
+    colDef({
       field: 'emp_id',
       headerName: t('payrollManagement.gridColumns.empId'),
-      minWidth: 88,
-      editable: false
+      minWidth: 64,
+      editable: false,
     }),
-    stretchCol({
+    colDef({
       field: 'bank_account',
       headerName: t('payrollManagement.gridColumns.bankAccount'),
       minWidth: 100,
       editable: allowCellEdit
     }),
-    stretchCol({ field: 'ifsc', headerName: t('payrollManagement.gridColumns.ifsc'), minWidth: 96, editable: allowCellEdit }),
-    stretchCol({
+    colDef({ field: 'ifsc', headerName: t('payrollManagement.gridColumns.ifsc'), minWidth: 96, editable: allowCellEdit }),
+    colDef({
       field: 'bank_name',
       headerName: t('payrollManagement.gridColumns.bankName'),
       minWidth: 96,
       editable: allowCellEdit
     }),
-    stretchCol({
+    colDef({
       field: 'employee_email',
       headerName: t('payrollManagement.gridColumns.email'),
       minWidth: 140,
       editable: false
     }),
-    stretchCol({
+    colDef({
       field: 'department',
       headerName: t('payrollManagement.gridColumns.department'),
       minWidth: 100,
       editable: allowCellEdit
     }),
-    stretchCol({
+    colDef({
       field: 'employee_name',
       headerName: t('payrollManagement.gridColumns.employeeName'),
       minWidth: 120,
       editable: allowCellEdit,
+      cellClassName: 'payroll-col-name',
       renderCell: (params) =>
         allowOpenPayslip ? (
           <Link
             component="button"
             type="button"
-            underline="hover"
+            underline="none"
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
@@ -240,181 +273,183 @@ export function buildPayrollGridColumns({
               cursor: 'pointer',
               font: 'inherit',
               textAlign: 'left',
-              color: 'primary.main',
+              color: 'inherit',
+              textDecoration: 'none',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
-              maxWidth: '100%'
+              maxWidth: '100%',
+              width: '100%',
+              p: 0,
+              minWidth: 0,
+              border: 'none',
+              background: 'none',
+              '&:hover': {
+                color: 'inherit',
+                textDecoration: 'none',
+              },
+              '&:focus, &:focus-visible': {
+                outline: 'none',
+              },
             }}
           >
             {params.value}
           </Link>
         ) : (
-          <Typography variant="body2" noWrap sx={{ maxWidth: '100%' }}>
+          <Typography variant="body2" noWrap sx={{ maxWidth: '100%', width: '100%', textAlign: 'left' }}>
             {params.value}
           </Typography>
         )
     }),
-    stretchCol({
+    colDef({
       field: 'joining_date',
       headerName: t('payrollManagement.gridColumns.joiningDate'),
-      minWidth: 100,
-      editable: allowCellEdit
+      minWidth: 88,
+      editable: allowCellEdit,
     }),
-    stretchCol({
+    colDef({
       field: 'working_month',
       headerName: t('payrollManagement.gridColumns.workingMonth'),
-      minWidth: 88,
+      minWidth: 56,
       editable: false,
       sortable: true,
-      align: 'right',
-      headerAlign: 'center',
+      headerClassName: 'payroll-col-salary-end',
+      cellClassName: 'payroll-col-salary-end',
       valueGetter: (_value, row) => computeTenureMonths(row.joining_date, row.working_month),
       valueFormatter: (value: unknown) =>
         value === '' || value === null || value === undefined ? '' : String(value)
     }),
     ...constantCols,
-    stretchCol({
+    colDef({
       field: 'total_salary',
       headerName: t('payrollManagement.gridColumns.totalSalary'),
-      minWidth: 100,
+      minWidth: 72,
       editable: allowCellEdit,
       headerClassName: 'payroll-col-salary-total',
       cellClassName: 'payroll-col-salary-total',
       ...numberEditProps
     }),
-    stretchCol({
+    colDef({
       field: 'total_day_of_month',
       headerName: t('payrollManagement.gridColumns.totalDayOfMonth'),
-      minWidth: 96,
+      minWidth: 56,
       editable: allowCellEdit,
-      align: 'center',
-      headerAlign: 'center',
       headerClassName: 'payroll-col-days payroll-col-days-start',
       cellClassName: 'payroll-col-days payroll-col-days-start',
       valueFormatter: (value: unknown) => formatMaybeNumericString(value)
     }),
-    stretchCol({
+    colDef({
       field: 'unpaid_leave',
       headerName: t('payrollManagement.gridColumns.unpaidLeave'),
-      minWidth: 88,
+      minWidth: 56,
       editable: allowCellEdit,
-      align: 'center',
-      headerAlign: 'center',
       headerClassName: 'payroll-col-days',
       cellClassName: 'payroll-col-days payroll-col-user-input',
       valueFormatter: (value: unknown) => formatMaybeNumericString(value)
     }),
-    stretchCol({
+    colDef({
       field: 'days_worked',
       headerName: t('payrollManagement.gridColumns.daysWorked'),
-      minWidth: 88,
+      minWidth: 56,
       editable: false,
-      align: 'center',
-      headerAlign: 'center',
-      headerClassName: 'payroll-col-days',
-      cellClassName: 'payroll-col-days',
+      headerClassName: 'payroll-col-days payroll-col-days-end',
+      cellClassName: 'payroll-col-days payroll-col-days-end',
       valueFormatter: (value: unknown) => formatMaybeNumericString(value)
     }),
-    stretchCol({
+    colDef({
       field: 'ot_rate',
       headerName: t('payrollManagement.gridColumns.otRate'),
-      minWidth: 84,
+      minWidth: 56,
       editable: false,
       headerClassName: 'payroll-col-attendance payroll-col-attendance-start',
-      cellClassName: 'payroll-col-attendance payroll-col-attendance-start',
+      cellClassName: 'payroll-col-attendance payroll-col-attendance-start payroll-col-center',
       ...numberEditProps
     }),
-    stretchCol({
+    colDef({
       field: 'day_ot_hour',
       headerName: t('payrollManagement.gridColumns.dayOtHour'),
-      minWidth: 84,
+      minWidth: 56,
       editable: allowCellEdit,
-      align: 'center',
-      headerAlign: 'center',
       headerClassName: 'payroll-col-attendance',
-      cellClassName: 'payroll-col-attendance payroll-col-user-input',
+      cellClassName: 'payroll-col-attendance payroll-col-user-input payroll-col-center',
       ...otHourEditProps
     }),
-    stretchCol({
+    colDef({
       field: 'sum_total',
       headerName: t('payrollManagement.gridColumns.sumTotal'),
-      minWidth: 100,
-      editable: false,
-      headerClassName: 'payroll-col-sum payroll-col-sum-start',
-      cellClassName: 'payroll-col-sum payroll-col-sum-start',
-      ...numberEditProps
-    }),
-    stretchCol({
-      field: 'esic_employer',
-      headerName: t('payrollManagement.gridColumns.esicEmployer'),
-      minWidth: 120,
-      editable: false,
-      headerClassName: 'payroll-col-employer payroll-col-employer-start',
-      cellClassName: 'payroll-col-employer payroll-col-employer-start',
-      valueFormatter: (value: unknown) => formatMaybeNumericString(value)
-    }),
-    stretchCol({
-      field: 'pf_employer',
-      headerName: t('payrollManagement.gridColumns.pfEmployer'),
-      minWidth: 100,
-      editable: false,
-      headerClassName: 'payroll-col-employer',
-      cellClassName: 'payroll-col-employer',
-      valueFormatter: (value: unknown) => formatMaybeNumericString(value)
-    }),
-    stretchCol({
-      field: 'esic_employee',
-      headerName: t('payrollManagement.gridColumns.esicEmployee'),
-      minWidth: 120,
-      editable: false,
-      headerClassName: 'payroll-col-employee payroll-col-employee-start',
-      cellClassName: 'payroll-col-employee payroll-col-employee-start',
-      valueFormatter: (value: unknown) => formatMaybeNumericString(value)
-    }),
-    stretchCol({
-      field: 'pf_employee',
-      headerName: t('payrollManagement.gridColumns.pfEmployee'),
-      minWidth: 100,
-      editable: false,
-      headerClassName: 'payroll-col-employee',
-      cellClassName: 'payroll-col-employee',
-      valueFormatter: (value: unknown) => formatMaybeNumericString(value)
-    }),
-    stretchCol({
-      field: 'tds',
-      headerName: t('payrollManagement.gridColumns.tds'),
-      minWidth: 80,
-      editable: false,
-      headerClassName: 'payroll-col-employee',
-      cellClassName: 'payroll-col-employee',
-      ...numberEditProps
-    }),
-    stretchCol({
-      field: 'pt',
-      headerName: t('payrollManagement.gridColumns.pt'),
       minWidth: 72,
       editable: false,
-      headerClassName: 'payroll-col-employee',
-      cellClassName: 'payroll-col-employee',
+      headerClassName: 'payroll-col-sum',
+      cellClassName: 'payroll-col-sum payroll-col-center',
+      ...numberEditProps
+    }),
+    colDef({
+      field: 'esic_employer',
+      headerName: t('payrollManagement.gridColumns.esicEmployer'),
+      minWidth: 64,
+      editable: false,
+      headerClassName: 'payroll-col-employer payroll-col-employer-start',
+      cellClassName: 'payroll-col-employer payroll-col-employer-start payroll-col-center',
       valueFormatter: (value: unknown) => formatMaybeNumericString(value)
     }),
-    stretchCol({
+    colDef({
+      field: 'pf_employer',
+      headerName: t('payrollManagement.gridColumns.pfEmployer'),
+      minWidth: 56,
+      editable: false,
+      headerClassName: 'payroll-col-employer payroll-col-employer-end',
+      cellClassName: 'payroll-col-employer payroll-col-employer-end payroll-col-center',
+      valueFormatter: (value: unknown) => formatMaybeNumericString(value)
+    }),
+    colDef({
+      field: 'esic_employee',
+      headerName: t('payrollManagement.gridColumns.esicEmployee'),
+      minWidth: 64,
+      editable: false,
+      headerClassName: 'payroll-col-employee payroll-col-employee-start',
+      cellClassName: 'payroll-col-employee payroll-col-employee-start payroll-col-center',
+      valueFormatter: (value: unknown) => formatMaybeNumericString(value)
+    }),
+    colDef({
+      field: 'pf_employee',
+      headerName: t('payrollManagement.gridColumns.pfEmployee'),
+      minWidth: 56,
+      editable: false,
+      headerClassName: 'payroll-col-employee',
+      cellClassName: 'payroll-col-employee payroll-col-center',
+      valueFormatter: (value: unknown) => formatMaybeNumericString(value)
+    }),
+    colDef({
+      field: 'tds',
+      headerName: t('payrollManagement.gridColumns.tds'),
+      minWidth: 56,
+      editable: false,
+      headerClassName: 'payroll-col-employee',
+      cellClassName: 'payroll-col-employee payroll-col-center',
+      ...numberEditProps
+    }),
+    colDef({
+      field: 'pt',
+      headerName: t('payrollManagement.gridColumns.pt'),
+      minWidth: 48,
+      editable: false,
+      headerClassName: 'payroll-col-employee',
+      cellClassName: 'payroll-col-employee payroll-col-center',
+      valueFormatter: (value: unknown) => formatMaybeNumericString(value)
+    }),
+    colDef({
       field: 'net_salary_payable',
       headerName: t('payrollManagement.gridColumns.netSalary'),
-      minWidth: 110,
+      minWidth: 80,
       editable: false,
       headerClassName: 'payroll-col-net payroll-col-net-start',
-      cellClassName: 'payroll-col-net payroll-col-net-start',
+      cellClassName: 'payroll-col-net payroll-col-net-start payroll-col-center',
       ...numberEditProps
     }),
     {
       field: 'actions',
       headerName: t('payrollManagement.columns.actions'),
-      flex: 0,
-      width: 72,
-      minWidth: 72,
-      maxWidth: 72,
+      minWidth: 48,
       sortable: false,
       filterable: false,
       editable: false,
@@ -472,5 +507,5 @@ export function buildPayrollGridColumns({
   // 상수 영역 → 기타 수당 옆(근속 다음 ~ 급여합계 앞), 추가 컬럼 → OT(시간) 옆
   order = placeConstantPartsAfterOther(order, constantFields);
   order = placeCustomColumnsAfterTransport(order, customFields);
-  return order.map((f) => byField.get(f)!).filter(Boolean);
+  return withPayrollGridDefaults(order.map((f) => byField.get(f)!).filter(Boolean));
 }
