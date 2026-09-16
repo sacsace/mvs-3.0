@@ -2033,14 +2033,13 @@ router.post(
           continue;
         }
 
-        // 중복 사용자ID 확인
-        const existingUser = await (User as any).findOne({
-          where: {
-            userid: row['사용자ID'].toString().trim()
-          }
-        });
+        const userid = row['사용자ID'].toString().trim();
+        const email = row['이메일'].toString().trim();
 
-        if (existingUser) {
+        const existingByUserid = await (User as any).findOne({ where: { userid } });
+        const existingByEmail = await (User as any).findOne({ where: { email } });
+
+        if (existingByUserid && existingByUserid.status !== 'inactive') {
           results.failed.push({
             row: i + 2,
             data: row,
@@ -2049,14 +2048,7 @@ router.post(
           continue;
         }
 
-        // 중복 이메일 확인
-        const existingEmail = await (User as any).findOne({
-          where: {
-            email: row['이메일'].toString().trim()
-          }
-        });
-
-        if (existingEmail) {
+        if (existingByEmail && existingByEmail.status !== 'inactive') {
           results.failed.push({
             row: i + 2,
             data: row,
@@ -2065,14 +2057,53 @@ router.post(
           continue;
         }
 
+        if (
+          existingByUserid &&
+          existingByEmail &&
+          Number(existingByUserid.id) !== Number(existingByEmail.id)
+        ) {
+          results.failed.push({
+            row: i + 2,
+            data: row,
+            error: '사용자ID와 이메일이 서로 다른 비활성 계정과 충돌합니다.'
+          });
+          continue;
+        }
+
+        const reactivateUser = existingByUserid || existingByEmail;
+
         // 회사 ID 결정 (root는 company_id를 선택할 수 있음)
         let finalCompanyId = companyId;
         if (userRole === 'root' && row['회사ID']) {
           finalCompanyId = parseInt(row['회사ID'].toString());
         }
 
+        if (reactivateUser) {
+          if (Number(reactivateUser.tenant_id) !== Number(tenantId)) {
+            results.failed.push({
+              row: i + 2,
+              data: row,
+              error: '다른 테넌트의 비활성 사용자는 재등록할 수 없습니다.'
+            });
+            continue;
+          }
+          if (userRole !== 'root' && userRole !== 'audit') {
+            if (Number(reactivateUser.company_id) !== Number(companyId)) {
+              results.failed.push({
+                row: i + 2,
+                data: row,
+                error: '다른 회사의 비활성 사용자는 재등록할 수 없습니다.'
+              });
+              continue;
+            }
+          }
+        }
+
         // 사원번호 자동 생성 (없는 경우)
         let employeeNumber = row['사원번호']?.toString().trim() || '';
+        if (!employeeNumber && reactivateUser?.employee_number) {
+          employeeNumber = String(reactivateUser.employee_number);
+        }
         if (!employeeNumber && finalCompanyId) {
           const company = await (Company as any).findByPk(finalCompanyId);
           if (company) {
@@ -2123,13 +2154,39 @@ router.post(
           continue;
         }
 
-        // 사용자 생성
-        const user = await (User as any).create({
+        const importStatus = (row['상태 (active/inactive/suspended)'] && ['active', 'inactive', 'suspended'].includes(row['상태 (active/inactive/suspended)'].toString().toLowerCase()))
+          ? row['상태 (active/inactive/suspended)'].toString().toLowerCase()
+          : 'active';
+
+        if (importStatus !== 'inactive') {
+          const tenant = await (Tenant as any).findByPk(tenantId, { attributes: ['id', 'max_users'] });
+          if (tenant?.max_users != null) {
+            const userCount = await (User as any).count({
+              where: {
+                tenant_id: tenantId,
+                status: { [Op.ne]: 'inactive' },
+                ...(reactivateUser && reactivateUser.status === 'inactive'
+                  ? { id: { [Op.ne]: reactivateUser.id } }
+                  : {})
+              }
+            });
+            if (userCount >= tenant.max_users) {
+              results.failed.push({
+                row: i + 2,
+                data: row,
+                error: `현재 요금제는 최대 ${tenant.max_users}명까지만 등록할 수 있습니다.`
+              });
+              continue;
+            }
+          }
+        }
+
+        const userPayload = {
           tenant_id: tenantId,
           company_id: finalCompanyId,
-          userid: row['사용자ID'].toString().trim(),
+          userid,
           username: row['이름'].toString().trim(),
-          email: row['이메일'].toString().trim(),
+          email,
           password_hash: passwordHash,
           role: importRole,
           department: row['부서'] ? row['부서'].toString().trim() : null,
@@ -2152,10 +2209,15 @@ router.post(
             if (raw == null || String(raw).trim() === '' || String(raw).trim() === '**') return null;
             return parseSalaryInput(raw);
           })(),
-          status: (row['상태 (active/inactive/suspended)'] && ['active', 'inactive', 'suspended'].includes(row['상태 (active/inactive/suspended)'].toString().toLowerCase()))
-            ? row['상태 (active/inactive/suspended)'].toString().toLowerCase()
-            : 'active'
-        });
+          status: importStatus,
+        };
+
+        const user = reactivateUser
+          ? await reactivateUser.update({
+              ...userPayload,
+              session_version: Number(reactivateUser.session_version ?? 0) + 1,
+            })
+          : await (User as any).create(userPayload);
 
         try {
           await grantEmployeeSelfServicePermissions({
@@ -2169,8 +2231,9 @@ router.post(
 
         results.success.push({
           row: i + 2,
-          userid: row['사용자ID'],
-          username: row['이름']
+          userid,
+          username: row['이름'],
+          reactivated: Boolean(reactivateUser)
         });
       } catch (error: any) {
         results.failed.push({

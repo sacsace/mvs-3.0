@@ -73,6 +73,9 @@ import {
 } from 'recharts';
 import { workBoardService } from '../../services/api';
 import { useStore } from '../../store';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
+
+type CompanyOption = { id: number; name: string };
 
 const listViewModeBarSx = {
   mb: 1.25,
@@ -650,8 +653,17 @@ const WorkStatistics: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useStore();
+  const isRoot = user?.role === 'root';
   const isPersonalStatsView = !user?.role || !TEAM_STATS_ROLES.has(user.role);
   const currentUserId = user?.id != null ? Number(user.id) : null;
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>('');
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const effectiveCompanyId = useMemo(() => {
+    if (isRoot) {
+      return selectedCompanyId !== '' ? Number(selectedCompanyId) : null;
+    }
+    return user?.company_id != null ? Number(user.company_id) : null;
+  }, [isRoot, selectedCompanyId, user?.company_id]);
   const [statistics, setStatistics] = useState<WorkStatistic[]>([]);
   const [filteredStatistics, setFilteredStatistics] = useState<WorkStatistic[]>([]);
   const [statusSummary, setStatusSummary] = useState<StatusSummary>({ todo: 0, progress: 0, done: 0, unassigned: 0 });
@@ -683,15 +695,49 @@ const WorkStatistics: React.FC = () => {
     return `${now.getFullYear()}-${m}`;
   }, []);
 
+  const loadCompanies = useCallback(async () => {
+    if (!isRoot) return;
+    try {
+      const rows = await useReferenceDataStore.getState().fetchCompanies();
+      const mapped = rows.map((c: any) => ({
+        id: Number(c.id),
+        name: String(c.name || `Company ${c.id}`),
+      }));
+      setCompanies(mapped);
+      if (selectedCompanyId === '' && mapped.length > 0) {
+        const loginCompanyId = Number(user?.company_id || 0);
+        const matched = mapped.find((c) => c.id === loginCompanyId);
+        setSelectedCompanyId(matched ? matched.id : mapped[0].id);
+      }
+    } catch {
+      setError(t('workStatistics.errors.loadCompaniesFailed'));
+    }
+  }, [isRoot, selectedCompanyId, t, user?.company_id]);
+
   const loadStatisticsData = useCallback(async () => {
     setError('');
     try {
-      const boardsRes = await workBoardService.getBoards();
+      if (
+        effectiveCompanyId == null ||
+        !Number.isFinite(effectiveCompanyId) ||
+        effectiveCompanyId <= 0
+      ) {
+        setStatistics([]);
+        setStatusSummary({ todo: 0, progress: 0, done: 0, unassigned: 0 });
+        setCompletedDurationSamples([]);
+        setCardsByEmployeeId({});
+        return;
+      }
+
+      const boardsRes = await workBoardService.getBoards({ company_id: effectiveCompanyId });
       if (!boardsRes?.success) {
         throw new Error(boardsRes?.message || t('workStatistics.errors.loadBoardsFailed'));
       }
 
-      const boardIds: number[] = (boardsRes.data || []).map((b: any) => b.id).filter(Boolean);
+      const boardIds: number[] = (boardsRes.data || [])
+        .filter((b: any) => Number(b.company_id) === effectiveCompanyId)
+        .map((b: any) => b.id)
+        .filter(Boolean);
       if (boardIds.length === 0) {
         setStatistics([]);
         setStatusSummary({ todo: 0, progress: 0, done: 0, unassigned: 0 });
@@ -710,7 +756,9 @@ const WorkStatistics: React.FC = () => {
         })
       );
 
-      const validBoards = details.filter(Boolean) as any[];
+      const validBoards = (details.filter(Boolean) as any[]).filter(
+        (board) => Number(board.company_id) === effectiveCompanyId
+      );
       const memberMeta = new Map<number, { name: string; department: string; position: string }>();
       const statMap = new Map<number, StatAccumulator>();
       const cardsMap = new Map<number, UserWorkCardItem[]>();
@@ -848,7 +896,9 @@ const WorkStatistics: React.FC = () => {
         }
       }
 
-      const rows = Array.from(statMap.values()).map((s) => {
+      const rows = Array.from(statMap.values())
+        .filter((s) => s.tasksAssigned > 0)
+        .map((s) => {
         const totalHours = s.tasksAssigned * 2;
         const productiveHours = s.tasksCompleted * 2 + s.tasksInProgress * 1.2;
         const finalized = finalizeStatistic(s);
@@ -860,33 +910,6 @@ const WorkStatistics: React.FC = () => {
           attendanceRate: Number(Math.min(100, 85 + doneRate * 0.15).toFixed(1))
         };
       });
-
-      // 담당카드가 0인 멤버도 포함 (보드 멤버 기준, 관리자 뷰만)
-      if (!isPersonalStatsView) {
-        memberMeta.forEach((meta, uid) => {
-          if (!statMap.has(uid)) {
-            rows.push(
-              finalizeStatistic(createEmptyAccumulator(uid, meta, meta.name, currentPeriod))
-            );
-          }
-        });
-      } else if (currentUserId != null && !statMap.has(currentUserId)) {
-        const meta = memberMeta.get(currentUserId);
-        rows.push(
-          finalizeStatistic(
-            createEmptyAccumulator(
-              currentUserId,
-              meta ?? {
-                name: user?.username || t('workStatistics.userFallback', { id: currentUserId }),
-                department: (user as { department?: string })?.department || '-',
-                position: (user as { position?: string })?.position || '-',
-              },
-              user?.username || t('workStatistics.userFallback', { id: currentUserId }),
-              currentPeriod
-            )
-          )
-        );
-      }
 
       rows.sort(
         (a, b) =>
@@ -915,7 +938,7 @@ const WorkStatistics: React.FC = () => {
       setCompletedDurationSamples([]);
       setCardsByEmployeeId({});
     }
-  }, [currentPeriod, currentUserId, isPersonalStatsView, t, user]);
+  }, [currentPeriod, currentUserId, effectiveCompanyId, isPersonalStatsView, t, user]);
 
   const openEmployeeCardList = useCallback((employeeId: number, employeeName: string) => {
     setCardListEmployee({ id: employeeId, name: employeeName });
@@ -1004,6 +1027,10 @@ const WorkStatistics: React.FC = () => {
   };
 
   useEffect(() => {
+    loadCompanies();
+  }, [loadCompanies]);
+
+  useEffect(() => {
     loadStatisticsData();
   }, [loadStatisticsData]);
 
@@ -1074,7 +1101,9 @@ const WorkStatistics: React.FC = () => {
   const averageOnTimeRate = safeAvg(
     statistics.filter((s) => s.tasksAssigned > 0).map((s) => s.onTimeRate)
   );
-  const averageProductivity = safeAvg(statistics.map((s) => s.productivity));
+  const averageProductivity = safeAvg(
+    statistics.filter((s) => s.tasksAssigned > 0).map((s) => s.productivity)
+  );
   const totalAssigned = statistics.reduce((sum, s) => sum + s.tasksAssigned, 0);
   const totalTasksCompleted = statistics.reduce((sum, s) => sum + s.tasksCompleted, 0);
   const totalCompletedProcessingHours = statistics.reduce(
@@ -1298,7 +1327,10 @@ const WorkStatistics: React.FC = () => {
             bgcolor: '#FFFFFF',
             ...statsFilterFieldSx,
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr' },
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: isRoot ? '2fr 1fr 1fr 1fr auto' : '2fr 1fr 1fr auto',
+            },
             gap: 2,
             alignItems: 'flex-end',
           }}
@@ -1320,6 +1352,33 @@ const WorkStatistics: React.FC = () => {
               }}
               sx={statsFilterFieldSx}
             />
+            {isRoot && (
+              <TextField
+                fullWidth
+                size="small"
+                select
+                label={t('workStatistics.filters.company')}
+                value={selectedCompanyId}
+                onChange={(e) => {
+                  const value = String(e.target.value);
+                  if (value === '') {
+                    setSelectedCompanyId('');
+                  } else {
+                    const num = Number(value);
+                    setSelectedCompanyId(Number.isFinite(num) ? num : '');
+                  }
+                }}
+                InputLabelProps={{ shrink: true }}
+                SelectProps={{ displayEmpty: true }}
+                sx={statsFilterFieldSx}
+              >
+                {companies.map((company) => (
+                  <MenuItem key={company.id} value={company.id}>
+                    {company.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
             <TextField
               fullWidth
               size="small"

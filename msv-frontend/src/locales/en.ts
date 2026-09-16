@@ -2093,6 +2093,7 @@ export default {
         avgProcessingTime: 'Avg. Processing Time (Completed)'
       },
       filters: {
+        company: 'Company',
         department: 'Department',
         period: 'Period',
         all: 'All'
@@ -2202,6 +2203,7 @@ export default {
       },
       errors: {
         loadBoardsFailed: 'Failed to load work board list.',
+        loadCompaniesFailed: 'Failed to load company list.',
         loadStatsFailed: 'Failed to load work card statistics.'
       }
     },

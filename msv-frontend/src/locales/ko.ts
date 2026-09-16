@@ -2146,6 +2146,7 @@ export default {
         avgProcessingTime: '평균 처리 시간(완료)'
       },
       filters: {
+        company: '회사',
         department: '부서',
         period: '기간',
         all: '전체'
@@ -2255,6 +2256,7 @@ export default {
       },
       errors: {
         loadBoardsFailed: '작업 보드 목록을 불러오지 못했습니다.',
+        loadCompaniesFailed: '회사 목록을 불러오지 못했습니다.',
         loadStatsFailed: '업무 관리 카드 통계를 불러오는데 실패했습니다.'
       }
     },
