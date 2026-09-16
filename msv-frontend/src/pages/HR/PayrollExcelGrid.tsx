@@ -553,6 +553,7 @@ const PayrollExcelGrid: React.FC<Props> = ({
     if (next < 0 || next >= order.length) return;
     if (field === 'actions' || order[next] === 'actions') return;
     if (field === 'row_no' || order[next] === 'row_no') return;
+    if (field === 'emp_id' || order[next] === 'emp_id') return;
     [order[idx], order[next]] = [order[next], order[idx]];
     persistPrefs({ ...prefs, order });
   };
@@ -1094,7 +1095,7 @@ const PayrollExcelGrid: React.FC<Props> = ({
               const customColumn = customId
                 ? prefs.customColumns.find((c) => c.id === customId)
                 : undefined;
-              const lockedEdge = field === 'row_no' || field === 'actions';
+              const lockedEdge = field === 'row_no' || field === 'emp_id' || field === 'actions';
               const customSecondary =
                 customColumn?.inputMode === 'count' && customColumn.formula
                   ? t('payrollManagement.customColumnFormulaBadge', {

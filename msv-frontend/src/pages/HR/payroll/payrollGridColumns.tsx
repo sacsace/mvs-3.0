@@ -257,8 +257,9 @@ export function buildPayrollGridColumns({
     colDef({
       field: 'emp_id',
       headerName: t('payrollManagement.gridColumns.empId'),
-      minWidth: 64,
+      minWidth: 88,
       editable: false,
+      cellClassName: 'payroll-col-emp-id',
     }),
     colDef({
       field: 'bank_account',

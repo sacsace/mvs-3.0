@@ -137,7 +137,22 @@ export function mergeColumnOrder(
     }
   }
   if (known.has('actions') && !result.includes('actions')) result.push('actions');
-  return result;
+  return ensureLeadColumns(result);
+}
+
+/** 번호·사번은 항상 앞 두 칸에 고정 */
+export function ensureLeadColumns(order: string[]): string[] {
+  const tail: string[] = [];
+  const seen = new Set(['row_no', 'emp_id']);
+  for (const f of order) {
+    if (f === 'row_no' || f === 'emp_id' || f === 'actions') continue;
+    if (seen.has(f)) continue;
+    seen.add(f);
+    tail.push(f);
+  }
+  const next = ['row_no', 'emp_id', ...tail];
+  if (order.includes('actions')) next.push('actions');
+  return next;
 }
 
 export function createCustomColumnId(label: string, existing: PayrollCustomColumn[]): string {

@@ -11,6 +11,7 @@ const CELL_PAD_PX = 18;
 const HEADER_ICON_PAD_PX = 8;
 
 const MAX_WIDTH: Record<string, number> = {
+  emp_id: 120,
   employee_email: 260,
   employee_name: 220,
   department: 180,
@@ -74,6 +75,15 @@ function autoWidthForColumn(col: GridColDef<PayrollGridRow>, rows: PayrollGridRo
     return Math.max(46, contentW + 8, headW + 8);
   }
 
+  if (col.field === 'emp_id') {
+    let width = headerWidth(col.headerName);
+    for (const row of rows) {
+      width = Math.max(width, textLineWidth(getDisplayValue(col, row), false));
+    }
+    const floor = typeof col.minWidth === 'number' ? col.minWidth : 88;
+    return Math.max(floor, width + 10);
+  }
+
   let width = headerWidth(col.headerName);
   for (const row of rows) {
     width = Math.max(width, textLineWidth(getDisplayValue(col, row), false));
@@ -90,7 +100,7 @@ export function applyPayrollAutoColumnWidths(
 ): GridColDef<PayrollGridRow>[] {
   return columns.map((col) => {
     const width = autoWidthForColumn(col, rows);
-    const locked = col.field === 'row_no' || col.field === 'actions';
+    const locked = col.field === 'row_no' || col.field === 'actions' || col.field === 'emp_id';
     return {
       ...col,
       flex: locked ? 0 : 1,

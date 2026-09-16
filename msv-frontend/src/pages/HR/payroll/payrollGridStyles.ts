@@ -293,6 +293,11 @@ export const payrollDataGridSx: SxProps<Theme> = (theme) => {
       paddingLeft: '6px',
     },
     '& .MuiDataGrid-cell.payroll-col-text-left .MuiInputBase-input': { textAlign: 'left' },
+    '& .MuiDataGrid-cell.payroll-col-emp-id': {
+      overflow: 'visible',
+      textOverflow: 'clip',
+      paddingRight: '8px',
+    },
     '& .MuiDataGrid-cell.payroll-col-name:focus, & .MuiDataGrid-cell.payroll-col-name:focus-within': {
       outline: 'none',
     },
