@@ -198,6 +198,16 @@ const companyCheckboxColSx = {
   py: 0.75,
   boxSizing: 'border-box' as const } as const;
 
+/** 회사 정보 보기(단일 회사) 화면 타이포 */
+const companyDetailViewSx = {
+  cardTitle: { fontWeight: 600, letterSpacing: '-0.02em', fontSize: '1rem' },
+  companyName: { fontWeight: 600, mb: 1, fontSize: '1.125rem', lineHeight: 1.35 },
+  companyMeta: { fontSize: '0.8125rem', lineHeight: 1.45 },
+  sectionTitle: { fontWeight: 600, mb: 2, fontSize: '0.875rem' },
+  fieldLabel: { mb: 1, fontSize: '0.8125rem', lineHeight: 1.35 },
+  fieldValue: { fontWeight: 500, fontSize: '0.875rem', lineHeight: 1.45 },
+} as const;
+
 // TabPanel 컴포넌트 정의
 
 // 회사 정보 타입 정의
@@ -286,6 +296,63 @@ interface ImagePreview {
   company_logo: string;
   company_seal: string;
   ceo_signature: string;
+}
+
+function transformCompanyFromApi(company: any): Company {
+  let gstNumbers: string[] = [];
+  if (Array.isArray(company.gst_numbers) && company.gst_numbers.length > 0) {
+    gstNumbers = company.gst_numbers.filter((gst: string) => gst && gst.trim() !== '');
+  }
+
+  return {
+    ...company,
+    employee_count: company.employee_count || 0,
+    subscription_plan: company.subscription_plan || 'basic',
+    subscription_status: company.status || 'active',
+    company_logo: company.company_logo || '',
+    company_seal: company.company_seal || '',
+    ceo_signature: company.ceo_signature || '',
+    account_holder_name: company.account_holder_name || '',
+    bank_name: company.bank_name || '',
+    bank_address: company.bank_address || '',
+    account_number: company.account_number || '',
+    ifsc_code: company.ifsc_code || '',
+    swift_code: company.swift_code || '',
+    gst_numbers: gstNumbers.length > 0 ? gstNumbers : [''],
+    msme_number: company.msme_number || '',
+    iec_number: company.iec_number || '',
+    pan_number: company.pan_number || '',
+    login_period_start: company.login_period_start || '',
+    login_period_end: company.login_period_end || '',
+    login_time_start: company.login_time_start || '09:00:00',
+    login_time_end: company.login_time_end || '18:00:00',
+    timezone: company.timezone || 'Asia/Kolkata',
+    settings: company.settings || {},
+  };
+}
+
+async function reloadCompaniesForUser(
+  user: { role?: string; company_id?: number } | null,
+  force: boolean
+): Promise<{ companies: Company[]; error?: string }> {
+  if (!user) {
+    return { companies: [] };
+  }
+
+  if (user.role === 'root') {
+    const companiesData = await useReferenceDataStore.getState().fetchCompanies(force);
+    return { companies: companiesData.map(transformCompanyFromApi) };
+  }
+
+  if (user.company_id) {
+    const company = await useReferenceDataStore.getState().fetchCompanyById(Number(user.company_id), force);
+    if (company) {
+      return { companies: [transformCompanyFromApi(company)] };
+    }
+    return { companies: [], error: '회사 정보를 불러오는데 실패했습니다.' };
+  }
+
+  return { companies: [], error: '회사 정보가 없습니다. 관리자에게 문의하세요.' };
 }
 
 /** 서버 응답에서 실패 사유를 최대한 구체적으로 뽑아낸다 */
@@ -418,89 +485,11 @@ const CompanyManagement: React.FC = () => {
         setLoading(true);
         setError('');
         
-        // root 사용자는 모든 회사 목록, 일반 사용자는 본인 회사만
-        if (user.role === 'root') {
-          const companiesData = await useReferenceDataStore.getState().fetchCompanies();
-            const transformedCompanies = companiesData.map((company: any) => {
-              // GST 번호 처리: 배열이 아니거나 비어있으면 빈 배열로 설정
-              let gstNumbers: string[] = [];
-              if (Array.isArray(company.gst_numbers) && company.gst_numbers.length > 0) {
-                gstNumbers = company.gst_numbers.filter((gst: string) => gst && gst.trim() !== '');
-              }
-              
-              return {
-                ...company,
-                employee_count: company.employee_count || 0,
-                subscription_plan: company.subscription_plan || 'basic',
-                subscription_status: company.status || 'active',
-                company_logo: company.company_logo || '',
-                company_seal: company.company_seal || '',
-                ceo_signature: company.ceo_signature || '',
-                account_holder_name: company.account_holder_name || '',
-                bank_name: company.bank_name || '',
-                bank_address: company.bank_address || '',
-                account_number: company.account_number || '',
-                ifsc_code: company.ifsc_code || '',
-                swift_code: company.swift_code || '',
-                gst_numbers: gstNumbers.length > 0 ? gstNumbers : [''],
-                msme_number: company.msme_number || '',
-                iec_number: company.iec_number || '',
-                pan_number: company.pan_number || '',
-                login_period_start: company.login_period_start || '',
-                login_period_end: company.login_period_end || '',
-                login_time_start: company.login_time_start || '09:00:00',
-                login_time_end: company.login_time_end || '18:00:00',
-                timezone: company.timezone || 'Asia/Kolkata',
-                settings: company.settings || {}
-              };
-            });
-            setCompanies(transformedCompanies);
-        } else {
-          // 일반 사용자: 본인 회사 정보만 조회
-          if (user.company_id) {
-            const company = await useReferenceDataStore.getState().fetchCompanyById(Number(user.company_id));
-            if (company) {
-              // GST 번호 처리: 배열이 아니거나 비어있으면 빈 배열로 설정
-              let gstNumbers: string[] = [];
-              if (Array.isArray(company.gst_numbers) && company.gst_numbers.length > 0) {
-                gstNumbers = company.gst_numbers.filter((gst: string) => gst && gst.trim() !== '');
-              }
-              
-              const transformedCompany = {
-                ...company,
-                employee_count: company.employee_count || 0,
-                subscription_plan: company.subscription_plan || 'basic',
-                subscription_status: company.status || 'active',
-                company_logo: company.company_logo || '',
-                company_seal: company.company_seal || '',
-                ceo_signature: company.ceo_signature || '',
-                account_holder_name: company.account_holder_name || '',
-                bank_name: company.bank_name || '',
-                bank_address: company.bank_address || '',
-                account_number: company.account_number || '',
-                ifsc_code: company.ifsc_code || '',
-                swift_code: company.swift_code || '',
-                gst_numbers: gstNumbers.length > 0 ? gstNumbers : [''],
-                msme_number: company.msme_number || '',
-                iec_number: company.iec_number || '',
-                pan_number: company.pan_number || '',
-                login_period_start: company.login_period_start || '',
-                login_period_end: company.login_period_end || '',
-                login_time_start: company.login_time_start || '09:00:00',
-                login_time_end: company.login_time_end || '18:00:00',
-                timezone: company.timezone || 'Asia/Kolkata',
-                settings: company.settings || {}
-              };
-              setCompanies([transformedCompany]);
-            } else {
-              setError('회사 정보를 불러오는데 실패했습니다.');
-              setCompanies([]);
-            }
-          } else {
-            setError('회사 정보가 없습니다. 관리자에게 문의하세요.');
-            setCompanies([]);
-          }
+        const { companies: nextCompanies, error: loadError } = await reloadCompaniesForUser(user, false);
+        if (loadError) {
+          setError(loadError);
         }
+        setCompanies(nextCompanies);
       } catch (error: any) {
         // 인증 오류인 경우 특별 처리
         if (error.response?.status === 401 || error.response?.status === 403) {
@@ -782,29 +771,11 @@ const CompanyManagement: React.FC = () => {
         }
       }
       
-      // 목록 새로고침
-      const companiesData = await useReferenceDataStore.getState().fetchCompanies(true);
-      const transformedCompanies = companiesData.map((company: any) => ({
-          ...company,
-          employee_count: company.employee_count || 0,
-          subscription_plan: company.subscription_plan || 'basic',
-          subscription_status: company.status || 'active',
-          company_logo: company.company_logo || '',
-          company_seal: company.company_seal || '',
-          ceo_signature: company.ceo_signature || '',
-          account_holder_name: company.account_holder_name || '',
-          bank_name: company.bank_name || '',
-          account_number: company.account_number || '',
-          ifsc_code: company.ifsc_code || '',
-          login_period_start: company.login_period_start || '',
-          login_period_end: company.login_period_end || '',
-          login_time_start: company.login_time_start || '09:00:00',
-          login_time_end: company.login_time_end || '18:00:00',
-          timezone: company.timezone || 'Asia/Kolkata',
-          settings: company.settings || {}
-        }));
-        
-        setCompanies(transformedCompanies);
+      const { companies: nextCompanies, error: loadError } = await reloadCompaniesForUser(user, true);
+      if (loadError) {
+        setError(loadError);
+      }
+      setCompanies(nextCompanies);
 
       // 등록 모드에서는 성공 시 다이얼로그 닫기 (수정 모드는 위에서 처리)
       if (dialogMode === 'add') {
@@ -843,28 +814,11 @@ const CompanyManagement: React.FC = () => {
             removeCompaniesFromList([id]);
             setSuccess(t('companyManagement.companyDeleted'));
 
-            const companiesData = await useReferenceDataStore.getState().fetchCompanies(true);
-            const transformedCompanies = companiesData.map((company: any) => ({
-                ...company,
-                employee_count: company.employee_count || 0,
-                subscription_plan: company.subscription_plan || 'basic',
-                subscription_status: company.status || 'active',
-                company_logo: company.company_logo || '',
-                company_seal: company.company_seal || '',
-                ceo_signature: company.ceo_signature || '',
-                account_holder_name: company.account_holder_name || '',
-                bank_name: company.bank_name || '',
-                account_number: company.account_number || '',
-                ifsc_code: company.ifsc_code || '',
-                login_period_start: company.login_period_start || '',
-                login_period_end: company.login_period_end || '',
-                login_time_start: company.login_time_start || '09:00:00',
-                login_time_end: company.login_time_end || '18:00:00',
-                timezone: company.timezone || 'Asia/Kolkata',
-                settings: company.settings || {}
-              }));
-
-            setCompanies(transformedCompanies);
+            const { companies: nextCompanies, error: loadError } = await reloadCompaniesForUser(user, true);
+            if (loadError) {
+              setError(loadError);
+            }
+            setCompanies(nextCompanies);
           } catch (error: any) {
             setError(error.response?.data?.message || '회사 삭제 중 오류가 발생했습니다.');
           } finally {
@@ -895,27 +849,11 @@ const CompanyManagement: React.FC = () => {
             removeCompaniesFromList(idsToDelete);
             setSuccess(t('companyManagement.deleteSelectedSuccess', { count: idsToDelete.length }));
 
-            const companiesData = await useReferenceDataStore.getState().fetchCompanies(true);
-            const transformedCompanies = companiesData.map((company: any) => ({
-              ...company,
-              employee_count: company.employee_count || 0,
-              subscription_plan: company.subscription_plan || 'basic',
-              subscription_status: company.status || 'active',
-              company_logo: company.company_logo || '',
-              company_seal: company.company_seal || '',
-              ceo_signature: company.ceo_signature || '',
-              account_holder_name: company.account_holder_name || '',
-              bank_name: company.bank_name || '',
-              account_number: company.account_number || '',
-              ifsc_code: company.ifsc_code || '',
-              login_period_start: company.login_period_start || '',
-              login_period_end: company.login_period_end || '',
-              login_time_start: company.login_time_start || '09:00:00',
-              login_time_end: company.login_time_end || '18:00:00',
-              timezone: company.timezone || 'Asia/Kolkata',
-              settings: company.settings || {} }));
-
-            setCompanies(transformedCompanies);
+            const { companies: nextCompanies, error: loadError } = await reloadCompaniesForUser(user, true);
+            if (loadError) {
+              setError(loadError);
+            }
+            setCompanies(nextCompanies);
           } catch (error: any) {
             setError(error.response?.data?.message || '회사 삭제 중 오류가 발생했습니다.');
           } finally {
@@ -945,6 +883,16 @@ const CompanyManagement: React.FC = () => {
       return haystack.includes(q);
     });
   }, [companies, searchTerm]);
+
+  /** admin 등 단일 회사 보기: 로그인 사용자 company_id와 일치하는 행 사용 */
+  const ownCompany = useMemo(() => {
+    const companyId = Number(user?.company_id);
+    if (Number.isFinite(companyId) && companyId > 0) {
+      const matched = companies.find((company) => company.id === companyId);
+      if (matched) return matched;
+    }
+    return companies[0] ?? null;
+  }, [companies, user?.company_id]);
 
   const handleRequestSort = (property: CompanySortKey) => {
     const isAsc = orderBy === property && order === 'asc';
@@ -2591,11 +2539,11 @@ const CompanyManagement: React.FC = () => {
           </Typography>
         </Box>
       ) : (
-        companies.length > 0 ? (
+        ownCompany ? (
           <Card elevation={0} sx={mvsBodyCardSx}>
             <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 4 }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600, letterSpacing: '-0.02em', color: tablePrimaryFg }}>
+                <Typography variant="subtitle1" sx={{ ...companyDetailViewSx.cardTitle, color: tablePrimaryFg }}>
                   {t('companyManagement.companyInfo')}
                 </Typography>
                 {(user?.role === 'admin' || user?.role === 'root') && (
@@ -2604,7 +2552,7 @@ const CompanyManagement: React.FC = () => {
                       <Button
                         variant="outlined"
                         startIcon={<EditIcon sx={{ fontSize: 18 }} />}
-                        onClick={() => handleEdit(companies[0])}
+                        onClick={() => handleEdit(ownCompany)}
                         disabled={menuFlags.menusLoading || !menuFlags.canEdit}
                         sx={mvsBodyOutlinedBtnSx}
                       >
@@ -2617,9 +2565,9 @@ const CompanyManagement: React.FC = () => {
 
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                  {companies[0].company_logo ? (
+                  {ownCompany.company_logo ? (
                     <Avatar
-                      src={getUploadUrl(companies[0].company_logo)}
+                      src={getUploadUrl(ownCompany.company_logo)}
                       sx={{
                         width: 100,
                         height: 100,
@@ -2630,7 +2578,7 @@ const CompanyManagement: React.FC = () => {
                             : alpha(theme.palette.common.white, 0.12),
                         color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.75)' : theme.palette.grey[200] }}
                     >
-                      {companies[0].name.charAt(0)}
+                      {ownCompany.name.charAt(0)}
                     </Avatar>
                   ) : (
                     <Avatar
@@ -2644,97 +2592,97 @@ const CompanyManagement: React.FC = () => {
                             : alpha(theme.palette.common.white, 0.12),
                         color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.75)' : theme.palette.grey[200] }}
                     >
-                      {companies[0].name.charAt(0)}
+                      {ownCompany.name.charAt(0)}
                     </Avatar>
                   )}
                   <Box>
-                    <Typography variant="h5" sx={{ fontWeight: 'medium', mb: 1, fontSize: '0.75rem' }}>
-                      {companies[0].name}
+                    <Typography variant="h5" sx={companyDetailViewSx.companyName}>
+                      {ownCompany.name}
                     </Typography>
-                    <Typography variant="body1" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                      사업자번호: {companies[0].business_number}
+                    <Typography variant="body1" color="text.secondary" sx={companyDetailViewSx.companyMeta}>
+                      사업자번호: {ownCompany.business_number}
                     </Typography>
                   </Box>
                 </Box>
                 
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 4 }}>
                   <Box>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>대표자</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].ceo_name || '-'}</Typography>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>대표자</Typography>
+                    <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.ceo_name || '-'}</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>업종</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].industry || '-'}</Typography>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>업종</Typography>
+                    <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.industry || '-'}</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>직원 수</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].employee_count}명</Typography>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>직원 수</Typography>
+                    <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.employee_count}명</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>{t('companyManagement.status')}</Typography>
-                    {getStatusChip(companies[0].subscription_status)}
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>{t('companyManagement.status')}</Typography>
+                    {getStatusChip(ownCompany.subscription_status)}
                   </Box>
                   <Box>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>{t('companyManagement.contact')}</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].phone || '-'}</Typography>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>{t('companyManagement.contact')}</Typography>
+                    <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.phone || '-'}</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>이메일</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].email || '-'}</Typography>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>이메일</Typography>
+                    <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.email || '-'}</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>MVS 사용 기간</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>
-                      {companies[0].mvs_start_date && companies[0].mvs_end_date
-                        ? `${companies[0].mvs_start_date} ~ ${companies[0].mvs_end_date}`
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>MVS 사용 기간</Typography>
+                    <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>
+                      {ownCompany.mvs_start_date && ownCompany.mvs_end_date
+                        ? `${ownCompany.mvs_start_date} ~ ${ownCompany.mvs_end_date}`
                         : '-'}
                     </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>웹사이트</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].website || '-'}</Typography>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>웹사이트</Typography>
+                    <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.website || '-'}</Typography>
                   </Box>
                 </Box>
                 
-                {companies[0].address && (
+                {ownCompany.address && (
                   <Box>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>주소</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].address}</Typography>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>주소</Typography>
+                    <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.address}</Typography>
                   </Box>
                 )}
 
                 {/* 세금 및 등록 번호 */}
-                {(companies[0].gst_numbers?.some((gst: string) => gst && gst.trim() !== '') || companies[0].msme_number || companies[0].iec_number || companies[0].pan_number) && (
+                {(ownCompany.gst_numbers?.some((gst: string) => gst && gst.trim() !== '') || ownCompany.msme_number || ownCompany.iec_number || ownCompany.pan_number) && (
                   <Box>
                     <Divider sx={{ my: 3, borderWidth: 1.5, borderColor: 'divider' }} />
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, fontSize: '0.75rem' }}>세금 및 등록 번호</Typography>
+                    <Typography variant="subtitle1" sx={companyDetailViewSx.sectionTitle}>세금 및 등록 번호</Typography>
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 4 }}>
-                      {companies[0].gst_numbers?.some((gst: string) => gst && gst.trim() !== '') && (
+                      {ownCompany.gst_numbers?.some((gst: string) => gst && gst.trim() !== '') && (
                         <Box>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>GST 번호</Typography>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>GST 번호</Typography>
                           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                            {companies[0].gst_numbers.filter((gst: string) => gst && gst.trim() !== '').map((gst: string, index: number) => (
-                              <Typography key={index} variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{gst}</Typography>
+                            {ownCompany.gst_numbers.filter((gst: string) => gst && gst.trim() !== '').map((gst: string, index: number) => (
+                              <Typography key={index} variant="body1" sx={companyDetailViewSx.fieldValue}>{gst}</Typography>
                             ))}
                           </Box>
                         </Box>
                       )}
-                      {companies[0].msme_number && (
+                      {ownCompany.msme_number && (
                         <Box>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>MSME 번호</Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].msme_number}</Typography>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>MSME 번호</Typography>
+                          <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.msme_number}</Typography>
                         </Box>
                       )}
-                      {companies[0].iec_number && (
+                      {ownCompany.iec_number && (
                         <Box>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>IEC 번호</Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].iec_number}</Typography>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>IEC 번호</Typography>
+                          <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.iec_number}</Typography>
                         </Box>
                       )}
-                      {companies[0].pan_number && (
+                      {ownCompany.pan_number && (
                         <Box>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>PAN 번호</Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].pan_number}</Typography>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>PAN 번호</Typography>
+                          <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.pan_number}</Typography>
                         </Box>
                       )}
                     </Box>
@@ -2742,45 +2690,45 @@ const CompanyManagement: React.FC = () => {
                 )}
 
                 {/* 은행 정보 */}
-                {(companies[0].account_holder_name || companies[0].bank_name || companies[0].account_number || companies[0].ifsc_code || companies[0].swift_code || companies[0].bank_address) && (
+                {(ownCompany.account_holder_name || ownCompany.bank_name || ownCompany.account_number || ownCompany.ifsc_code || ownCompany.swift_code || ownCompany.bank_address) && (
                   <Box>
                     <Divider sx={{ my: 3, borderWidth: 1.5, borderColor: 'divider' }} />
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, fontSize: '0.75rem' }}>은행 정보</Typography>
+                    <Typography variant="subtitle1" sx={companyDetailViewSx.sectionTitle}>은행 정보</Typography>
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 4 }}>
-                      {companies[0].account_holder_name && (
+                      {ownCompany.account_holder_name && (
                         <Box>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>예금주</Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].account_holder_name}</Typography>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>예금주</Typography>
+                          <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.account_holder_name}</Typography>
                         </Box>
                       )}
-                      {companies[0].bank_name && (
+                      {ownCompany.bank_name && (
                         <Box>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>은행명</Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].bank_name}</Typography>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>은행명</Typography>
+                          <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.bank_name}</Typography>
                         </Box>
                       )}
-                      {companies[0].account_number && (
+                      {ownCompany.account_number && (
                         <Box>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>계좌번호</Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].account_number}</Typography>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>계좌번호</Typography>
+                          <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.account_number}</Typography>
                         </Box>
                       )}
-                      {companies[0].ifsc_code && (
+                      {ownCompany.ifsc_code && (
                         <Box>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>IFSC 코드</Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].ifsc_code}</Typography>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>IFSC 코드</Typography>
+                          <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.ifsc_code}</Typography>
                         </Box>
                       )}
-                      {companies[0].swift_code && (
+                      {ownCompany.swift_code && (
                         <Box>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>SWIFT 코드</Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].swift_code}</Typography>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>SWIFT 코드</Typography>
+                          <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.swift_code}</Typography>
                         </Box>
                       )}
-                      {companies[0].bank_address && (
+                      {ownCompany.bank_address && (
                         <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>은행 주소</Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].bank_address}</Typography>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>은행 주소</Typography>
+                          <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.bank_address}</Typography>
                         </Box>
                       )}
                     </Box>
@@ -2788,39 +2736,39 @@ const CompanyManagement: React.FC = () => {
                 )}
 
                 {/* 로그인 기간 */}
-                {(companies[0].login_period_start || companies[0].login_period_end) && (
+                {(ownCompany.login_period_start || ownCompany.login_period_end) && (
                   <Box>
                     <Divider sx={{ my: 3, borderWidth: 1.5, borderColor: 'divider' }} />
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, fontSize: '0.75rem' }}>로그인 기간</Typography>
+                    <Typography variant="subtitle1" sx={companyDetailViewSx.sectionTitle}>로그인 기간</Typography>
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 4 }}>
-                      {companies[0].login_period_start && (
+                      {ownCompany.login_period_start && (
                         <Box>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>로그인 시작일</Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].login_period_start}</Typography>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>로그인 시작일</Typography>
+                          <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.login_period_start}</Typography>
                         </Box>
                       )}
-                      {companies[0].login_period_end && (
+                      {ownCompany.login_period_end && (
                         <Box>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>로그인 종료일</Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].login_period_end}</Typography>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>로그인 종료일</Typography>
+                          <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.login_period_end}</Typography>
                         </Box>
                       )}
-                      {companies[0].login_time_start && (
+                      {ownCompany.login_time_start && (
                         <Box>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>로그인 시작 시간</Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].login_time_start}</Typography>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>로그인 시작 시간</Typography>
+                          <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.login_time_start}</Typography>
                         </Box>
                       )}
-                      {companies[0].login_time_end && (
+                      {ownCompany.login_time_end && (
                         <Box>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>로그인 종료 시간</Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].login_time_end}</Typography>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>로그인 종료 시간</Typography>
+                          <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.login_time_end}</Typography>
                         </Box>
                       )}
-                      {companies[0].timezone && (
+                      {ownCompany.timezone && (
                         <Box>
-                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>타임존</Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].timezone}</Typography>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ ...companyDetailViewSx.fieldLabel, mb: 1.5 }}>타임존</Typography>
+                          <Typography variant="body1" sx={companyDetailViewSx.fieldValue}>{ownCompany.timezone}</Typography>
                         </Box>
                       )}
                     </Box>

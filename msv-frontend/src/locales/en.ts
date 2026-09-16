@@ -1440,9 +1440,14 @@ export default {
         save: 'Save settings',
         saving: 'Saving…',
       },
+      comingSoon: 'Coming soon',
       general: {
         companyAbbreviation: 'Company abbreviation (email subject)',
-        companyAbbreviationHint: 'Used in quotation emails as [MSV]. Example: MSV'
+        companyAbbreviationHint: 'Used in quotation emails as [MSV]. Example: MSV',
+        currencyFixedNote: 'Currency is fixed to INR.',
+      },
+      appearance: {
+        showNotificationsComingSoon: 'The header notification display option is coming soon.',
       },
       tabs: {
         basic: 'General',
@@ -1450,6 +1455,9 @@ export default {
       },
       loginHistoryHint: 'View login, logout, delete, and other audit events. Read-only APIs are not logged for performance.',
       notifications: {
+        comingSoonTitle: 'Company-wide notification settings are coming soon',
+        comingSoonBody:
+          'Email, push, SMS, work, and system switches are not wired to delivery yet. Manage personal notifications under My Info → Notification settings.',
         emailHintTitle: 'Screens that trigger email notifications',
         emailHintIntro:
           'When enabled and SMTP (outgoing mail server below) is configured, emails are also sent to recipients when alerts fire on these screens.',
@@ -1915,6 +1923,11 @@ export default {
       deleted: 'Deleted.',
       selectCompanyFirst: 'Please select a company.',
       selectCompanyHint: 'Departments are registered per company. Select a company first.',
+      listView: {
+        viewAll: 'View all',
+        viewPages: 'View by page',
+        showingAll: 'Showing all {{count}}',
+      },
     },
     positionManagement: {
       title: 'Job Title Management',

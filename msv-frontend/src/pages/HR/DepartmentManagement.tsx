@@ -58,6 +58,28 @@ import MvsPageHeader from '../../components/Common/MvsPageHeader';
 const DEPTS_PER_PAGE = 10;
 const DEPT_FORM_FIELD_SX = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
 
+type ListViewMode = 'page' | 'all';
+
+const listViewModeBarSx = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: 0.75,
+  mb: 1.25,
+} as const;
+
+const listViewModeBtnSx = {
+  height: 32,
+  minWidth: 0,
+  px: 1.5,
+  textTransform: 'none' as const,
+  fontWeight: 600,
+  fontSize: '0.75rem',
+  borderRadius: '8px',
+  boxShadow: 'none',
+  whiteSpace: 'nowrap' as const,
+};
+
 const deptTableBodyRowSx: SxProps<Theme> = (theme) => {
   const base = typeof mvsTableBodyRowSx === 'function' ? mvsTableBodyRowSx(theme) : mvsTableBodyRowSx;
   const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
@@ -110,6 +132,7 @@ export const DepartmentManagementPanel: React.FC<{
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
+  const [listViewMode, setListViewMode] = useState<ListViewMode>('page');
   const [form, setForm] = useState<DeptFormState>({
     name: '',
     sort_order: 0,
@@ -174,9 +197,14 @@ export const DepartmentManagementPanel: React.FC<{
     [rows, page]
   );
 
+  const displayedRows = useMemo(
+    () => (listViewMode === 'all' ? rows : paginatedRows),
+    [rows, paginatedRows, listViewMode]
+  );
+
   useEffect(() => {
     setPage(1);
-  }, [rows.length, scopedCompanyId]);
+  }, [rows.length, scopedCompanyId, listViewMode]);
 
   useEffect(() => {
     if (page > totalPages) {
@@ -383,6 +411,36 @@ export const DepartmentManagementPanel: React.FC<{
           </Box>
         ) : (
           <>
+            <Box sx={listViewModeBarSx}>
+              <Button
+                size="small"
+                disableElevation
+                variant={listViewMode === 'all' ? 'contained' : 'outlined'}
+                onClick={() => setListViewMode('all')}
+                sx={{
+                  ...listViewModeBtnSx,
+                  ...(listViewMode === 'all'
+                    ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                    : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                }}
+              >
+                {t('departmentManagement.listView.viewAll')}
+              </Button>
+              <Button
+                size="small"
+                disableElevation
+                variant={listViewMode === 'page' ? 'contained' : 'outlined'}
+                onClick={() => setListViewMode('page')}
+                sx={{
+                  ...listViewModeBtnSx,
+                  ...(listViewMode === 'page'
+                    ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                    : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                }}
+              >
+                {t('departmentManagement.listView.viewPages')}
+              </Button>
+            </Box>
             <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
               <Table
                 size="small"
@@ -409,7 +467,7 @@ export const DepartmentManagementPanel: React.FC<{
                   </TableRow>
                 </TableHead>
                 <TableBody sx={deptTableBodyRowSx}>
-                  {paginatedRows.map((row) => (
+                  {displayedRows.map((row) => (
                     <TableRow key={row.id}>
                       <TableCell sx={{ overflow: 'hidden' }}>
                         <Typography variant="body2" fontWeight={600} noWrap title={row.name}>
@@ -473,21 +531,29 @@ export const DepartmentManagementPanel: React.FC<{
               </Table>
             </TableContainer>
 
-            <Box sx={mvsBodyPaginationSx}>
-              <Pagination
-                count={totalPages}
-                page={page}
-                onChange={(_, value) => setPage(value)}
-                color="primary"
-                shape="rounded"
-                sx={{
-                  '& .MuiPaginationItem-root': {
-                    borderRadius: '10px',
-                    fontWeight: 500,
-                  },
-                }}
-              />
-            </Box>
+            {listViewMode === 'page' ? (
+              <Box sx={mvsBodyPaginationSx}>
+                <Pagination
+                  count={totalPages}
+                  page={page}
+                  onChange={(_, value) => setPage(value)}
+                  color="primary"
+                  shape="rounded"
+                  sx={{
+                    '& .MuiPaginationItem-root': {
+                      borderRadius: '10px',
+                      fontWeight: 500,
+                    },
+                  }}
+                />
+              </Box>
+            ) : (
+              <Box sx={{ ...mvsBodyPaginationSx, justifyContent: 'flex-end' }}>
+                <Typography variant="body2" color="text.secondary">
+                  {t('departmentManagement.listView.showingAll', { count: displayedRows.length })}
+                </Typography>
+              </Box>
+            )}
           </>
         )}
       </Box>

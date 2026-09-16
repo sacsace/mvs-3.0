@@ -1493,9 +1493,14 @@ export default {
         save: '설정 저장',
         saving: '저장 중…',
       },
+      comingSoon: '준비 중',
       general: {
         companyAbbreviation: '회사 약어 (메일 제목)',
-        companyAbbreviationHint: '견적 메일 제목 [MSV] 형식에 사용됩니다. 예: MSV'
+        companyAbbreviationHint: '견적 메일 제목 [MSV] 형식에 사용됩니다. 예: MSV',
+        currencyFixedNote: '통화는 INR로 고정됩니다.',
+      },
+      appearance: {
+        showNotificationsComingSoon: '헤더 알림 표시 옵션은 준비 중입니다.',
       },
       tabs: {
         basic: '기본 설정',
@@ -1503,6 +1508,9 @@ export default {
       },
       loginHistoryHint: '로그인·로그아웃·삭제 등 주요 감사 로그를 조회합니다. (조회성 API는 성능상 기록하지 않습니다.)',
       notifications: {
+        comingSoonTitle: '회사 단위 알림 설정은 준비 중입니다',
+        comingSoonBody:
+          '이메일·푸시·SMS·업무·시스템 알림 스위치는 아직 실제 발송/표시와 연결되지 않았습니다. 개인 알림은 「내 정보 → 알림 설정」에서 관리하세요.',
         emailHintTitle: '이메일 알림이 실행되는 화면',
         emailHintIntro:
           '켜 두면 하단 SMTP(보내는 메일 서버)가 설정된 경우, 아래 업무 화면에서 알림이 발생할 때 수신자 이메일로도 발송됩니다.',
@@ -1967,6 +1975,11 @@ export default {
       deleted: '삭제되었습니다.',
       selectCompanyFirst: '회사를 선택해주세요.',
       selectCompanyHint: '부서는 회사마다 따로 등록됩니다. 관리할 회사를 먼저 선택하세요.',
+      listView: {
+        viewAll: '전체보기',
+        viewPages: '페이지로 보기',
+        showingAll: '전체 {{count}}개 표시',
+      },
     },
     positionManagement: {
       title: '직책 관리',

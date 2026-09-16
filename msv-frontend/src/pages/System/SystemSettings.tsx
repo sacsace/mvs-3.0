@@ -120,6 +120,22 @@ const SETTINGS_RIGHT_CARD_CONTENT_SX = {
 /** 백업 설정 UI 전체 비활성 — 서버 로직은 유지 */
 const BACKUP_UI_DISABLED = true;
 
+/** 저장만 되고 실제 동작과 연결되지 않은 설정 항목 */
+const DISABLED_SETTING_KEYS: Readonly<Record<string, readonly string[]>> = {
+  appearance: ['showNotifications'],
+  notifications: [
+    'emailNotifications',
+    'pushNotifications',
+    'smsNotifications',
+    'taskReminders',
+    'systemAlerts',
+  ],
+  security: ['twoFactorAuth', 'ipWhitelist'],
+};
+
+const isSettingUiDisabled = (category: string, key: string): boolean =>
+  DISABLED_SETTING_KEYS[category]?.includes(key) ?? false;
+
 /** 서버에만 비밀번호가 있을 때 입력란에 보이는 마스크(실제 값과 무관) */
 const MAIL_AUTH_PASS_MASK = '********';
 
@@ -316,7 +332,14 @@ const SystemSettings: React.FC = () => {
     }
   }, [isRoot, loadBackupFiles]);
 
+  const settingControlDisabled = (category: string, key: string) =>
+    !canManageAll || isSettingUiDisabled(category, key);
+
+  const settingLabel = (text: string, category: string, key: string) =>
+    isSettingUiDisabled(category, key) ? `${text} (${t('systemSettings.comingSoon')})` : text;
+
   const handleSettingChange = (category: string, key: string, value: any) => {
+    if (isSettingUiDisabled(category, key)) return;
     let nextValue = value;
     if (category === 'security' && key === 'sessionTimeout') {
       const parsed = Number(value);
@@ -982,11 +1005,19 @@ const SystemSettings: React.FC = () => {
                 label="통화"
                 {...OUTLINED_FIELD}
                 value="INR"
-                onChange={(e) => handleSettingChange('general', 'currency', e.target.value)}
-                disabled={!canManageAll}
+                variant="outlined"
+                disabled
+                sx={{
+                  '& .MuiInputBase-root': {
+                    backgroundColor: 'action.disabledBackground',
+                  },
+                }}
               >
                 <MenuItem value="INR">INR (Rs.)</MenuItem>
               </TextField>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', fontSize: '0.7rem', lineHeight: 1.5 }}>
+                {t('systemSettings.general.currencyFixedNote')}
+              </Typography>
             </Box>
           </CardContent>
         </Card>
@@ -1007,14 +1038,16 @@ const SystemSettings: React.FC = () => {
                 <NotificationsOutlinedIcon sx={{ fontSize: 20, color: 'secondary.main', mt: 0.15, flexShrink: 0 }} />
                 <Box sx={{ minWidth: 0 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8125rem', lineHeight: 1.4 }}>
-                    알림 표시
+                    {settingLabel('알림 표시', 'appearance', 'showNotifications')}
                   </Typography>
                   <Typography
                     variant="caption"
                     color="text.secondary"
                     sx={{ display: 'block', mt: 0.35, fontSize: '0.7rem', lineHeight: 1.45 }}
                   >
-                    헤더 영역에 알림 벨 아이콘을 표시합니다.
+                    {isSettingUiDisabled('appearance', 'showNotifications')
+                      ? t('systemSettings.appearance.showNotificationsComingSoon')
+                      : '헤더 영역에 알림 벨 아이콘을 표시합니다.'}
                   </Typography>
                 </Box>
               </Box>
@@ -1022,6 +1055,7 @@ const SystemSettings: React.FC = () => {
                 size="small"
                 checked={settings.appearance.showNotifications}
                 onChange={(e) => handleSettingChange('appearance', 'showNotifications', e.target.checked)}
+                disabled={settingControlDisabled('appearance', 'showNotifications')}
                 sx={{ flexShrink: 0 }}
               />
             </Box>
@@ -1047,36 +1081,10 @@ const SystemSettings: React.FC = () => {
               }}
             >
               <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.75, fontSize: '0.8125rem' }}>
-                {t('systemSettings.notifications.emailHintTitle')}
+                {t('systemSettings.notifications.comingSoonTitle')}
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: '0.8125rem', lineHeight: 1.55 }}>
-                {t('systemSettings.notifications.emailHintIntro')}
-              </Typography>
-              <Box
-                component="ul"
-                sx={{
-                  m: 0,
-                  pl: 2.25,
-                  color: 'text.secondary',
-                  fontSize: '0.8125rem',
-                  lineHeight: 1.6,
-                  '& li': { mb: 0.35 },
-                }}
-              >
-                {(t('systemSettings.notifications.emailHintPages', { returnObjects: true }) as string[]).map(
-                  (line) => (
-                    <Box component="li" key={line}>
-                      {line}
-                    </Box>
-                  )
-                )}
-              </Box>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ display: 'block', mt: 1, fontSize: '0.75rem', lineHeight: 1.5 }}
-              >
-                {t('systemSettings.notifications.emailHintNote')}
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem', lineHeight: 1.55 }}>
+                {t('systemSettings.notifications.comingSoonBody')}
               </Typography>
             </Alert>
 
@@ -1087,10 +1095,10 @@ const SystemSettings: React.FC = () => {
                     size="small"
                     checked={settings.notifications.emailNotifications}
                     onChange={(e) => handleSettingChange('notifications', 'emailNotifications', e.target.checked)}
-                    disabled={!canManageAll}
+                    disabled={settingControlDisabled('notifications', 'emailNotifications')}
                   />
                 }
-                label="이메일 알림"
+                label={settingLabel('이메일 알림', 'notifications', 'emailNotifications')}
                 sx={{ ...SWITCH_LABEL, mb: 0 }}
               />
 
@@ -1100,10 +1108,10 @@ const SystemSettings: React.FC = () => {
                     size="small"
                     checked={settings.notifications.pushNotifications}
                     onChange={(e) => handleSettingChange('notifications', 'pushNotifications', e.target.checked)}
-                    disabled={!canManageAll}
+                    disabled={settingControlDisabled('notifications', 'pushNotifications')}
                   />
                 }
-                label="푸시 알림"
+                label={settingLabel('푸시 알림', 'notifications', 'pushNotifications')}
                 sx={{ ...SWITCH_LABEL, mb: 0 }}
               />
 
@@ -1113,10 +1121,10 @@ const SystemSettings: React.FC = () => {
                     size="small"
                     checked={settings.notifications.smsNotifications}
                     onChange={(e) => handleSettingChange('notifications', 'smsNotifications', e.target.checked)}
-                    disabled={!canManageAll}
+                    disabled={settingControlDisabled('notifications', 'smsNotifications')}
                   />
                 }
-                label="SMS 알림"
+                label={settingLabel('SMS 알림', 'notifications', 'smsNotifications')}
                 sx={{ ...SWITCH_LABEL, mb: 0 }}
               />
 
@@ -1126,10 +1134,10 @@ const SystemSettings: React.FC = () => {
                     size="small"
                     checked={settings.notifications.taskReminders}
                     onChange={(e) => handleSettingChange('notifications', 'taskReminders', e.target.checked)}
-                    disabled={!canManageAll}
+                    disabled={settingControlDisabled('notifications', 'taskReminders')}
                   />
                 }
-                label="업무 알림"
+                label={settingLabel('업무 알림', 'notifications', 'taskReminders')}
                 sx={{ ...SWITCH_LABEL, mb: 0 }}
               />
 
@@ -1139,10 +1147,10 @@ const SystemSettings: React.FC = () => {
                     size="small"
                     checked={settings.notifications.systemAlerts}
                     onChange={(e) => handleSettingChange('notifications', 'systemAlerts', e.target.checked)}
-                    disabled={!canManageAll}
+                    disabled={settingControlDisabled('notifications', 'systemAlerts')}
                   />
                 }
-                label="시스템 알림"
+                label={settingLabel('시스템 알림', 'notifications', 'systemAlerts')}
                 sx={{ ...SWITCH_LABEL, mb: 0 }}
               />
             </Box>
@@ -1207,10 +1215,10 @@ const SystemSettings: React.FC = () => {
                   size="small"
                   checked={settings.security.twoFactorAuth}
                   onChange={(e) => handleSettingChange('security', 'twoFactorAuth', e.target.checked)}
-                  disabled={!canManageAll}
+                  disabled={settingControlDisabled('security', 'twoFactorAuth')}
                 />
               }
-              label="2단계 인증"
+              label={settingLabel('2단계 인증', 'security', 'twoFactorAuth')}
               sx={{ ...SWITCH_LABEL, mb: 0 }}
             />
 
@@ -1220,10 +1228,10 @@ const SystemSettings: React.FC = () => {
                   size="small"
                   checked={settings.security.ipWhitelist}
                   onChange={(e) => handleSettingChange('security', 'ipWhitelist', e.target.checked)}
-                  disabled={!canManageAll}
+                  disabled={settingControlDisabled('security', 'ipWhitelist')}
                 />
               }
-              label="IP 화이트리스트"
+              label={settingLabel('IP 화이트리스트', 'security', 'ipWhitelist')}
               sx={{ ...SWITCH_LABEL, mb: 0 }}
             />
             </Box>
