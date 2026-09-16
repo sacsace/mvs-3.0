@@ -15,6 +15,8 @@ import {
   downloadMyPayslip,
   getPayrollPeriodLocks,
   completePayrollPeriod,
+  getPayrollGridSettings,
+  updatePayrollGridSettings,
 } from '../controllers/hrController';
 import {
   getAttendances,
@@ -140,6 +142,8 @@ router.delete(
 );
 
 router.get('/payroll-period-locks', getPayrollPeriodLocks);
+router.get('/payroll-grid-settings', getPayrollGridSettings);
+router.put('/payroll-grid-settings', restrictAuditToReadOnly, updatePayrollGridSettings);
 router.post(
   '/payroll-periods/complete',
   restrictAuditToReadOnly,

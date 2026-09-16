@@ -27,6 +27,11 @@ import {
   type PfMode
 } from '../services/indianStatutoryPayroll';
 import { resolveCompanyRegisteredStateCode } from '../utils/indianProfessionalTax';
+import {
+  buildPayrollGridSettingsPatch,
+  mergePayrollGridIntoCompanySettings,
+  readPayrollGridSettingsFromCompanySettings,
+} from '../utils/payrollGridSettings';
 
 const MONTH_NAMES_EN = [
   'January',
@@ -1397,6 +1402,67 @@ export const getPayrollStats = async (req: RequestWithUser, res: Response) => {
     });
   } catch (error) {
     console.error('급여 통계 조회 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/** 급여 그리드 컬럼·상수 % — companies.settings.payroll.grid (회사 공유) */
+export const getPayrollGridSettings = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { tenantId, companyId: effectiveCompanyId, userRole } = resolvePayrollScope(req);
+    if (!tenantId) {
+      return res.status(400).json({ success: false, message: '테넌트 정보가 없습니다.' });
+    }
+    if (effectiveCompanyId == null && userRole !== 'root') {
+      return res.status(400).json({ success: false, message: '회사 정보가 없습니다.' });
+    }
+    if (effectiveCompanyId == null) {
+      return res.json({ success: true, data: null });
+    }
+
+    const company = await (Company as any).findOne({
+      where: { id: effectiveCompanyId, tenant_id: tenantId },
+      attributes: ['id', 'settings'],
+    });
+    if (!company) {
+      return res.status(404).json({ success: false, message: '회사를 찾을 수 없습니다.' });
+    }
+
+    const grid = readPayrollGridSettingsFromCompanySettings(company.settings);
+    res.json({ success: true, data: grid });
+  } catch (error) {
+    console.error('급여 그리드 설정 조회 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+};
+
+export const updatePayrollGridSettings = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { tenantId, companyId: effectiveCompanyId, userRole } = resolvePayrollScope(req);
+    if (!tenantId) {
+      return res.status(400).json({ success: false, message: '테넌트 정보가 없습니다.' });
+    }
+    if (effectiveCompanyId == null && userRole !== 'root') {
+      return res.status(400).json({ success: false, message: '회사 정보가 없습니다.' });
+    }
+    if (effectiveCompanyId == null) {
+      return res.status(400).json({ success: false, message: '회사를 지정해 주세요.' });
+    }
+
+    const company = await (Company as any).findOne({
+      where: { id: effectiveCompanyId, tenant_id: tenantId },
+    });
+    if (!company) {
+      return res.status(404).json({ success: false, message: '회사를 찾을 수 없습니다.' });
+    }
+
+    const grid = buildPayrollGridSettingsPatch(req.body);
+    const nextSettings = mergePayrollGridIntoCompanySettings(company.settings, grid);
+    await company.update({ settings: nextSettings as any });
+
+    res.json({ success: true, data: grid });
+  } catch (error) {
+    console.error('급여 그리드 설정 저장 오류:', error);
     res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
   }
 };

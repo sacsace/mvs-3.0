@@ -797,6 +797,21 @@ export const payrollService = {
     return response.data;
   },
 
+  /** 회사별 급여 그리드 컬럼·상수 % (companies.settings.payroll.grid) */
+  getPayrollGridSettings: async (params?: { company_id?: number }) => {
+    const response = await api.get('/hr/payroll-grid-settings', { params });
+    return response.data;
+  },
+
+  updatePayrollGridSettings: async (data: {
+    company_id?: number;
+    columnPrefs: unknown;
+    salaryRatios: unknown;
+  }) => {
+    const response = await api.put('/hr/payroll-grid-settings', data);
+    return response.data;
+  },
+
   /** ?�재 ?�사 ?�성 ?�용??기�? 급여 ?�괄 ?�성 (?�도 PF/ESI/PT/TDS ?�션 ?�택 가?? */
   /** ?�괄 ?�성 ?? ?�정·중복·직원�??�당 ??출퇴�?건수 ?�약 */
   previewBulkPayrollGeneration: async (payroll_period: string) => {

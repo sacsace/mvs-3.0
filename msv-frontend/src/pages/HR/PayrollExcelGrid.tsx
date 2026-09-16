@@ -74,6 +74,9 @@ import {
   type PayrollConstantPart,
   type PayrollSalaryRatios,
 } from './payroll/payrollSalaryRatios';
+import {
+  persistPayrollGridSettings,
+} from './payroll/payrollGridSettingsSync';
 
 export type { PayrollGridRow } from './payroll/payrollGridTypes';
 export { computeTenureMonths, payrollRecordToGridRow } from './payroll';
@@ -92,6 +95,8 @@ type Props = {
   allowOpenPayslip?: boolean;
   /** 회사별 컬럼·상수 설정을 분리하는 회사 ID */
   companyId?: string | number | null;
+  /** 부모에서 서버 그리드 설정 동기화 완료 시 증가 */
+  settingsRevision?: number;
   companyStateCode?: string | null;
   payrollMonth?: string | null;
 };
@@ -109,6 +114,7 @@ const PayrollExcelGrid: React.FC<Props> = ({
   allowDelete = true,
   allowOpenPayslip = true,
   companyId = null,
+  settingsRevision = 0,
   companyStateCode = null,
   payrollMonth = null
 }) => {
@@ -163,12 +169,19 @@ const PayrollExcelGrid: React.FC<Props> = ({
     const ratios = loadPayrollSalaryRatios(companyId);
     setSalaryRatios(ratios);
     setRatioDraft(ratios);
-  }, [companyId]);
+  }, [companyId, settingsRevision]);
 
-  const persistPrefs = useCallback((next: PayrollColumnPrefs) => {
-    setPrefs(next);
-    savePayrollColumnPrefs(next, companyId);
-  }, [companyId]);
+  const persistPrefs = useCallback(
+    (next: PayrollColumnPrefs) => {
+      setPrefs(next);
+      savePayrollColumnPrefs(next, companyId);
+      void persistPayrollGridSettings(companyId, {
+        columnPrefs: next,
+        salaryRatios: loadPayrollSalaryRatios(companyId),
+      });
+    },
+    [companyId]
+  );
 
   const handleDeleteRow = useCallback(
     (id: number) => {
@@ -478,6 +491,7 @@ const PayrollExcelGrid: React.FC<Props> = ({
     setSalaryRatios(next);
     setRatioDraft(next);
     syncConstantColumnsInOrder(next);
+    void persistPayrollGridSettings(companyId, { salaryRatios: next });
 
     if (!allowCellEdit || rows.length === 0) {
       onSuccess(t('payrollManagement.salaryRatiosSaved'));

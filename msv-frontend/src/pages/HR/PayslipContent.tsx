@@ -741,17 +741,41 @@ const PayslipContent = React.forwardRef<HTMLDivElement, Props>(function PayslipC
           : dayHours === 0 && otPayTotal === 0
             ? [{ label: labels.dayOt, value: money(0), highlight: true }]
             : []),
-        { label: labels.extraAllowance, value: money(row.transport_allowance), highlight: true },
+        ...(Number(row.transport_allowance) > 0
+          ? [{ label: labels.extraAllowance, value: money(row.transport_allowance), highlight: true }]
+          : []),
         ...(() => {
           const prefs = loadPayrollColumnPrefs(companyId);
-          return Object.entries(row.custom_allowances || {})
-            .filter(([, amount]) => Number(amount) > 0)
-            .map(([key, amount]) => {
-              const label =
-                prefs.customColumns.find((c) => c.id === key)?.label ||
-                key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-              return { label, value: money(amount), highlight: true };
+          const lines: LedgerLine[] = [];
+          const shown = new Set<string>();
+
+          for (const col of prefs.customColumns) {
+            const amount = Number(row.custom_allowances?.[col.id]) || 0;
+            if (amount <= 0) continue;
+            shown.add(col.id);
+            let label = col.label;
+            const isCountFormula =
+              col.inputMode === 'count' && Boolean(String(col.formula || '').trim());
+            if (isCountFormula) {
+              const count = Math.max(
+                0,
+                Math.floor(Number(row.custom_allowance_inputs?.[col.id]) || 0)
+              );
+              if (count > 0) label = `${col.label} (${count})`;
+            }
+            lines.push({ label, value: money(amount), highlight: true });
+          }
+
+          Object.entries(row.custom_allowances || {}).forEach(([key, amount]) => {
+            if (shown.has(key) || !(Number(amount) > 0)) return;
+            lines.push({
+              label: key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+              value: money(amount),
+              highlight: true,
             });
+          });
+
+          return lines;
         })(),
       ];
 

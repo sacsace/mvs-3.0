@@ -47,6 +47,7 @@ import PayrollPayslipDialog from './PayrollPayslipDialog';
 import PayrollSendPayslipsDialog from './PayrollSendPayslipsDialog';
 import type { PayslipHeaderLayout } from './PayslipContent';
 import { exportPayrollGridToExcel } from './payroll/exportPayrollGridToExcel';
+import { syncPayrollGridSettingsFromServer } from './payroll/payrollGridSettingsSync';
 import { resolveRegisteredStateCodeFromCompanyLike } from './payroll/indianProfessionalTax';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 import { normalizePayMonth, isPayMonthAfterCurrent } from '../../utils/payMonth';
@@ -140,6 +141,8 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
   const [payrollPreviewPayload, setPayrollPreviewPayload] = useState<PayrollBulkPreviewPayload | null>(null);
   const [previewAttendanceLoading, setPreviewAttendanceLoading] = useState(false);
   const [companyRegisteredStateCode, setCompanyRegisteredStateCode] = useState<string | null>(null);
+  /** 서버 급여 그리드 설정 동기화 후 행 재계산 트리거 */
+  const [gridSettingsTick, setGridSettingsTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -177,6 +180,16 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
       }
     };
     void loadCompanyState();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.company_id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void syncPayrollGridSettingsFromServer(user?.company_id ?? null).then(() => {
+      if (!cancelled) setGridSettingsTick((n) => n + 1);
+    });
     return () => {
       cancelled = true;
     };
@@ -287,7 +300,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
 
   const gridRows = useMemo(
     () => filteredRecords.map((p, i) => payrollRecordToGridRow(p, i, payrollRecalcContext)),
-    [filteredRecords, payrollRecalcContext]
+    [filteredRecords, payrollRecalcContext, gridSettingsTick]
   );
 
   const departments = useMemo(
@@ -851,7 +864,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
       </Card>
 
       <Box sx={mvsBodyListZoneSx}>
-        {loading ? (
+        {loading && gridRows.length === 0 ? (
           <Box sx={listStateBoxSx}>
             <CircularProgress size={36} />
             <Typography variant="body2" color="text.secondary">
@@ -939,6 +952,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
                 allowDelete={!payslipSendOnly && !menuFlags.menusLoading && menuFlags.canDelete}
                 allowOpenPayslip={!menuFlags.menusLoading && menuFlags.canRead}
                 companyId={user?.company_id}
+                settingsRevision={gridSettingsTick}
                 companyStateCode={companyRegisteredStateCode}
                 payrollMonth={payrollRecalcContext.payrollMonth}
               />
