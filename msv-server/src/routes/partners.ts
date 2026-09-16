@@ -424,7 +424,7 @@ router.post(
   validateBody({
     companyName: { required: true, type: 'string', minLength: 1, maxLength: 200 },
     businessNumber: { type: 'string', maxLength: 50 },
-    email: { required: true, type: 'string', maxLength: 255, pattern: emailPattern },
+    email: { type: 'string', maxLength: 255, pattern: emailPattern },
     status: { type: 'string', maxLength: 50 },
     phone: { type: 'string', maxLength: 50 },
     representative: { type: 'string', maxLength: 100 },
@@ -491,7 +491,7 @@ router.post(
       industry: partnerFormData.industry || null,
       address: partnerFormData.address || null,
       phone: partnerFormData.phone || null,
-      email: partnerFormData.email,
+      email: String(partnerFormData.email || '').trim(),
       website: partnerFormData.website || null,
       bank_name: partnerFormData.bankName || null,
       account_number: partnerFormData.accountNumber || null,
@@ -678,7 +678,7 @@ router.put(
       industry: partnerData.industry !== undefined ? partnerData.industry : partner.industry,
       address: partnerData.address !== undefined ? partnerData.address : partner.address,
       phone: partnerData.phone !== undefined ? partnerData.phone : partner.phone,
-      email: partnerData.email || partner.email,
+      email: partnerData.email !== undefined ? String(partnerData.email || '').trim() : partner.email,
       website: partnerData.website !== undefined ? partnerData.website : partner.website,
       bank_name: partnerData.bankName !== undefined ? partnerData.bankName : partner.bank_name,
       account_number: partnerData.accountNumber !== undefined ? partnerData.accountNumber : partner.account_number,
@@ -993,12 +993,12 @@ router.post('/excel/import', authenticateToken, upload.single('file'), async (re
     for (let i = 0; i < data.length; i++) {
       const row = data[i] as any;
       try {
-        // 필수 필드 검증 (회사명·이메일만 — CIN/GST 는 선택)
-        if (!row['회사명'] || !row['이메일']) {
+        // 필수 필드 검증 (회사명만 — CIN/GST/이메일은 선택)
+        if (!row['회사명']) {
           results.failed.push({
             row: i + 2, // Excel 행 번호 (헤더 제외)
             data: row,
-            error: '필수 필드(회사명, 이메일)가 누락되었습니다.'
+            error: '필수 필드(회사명)가 누락되었습니다.'
           });
           continue;
         }
@@ -1086,7 +1086,7 @@ router.post('/excel/import', authenticateToken, upload.single('file'), async (re
           industry: row['업종'] ? row['업종'].toString().trim() : null,
           address: row['주소'] ? row['주소'].toString().trim() : null,
           phone: row['전화번호'] ? row['전화번호'].toString().trim() : null,
-          email: row['이메일'].toString().trim(),
+          email: row['이메일'] ? row['이메일'].toString().trim() : '',
           website: row['웹사이트'] ? row['웹사이트'].toString().trim() : null,
           bank_name: row['은행명'] ? row['은행명'].toString().trim() : null,
           account_number: row['계좌번호'] ? row['계좌번호'].toString().trim() : null,

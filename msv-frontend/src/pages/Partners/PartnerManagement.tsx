@@ -1905,7 +1905,6 @@ const PartnerManagement: React.FC = () => {
                       fullWidth
                       size="small"
                       label={t('partnerManagement.email')}
-                      required
                       {...PARTNER_FORM_OUTLINED}
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
