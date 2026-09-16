@@ -110,6 +110,44 @@ export async function resolveDepartmentFieldsForUser(
   return { kind: 'ok', department_id: dept.id, department: dept.name };
 }
 
+function normalizeMasterName(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+/** Excel·레거시 문자열 부서명 → department_id 매칭 (회사 스코프) */
+export async function resolveDepartmentFieldsByName(
+  tenantId: number,
+  departmentName: unknown,
+  companyId?: number | null
+): Promise<
+  | { kind: 'skip' }
+  | { kind: 'ok'; department_id: number | null; department: string | null }
+  | { kind: 'text_only'; department: string | null }
+> {
+  if (departmentName === undefined) return { kind: 'skip' };
+  const raw = String(departmentName ?? '').trim();
+  if (!raw) {
+    return { kind: 'ok', department_id: null, department: null };
+  }
+
+  await ensureDepartmentColumns();
+  const where: Record<string, unknown> = { tenant_id: tenantId, is_active: true };
+  if (companyId != null && Number.isFinite(Number(companyId))) {
+    where.company_id = Number(companyId);
+  }
+
+  const rows = await Department.findAll({ where });
+  const target = normalizeMasterName(raw);
+  const matched = rows.find((row) => normalizeMasterName(row.name) === target);
+  if (matched) {
+    return { kind: 'ok', department_id: matched.id, department: matched.name };
+  }
+  return { kind: 'text_only', department: raw };
+}
+
 export async function listDepartments(req: AuthRequest, res: Response) {
   try {
     await ensureDepartmentColumns();

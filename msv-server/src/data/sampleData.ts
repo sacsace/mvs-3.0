@@ -115,7 +115,7 @@ export const sampleTenants = [
     domain: 'mvs3.com',
     subdomain: 'mvs3',
     plan: 'premium' as const,
-    max_users: 100,
+    max_users: 1000,
     max_companies: 10,
     features: ['inventory', 'hr', 'accounting', 'ai_analysis'],
     status: 'active' as const

@@ -2,8 +2,8 @@ import express from 'express';
 import { Op } from 'sequelize';
 import bcrypt from 'bcrypt';
 import { User, Company, Tenant } from '../models';
-import { resolveDepartmentFieldsForUser } from '../controllers/departmentController';
-import { resolvePositionFieldsForUser } from '../controllers/positionController';
+import { resolveDepartmentFieldsForUser, resolveDepartmentFieldsByName } from '../controllers/departmentController';
+import { resolvePositionFieldsForUser, resolvePositionFieldsByName } from '../controllers/positionController';
 import { authenticateToken } from '../middleware/auth';
 import { requireAdminRootOrUserMenuPermission } from '../middleware/menuPermission';
 import { getUserUiPreferences, patchUserUiPreferences } from '../controllers/userUiPreferencesController';
@@ -2208,7 +2208,7 @@ router.post(
           continue;
         }
 
-        const userPayload = {
+        const userPayload: Record<string, unknown> = {
           tenant_id: tenantId,
           company_id: finalCompanyId,
           userid,
@@ -2216,8 +2216,6 @@ router.post(
           email,
           password_hash: passwordHash,
           role: importRole,
-          department: row['부서'] ? row['부서'].toString().trim() : null,
-          position: row['직책'] ? row['직책'].toString().trim() : null,
           employee_number: employeeNumber || null,
           birth_date: birthDateResult.value,
           gender: (row['성별 (male/female/other)'] && ['male', 'female', 'other'].includes(row['성별 (male/female/other)'].toString().toLowerCase()))
@@ -2238,6 +2236,36 @@ router.post(
           })(),
           status: importStatus,
         };
+
+        const deptRaw = row['부서'] ? row['부서'].toString().trim() : '';
+        if (deptRaw) {
+          const deptRes = await resolveDepartmentFieldsByName(tenantId, deptRaw, finalCompanyId);
+          if (deptRes.kind === 'ok') {
+            userPayload.department_id = deptRes.department_id;
+            userPayload.department = deptRes.department;
+          } else if (deptRes.kind === 'text_only') {
+            userPayload.department = deptRes.department;
+            userPayload.department_id = null;
+          }
+        } else {
+          userPayload.department = null;
+          userPayload.department_id = null;
+        }
+
+        const posRaw = row['직책'] ? row['직책'].toString().trim() : '';
+        if (posRaw) {
+          const posRes = await resolvePositionFieldsByName(tenantId, posRaw, finalCompanyId);
+          if (posRes.kind === 'ok') {
+            userPayload.position_id = posRes.position_id;
+            userPayload.position = posRes.position;
+          } else if (posRes.kind === 'text_only') {
+            userPayload.position = posRes.position;
+            userPayload.position_id = null;
+          }
+        } else {
+          userPayload.position = null;
+          userPayload.position_id = null;
+        }
 
         const user = reactivateUser
           ? await reactivateUser.update({

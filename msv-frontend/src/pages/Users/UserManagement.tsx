@@ -100,6 +100,21 @@ import { shortCompanyName, toPayslipCompanyInfo } from '../HR/PayslipContent';
 const USER_MGMT_MENU_ROUTES = ['/hr/users', '/users'];
 const USERS_PER_PAGE = 10;
 
+function matchMasterIdByName(
+  name: string | undefined | null,
+  id: number | '' | null | undefined,
+  list: { id: number; name: string }[]
+): number | '' {
+  if (id != null && id !== '') return Number(id);
+  const trimmed = String(name ?? '').trim();
+  if (!trimmed) return '';
+  const lower = trimmed.toLowerCase();
+  const exact = list.find((item) => item.name === trimmed);
+  if (exact) return exact.id;
+  const ci = list.find((item) => item.name.toLowerCase() === lower);
+  return ci ? ci.id : '';
+}
+
 type ListViewMode = 'page' | 'all';
 
 const listViewModeBarSx = {
@@ -898,15 +913,38 @@ const UserManagement: React.FC = () => {
     }
   }, [viewMode, loadDepartments, loadPositions, formData.company_id, editingUser?.company_id, user?.company_id]);
 
+  /** 기존 사용자에 department 문자열만 있을 때 마스터와 이름 매칭 */
+  useEffect(() => {
+    if (viewMode !== 'create' && viewMode !== 'edit') return;
+    if (formData.department_id !== '' || !formData.department || departments.length === 0) return;
+    const match = departments.find(
+      (d) =>
+        d.name === formData.department ||
+        d.name.toLowerCase() === String(formData.department).trim().toLowerCase()
+    );
+    if (!match) return;
+    setFormData((prev) =>
+      prev.department_id === '' &&
+      prev.department.trim().toLowerCase() === match.name.trim().toLowerCase()
+        ? { ...prev, department_id: match.id, department: match.name }
+        : prev
+    );
+  }, [viewMode, departments, formData.department, formData.department_id]);
+
   /** 기존 사용자에 position 문자열만 있을 때 마스터와 이름 매칭 */
   useEffect(() => {
     if (viewMode !== 'create' && viewMode !== 'edit') return;
     if (formData.position_id !== '' || !formData.position || positions.length === 0) return;
-    const match = positions.find((p) => p.name === formData.position);
+    const match = positions.find(
+      (p) =>
+        p.name === formData.position ||
+        p.name.toLowerCase() === String(formData.position).trim().toLowerCase()
+    );
     if (!match) return;
     setFormData((prev) =>
-      prev.position_id === '' && prev.position === match.name
-        ? { ...prev, position_id: match.id }
+      prev.position_id === '' &&
+      prev.position.trim().toLowerCase() === match.name.trim().toLowerCase()
+        ? { ...prev, position_id: match.id, position: match.name }
         : prev
     );
   }, [viewMode, positions, formData.position, formData.position_id]);
@@ -1098,15 +1136,9 @@ const UserManagement: React.FC = () => {
       emergency_phone: (user as any).emergency_phone || '',
       hire_date: (user as any).hire_date || '',
       department: user.department || '',
-      department_id:
-        (user as any).department_id != null && (user as any).department_id !== ''
-          ? Number((user as any).department_id)
-          : ('' as number | ''),
+      department_id: matchMasterIdByName(user.department, (user as any).department_id, departments),
       position: user.position || '',
-      position_id:
-        (user as any).position_id != null && (user as any).position_id !== ''
-          ? Number((user as any).position_id)
-          : ('' as number | ''),
+      position_id: matchMasterIdByName(user.position, (user as any).position_id, positions),
       employment_type: (user as any).employment_type || 'fulltime',
       salary: '',
       ot_eligible: (user as any).ot_eligible === true,

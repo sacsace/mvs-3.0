@@ -185,6 +185,44 @@ export async function resolvePositionFieldsForUser(
   return { kind: 'ok', position_id: row.id, position: row.name };
 }
 
+function normalizeMasterName(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+/** Excel·레거시 문자열 직책명 → position_id 매칭 (회사 스코프) */
+export async function resolvePositionFieldsByName(
+  tenantId: number,
+  positionName: unknown,
+  companyId?: number | null
+): Promise<
+  | { kind: 'skip' }
+  | { kind: 'ok'; position_id: number | null; position: string | null }
+  | { kind: 'text_only'; position: string | null }
+> {
+  if (positionName === undefined) return { kind: 'skip' };
+  const raw = String(positionName ?? '').trim();
+  if (!raw) {
+    return { kind: 'ok', position_id: null, position: null };
+  }
+
+  await ensurePositionSchema();
+  const where: Record<string, unknown> = { tenant_id: tenantId, is_active: true };
+  if (companyId != null && Number.isFinite(Number(companyId))) {
+    where.company_id = Number(companyId);
+  }
+
+  const rows = await Position.findAll({ where });
+  const target = normalizeMasterName(raw);
+  const matched = rows.find((row) => normalizeMasterName(row.name) === target);
+  if (matched) {
+    return { kind: 'ok', position_id: matched.id, position: matched.name };
+  }
+  return { kind: 'text_only', position: raw };
+}
+
 export async function listPositions(req: AuthRequest, res: Response) {
   try {
     await ensurePositionSchema();
