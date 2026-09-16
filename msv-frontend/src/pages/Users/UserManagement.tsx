@@ -1254,15 +1254,15 @@ const UserManagement: React.FC = () => {
     try {
       const response = await api.post('/users/excel/import', formData, {
         headers: {
-          'Content-Type': 'multipart/form-data'
-        }
+          'x-skip-error-popup': 'true',
+        },
+        timeout: 120000,
       });
 
       setImportResult(response.data.data);
       setSuccess(response.data.message);
       setImportLoginPassword('');
-      
-      // 성공적으로 가져온 경우 사용자 목록 새로고침
+
       if (response.data.data.success.length > 0) {
         setTimeout(() => {
           fetchUsers();
@@ -1271,7 +1271,20 @@ const UserManagement: React.FC = () => {
         }, 2000);
       }
     } catch (error: any) {
-      setError(error.response?.data?.message || t('userManagement.excelImportError'));
+      const isNetworkFailure =
+        !error.response &&
+        (error.code === 'ECONNABORTED' ||
+          String(error.message || '')
+            .toLowerCase()
+            .includes('network error') ||
+          String(error.message || '').toLowerCase().includes('timeout'));
+
+      if (isNetworkFailure) {
+        await fetchUsers();
+        setError(t('userManagement.excelImportNetworkMaybeSucceeded'));
+      } else {
+        setError(error.response?.data?.message || t('userManagement.excelImportError'));
+      }
     } finally {
       setImportLoading(false);
     }

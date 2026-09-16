@@ -642,6 +642,8 @@ export default {
       excelExportError: 'Failed to export Excel file.',
       excelSelectFile: 'Please select an Excel file.',
       excelImportError: 'Failed to import Excel file.',
+      excelImportNetworkMaybeSucceeded:
+        'Could not receive the import result due to a network issue. The user list was refreshed — please verify whether records were created.',
       excelImportTitle: 'Import Excel File',
       selectedFile: 'Selected file',
       importResultTitle: 'Import result',

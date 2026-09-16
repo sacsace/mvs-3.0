@@ -640,6 +640,8 @@ export default {
       excelExportError: 'Excel 파일 내보내기 중 오류가 발생했습니다.',
       excelSelectFile: 'Excel 파일을 선택해주세요.',
       excelImportError: 'Excel 파일 가져오기 중 오류가 발생했습니다.',
+      excelImportNetworkMaybeSucceeded:
+        '네트워크 연결 문제로 가져오기 결과를 받지 못했습니다. 사용자 목록을 새로고침했으니 등록 여부를 확인해 주세요.',
       excelImportTitle: 'Excel 파일 가져오기',
       selectedFile: '선택된 파일',
       importResultTitle: '가져오기 결과',
