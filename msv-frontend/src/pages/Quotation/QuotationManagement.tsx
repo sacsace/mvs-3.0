@@ -68,6 +68,10 @@ import { companyService, quotationService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { downloadQuotationPdf, buildQuotationPdfFilename, formatAddressTwoLines, QUOTATION_SCREEN_TOTALS_MIN_WIDTH_PX } from '../../utils/quotationPdf';
 import { parseEmailRecipientsList } from '../../utils/emailRecipients';
+import { usePageMenuPermission } from '../../context/MenuPermissionContext';
+import { useMenuActionGuard } from '../../hooks/useMenuActionGuard';
+
+const QUOTATION_MENU_ROUTES = ['/accounting/quotation', '/work/quotation', '/quotation'] as const;
 
 interface QuotationItem {
   id: number;
@@ -270,6 +274,10 @@ interface CompanyInfo {
 const QuotationManagement: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useStore();
+  const menuFlags = usePageMenuPermission(QUOTATION_MENU_ROUTES);
+  const createGuard = useMenuActionGuard('create', QUOTATION_MENU_ROUTES);
+  const editGuard = useMenuActionGuard('edit', QUOTATION_MENU_ROUTES);
+  const deleteGuard = useMenuActionGuard('delete', QUOTATION_MENU_ROUTES);
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [filteredQuotations, setFilteredQuotations] = useState<Quotation[]>([]);
@@ -455,11 +463,12 @@ const QuotationManagement: React.FC = () => {
   }, [quotations, searchTerm, statusFilter, customerFilter]);
 
   useEffect(() => {
+    if (menuFlags.menusLoading || !menuFlags.canRead) return;
     loadQuotationData();
     loadPartners();
     loadIssuingCompany();
     loadCompanyUsers();
-  }, [loadCompanyUsers, loadIssuingCompany, loadPartners, loadQuotationData]);
+  }, [loadCompanyUsers, loadIssuingCompany, loadPartners, loadQuotationData, menuFlags.menusLoading, menuFlags.canRead]);
 
   useEffect(() => {
     filterQuotations();
@@ -543,6 +552,7 @@ const QuotationManagement: React.FC = () => {
     !!q && (q.status === 'approved' || q.status === 'sent');
 
   const handleAddQuotation = () => {
+    if (!createGuard.guard()) return;
     setSelectedQuotation(null);
     setIsCreating(true);
     setIsEditing(false);
@@ -558,6 +568,7 @@ const QuotationManagement: React.FC = () => {
   };
 
   const handleDeleteQuotation = async (id: number) => {
+    if (!deleteGuard.guard()) return;
     showConfirm(
       t('quotationManagement.confirmDelete'),
       async () => {
@@ -580,6 +591,7 @@ const QuotationManagement: React.FC = () => {
   const handleSaveQuotation = async (
     quotationData: Partial<Quotation> & { quotationNumber?: string; approverUserId?: number }
   ) => {
+    if (selectedQuotation ? !editGuard.guard() : !createGuard.guard()) return;
     try {
       const isPartialContentSave =
         !!selectedQuotation &&
@@ -946,18 +958,29 @@ const QuotationManagement: React.FC = () => {
               {t('common.back')}
             </Button>
           ) : (
-            <Button
-              variant="contained"
-              disableElevation
-              startIcon={<AddIcon fontSize="small" />}
-              onClick={handleAddQuotation}
-              sx={mvsBodyPrimaryBtnSx}
-            >
-              {t('quotationManagement.create')}
-            </Button>
+            <Tooltip title={createGuard.tooltipTitle} disableHoverListener={!createGuard.tooltipTitle}>
+              <span style={{ display: 'inline-flex' }}>
+                <Button
+                  variant="contained"
+                  disableElevation
+                  startIcon={<AddIcon fontSize="small" />}
+                  onClick={handleAddQuotation}
+                  disabled={createGuard.disabled}
+                  sx={mvsBodyPrimaryBtnSx}
+                >
+                  {t('quotationManagement.create')}
+                </Button>
+              </span>
+            </Tooltip>
           )
         }
       />
+
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
 
       {/* 통계 카드 */}
       <Box sx={{
@@ -1454,10 +1477,16 @@ const QuotationManagement: React.FC = () => {
                               </Tooltip>
                             </>
                           )}
-                          <Tooltip title={t('quotationManagement.delete')}>
-                            <IconButton size="small" onClick={() => handleDeleteQuotation(quotation.id)}>
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
+                          <Tooltip title={deleteGuard.tooltipTitle || t('quotationManagement.delete')}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleDeleteQuotation(quotation.id)}
+                                disabled={deleteGuard.disabled}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </span>
                           </Tooltip>
                         </Box>
                       </TableCell>

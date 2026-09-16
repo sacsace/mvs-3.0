@@ -58,8 +58,8 @@ import {
 } from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { api } from '../../services/api';
-import { useMenuStore, useStore } from '../../store';
-import { findMenuIdByPath } from '../../utils/findMenuByPath';
+import { useMenuStore } from '../../store';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
@@ -121,8 +121,7 @@ function findCustomerByName(customers: Customer[], rawName: string): Customer | 
 
 const ContractManagement: React.FC = () => {
   const theme = useTheme();
-  const { user } = useStore();
-  const { language, menus, hasMenuPermission, loading: menusLoading } = useMenuStore();
+  const { language, loading: menusLoading } = useMenuStore();
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const txt = useCallback((ko: string, en: string) => (language === 'en' ? en : ko), [language]);
   const dateLocale = language === 'en' ? 'en-US' : 'ko-KR';
@@ -153,23 +152,7 @@ const ContractManagement: React.FC = () => {
   });
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
-  const elevated = user?.role === 'root' || user?.role === 'admin';
-  const contractMenuFlags = useMemo(() => {
-    const check = (action: 'view' | 'create' | 'edit' | 'delete') => {
-      if (elevated) return true;
-      for (const route of CONTRACT_MENU_ROUTES) {
-        const mid = findMenuIdByPath(menus, route);
-        if (mid != null && hasMenuPermission(mid, action)) return true;
-      }
-      return false;
-    };
-    return {
-      canRead: check('view') || check('create'),
-      canCreate: check('create'),
-      canEdit: check('edit'),
-      canDelete: check('delete')
-    };
-  }, [menus, hasMenuPermission, elevated]);
+  const menuFlags = useMenuRoutePermissionFlags(CONTRACT_MENU_ROUTES);
 
   const loadContracts = useCallback(async () => {
     try {
@@ -315,7 +298,7 @@ const ContractManagement: React.FC = () => {
   );
 
   const handleCreateContract = () => {
-    if (!contractMenuFlags.canCreate) {
+    if (!menuFlags.canCreate) {
       showSnackbar(
         txt('계약을 등록할 권한이 없습니다.', 'You do not have permission to register contracts.'),
         'error'
@@ -340,7 +323,7 @@ const ContractManagement: React.FC = () => {
   };
 
   const handleEditContract = (contract: Contract) => {
-    if (!contractMenuFlags.canEdit) {
+    if (!menuFlags.canEdit) {
       showSnackbar(txt('계약을 수정할 권한이 없습니다.', 'You do not have permission to edit contracts.'), 'error');
       return;
     }
@@ -363,7 +346,7 @@ const ContractManagement: React.FC = () => {
   };
 
   const handleViewContract = (contract: Contract) => {
-    if (!contractMenuFlags.canRead) {
+    if (!menuFlags.canRead) {
       showSnackbar(txt('계약을 조회할 권한이 없습니다.', 'You do not have permission to view contracts.'), 'error');
       return;
     }
@@ -386,14 +369,14 @@ const ContractManagement: React.FC = () => {
   };
 
   const handleSaveContract = async () => {
-    if (dialogMode === 'create' && !contractMenuFlags.canCreate) {
+    if (dialogMode === 'create' && !menuFlags.canCreate) {
       showSnackbar(
         txt('계약을 등록할 권한이 없습니다.', 'You do not have permission to register contracts.'),
         'error'
       );
       return;
     }
-    if (dialogMode === 'edit' && !contractMenuFlags.canEdit) {
+    if (dialogMode === 'edit' && !menuFlags.canEdit) {
       showSnackbar(txt('계약을 수정할 권한이 없습니다.', 'You do not have permission to edit contracts.'), 'error');
       return;
     }
@@ -437,7 +420,7 @@ const ContractManagement: React.FC = () => {
   };
 
   const handleDeleteContract = (contract: Contract) => {
-    if (!contractMenuFlags.canDelete) {
+    if (!menuFlags.canDelete) {
       showSnackbar(txt('계약을 삭제할 권한이 없습니다.', 'You do not have permission to delete contracts.'), 'error');
       return;
     }
@@ -627,14 +610,14 @@ const ContractManagement: React.FC = () => {
             variant="outlined"
             startIcon={<RefreshIcon sx={{ fontSize: 18 }} />}
             onClick={() => void loadContracts()}
-            disabled={loading || menusLoading || !contractMenuFlags.canRead}
+            disabled={loading || menusLoading || !menuFlags.canRead}
             sx={mvsBodyOutlinedBtnSx}
           >
             {txt('새로고침', 'Refresh')}
           </Button>
           <Tooltip
             title={
-              !contractMenuFlags.canCreate && !menusLoading
+              !menuFlags.canCreate && !menusLoading
                 ? txt('등록 권한이 없습니다.', 'No permission to create.')
                 : ''
             }
@@ -646,7 +629,7 @@ const ContractManagement: React.FC = () => {
                 disableElevation
                 startIcon={<AddIcon sx={{ fontSize: 20 }} />}
                 onClick={handleCreateContract}
-                disabled={menusLoading || !contractMenuFlags.canCreate}
+                disabled={menusLoading || !menuFlags.canCreate}
                 sx={mvsBodyPrimaryBtnSx}
               >
                 {txt('계약 등록', 'Register contract')}
@@ -826,8 +809,8 @@ const ContractManagement: React.FC = () => {
                   return (
                     <TableRow
                       key={contract.id}
-                      onClick={contractMenuFlags.canRead ? () => handleViewContract(contract) : undefined}
-                      sx={{ cursor: contractMenuFlags.canRead ? 'pointer' : 'default' }}
+                      onClick={menuFlags.canRead ? () => handleViewContract(contract) : undefined}
+                      sx={{ cursor: menuFlags.canRead ? 'pointer' : 'default' }}
                     >
                       <TableCell>
                         <Box>
@@ -913,16 +896,16 @@ const ContractManagement: React.FC = () => {
                         <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
                           <Tooltip
                             title={
-                              !contractMenuFlags.canEdit && !menusLoading
+                              !menuFlags.canEdit && !menusLoading
                                 ? txt('계약을 수정할 권한이 없습니다.', 'No permission to edit contracts.')
                                 : txt('수정', 'Edit')
                             }
-                            disableHoverListener={menusLoading || contractMenuFlags.canEdit}
+                            disableHoverListener={menusLoading || menuFlags.canEdit}
                           >
                             <span>
                               <IconButton
                                 size="small"
-                                disabled={menusLoading || !contractMenuFlags.canEdit}
+                                disabled={menusLoading || !menuFlags.canEdit}
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   handleEditContract(contract);
@@ -939,16 +922,16 @@ const ContractManagement: React.FC = () => {
                           </Tooltip>
                           <Tooltip
                             title={
-                              !contractMenuFlags.canDelete && !menusLoading
+                              !menuFlags.canDelete && !menusLoading
                                 ? txt('계약을 삭제할 권한이 없습니다.', 'No permission to delete contracts.')
                                 : txt('삭제', 'Delete')
                             }
-                            disableHoverListener={menusLoading || contractMenuFlags.canDelete}
+                            disableHoverListener={menusLoading || menuFlags.canDelete}
                           >
                             <span>
                               <IconButton
                                 size="small"
-                                disabled={menusLoading || !contractMenuFlags.canDelete}
+                                disabled={menusLoading || !menuFlags.canDelete}
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   handleDeleteContract(contract);
@@ -1203,8 +1186,8 @@ const ContractManagement: React.FC = () => {
                 startIcon={<AttachFileIcon sx={{ fontSize: 18 }} />}
                 disabled={
                   dialogMode === 'view' ||
-                  (dialogMode === 'create' && !contractMenuFlags.canCreate) ||
-                  (dialogMode === 'edit' && !contractMenuFlags.canEdit)
+                  (dialogMode === 'create' && !menuFlags.canCreate) ||
+                  (dialogMode === 'edit' && !menuFlags.canEdit)
                 }
                 sx={{
                   borderRadius: '8px',
@@ -1286,8 +1269,8 @@ const ContractManagement: React.FC = () => {
             {dialogMode === 'view' ? txt('닫기', 'Close') : txt('취소', 'Cancel')}
           </Button>
           {dialogMode !== 'view' &&
-            ((dialogMode === 'create' && contractMenuFlags.canCreate) ||
-              (dialogMode === 'edit' && contractMenuFlags.canEdit)) && (
+            ((dialogMode === 'create' && menuFlags.canCreate) ||
+              (dialogMode === 'edit' && menuFlags.canEdit)) && (
               <Button
                 onClick={() => void handleSaveContract()}
                 variant="contained"

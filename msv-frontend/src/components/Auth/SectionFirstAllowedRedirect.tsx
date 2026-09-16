@@ -20,7 +20,7 @@ const SectionFirstAllowedRedirect: React.FC<Props> = ({
 }) => {
   const user = useStore((s) => s.user);
   const { menus, hasMenuPermission, loading: menusLoading } = useMenuStore();
-  const elevated = user?.role === 'root' || user?.role === 'admin';
+  const elevated = user?.role === 'root';
 
   const target = useMemo(() => {
     // admin/root·메뉴 로딩 중이라도 섹션 진입이 멈추지 않도록 첫 후보로 보냄

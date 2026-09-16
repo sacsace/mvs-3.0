@@ -63,6 +63,10 @@ import {
   mvsTableScrollSx,
 } from '../../theme/mvsLayout';
 import { accountingService } from '../../services/api';
+import { usePageMenuPermission } from '../../context/MenuPermissionContext';
+import { useMenuActionGuard } from '../../hooks/useMenuActionGuard';
+
+const CHART_OF_ACCOUNTS_MENU_ROUTES = ['/accounting/chart-of-accounts', '/accounting/books'] as const;
 
 type GlAccount = {
   id: number;
@@ -154,7 +158,12 @@ const ChartOfAccounts: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const { user } = useStore();
-  const canManage = user?.role === 'root' || user?.role === 'admin';
+  const menuFlags = usePageMenuPermission(CHART_OF_ACCOUNTS_MENU_ROUTES);
+  const createGuard = useMenuActionGuard('create', CHART_OF_ACCOUNTS_MENU_ROUTES);
+  const editGuard = useMenuActionGuard('edit', CHART_OF_ACCOUNTS_MENU_ROUTES);
+  const deleteGuard = useMenuActionGuard('delete', CHART_OF_ACCOUNTS_MENU_ROUTES);
+  const mutateGuard = useMenuActionGuard('mutate', CHART_OF_ACCOUNTS_MENU_ROUTES);
+  const canManage = menuFlags.canMutate;
   const {
     canSelectCompany,
     companies,
@@ -194,8 +203,9 @@ const ChartOfAccounts: React.FC = () => {
   }, [effectiveCompanyId, t]);
 
   useEffect(() => {
+    if (menuFlags.menusLoading || !menuFlags.canRead) return;
     load();
-  }, [load]);
+  }, [load, menuFlags.menusLoading, menuFlags.canRead]);
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -234,12 +244,14 @@ const ChartOfAccounts: React.FC = () => {
   };
 
   const openCreate = () => {
+    if (!createGuard.guard()) return;
     setEditing(null);
     setForm(emptyForm());
     setDialogOpen(true);
   };
 
   const openEdit = (row: GlAccount) => {
+    if (!editGuard.guard()) return;
     setEditing(row);
     setForm({
       code: row.code,
@@ -251,6 +263,7 @@ const ChartOfAccounts: React.FC = () => {
   };
 
   const handleSeed = async () => {
+    if (!mutateGuard.guard()) return;
     try {
       const response = await accountingService.seedGlAccounts(effectiveCompanyId);
       setSuccess(response?.message || t('chartOfAccounts.success.seeded'));
@@ -261,6 +274,7 @@ const ChartOfAccounts: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (editing ? !editGuard.guard() : !createGuard.guard()) return;
     if (!form.code.trim() || !form.name.trim()) {
       setError(t('chartOfAccounts.errors.codeNameRequired'));
       return;
@@ -293,6 +307,7 @@ const ChartOfAccounts: React.FC = () => {
   };
 
   const handleDelete = (row: GlAccount) => {
+    if (!deleteGuard.guard()) return;
     showConfirm(
       t('chartOfAccounts.deleteConfirm'),
       () => {
@@ -335,6 +350,12 @@ const ChartOfAccounts: React.FC = () => {
         onChangeCompany={changeCompany}
       />
 
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
+
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
         <Box
           sx={{
@@ -358,14 +379,21 @@ const ChartOfAccounts: React.FC = () => {
             >
               {t('chartOfAccounts.booksLink')}
             </Button>
-            {canManage && (
-              <Button variant="outlined" size="small" onClick={handleSeed} sx={mvsBodyOutlinedBtnSx}>
-                {t('chartOfAccounts.seed')}
-              </Button>
-            )}
+            <Tooltip title={mutateGuard.tooltipTitle} disableHoverListener={!mutateGuard.tooltipTitle}>
+              <span>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleSeed}
+                  disabled={mutateGuard.disabled}
+                  sx={mvsBodyOutlinedBtnSx}
+                >
+                  {t('chartOfAccounts.seed')}
+                </Button>
+              </span>
+            </Tooltip>
           </Box>
-          {canManage && (
-            <Box
+          <Box
               sx={{
                 display: 'flex',
                 flexWrap: 'wrap',
@@ -377,18 +405,22 @@ const ChartOfAccounts: React.FC = () => {
                 ml: { md: 'auto' },
               }}
             >
-              <Button
-                variant="contained"
-                disableElevation
-                size="small"
-                startIcon={<AddIcon fontSize="small" />}
-                sx={mvsBodyPrimaryBtnSx}
-                onClick={openCreate}
-              >
-                {t('chartOfAccounts.add')}
-              </Button>
+              <Tooltip title={createGuard.tooltipTitle} disableHoverListener={!createGuard.tooltipTitle}>
+                <span>
+                  <Button
+                    variant="contained"
+                    disableElevation
+                    size="small"
+                    startIcon={<AddIcon fontSize="small" />}
+                    sx={mvsBodyPrimaryBtnSx}
+                    onClick={openCreate}
+                    disabled={createGuard.disabled}
+                  >
+                    {t('chartOfAccounts.add')}
+                  </Button>
+                </span>
+              </Tooltip>
             </Box>
-          )}
         </Box>
 
         <Box
@@ -491,7 +523,7 @@ const ChartOfAccounts: React.FC = () => {
                         {t('chartOfAccounts.columns.name')}
                       </Box>
                     </TableCell>
-                    {canManage && (
+                    {menuFlags.canMutate && (
                       <TableCell width="14%" align="center" sx={{ whiteSpace: 'nowrap' }}>
                         <Box component="span" sx={chartCellEllipsisSx} title={t('chartOfAccounts.columns.actions')}>
                           {t('chartOfAccounts.columns.actions')}
@@ -521,19 +553,26 @@ const ChartOfAccounts: React.FC = () => {
                             )}
                           </Box>
                         </TableCell>
-                        {canManage && (
+                        {menuFlags.canMutate && (
                           <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                             <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                              <Tooltip title={t('common.edit')}>
-                                <IconButton size="small" onClick={() => openEdit(row)} sx={{ borderRadius: '10px' }}>
-                                  <EditIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                              <Tooltip title={t('common.delete')}>
+                              <Tooltip title={editGuard.tooltipTitle || t('common.edit')}>
                                 <span>
                                   <IconButton
                                     size="small"
-                                    disabled={Boolean(row.is_system)}
+                                    onClick={() => openEdit(row)}
+                                    disabled={editGuard.disabled}
+                                    sx={{ borderRadius: '10px' }}
+                                  >
+                                    <EditIcon fontSize="small" />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                              <Tooltip title={deleteGuard.tooltipTitle || t('common.delete')}>
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    disabled={Boolean(row.is_system) || deleteGuard.disabled}
                                     onClick={() => handleDelete(row)}
                                     sx={{
                                       color: alpha(

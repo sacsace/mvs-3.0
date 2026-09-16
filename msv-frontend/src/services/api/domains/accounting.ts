@@ -768,7 +768,7 @@ export const accountingService = {
 
 export const payrollService = {
   // 급여 목록 조회
-  getPayrolls: async (params?: { page?: number; limit?: number; employee_id?: number; period?: string }) => {
+  getPayrolls: async (params?: { page?: number; limit?: number; employee_id?: number; period?: string; company_id?: number }) => {
     const response = await api.get('/hr/payrolls', { params });
     return response.data;
   },

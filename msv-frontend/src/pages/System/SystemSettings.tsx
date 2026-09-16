@@ -55,6 +55,10 @@ import { getUploadUrl } from '../../utils/uploadUrl';
 import { useStore, useMenuStore } from '../../store';
 import { canAccessSystemLoginHistory } from '../../utils/canAccessSystemLoginHistory';
 import SystemLoginHistoryTab from './SystemLoginHistoryTab';
+import { usePageMenuPermission } from '../../context/MenuPermissionContext';
+import { useMenuActionGuard } from '../../hooks/useMenuActionGuard';
+
+const SYSTEM_SETTINGS_MENU_ROUTES = ['/basic-info/system-settings', '/basic-info'] as const;
 
 /** 시스템 설정 폼: 필드·섹션 간 여유 있는 줄간격 */
 const CARD_CONTENT_COMPACT = { py: 2, px: 2.25, '&:last-child': { pb: 2 } } as const;
@@ -155,10 +159,12 @@ const formatBackupSize = (bytes: number) => {
 const SystemSettings: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useStore();
+  const menuFlags = usePageMenuPermission(SYSTEM_SETTINGS_MENU_ROUTES);
+  const editGuard = useMenuActionGuard('edit', SYSTEM_SETTINGS_MENU_ROUTES);
   const { language, setLanguage } = useMenuStore();
   const [settingsTab, setSettingsTab] = useState(0);
   const [canAccessLoginHistory, setCanAccessLoginHistory] = useState(false);
-  const canManageAll = user?.role === 'root' || user?.role === 'admin';
+  const canManageAll = menuFlags.canEdit;
   const isRoot = user?.role === 'root';
 
   useEffect(() => {
@@ -170,7 +176,7 @@ const SystemSettings: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [user?.role, user?.company_id]);
+  }, [user]);
 
   useEffect(() => {
     if (!canAccessLoginHistory && settingsTab !== 0) {
@@ -323,8 +329,9 @@ const SystemSettings: React.FC = () => {
   }, [user?.email, user?.username]);
 
   useEffect(() => {
+    if (menuFlags.menusLoading || !menuFlags.canRead) return;
     loadSettings();
-  }, [loadSettings]);
+  }, [loadSettings, menuFlags.menusLoading, menuFlags.canRead]);
 
   useEffect(() => {
     if (isRoot) {
@@ -439,6 +446,7 @@ const SystemSettings: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (!editGuard.guard()) return;
     try {
       setSaving(true);
       let payload: typeof settings | { appearance: typeof settings.appearance } = canManageAll
@@ -476,7 +484,7 @@ const SystemSettings: React.FC = () => {
   };
 
   const handleSaveMailServer = async () => {
-    if (!canManageAll) return;
+    if (!canManageAll || !editGuard.guard()) return;
     try {
       setSavingMail(true);
       let payload: typeof settings = settings;
@@ -755,6 +763,12 @@ const SystemSettings: React.FC = () => {
         description={t('systemSettings.pageDescription')}
       />
 
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
+
       {settingsTab === 0 && kpiItems.length > 0 ? (
         <Box
           sx={{
@@ -829,7 +843,7 @@ const SystemSettings: React.FC = () => {
               size="small"
               startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon fontSize="small" />}
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || editGuard.disabled}
               sx={mvsBodyPrimaryBtnSx}
             >
               {saving ? t('systemSettings.actions.saving') : t('systemSettings.actions.save')}
@@ -1406,7 +1420,7 @@ const SystemSettings: React.FC = () => {
                     savingMail ? <CircularProgress size={16} color="inherit" /> : <SaveIcon fontSize="small" />
                   }
                   onClick={() => void handleSaveMailServer()}
-                  disabled={savingMail || mailTesting}
+                  disabled={savingMail || mailTesting || editGuard.disabled}
                   sx={mvsBodyPrimaryBtnSx}
                 >
                   {savingMail

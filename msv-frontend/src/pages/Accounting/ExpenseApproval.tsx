@@ -99,6 +99,10 @@ import {
 import { buildDocumentDownloadFilename } from '../../utils/pdf';
 import { normalizePartnerCompanyName } from '../../utils/partnerCompanyName';
 import { formatEnglishSentenceLabel } from '../../utils/textCase';
+import { usePageMenuPermission } from '../../context/MenuPermissionContext';
+import { useMenuActionGuard } from '../../hooks/useMenuActionGuard';
+
+const EXPENSE_APPROVAL_MENU_ROUTES = ['/accounting/expense'] as const;
 
 const expenseApprovalFilterFieldSx = {
   ...(mvsSearchFieldSx as Record<string, unknown>),
@@ -169,10 +173,6 @@ const normalizeExpenseAttachments = (value: unknown): ExpenseAttachment[] => {
     })
     .filter(Boolean) as ExpenseAttachment[];
 };
-
-/** @deprecated use normalizeExpenseAttachments */
-const normalizeAttachmentPaths = (value: unknown): string[] =>
-  normalizeExpenseAttachments(value).map((row) => row.path);
 
 const expenseHasTaxInvoice = (attachments: ExpenseAttachment[] | string[] | unknown) =>
   normalizeExpenseAttachments(attachments).some((row) => row.invoiceType === 'tax');
@@ -1172,6 +1172,10 @@ const ExpenseApproval: React.FC = () => {
   const theme = useTheme();
   const { user } = useStore();
   const navigate = useNavigate();
+  const menuFlags = usePageMenuPermission(EXPENSE_APPROVAL_MENU_ROUTES);
+  const createGuard = useMenuActionGuard('create', EXPENSE_APPROVAL_MENU_ROUTES);
+  const editGuard = useMenuActionGuard('edit', EXPENSE_APPROVAL_MENU_ROUTES);
+  const deleteGuard = useMenuActionGuard('delete', EXPENSE_APPROVAL_MENU_ROUTES);
   const isRootUser = user?.role === 'root';
   const hasTransferAccess = Boolean(user?.is_payment_officer) || isRootUser;
   const [expenses, setExpenses] = useState<ExpenseApprovalItem[]>([]);
@@ -1391,10 +1395,6 @@ const ExpenseApproval: React.FC = () => {
     }
     return 0;
   }, [lineItems, subtotalAmount, voucherData.formType, voucherData.tdsEnabled, voucherData.tdsRate]);
-  const tdsInterestAmount = useMemo(() => {
-    if (voucherData.formType !== 'tds') return 0;
-    return floorMoney(lineItems.reduce((sum, item) => sum + Number(item.tdsInterest || 0), 0));
-  }, [lineItems, voucherData.formType]);
   const totalAmount = useMemo(() => {
     if (voucherData.formType === 'tds') {
       return floorMoney(Math.max(0, subtotalAmount - tdsAmount));
@@ -1508,6 +1508,7 @@ const ExpenseApproval: React.FC = () => {
 
   // 작성 화면 진입 시 초안 1회만 생성
   useEffect(() => {
+    if (viewMode === 'create' && !createGuard.allowed && !createGuard.flags.menusLoading) return;
     if (viewMode !== 'create') {
       draftInitInFlightRef.current = false;
       return;
@@ -1628,7 +1629,7 @@ const ExpenseApproval: React.FC = () => {
     lineItems,
     voucherData,
     draftId,
-    selectedExpense?.id,
+    selectedExpense,
     viewMode,
     isInitializingDraft,
     buildExpensePayload,
@@ -1723,8 +1724,9 @@ const ExpenseApproval: React.FC = () => {
   };
 
   useEffect(() => {
+    if (menuFlags.menusLoading || !menuFlags.canRead) return;
     loadExpenseData();
-  }, [loadExpenseData]);
+  }, [loadExpenseData, menuFlags.menusLoading, menuFlags.canRead]);
 
   useEffect(() => {
     if (!isRootUser) {
@@ -2180,6 +2182,7 @@ const ExpenseApproval: React.FC = () => {
   };
 
   const handleCreateExpense = () => {
+    if (!createGuard.guard()) return;
     setSelectedExpense(null);
     setFormData({
       title: '',
@@ -2228,6 +2231,7 @@ const ExpenseApproval: React.FC = () => {
   };
 
   const handleSaveExpense = async (editReason?: string) => {
+    if (viewMode === 'edit' ? !editGuard.guard() : !createGuard.guard()) return;
     if (!formData.title.trim() || !formData.purpose.trim()) {
       setError(t('expenseApproval.errors.requiredTitlePurpose'));
       return;
@@ -2796,11 +2800,12 @@ const ExpenseApproval: React.FC = () => {
   };
 
   const handleDeleteExpense = async (id: number) => {
+    if (!deleteGuard.guard()) return;
     setDeleteTargetId(id);
   };
 
   const confirmDeleteExpense = async () => {
-    if (!deleteTargetId) return;
+    if (!deleteGuard.guard() || !deleteTargetId) return;
     try {
       const response = await accountingService.deleteExpenseReport(deleteTargetId);
       if (!response.success) {
@@ -4501,7 +4506,13 @@ const ExpenseApproval: React.FC = () => {
               <Button variant="outlined" onClick={() => setViewMode('list')} sx={mvsBodyOutlinedBtnSx}>
                 {t('common.cancel')}
               </Button>
-              <Button variant="contained" disableElevation onClick={() => void handleSaveExpense()} disabled={saving || isInitializingDraft} sx={mvsBodyPrimaryBtnSx}>
+              <Button
+                variant="contained"
+                disableElevation
+                onClick={() => void handleSaveExpense()}
+                disabled={saving || isInitializingDraft || (isEdit ? editGuard.disabled : createGuard.disabled)}
+                sx={mvsBodyPrimaryBtnSx}
+              >
                 {saving
                   ? isRevisionResubmitEdit
                     ? t('expenseApproval.voucher.resubmitAfterRevisionSaving')
@@ -5913,17 +5924,28 @@ const ExpenseApproval: React.FC = () => {
         title={t('expenseApproval.title')}
         mb={2}
         actions={
-        <Button
-          variant="contained"
-          disableElevation
-          startIcon={<AddIcon fontSize="small" />}
-          onClick={handleCreateExpense}
-            sx={mvsBodyPrimaryBtnSx}
-        >
-          {t('expenseApproval.actions.requestExpense')}
-        </Button>
+        <Tooltip title={createGuard.tooltipTitle} disableHoverListener={!createGuard.tooltipTitle}>
+          <span style={{ display: 'inline-flex' }}>
+            <Button
+              variant="contained"
+              disableElevation
+              startIcon={<AddIcon fontSize="small" />}
+              onClick={handleCreateExpense}
+              disabled={createGuard.disabled}
+              sx={mvsBodyPrimaryBtnSx}
+            >
+              {t('expenseApproval.actions.requestExpense')}
+            </Button>
+          </span>
+        </Tooltip>
         }
       />
+
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
 
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
       <Tabs
@@ -6439,17 +6461,20 @@ const ExpenseApproval: React.FC = () => {
                         </Tooltip>
                       )}
                       {listTab !== 'transfer' && canDeleteExpense(expense) && (
-                      <Tooltip title={t('common.delete')}>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleDeleteExpense(expense.id)}
-                          sx={{
-                            color: 'text.secondary',
-                            borderRadius: '10px',
-                            '&:hover': { color: 'error.main', bgcolor: (theme) => `${theme.palette.error.main}14` } }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
+                      <Tooltip title={deleteGuard.tooltipTitle || t('common.delete')}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDeleteExpense(expense.id)}
+                            disabled={deleteGuard.disabled}
+                            sx={{
+                              color: 'text.secondary',
+                              borderRadius: '10px',
+                              '&:hover': { color: 'error.main', bgcolor: (theme) => `${theme.palette.error.main}14` } }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </span>
                       </Tooltip>
                       )}
                     </Box>

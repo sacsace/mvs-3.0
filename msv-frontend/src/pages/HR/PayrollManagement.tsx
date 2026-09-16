@@ -218,7 +218,11 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     setLoading(true);
     setError('');
     try {
-      const response = await payrollService.getPayrolls({ page: 1, limit: 10000 });
+      const response = await payrollService.getPayrolls({
+        page: 1,
+        limit: 10000,
+        ...(user?.company_id ? { company_id: user.company_id } : {}),
+      });
       if (response.success) {
         setPayrollRecords(response.data || []);
       } else {
@@ -229,7 +233,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     } finally {
       setLoading(false);
     }
-  }, [t, menuFlags.menusLoading, menuFlags.canRead]);
+  }, [t, menuFlags.menusLoading, menuFlags.canRead, user?.company_id]);
 
   useEffect(() => {
     void loadPayrollData();

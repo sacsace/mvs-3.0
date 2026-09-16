@@ -78,7 +78,8 @@ import {
 } from '@mui/icons-material';
 import { useSearchParams } from 'react-router-dom';
 import { useStore, useMenuStore } from '../../store';
-import { findMenuIdByPath } from '../../utils/findMenuByPath';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+import { buildEmployeePersonalRecordSections } from './buildEmployeePersonalRecordSections';
 import { api, departmentService, positionService, userService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
@@ -89,7 +90,6 @@ import { DepartmentManagementPanel } from '../HR/DepartmentManagement';
 import { PositionManagementPanel } from '../HR/PositionManagement';
 import { getUploadUrl } from '../../utils/uploadUrl';
 import { formatPositionLabel } from '../../utils/positionLabels';
-import type { PersonalRecordSection } from './EmployeePersonalRecordContent';
 import {
   buildEmployeePersonalRecordFilename,
   downloadEmployeePersonalRecordPdf,
@@ -451,12 +451,6 @@ const highlightPayrollFieldsSx = {
   boxSizing: 'border-box' as const,
 };
 
-/** 부서·직책 행 */
-const highlightDeptPositionRowSx = {
-  width: '100%',
-  boxSizing: 'border-box' as const,
-};
-
 /** 폼 outlined 라벨 — 테두리 위 고정 */
 const OUTLINED_FIELD = mvsOutlinedLabelProps;
 
@@ -601,26 +595,10 @@ const UserManagement: React.FC = () => {
     [theme]
   );
   const { user } = useStore();
-  const { menus, hasMenuPermission, loading: menusLoading } = useMenuStore();
+  const { loading: menusLoading } = useMenuStore();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const hrElevated = user?.role === 'root' || user?.role === 'admin';
-  const userMgmtMenuFlags = useMemo(() => {
-    const check = (action: 'view' | 'create' | 'edit' | 'delete') => {
-      if (hrElevated) return true;
-      for (const route of USER_MGMT_MENU_ROUTES) {
-        const mid = findMenuIdByPath(menus, route);
-        if (mid != null && hasMenuPermission(mid, action)) return true;
-      }
-      return false;
-    };
-    return {
-      canView: check('view'),
-      canCreate: check('create'),
-      canEdit: check('edit'),
-      canDelete: check('delete')
-    };
-  }, [menus, hasMenuPermission, hrElevated]);
+  const menuFlags = useMenuRoutePermissionFlags(USER_MGMT_MENU_ROUTES);
   const { t, i18n } = useTranslation();
   const dateLocale = i18n.language?.startsWith('en') ? 'en-US' : 'ko-KR';
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
@@ -953,7 +931,7 @@ const UserManagement: React.FC = () => {
     const tab = searchParams.get('tab');
     if (tab !== 'departments' && tab !== 'positions') return;
     if (menusLoading) return;
-    if (!hrElevated && !userMgmtMenuFlags.canCreate) {
+    if (!menuFlags.canCreate) {
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
         next.delete('tab');
@@ -969,14 +947,14 @@ const UserManagement: React.FC = () => {
       next.delete('tab');
       return next;
     }, { replace: true });
-  }, [searchParams, setSearchParams, menusLoading, hrElevated, userMgmtMenuFlags.canCreate]);
+  }, [searchParams, setSearchParams, menusLoading, menuFlags.canCreate]);
 
   useEffect(() => {
     const prefillEmailRaw = searchParams.get('prefill_email');
     if (!prefillEmailRaw) return;
     const prefillEmail = prefillEmailRaw.trim().toLowerCase();
     if (!prefillEmail) return;
-    if (!hrElevated && !userMgmtMenuFlags.canCreate) {
+    if (!menuFlags.canCreate) {
       setError(t('userManagement.tabDisabledNoCreate'));
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
@@ -1034,25 +1012,25 @@ const UserManagement: React.FC = () => {
       next.delete('prefill_email');
       return next;
     }, { replace: true });
-  }, [searchParams, setSearchParams, hrElevated, userMgmtMenuFlags.canCreate, loginUserCompanyId, t]);
+  }, [searchParams, setSearchParams, menuFlags.canCreate, loginUserCompanyId, t]);
 
   /** 메뉴 로드 후 권한 없는 탭에 머물러 있으면 목록으로 */
   useEffect(() => {
     if (menusLoading) return;
-    if (pageTab === 1 && viewMode === 'create' && !hrElevated && !userMgmtMenuFlags.canCreate) {
+    if (pageTab === 1 && viewMode === 'create' && !menuFlags.canCreate) {
       setPageTab(0);
       setViewMode('list');
       setEditingUser(null);
     }
-    if ((pageTab === 2 || pageTab === 3) && !hrElevated && !userMgmtMenuFlags.canCreate) {
+    if ((pageTab === 2 || pageTab === 3) && !menuFlags.canCreate) {
       setPageTab(0);
       setViewMode('list');
       setEditingUser(null);
     }
-    if (pageTab === 0 && !hrElevated && !userMgmtMenuFlags.canView) {
+    if (pageTab === 0 && !menuFlags.canRead) {
       /* 목록 탭도 못 보면 API가 막히므로 안내만 — 다른 탭으로 보내지 않음 */
     }
-  }, [menusLoading, pageTab, viewMode, hrElevated, userMgmtMenuFlags.canCreate, userMgmtMenuFlags.canView]);
+  }, [menusLoading, pageTab, viewMode, menuFlags.canCreate, menuFlags.canRead]);
 
   const formCompanyId = (formData as { company_id?: number }).company_id;
 
@@ -1071,7 +1049,7 @@ const UserManagement: React.FC = () => {
   }, [fetchUsers, searchTerm, selectedCompanyId]);
 
   const handleCreateUser = () => {
-    if (!hrElevated && !userMgmtMenuFlags.canCreate) {
+    if (!menuFlags.canCreate) {
       setError(t('userManagement.tabDisabledNoCreate'));
       return;
     }
@@ -1598,6 +1576,15 @@ const UserManagement: React.FC = () => {
     setError('');
     try {
       const su = selectedUser as any;
+      const hasSalary =
+        Boolean(selectedUser.has_salary) || (su.salary != null && su.salary !== '');
+      const salaryDisplay =
+        viewSalaryRevealed != null && viewSalaryRevealed !== ''
+          ? formatSalaryInr(viewSalaryRevealed)
+          : hasSalary
+            ? t('userManagement.salaryMasked')
+            : '';
+
       const companyId = Number(su.company_id) || Number(user?.company_id) || 0;
       let companyName = '';
       let companyLogoUrl = '';
@@ -1620,175 +1607,13 @@ const UserManagement: React.FC = () => {
         companyName = shortCompanyName(fromList?.name) || fromList?.name || '';
       }
 
-      const genderLabel = getGenderLabel(su.gender);
-      const phoneDisplay = formatPhoneDisplay(su.phone || '');
-      const emergencyPhoneDisplay = formatPhoneDisplay(su.emergency_phone || '');
-      const hireDateDisplay = su.hire_date
-        ? new Date(su.hire_date).toLocaleDateString(dateLocale)
-        : '';
-      const birthDateDisplay = su.birth_date
-        ? new Date(su.birth_date).toLocaleDateString(dateLocale)
-        : '';
-      const employmentLabel = getEmploymentTypeLabel(su.employment_type);
-      const positionLabel = formatPositionLabel(selectedUser.position, i18n.language);
-      const hasSalary =
-        Boolean(selectedUser.has_salary) || (su.salary != null && su.salary !== '');
-      const salaryDisplay =
-        viewSalaryRevealed != null && viewSalaryRevealed !== ''
-          ? formatSalaryInr(viewSalaryRevealed)
-          : hasSalary
-            ? t('userManagement.salaryMasked')
-            : '';
-      const careers = normalizeCareerForm(su.career_history).filter((c) => c.company_name);
-      const educations = normalizeEducationForm(su.education_history).filter((e) => e.school_name);
-      const certificates = normalizeCertificateForm(su.certificate_history).filter((c) => c.name);
-
-      const pushField = (
-        fields: { label: string; value: string }[],
-        label: string,
-        value: unknown
-      ) => {
-        if (!hasDetailValue(value)) return;
-        fields.push({ label, value: String(value).trim() });
-      };
-
-      const sections: PersonalRecordSection[] = [];
-
-      const basicFields: { label: string; value: string }[] = [];
-      pushField(basicFields, t('userManagement.employeeNumber'), su.employee_number);
-      pushField(basicFields, t('userManagement.name'), selectedUser.username);
-      pushField(basicFields, t('userManagement.dateOfBirth'), birthDateDisplay);
-      pushField(basicFields, t('userManagement.gender'), genderLabel);
-      pushField(basicFields, t('userManagement.phoneNumber'), phoneDisplay);
-      pushField(basicFields, t('userManagement.email'), selectedUser.email);
-      if (su.is_payment_officer) {
-        basicFields.push({
-          label: t('userManagement.paymentOfficer'),
-          value: t('userManagement.paymentOfficerAssigned'),
-        });
-      }
-      pushField(basicFields, t('userManagement.address'), su.address);
-      pushField(basicFields, t('userManagement.emergencyContactName'), su.emergency_contact);
-      pushField(basicFields, t('userManagement.emergencyContactPhone'), emergencyPhoneDisplay);
-      if (basicFields.length) {
-        sections.push({ title: t('userManagement.sectionBasic'), fields: basicFields });
-      }
-
-      const hrFields: { label: string; value: string }[] = [];
-      pushField(hrFields, t('userManagement.hireDate'), hireDateDisplay);
-      pushField(hrFields, t('userManagement.employmentType'), employmentLabel);
-      pushField(hrFields, t('userManagement.department'), selectedUser.department);
-      pushField(hrFields, t('userManagement.positionTitle'), positionLabel);
-      if (hasSalary) {
-        hrFields.push({ label: t('userManagement.salary'), value: salaryDisplay });
-      }
-      hrFields.push({
-        label: t('userManagement.otEligible'),
-        value:
-          su.ot_eligible === true
-            ? t('userManagement.otEligibleYes')
-            : t('userManagement.otEligibleNo'),
+      const sections = buildEmployeePersonalRecordSections({
+        user: selectedUser,
+        t,
+        dateLocale,
+        language: i18n.language,
+        salaryDisplay,
       });
-      {
-        const m = String(su.pf_calc_mode ?? '').trim();
-        const pfLabel =
-          m === 'total_12pct'
-            ? t('userManagement.pfCapTotal12pct')
-            : m === 'basic_12pct' || su.pf_cap_1800 === false
-              ? t('userManagement.pfCap12pct')
-              : t('userManagement.pfCap1800');
-        hrFields.push({ label: t('userManagement.pfCap'), value: pfLabel });
-      }
-      if (hrFields.length) {
-        sections.push({ title: t('userManagement.sectionHr'), fields: hrFields });
-      }
-
-      if (careers.length) {
-        sections.push({
-          title: t('userManagement.sectionCareer'),
-          items: careers.map((c) => ({
-            title: `${c.company_name}${c.position ? ` · ${c.position}` : ''}`,
-            subtitle:
-              c.start_date || c.end_date
-                ? `${c.start_date ? new Date(c.start_date).toLocaleDateString(dateLocale) : '—'} ~ ${
-                    c.end_date
-                      ? new Date(c.end_date).toLocaleDateString(dateLocale)
-                      : t('userManagement.careerPresent')
-                  }`
-                : undefined,
-            body: c.description || undefined,
-          })),
-        });
-      }
-
-      if (educations.length) {
-        sections.push({
-          title: t('userManagement.sectionEducation'),
-          items: educations.map((e) => ({
-            title: `${e.school_name}${e.major ? ` · ${e.major}` : ''}`,
-            subtitle:
-              e.start_date || e.end_date
-                ? `${e.start_date ? new Date(e.start_date).toLocaleDateString(dateLocale) : '—'} ~ ${
-                    e.end_date ? new Date(e.end_date).toLocaleDateString(dateLocale) : '—'
-                  }`
-                : undefined,
-            body: e.degree || undefined,
-          })),
-        });
-      }
-
-      if (certificates.length) {
-        sections.push({
-          title: t('userManagement.sectionCertificate'),
-          items: certificates.map((c) => ({
-            title: `${c.name}${c.issuer ? ` · ${c.issuer}` : ''}`,
-            subtitle:
-              [
-                c.certificate_number || '',
-                c.issue_date || c.expiry_date
-                  ? `${c.issue_date ? new Date(c.issue_date).toLocaleDateString(dateLocale) : '—'}${
-                      c.expiry_date
-                        ? ` ~ ${new Date(c.expiry_date).toLocaleDateString(dateLocale)}`
-                        : ''
-                    }`
-                  : '',
-              ]
-                .filter(Boolean)
-                .join(' · ') || undefined,
-          })),
-        });
-      }
-
-      const bankFields: { label: string; value: string }[] = [];
-      pushField(bankFields, t('userManagement.bankName'), su.bank_name);
-      pushField(
-        bankFields,
-        t('userManagement.accountNumber'),
-        su.bank_account ? formatBankAccountDisplay(String(su.bank_account)) : ''
-      );
-      pushField(
-        bankFields,
-        t('userManagement.ifscCode'),
-        su.bank_ifsc ? formatIfscDisplay(String(su.bank_ifsc)) : ''
-      );
-      if (bankFields.length) {
-        sections.push({ title: t('userManagement.sectionBank'), fields: bankFields });
-      }
-
-      const accountFields: { label: string; value: string }[] = [];
-      pushField(accountFields, t('userManagement.userId'), selectedUser.userid);
-      pushField(accountFields, t('userManagement.role'), getRoleLabel(selectedUser.role));
-      pushField(accountFields, t('userManagement.statusLabel'), getStatusLabel(selectedUser.status));
-      pushField(
-        accountFields,
-        t('userManagement.createdAt'),
-        selectedUser.created_at
-          ? new Date(selectedUser.created_at).toLocaleDateString(dateLocale)
-          : ''
-      );
-      if (accountFields.length) {
-        sections.push({ title: t('userManagement.sectionAccount'), fields: accountFields });
-      }
 
       const blob = await generateEmployeePersonalRecordPdfBlob({
         documentTitle: t('userManagement.personalRecordTitle'),
@@ -2012,13 +1837,13 @@ const UserManagement: React.FC = () => {
             }}
             onChange={(e, newValue) => {
               const v = newValue as 0 | 1 | 2 | 3;
-              if (v === 0 && !menusLoading && !hrElevated && !userMgmtMenuFlags.canView) {
+              if (v === 0 && !menusLoading && !menuFlags.canRead) {
                 return;
               }
-              if (v === 1 && !menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate) {
+              if (v === 1 && !menusLoading && !menuFlags.canCreate) {
                 return;
               }
-              if ((v === 2 || v === 3) && !menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate) {
+              if ((v === 2 || v === 3) && !menusLoading && !menuFlags.canCreate) {
                 return;
               }
               if (v === 1) {
@@ -2032,36 +1857,36 @@ const UserManagement: React.FC = () => {
           >
             <Tab
               label={t('userManagement.userList')}
-              disabled={!menusLoading && !hrElevated && !userMgmtMenuFlags.canView}
+              disabled={!menusLoading && !menuFlags.canRead}
               title={
-                !menusLoading && !hrElevated && !userMgmtMenuFlags.canView
+                !menusLoading && !menuFlags.canRead
                   ? t('userManagement.tabDisabledNoView')
                   : undefined
               }
             />
             <Tab
               label={t('userManagement.addUser')}
-              disabled={!menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate}
+              disabled={!menusLoading && !menuFlags.canCreate}
               title={
-                !menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate
+                !menusLoading && !menuFlags.canCreate
                   ? t('userManagement.tabDisabledNoCreate')
                   : undefined
               }
             />
             <Tab
               label={t('userManagement.departmentTab')}
-              disabled={!menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate}
+              disabled={!menusLoading && !menuFlags.canCreate}
               title={
-                !menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate
+                !menusLoading && !menuFlags.canCreate
                   ? t('userManagement.tabDisabledNoCreate')
                   : undefined
               }
             />
             <Tab
               label={t('userManagement.positionTab')}
-              disabled={!menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate}
+              disabled={!menusLoading && !menuFlags.canCreate}
               title={
-                !menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate
+                !menusLoading && !menuFlags.canCreate
                   ? t('userManagement.tabDisabledNoCreate')
                   : undefined
               }
@@ -2154,7 +1979,7 @@ const UserManagement: React.FC = () => {
                       }}
                     >
                       <MenuItem
-                        disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canView)}
+                        disabled={menusLoading || !menuFlags.canRead}
                         onClick={() => {
                           closeToolbarMenu();
                           handleDownloadSample();
@@ -2166,7 +1991,7 @@ const UserManagement: React.FC = () => {
                         {t('userManagement.excelSample')}
                       </MenuItem>
                       <MenuItem
-                        disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canView)}
+                        disabled={menusLoading || !menuFlags.canRead}
                         onClick={() => {
                           closeToolbarMenu();
                           handleExportExcel();
@@ -2178,7 +2003,7 @@ const UserManagement: React.FC = () => {
                         {t('userManagement.excelExport')}
                       </MenuItem>
                       <MenuItem
-                        disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canCreate)}
+                        disabled={menusLoading || !menuFlags.canCreate}
                         onClick={() => {
                           closeToolbarMenu();
                           setImportDialogOpen(true);
@@ -2197,7 +2022,7 @@ const UserManagement: React.FC = () => {
                       variant="outlined"
                       size="small"
                       startIcon={<DownloadIcon fontSize="small" />}
-                      disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canView)}
+                      disabled={menusLoading || !menuFlags.canRead}
                       onClick={handleDownloadSample}
                       sx={mvsBodyOutlinedBtnSx}
                     >
@@ -2207,7 +2032,7 @@ const UserManagement: React.FC = () => {
                       variant="outlined"
                       size="small"
                       startIcon={<FileDownloadIcon fontSize="small" />}
-                      disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canView)}
+                      disabled={menusLoading || !menuFlags.canRead}
                       onClick={handleExportExcel}
                       sx={mvsBodyOutlinedBtnSx}
                     >
@@ -2217,7 +2042,7 @@ const UserManagement: React.FC = () => {
                       variant="outlined"
                       size="small"
                       startIcon={<UploadIcon fontSize="small" />}
-                      disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canCreate)}
+                      disabled={menusLoading || !menuFlags.canCreate}
                       onClick={() => setImportDialogOpen(true)}
                       sx={mvsBodyOutlinedBtnSx}
                     >
@@ -2245,7 +2070,7 @@ const UserManagement: React.FC = () => {
                     disableElevation
                     size="small"
                     startIcon={<DeleteIcon fontSize="small" />}
-                    disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canDelete)}
+                    disabled={menusLoading || !menuFlags.canDelete}
                     onClick={handleDeleteSelected}
                     sx={{
                       textTransform: 'none',
@@ -2265,7 +2090,7 @@ const UserManagement: React.FC = () => {
                   disableElevation
                   size="small"
                   startIcon={<AddIcon fontSize="small" />}
-                  disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canCreate)}
+                  disabled={menusLoading || !menuFlags.canCreate}
                   onClick={handleCreateUser}
                   sx={mvsBodyPrimaryBtnSx}
                 >
@@ -2301,7 +2126,7 @@ const UserManagement: React.FC = () => {
                 placeholder={t('userManagement.search')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canView)}
+                disabled={menusLoading || !menuFlags.canRead}
                 sx={userFilterFieldSx}
                 InputProps={{
                   startAdornment: (
@@ -2320,7 +2145,7 @@ const UserManagement: React.FC = () => {
                   placeholder={t('userManagement.searchCompany')}
                   allowAll
                   allLabel={t('userManagement.allCompanies')}
-                  disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canView)}
+                  disabled={menusLoading || !menuFlags.canRead}
                   outlinedProps={USER_FILTER_OUTLINED}
                   textFieldSx={userFilterFieldSx}
                 />
@@ -2330,7 +2155,7 @@ const UserManagement: React.FC = () => {
                 size="small"
                 startIcon={<ResetIcon fontSize="small" />}
                 onClick={handleResetFilters}
-                disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canView)}
+                disabled={menusLoading || !menuFlags.canRead}
                 sx={{
                   ...mvsBodyOutlinedBtnSx,
                   height: 40,
@@ -2379,7 +2204,7 @@ const UserManagement: React.FC = () => {
                     disableElevation
                     size="small"
                     startIcon={<AddIcon fontSize="small" />}
-                    disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canCreate)}
+                    disabled={menusLoading || !menuFlags.canCreate}
                     onClick={handleCreateUser}
                     sx={mvsBodyPrimaryBtnSx}
                   >
@@ -2453,7 +2278,7 @@ const UserManagement: React.FC = () => {
                             size="small"
                             disabled={
                               menusLoading ||
-                              !(hrElevated || userMgmtMenuFlags.canDelete) ||
+                              !menuFlags.canDelete ||
                               paginatedUsers.length === 0
                             }
                             indeterminate={someVisibleSelected && !allVisibleSelected}
@@ -2550,12 +2375,12 @@ const UserManagement: React.FC = () => {
                         <TableRow
                           key={rowUser.id}
                           onClick={() => {
-                            if (!menusLoading && (hrElevated || userMgmtMenuFlags.canView)) {
+                            if (!menusLoading && menuFlags.canRead) {
                               handleViewUser(rowUser);
                             }
                           }}
                           sx={{
-                            cursor: menusLoading || !(hrElevated || userMgmtMenuFlags.canView) ? 'default' : 'pointer',
+                            cursor: menusLoading || !menuFlags.canRead ? 'default' : 'pointer',
                           }}
                         >
                           <TableCell sx={userSeqColSx} align="center">
@@ -2566,7 +2391,7 @@ const UserManagement: React.FC = () => {
                           <TableCell padding="checkbox" align="center" onClick={(e) => e.stopPropagation()}>
                             <Checkbox
                               size="small"
-                              disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canDelete)}
+                              disabled={menusLoading || !menuFlags.canDelete}
                               checked={selectedUsers.includes(rowUser.id)}
                               onChange={() => handleSelectUser(rowUser.id)}
                             />
@@ -2679,9 +2504,9 @@ const UserManagement: React.FC = () => {
                   ? Number(user.company_id)
                   : null
             }
-            canCreate={hrElevated || userMgmtMenuFlags.canCreate}
-            canEdit={hrElevated || userMgmtMenuFlags.canEdit}
-            canDelete={hrElevated || userMgmtMenuFlags.canDelete}
+            canCreate={menuFlags.canCreate}
+            canEdit={menuFlags.canEdit}
+            canDelete={menuFlags.canDelete}
           />
         </Box>
       )}
@@ -2715,9 +2540,9 @@ const UserManagement: React.FC = () => {
                   ? Number(user.company_id)
                   : null
             }
-            canCreate={hrElevated || userMgmtMenuFlags.canCreate}
-            canEdit={hrElevated || userMgmtMenuFlags.canEdit}
-            canDelete={hrElevated || userMgmtMenuFlags.canDelete}
+            canCreate={menuFlags.canCreate}
+            canEdit={menuFlags.canEdit}
+            canDelete={menuFlags.canDelete}
           />
         </Box>
       )}

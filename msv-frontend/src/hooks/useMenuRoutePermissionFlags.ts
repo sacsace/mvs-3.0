@@ -22,7 +22,7 @@ export type MenuRoutePermissionFlags = {
 export function useMenuRoutePermissionFlags(menuRoutes: readonly string[]): MenuRoutePermissionFlags {
   const user = useStore((s) => s.user);
   const { menus, hasMenuPermission, loading: menusLoading } = useMenuStore();
-  const elevated = user?.role === 'root' || user?.role === 'admin';
+  const elevated = user?.role === 'root';
 
   const routeKey = menuRoutes.filter(Boolean).join('\u0001');
 

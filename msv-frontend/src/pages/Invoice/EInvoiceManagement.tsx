@@ -76,6 +76,13 @@ import { api, accountingService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { AxiosResponse } from 'axios';
 import { useTranslation } from 'react-i18next';
+import { usePageMenuPermission } from '../../context/MenuPermissionContext';
+import { useMenuActionGuard } from '../../hooks/useMenuActionGuard';
+import {
+  MenuPermissionButton,
+} from '../../components/Common/MenuPermissionControls';
+
+const E_INVOICE_MENU_ROUTES = ['/accounting/e-invoice'] as const;
 
 // TabPanel 컴포넌트 정의
 interface TabPanelProps {
@@ -256,6 +263,9 @@ interface ProformaInvoice {
 const EInvoiceManagement: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { user } = useStore();
+  const menuFlags = usePageMenuPermission(E_INVOICE_MENU_ROUTES);
+  const createGuard = useMenuActionGuard('create', E_INVOICE_MENU_ROUTES);
+  const editGuard = useMenuActionGuard('edit', E_INVOICE_MENU_ROUTES);
   const [einvoices, setEinvoices] = useState<EInvoice[]>([]);
   const [proformaInvoices, setProformaInvoices] = useState<ProformaInvoice[]>([]);
   const [companies, setCompanies] = useState<any[]>([]);
@@ -382,6 +392,7 @@ const EInvoiceManagement: React.FC = () => {
 
   // 데이터 로드
   useEffect(() => {
+    if (menuFlags.menusLoading || !menuFlags.canRead) return;
     const fetchData = async () => {
       setLoading(true);
       try {
@@ -419,7 +430,12 @@ const EInvoiceManagement: React.FC = () => {
       loadCompanies();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- normalize*, t, user.role는 초기 로드 시점 기준
-  }, [selectedCompanyId]);
+  }, [selectedCompanyId, menuFlags.menusLoading, menuFlags.canRead]);
+
+  useEffect(() => {
+    if (menuFlags.menusLoading || createGuard.allowed) return;
+    if (isCreating) setIsCreating(false);
+  }, [menuFlags.menusLoading, createGuard.allowed, isCreating]);
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -453,7 +469,8 @@ const EInvoiceManagement: React.FC = () => {
   };
 
   // 탭 변경
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
+    if (newValue === 1 && !createGuard.guard()) return;
     setActiveTab(newValue);
   };
 
@@ -462,6 +479,7 @@ const EInvoiceManagement: React.FC = () => {
 
   // E-Invoice 생성
   const handleCreate = async () => {
+    if (!createGuard.guard()) return;
     try {
       if (formData.approverUserId === '') {
         setError(t('eInvoiceManagement.errors.selectApprover'));
@@ -555,6 +573,7 @@ const EInvoiceManagement: React.FC = () => {
 
   // 프로포마 인보이스에서 E-Invoice 생성
   const handleCreateFromProforma = async (proformaInvoiceId: string) => {
+    if (!createGuard.guard()) return;
     try {
       if (proformaApproverId === '') {
         setError(t('eInvoiceManagement.errors.selectApprover'));
@@ -574,6 +593,7 @@ const EInvoiceManagement: React.FC = () => {
 
   // 상태 업데이트
   const handleStatusUpdate = async (id: string, status: string) => {
+    if (!editGuard.guard()) return;
     try {
       const response = await api.put(`/accounting/e-invoices/${id}/status`, { status });
       if (response.data.success) {
@@ -588,6 +608,7 @@ const EInvoiceManagement: React.FC = () => {
 
   /** NIC IRP에 JSON 제출 → IRN / Signed QR (GST_IRP_MODE=live 시 GSP 연동) */
   const handleGenerateIrn = async (id: string) => {
+    if (!editGuard.guard()) return;
     setIrnLoadingId(id);
     setError('');
     try {
@@ -607,6 +628,7 @@ const EInvoiceManagement: React.FC = () => {
 
   // E-Way Bill 생성
   const handleCreateEWayBill = async (eInvoiceId: string) => {
+    if (!createGuard.guard()) return;
     try {
       const response = await api.post(`/accounting/e-invoices/${eInvoiceId}/create-eway-bill`);
       if (response.data.success) {
@@ -721,6 +743,7 @@ const EInvoiceManagement: React.FC = () => {
   }, [einvoices, filterStatus, searchTerm, listSubTab, user?.id]);
 
   const handleApproveInvoice = async (id: string) => {
+    if (!editGuard.guard()) return;
     try {
       const res = await accountingService.approveInvoice(Number(id));
       if (res?.success) {
@@ -740,6 +763,7 @@ const EInvoiceManagement: React.FC = () => {
   };
 
   const handleRejectInvoice = async (id: string) => {
+    if (!editGuard.guard()) return;
     try {
       const res = await accountingService.rejectInvoice(Number(id));
       if (res?.success) {
@@ -884,6 +908,12 @@ const EInvoiceManagement: React.FC = () => {
         </Alert>
       )}
 
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
+
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: { xs: 2, sm: 2.5 }, overflow: 'hidden' }}>
         <Tabs
           value={activeTab}
@@ -894,7 +924,7 @@ const EInvoiceManagement: React.FC = () => {
           sx={eInvoiceMainTabsSx}
         >
           <Tab label={t('eInvoiceManagement.tabs.list')} />
-          <Tab label={t('eInvoiceManagement.tabs.fromProforma')} />
+          <Tab label={t('eInvoiceManagement.tabs.fromProforma')} disabled={createGuard.disabled} />
           <Tab label={t('eInvoiceManagement.tabs.gstCompliance')} />
           <Tab label={t('eInvoiceManagement.tabs.analytics')} />
         </Tabs>
@@ -1104,9 +1134,16 @@ const EInvoiceManagement: React.FC = () => {
                       <Button variant="outlined" onClick={handleCancelCreate} sx={mvsBodyOutlinedBtnSx}>
                         {t('common.cancel')}
                       </Button>
-                      <Button variant="contained" disableElevation onClick={handleCreate} sx={mvsBodyPrimaryBtnSx}>
+                      <MenuPermissionButton
+                        permissionAction="create"
+                        menuRoutes={E_INVOICE_MENU_ROUTES}
+                        variant="contained"
+                        disableElevation
+                        onClick={handleCreate}
+                        sx={mvsBodyPrimaryBtnSx}
+                      >
                         {t('common.create')}
-                      </Button>
+                      </MenuPermissionButton>
                     </Box>
                   </Box>
                 </CardContent>
@@ -1287,15 +1324,20 @@ const EInvoiceManagement: React.FC = () => {
                           : t('eInvoiceManagement.approval.tabRequested')}
                       </Typography>
                     </Box>
-                    <Button
+                    <MenuPermissionButton
+                      permissionAction="create"
+                      menuRoutes={E_INVOICE_MENU_ROUTES}
                       variant="contained"
                       disableElevation
                       startIcon={<AddIcon />}
-                      onClick={() => setIsCreating(true)}
+                      onClick={() => {
+                        if (!createGuard.guard()) return;
+                        setIsCreating(true);
+                      }}
                       sx={mvsBodyPrimaryBtnSx}
                     >
                       {t('eInvoiceManagement.actions.newEInvoice')}
-                    </Button>
+                    </MenuPermissionButton>
                   </Box>
 
                 <Box sx={{ ...mvsBodyListZoneSx, border: 'none', boxShadow: 'none', bgcolor: 'transparent', p: 0 }}>
@@ -1408,7 +1450,9 @@ const EInvoiceManagement: React.FC = () => {
                                 sx={eInvoiceChipSx}
                               />
                             ) : einvoice.irpStatus === 'irn_generated' ? (
-                              <Button
+                              <MenuPermissionButton
+                                permissionAction="create"
+                                menuRoutes={E_INVOICE_MENU_ROUTES}
                                 variant="outlined"
                                 size="small"
                                 startIcon={<LocalShippingIcon sx={{ fontSize: '0.95rem !important' }} />}
@@ -1416,7 +1460,7 @@ const EInvoiceManagement: React.FC = () => {
                                 sx={{ ...mvsBodyOutlinedBtnSx, minHeight: 28, py: 0.25, px: 1, fontSize: '0.6875rem' }}
                               >
                                 {t('common.create')}
-                              </Button>
+                              </MenuPermissionButton>
                             ) : (
                               <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
                                 {t('eInvoiceManagement.eway.pending')}
@@ -1428,9 +1472,10 @@ const EInvoiceManagement: React.FC = () => {
                               {einvoice.irpStatus !== 'irn_generated' && (
                                 <Tooltip
                                   title={
-                                    !isEInvoiceExportAllowed(einvoice)
+                                    editGuard.tooltipTitle ||
+                                    (!isEInvoiceExportAllowed(einvoice)
                                       ? t('eInvoiceManagement.approval.needApprovalForIrn')
-                                      : t('eInvoiceManagement.actions.generateIrn')
+                                      : t('eInvoiceManagement.actions.generateIrn'))
                                   }
                                 >
                                   <span>
@@ -1438,11 +1483,11 @@ const EInvoiceManagement: React.FC = () => {
                                       size="small"
                                       variant="contained"
                                       color="secondary"
-                                      disabled={
+                                      disabled={editGuard.mergeDisabled(
                                         irnLoadingId === einvoice.id ||
-                                        einvoice.irpStatus === 'submitted' ||
-                                        !isEInvoiceExportAllowed(einvoice)
-                                      }
+                                          einvoice.irpStatus === 'submitted' ||
+                                          !isEInvoiceExportAllowed(einvoice)
+                                      )}
                                       onClick={() => handleGenerateIrn(einvoice.id)}
                                       sx={{ minHeight: 28, py: 0.25, px: 1, fontSize: '0.6875rem', borderRadius: '8px' }}
                                     >
@@ -1453,23 +1498,29 @@ const EInvoiceManagement: React.FC = () => {
                               )}
                               {listSubTab === 'pending' && einvoice.approvalStatus === 'pending_approval' && (
                                 <>
-                                  <Tooltip title={t('eInvoiceManagement.approval.approve')}>
-                                    <IconButton
-                                      size="small"
-                                      color="success"
-                                      onClick={() => void handleApproveInvoice(einvoice.id)}
-                                    >
-                                      <ThumbUpIcon />
-                                    </IconButton>
+                                  <Tooltip title={editGuard.tooltipTitle || t('eInvoiceManagement.approval.approve')}>
+                                    <span>
+                                      <IconButton
+                                        size="small"
+                                        color="success"
+                                        disabled={editGuard.disabled}
+                                        onClick={() => void handleApproveInvoice(einvoice.id)}
+                                      >
+                                        <ThumbUpIcon />
+                                      </IconButton>
+                                    </span>
                                   </Tooltip>
-                                  <Tooltip title={t('eInvoiceManagement.approval.reject')}>
-                                    <IconButton
-                                      size="small"
-                                      color="error"
-                                      onClick={() => void handleRejectInvoice(einvoice.id)}
-                                    >
-                                      <ThumbDownIcon />
-                                    </IconButton>
+                                  <Tooltip title={editGuard.tooltipTitle || t('eInvoiceManagement.approval.reject')}>
+                                    <span>
+                                      <IconButton
+                                        size="small"
+                                        color="error"
+                                        disabled={editGuard.disabled}
+                                        onClick={() => void handleRejectInvoice(einvoice.id)}
+                                      >
+                                        <ThumbDownIcon />
+                                      </IconButton>
+                                    </span>
                                   </Tooltip>
                                 </>
                               )}
@@ -1483,23 +1534,27 @@ const EInvoiceManagement: React.FC = () => {
                                   <QrCodeIcon />
                                 </IconButton>
                               </Tooltip>
-                              <Tooltip title={t('eInvoiceManagement.actions.upload')}>
-                                <IconButton 
-                                  size="small" 
-                                  onClick={() => handleStatusUpdate(einvoice.id, 'uploaded')}
-                                  disabled={einvoice.irpStatus !== 'irn_generated'}
-                                >
-                                  <SendIcon />
-                                </IconButton>
+                              <Tooltip title={editGuard.tooltipTitle || t('eInvoiceManagement.actions.upload')}>
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleStatusUpdate(einvoice.id, 'uploaded')}
+                                    disabled={editGuard.mergeDisabled(einvoice.irpStatus !== 'irn_generated')}
+                                  >
+                                    <SendIcon />
+                                  </IconButton>
+                                </span>
                               </Tooltip>
-                              <Tooltip title={t('common.cancel')}>
-                                <IconButton 
-                                  size="small" 
-                                  onClick={() => handleStatusUpdate(einvoice.id, 'cancelled')}
-                                  disabled={einvoice.status === 'cancelled'}
-                                >
-                                  <CancelIcon />
-                                </IconButton>
+                              <Tooltip title={editGuard.tooltipTitle || t('common.cancel')}>
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleStatusUpdate(einvoice.id, 'cancelled')}
+                                    disabled={editGuard.mergeDisabled(einvoice.status === 'cancelled')}
+                                  >
+                                    <CancelIcon />
+                                  </IconButton>
+                                </span>
                               </Tooltip>
                             </Box>
                           </TableCell>
@@ -1599,7 +1654,9 @@ const EInvoiceManagement: React.FC = () => {
                         />
                       </TableCell>
                       <TableCell sx={{ ...eInvoiceCellBaseSx, whiteSpace: 'nowrap' }}>
-                        <Button
+                        <MenuPermissionButton
+                          permissionAction="create"
+                          menuRoutes={E_INVOICE_MENU_ROUTES}
                           variant="contained"
                           disableElevation
                           size="small"
@@ -1608,7 +1665,7 @@ const EInvoiceManagement: React.FC = () => {
                           sx={mvsBodyPrimaryBtnSx}
                         >
                           {t('eInvoiceManagement.actions.createEInvoice')}
-                        </Button>
+                        </MenuPermissionButton>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -2008,9 +2065,20 @@ const EInvoiceManagement: React.FC = () => {
               </Button>
             </span>
           </Tooltip>
-          <Button variant="contained" disableElevation startIcon={<SendIcon />} sx={mvsBodyPrimaryBtnSx}>
+          <MenuPermissionButton
+            permissionAction="edit"
+            menuRoutes={E_INVOICE_MENU_ROUTES}
+            variant="contained"
+            disableElevation
+            startIcon={<SendIcon />}
+            onClick={() => {
+              if (selectedEInvoice) void handleStatusUpdate(selectedEInvoice.id, 'uploaded');
+            }}
+            disabled={!selectedEInvoice || selectedEInvoice.irpStatus !== 'irn_generated'}
+            sx={mvsBodyPrimaryBtnSx}
+          >
             {t('eInvoiceManagement.actions.upload')}
-          </Button>
+          </MenuPermissionButton>
         </DialogActions>
       </Dialog>
     </Box>

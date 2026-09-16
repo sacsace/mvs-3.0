@@ -98,6 +98,26 @@ function pickPayrollBody(body: Record<string, unknown>): Record<string, unknown>
   return o;
 }
 
+/** 급여 조회 스코프 — 기본은 로그인 회사, root/audit만 query/body company_id로 전환 */
+function resolvePayrollScope(req: RequestWithUser) {
+  const tenantId = req.user?.tenant_id;
+  const companyId = req.user?.company_id;
+  const userRole = req.user?.role;
+  const queryCompanyId = req.query.company_id
+    ? parseInt(String(req.query.company_id), 10)
+    : undefined;
+  const bodyCompanyId = (req.body as Record<string, unknown> | undefined)?.company_id
+    ? parseInt(String((req.body as Record<string, unknown>).company_id), 10)
+    : undefined;
+
+  let effectiveCompanyId = companyId;
+  if ((userRole === 'root' || userRole === 'audit') && (queryCompanyId || bodyCompanyId)) {
+    effectiveCompanyId = queryCompanyId || bodyCompanyId;
+  }
+
+  return { tenantId, companyId: effectiveCompanyId, userRole };
+}
+
 async function isPayrollPeriodLocked(
   tenantId: number,
   companyId: number,
@@ -140,29 +160,16 @@ async function assertPayrollPeriodEditable(
 // 급여 목록 조회
 export const getPayrolls = async (req: RequestWithUser, res: Response) => {
   try {
-    const tenantId = req.user?.tenant_id;
-    const companyId = req.user?.company_id;
-    const userRole = req.user?.role;
-    const { page = 1, limit = 10, employee_id = '', period = '', company_id } = req.query;
+    const { tenantId, companyId: effectiveCompanyId, userRole } = resolvePayrollScope(req);
+    const { page = 1, limit = 10, employee_id = '', period = '' } = req.query;
 
-    const whereClause: any = {};
-    
-    // root나 audit 권한이면 모든 급여 조회 가능, 아니면 자신의 회사 급여만
-    if (userRole !== 'root' && userRole !== 'audit') {
-      whereClause.tenant_id = tenantId;
-      whereClause.company_id = companyId;
-    } else {
-      // root는 company_id 쿼리 파라미터로 회사별 필터링 가능
-      if (userRole === 'root' && company_id) {
-        whereClause.company_id = parseInt(company_id as string);
-      } else if (userRole === 'root') {
-        // root가 company_id를 지정하지 않으면 모든 회사 조회
-      } else {
-        // audit는 모든 회사 조회 가능
-        if (tenantId) whereClause.tenant_id = tenantId;
-        if (companyId) whereClause.company_id = companyId;
-      }
+    if (effectiveCompanyId == null && userRole !== 'root') {
+      return res.status(400).json({ success: false, message: '회사 정보가 없습니다.' });
     }
+
+    const whereClause: any = { is_active: true };
+    if (tenantId != null) whereClause.tenant_id = tenantId;
+    if (effectiveCompanyId != null) whereClause.company_id = effectiveCompanyId;
     
     if (employee_id) {
       whereClause.employee_id = employee_id;
@@ -171,9 +178,6 @@ export const getPayrolls = async (req: RequestWithUser, res: Response) => {
     if (period) {
       whereClause.payroll_period = period;
     }
-
-    // 활성화된 급여만 조회
-    whereClause.is_active = true;
 
     const payrolls = await (Payroll as any).findAndCountAll({
       where: whereClause,
@@ -220,19 +224,15 @@ export const getPayrolls = async (req: RequestWithUser, res: Response) => {
 export const getPayroll = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const tenantId = req.user?.tenant_id;
-    const companyId = req.user?.company_id;
-    const userRole = req.user?.role;
+    const { tenantId, companyId: effectiveCompanyId, userRole } = resolvePayrollScope(req);
 
-    const whereClause: any = { id };
-    
-    if (userRole !== 'root' && userRole !== 'audit') {
-      whereClause.tenant_id = tenantId;
-      whereClause.company_id = companyId;
+    if (effectiveCompanyId == null && userRole !== 'root') {
+      return res.status(400).json({ success: false, message: '회사 정보가 없습니다.' });
     }
 
-    // 활성화된 급여만 조회
-    whereClause.is_active = true;
+    const whereClause: any = { id, is_active: true };
+    if (tenantId != null) whereClause.tenant_id = tenantId;
+    if (effectiveCompanyId != null) whereClause.company_id = effectiveCompanyId;
 
     const payroll = await (Payroll as any).findOne({
       where: whereClause,

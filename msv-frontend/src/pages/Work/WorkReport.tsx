@@ -80,6 +80,10 @@ import { useStore } from '../../store';
 import { useSearchParams } from 'react-router-dom';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import { usePageMenuPermission } from '../../context/MenuPermissionContext';
+import { useMenuActionGuard } from '../../hooks/useMenuActionGuard';
+
+const WORK_REPORT_MENU_ROUTES = ['/work/reports', '/work'] as const;
 
 /** 보고서 제출 다이얼로그 — outlined floating label + 노치 라벨 */
 function getReportDialogFieldSx(theme: Theme) {
@@ -359,8 +363,11 @@ function mapApiRowToWorkReportItem(r: any, unknownLabel: string): WorkReportItem
 }
 
 const WorkReport: React.FC = () => {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useStore();
+  const menuFlags = usePageMenuPermission(WORK_REPORT_MENU_ROUTES);
+  const createGuard = useMenuActionGuard('create', WORK_REPORT_MENU_ROUTES);
+  const editGuard = useMenuActionGuard('edit', WORK_REPORT_MENU_ROUTES);
   const [searchParams, setSearchParams] = useSearchParams();
   const isEnglish = i18n.language.startsWith('en');
   const tr = useCallback((ko: string, en: string) => (isEnglish ? en : ko), [isEnglish]);
@@ -496,8 +503,9 @@ const WorkReport: React.FC = () => {
   }, [reports, searchTerm, statusFilter, typeFilter, priorityFilter]);
 
   useEffect(() => {
+    if (menuFlags.menusLoading || !menuFlags.canRead) return;
     loadReportData();
-  }, [loadReportData]);
+  }, [loadReportData, menuFlags.menusLoading, menuFlags.canRead]);
 
   useEffect(() => {
     filterReports();
@@ -665,6 +673,7 @@ const WorkReport: React.FC = () => {
   };
 
   const handleEditReport = (report: WorkReportItem) => {
+    if (!editGuard.guard()) return;
     setSelectedReport(report);
     const uid = user?.id != null ? Number(user.id) : NaN;
     const safeRecipient =
@@ -692,6 +701,7 @@ const WorkReport: React.FC = () => {
   };
 
   const handleOpenCreate = () => {
+    if (!createGuard.guard()) return;
     const today = new Date().toISOString().split('T')[0];
     setSelectedReport(null);
     setFormState({
@@ -768,6 +778,7 @@ const WorkReport: React.FC = () => {
   };
 
   const handleSaveReport = async () => {
+    if (selectedReport ? !editGuard.guard() : !createGuard.guard()) return;
     const contentForSave = formState.content;
 
     if (!formState.title.trim() || isHtmlContentEmpty(contentForSave)) {
@@ -852,6 +863,7 @@ const WorkReport: React.FC = () => {
   };
 
   const handleSubmitReport = async (id: number) => {
+    if (!editGuard.guard()) return;
     try {
       const response = await workReportService.submitWorkReport(id);
       if (response.success) {
@@ -1346,18 +1358,29 @@ const WorkReport: React.FC = () => {
       <MvsPageHeader
         title={tr('업무 보고서', 'Work Reports')}
         actions={
-          <Button
-            variant="contained"
-            color="primary"
-            disableElevation
-            startIcon={<AddIcon sx={{ fontSize: 20 }} />}
-            onClick={handleOpenCreate}
-            sx={mvsBodyPrimaryBtnSx}
-          >
-            {tr('보고서 제출', 'Submit report')}
-          </Button>
+          <Tooltip title={createGuard.tooltipTitle} disableHoverListener={!createGuard.tooltipTitle}>
+            <span style={{ display: 'inline-flex' }}>
+              <Button
+                variant="contained"
+                color="primary"
+                disableElevation
+                startIcon={<AddIcon sx={{ fontSize: 20 }} />}
+                onClick={handleOpenCreate}
+                disabled={createGuard.disabled}
+                sx={mvsBodyPrimaryBtnSx}
+              >
+                {tr('보고서 제출', 'Submit report')}
+              </Button>
+            </span>
+          </Tooltip>
         }
       />
+
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
 
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 2 }}>
         <Tabs
@@ -2101,7 +2124,7 @@ const WorkReport: React.FC = () => {
             variant="contained"
             disableElevation
             onClick={handleSaveReport}
-            disabled={saving}
+            disabled={saving || (selectedReport ? editGuard.disabled : createGuard.disabled)}
             startIcon={selectedReport ? <EditIcon sx={{ fontSize: 20 }} /> : <SendIcon sx={{ fontSize: 20 }} />}
             sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
           >

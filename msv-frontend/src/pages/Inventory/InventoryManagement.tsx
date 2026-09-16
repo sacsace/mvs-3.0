@@ -72,8 +72,8 @@ import { alpha, useTheme } from '@mui/material/styles';
 import { inventoryService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { resolveMediaUrl } from '../../utils/uploadUrl';
-import { useMenuStore, useStore } from '../../store';
-import { findMenuIdByPath } from '../../utils/findMenuByPath';
+import { useMenuStore } from '../../store';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
@@ -220,8 +220,7 @@ interface InventoryStats {
 const InventoryManagement: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
-  const { user } = useStore();
-  const { menus, hasMenuPermission, loading: menusLoading } = useMenuStore();
+  const { loading: menusLoading } = useMenuStore();
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
@@ -273,24 +272,7 @@ const InventoryManagement: React.FC = () => {
   const [toolbarMenuAnchor, setToolbarMenuAnchor] = useState<null | HTMLElement>(null);
   const isCompactToolbar = useMediaQuery(theme.breakpoints.down('md'));
 
-  const elevated = user?.role === 'root' || user?.role === 'admin';
-  const basicMenuFlags = useMemo(() => {
-    const check = (action: 'view' | 'create' | 'edit' | 'delete') => {
-      if (elevated) return true;
-      for (const route of INVENTORY_BASIC_MENU_ROUTES) {
-        const mid = findMenuIdByPath(menus, route);
-        if (mid != null && hasMenuPermission(mid, action)) return true;
-      }
-      return false;
-    };
-    return {
-      canRead: check('view') || check('create'),
-      canCreate: check('create'),
-      canEdit: check('edit'),
-      canDelete: check('delete'),
-      canMutate: check('create') || check('edit')
-    };
-  }, [menus, hasMenuPermission, elevated]);
+  const menuFlags = useMenuRoutePermissionFlags(INVENTORY_BASIC_MENU_ROUTES);
 
   const loadInventoryData = useCallback(async () => {
     setLoading(true);
@@ -391,14 +373,14 @@ const InventoryManagement: React.FC = () => {
   }, [page, searchTerm, categoryFilter, warehouseFilter, listViewMode, itemsPerPage, t]);
 
   useEffect(() => {
-    if (menusLoading || !basicMenuFlags.canRead) return;
+    if (menusLoading || !menuFlags.canRead) return;
     loadInventoryData();
-  }, [loadInventoryData, menusLoading, basicMenuFlags.canRead]);
+  }, [loadInventoryData, menusLoading, menuFlags.canRead]);
 
   useEffect(() => {
-    if (menusLoading || !basicMenuFlags.canRead) return;
+    if (menusLoading || !menuFlags.canRead) return;
     void loadWarehouseManageList();
-  }, [menusLoading, basicMenuFlags.canRead]);
+  }, [menusLoading, menuFlags.canRead]);
 
   const filterItems = useCallback(() => {
     // 검색과 카테고리는 API에서 처리되므로, 상태 필터만 클라이언트에서 처리
@@ -429,7 +411,7 @@ const InventoryManagement: React.FC = () => {
   }, [t]);
 
   const handleAddItem = () => {
-    if (!basicMenuFlags.canCreate) {
+    if (!menuFlags.canCreate) {
       setError(t('inventoryManagement.messages.noPermissionCreate'));
       return;
     }
@@ -439,13 +421,13 @@ const InventoryManagement: React.FC = () => {
   };
 
   const handleOpenView = (item: InventoryItem) => {
-    if (basicMenuFlags.canRead) {
+    if (menuFlags.canRead) {
       setSelectedItem(item);
       setInventoryDialogMode('view');
       setOpenDialog(true);
       return;
     }
-    if (basicMenuFlags.canEdit) {
+    if (menuFlags.canEdit) {
       setSelectedItem(item);
       setInventoryDialogMode('edit');
       setOpenDialog(true);
@@ -720,7 +702,7 @@ const InventoryManagement: React.FC = () => {
   };
 
   const handleDownloadInventoryExcelSample = async () => {
-    if (!basicMenuFlags.canRead) {
+    if (!menuFlags.canRead) {
       setError(t('inventoryManagement.messages.noPermissionReadPage'));
       return;
     }
@@ -746,7 +728,7 @@ const InventoryManagement: React.FC = () => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    if (!basicMenuFlags.canMutate) {
+    if (!menuFlags.canMutate) {
       setError(t('inventoryManagement.messages.noPermissionExcel'));
       return;
     }
@@ -775,7 +757,7 @@ const InventoryManagement: React.FC = () => {
   };
 
   const handleDeleteItem = (id: number) => {
-    if (!basicMenuFlags.canDelete) {
+    if (!menuFlags.canDelete) {
       setError(t('inventoryManagement.messages.noPermissionDelete'));
       return;
     }
@@ -803,11 +785,11 @@ const InventoryManagement: React.FC = () => {
   };
 
   const handleSaveItem = async (itemData: Partial<InventoryItem>) => {
-    if (selectedItem && !basicMenuFlags.canEdit) {
+    if (selectedItem && !menuFlags.canEdit) {
       setError(t('inventoryManagement.messages.noPermissionEdit'));
       return;
     }
-    if (!selectedItem && !basicMenuFlags.canCreate) {
+    if (!selectedItem && !menuFlags.canCreate) {
       setError(t('inventoryManagement.messages.noPermissionCreate'));
       return;
     }
@@ -903,7 +885,7 @@ const InventoryManagement: React.FC = () => {
   };
 
   const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!basicMenuFlags.canDelete) return;
+    if (!menuFlags.canDelete) return;
     if (event.target.checked) {
       setSelectedItemIds(visibleItemIds);
     } else {
@@ -912,14 +894,14 @@ const InventoryManagement: React.FC = () => {
   };
 
   const handleToggleSelectItem = (id: number) => {
-    if (!basicMenuFlags.canDelete) return;
+    if (!menuFlags.canDelete) return;
     setSelectedItemIds((prev) =>
       prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]
     );
   };
 
   const handleDeleteSelected = () => {
-    if (!basicMenuFlags.canDelete) {
+    if (!menuFlags.canDelete) {
       setError(t('inventoryManagement.messages.noPermissionDelete'));
       return;
     }
@@ -1115,7 +1097,7 @@ const InventoryManagement: React.FC = () => {
         </Box>
       ) : (
         <>
-      {!basicMenuFlags.canRead ? (
+      {!menuFlags.canRead ? (
         <Alert severity="warning" sx={{ mb: 2 }}>
           {t('inventoryManagement.messages.noPermissionReadPage')}
         </Alert>
@@ -1183,7 +1165,7 @@ const InventoryManagement: React.FC = () => {
           <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, minWidth: 0 }}>
           {isCompactToolbar ? (
             <>
-              <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menusLoading || basicMenuFlags.canMutate}>
+              <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menusLoading || menuFlags.canMutate}>
                 <span style={{ display: 'inline-flex' }}>
                   <Button
                     variant="outlined"
@@ -1213,7 +1195,7 @@ const InventoryManagement: React.FC = () => {
                       boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)' } } }}
               >
                 <MenuItem
-                  disabled={menusLoading || !basicMenuFlags.canMutate}
+                  disabled={menusLoading || !menuFlags.canMutate}
                   onClick={() => {
                     closeToolbarMenu();
                     openWarehouseManage();
@@ -1225,7 +1207,7 @@ const InventoryManagement: React.FC = () => {
                   {t('inventoryManagement.manageWarehouseButton')}
                 </MenuItem>
                 <MenuItem
-                  disabled={menusLoading || !basicMenuFlags.canMutate}
+                  disabled={menusLoading || !menuFlags.canMutate}
                   onClick={() => {
                     closeToolbarMenu();
                     openCategoryManage();
@@ -1237,7 +1219,7 @@ const InventoryManagement: React.FC = () => {
                   {t('inventoryManagement.manageCategoryButton')}
                 </MenuItem>
                 <MenuItem
-                  disabled={menusLoading || !basicMenuFlags.canMutate}
+                  disabled={menusLoading || !menuFlags.canMutate}
                   onClick={() => {
                     closeToolbarMenu();
                     openUnitManage();
@@ -1249,7 +1231,7 @@ const InventoryManagement: React.FC = () => {
                   {t('inventoryManagement.manageUnitButton')}
                 </MenuItem>
                 <MenuItem
-                  disabled={excelUploading || menusLoading || !basicMenuFlags.canMutate}
+                  disabled={excelUploading || menusLoading || !menuFlags.canMutate}
                   onClick={() => {
                     closeToolbarMenu();
                     excelFileInputRef.current?.click();
@@ -1261,7 +1243,7 @@ const InventoryManagement: React.FC = () => {
                   {t('inventoryManagement.excelBulkApply')}
                 </MenuItem>
                 <MenuItem
-                  disabled={menusLoading || !basicMenuFlags.canRead}
+                  disabled={menusLoading || !menuFlags.canRead}
                   onClick={() => {
                     closeToolbarMenu();
                     handleDownloadInventoryExcelSample();
@@ -1276,13 +1258,13 @@ const InventoryManagement: React.FC = () => {
             </>
           ) : (
             <>
-          <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menusLoading || basicMenuFlags.canMutate}>
+          <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menusLoading || menuFlags.canMutate}>
             <span style={{ display: 'inline-flex' }}>
               <Button
                 variant="outlined"
                 size="small"
                 startIcon={<WarehouseIcon fontSize="small" />}
-                disabled={menusLoading || !basicMenuFlags.canMutate}
+                disabled={menusLoading || !menuFlags.canMutate}
                 onClick={openWarehouseManage}
                 sx={mvsBodyOutlinedBtnSx}
               >
@@ -1290,13 +1272,13 @@ const InventoryManagement: React.FC = () => {
               </Button>
             </span>
           </Tooltip>
-          <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menusLoading || basicMenuFlags.canMutate}>
+          <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menusLoading || menuFlags.canMutate}>
             <span style={{ display: 'inline-flex' }}>
               <Button
                 variant="outlined"
                 size="small"
                 startIcon={<CategoryIcon fontSize="small" />}
-                disabled={menusLoading || !basicMenuFlags.canMutate}
+                disabled={menusLoading || !menuFlags.canMutate}
                 onClick={openCategoryManage}
                 sx={mvsBodyOutlinedBtnSx}
               >
@@ -1304,13 +1286,13 @@ const InventoryManagement: React.FC = () => {
               </Button>
             </span>
           </Tooltip>
-          <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menusLoading || basicMenuFlags.canMutate}>
+          <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menusLoading || menuFlags.canMutate}>
             <span style={{ display: 'inline-flex' }}>
               <Button
                 variant="outlined"
                 size="small"
                 startIcon={<ScaleIcon fontSize="small" />}
-                disabled={menusLoading || !basicMenuFlags.canMutate}
+                disabled={menusLoading || !menuFlags.canMutate}
                 onClick={openUnitManage}
                 sx={mvsBodyOutlinedBtnSx}
               >
@@ -1318,13 +1300,13 @@ const InventoryManagement: React.FC = () => {
               </Button>
             </span>
           </Tooltip>
-          <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menusLoading || basicMenuFlags.canMutate}>
+          <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menusLoading || menuFlags.canMutate}>
             <span style={{ display: 'inline-flex' }}>
               <Button
                 variant="outlined"
                 size="small"
                 startIcon={<UploadFileIcon fontSize="small" />}
-                disabled={excelUploading || menusLoading || !basicMenuFlags.canMutate}
+                disabled={excelUploading || menusLoading || !menuFlags.canMutate}
                 onClick={() => excelFileInputRef.current?.click()}
                 sx={mvsBodyOutlinedBtnSx}
               >
@@ -1332,13 +1314,13 @@ const InventoryManagement: React.FC = () => {
               </Button>
             </span>
           </Tooltip>
-          <Tooltip title={t('common.menuNoView')} disableHoverListener={menusLoading || basicMenuFlags.canRead}>
+          <Tooltip title={t('common.menuNoView')} disableHoverListener={menusLoading || menuFlags.canRead}>
             <span style={{ display: 'inline-flex' }}>
               <Button
                 variant="outlined"
                 size="small"
                 startIcon={<DownloadIcon fontSize="small" />}
-                disabled={menusLoading || !basicMenuFlags.canRead}
+                disabled={menusLoading || !menuFlags.canRead}
                 onClick={handleDownloadInventoryExcelSample}
                 sx={mvsBodyOutlinedBtnSx}
               >
@@ -1361,7 +1343,7 @@ const InventoryManagement: React.FC = () => {
               ml: { md: 'auto' } }}
           >
           {selectedItemIds.length > 0 ? (
-            <Tooltip title={t('common.menuNoDelete')} disableHoverListener={menusLoading || basicMenuFlags.canDelete}>
+            <Tooltip title={t('common.menuNoDelete')} disableHoverListener={menusLoading || menuFlags.canDelete}>
               <span style={{ display: 'inline-flex' }}>
                 <Button
                   variant="contained"
@@ -1369,7 +1351,7 @@ const InventoryManagement: React.FC = () => {
                   disableElevation
                   size="small"
                   startIcon={<DeleteIcon fontSize="small" />}
-                  disabled={menusLoading || !basicMenuFlags.canDelete}
+                  disabled={menusLoading || !menuFlags.canDelete}
                   onClick={handleDeleteSelected}
                   sx={{
                     textTransform: 'none',
@@ -1385,14 +1367,14 @@ const InventoryManagement: React.FC = () => {
               </span>
             </Tooltip>
           ) : null}
-          <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menusLoading || basicMenuFlags.canCreate}>
+          <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menusLoading || menuFlags.canCreate}>
             <span style={{ display: 'inline-flex', flexShrink: 0 }}>
               <Button
                 variant="contained"
                 disableElevation
                 size="small"
                 startIcon={<AddIcon fontSize="small" />}
-                disabled={menusLoading || !basicMenuFlags.canCreate}
+                disabled={menusLoading || !menuFlags.canCreate}
                 onClick={handleAddItem}
                 sx={mvsBodyPrimaryBtnSx}
               >
@@ -1548,14 +1530,14 @@ const InventoryManagement: React.FC = () => {
                 {t('inventoryManagement.reset')}
               </Button>
             ) : (
-              <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menusLoading || basicMenuFlags.canCreate}>
+              <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menusLoading || menuFlags.canCreate}>
                 <span style={{ display: 'inline-flex' }}>
                   <Button
                     variant="contained"
                     disableElevation
                     size="small"
                     startIcon={<AddIcon fontSize="small" />}
-                    disabled={menusLoading || !basicMenuFlags.canCreate}
+                    disabled={menusLoading || !menuFlags.canCreate}
                     onClick={handleAddItem}
                     sx={mvsBodyPrimaryBtnSx}
                   >
@@ -1614,7 +1596,7 @@ const InventoryManagement: React.FC = () => {
                 <TableCell padding="checkbox" align="center" sx={thSx('select')}>
                   <Checkbox
                     size="small"
-                    disabled={menusLoading || !basicMenuFlags.canDelete || paginatedItems.length === 0}
+                    disabled={menusLoading || !menuFlags.canDelete || paginatedItems.length === 0}
                     indeterminate={someVisibleSelected && !allVisibleSelected}
                     checked={allVisibleSelected}
                     onChange={handleSelectAll}
@@ -1650,9 +1632,9 @@ const InventoryManagement: React.FC = () => {
               {paginatedItems.map((item) => (
                 <TableRow
                   key={item.id}
-                  onClick={basicMenuFlags.canRead || basicMenuFlags.canEdit ? () => handleOpenView(item) : undefined}
+                  onClick={menuFlags.canRead || menuFlags.canEdit ? () => handleOpenView(item) : undefined}
                   sx={{
-                    cursor: basicMenuFlags.canRead || basicMenuFlags.canEdit ? 'pointer' : 'default',
+                    cursor: menuFlags.canRead || menuFlags.canEdit ? 'pointer' : 'default',
                     '&:hover .inv-delete-btn:not(.Mui-disabled)': {
                       color: 'error.main',
                       bgcolor: alpha(theme.palette.error.main, 0.08) } }}
@@ -1665,7 +1647,7 @@ const InventoryManagement: React.FC = () => {
                   >
                     <Checkbox
                       size="small"
-                      disabled={menusLoading || !basicMenuFlags.canDelete}
+                      disabled={menusLoading || !menuFlags.canDelete}
                       checked={selectedItemIds.includes(item.id)}
                       onChange={() => handleToggleSelectItem(item.id)}
                       inputProps={{ 'aria-label': t('inventoryManagement.selectItem', { name: item.name }) }}
@@ -1758,17 +1740,17 @@ const InventoryManagement: React.FC = () => {
                     <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
                       <Tooltip
                         title={
-                          !basicMenuFlags.canDelete && !menusLoading
+                          !menuFlags.canDelete && !menusLoading
                             ? t('common.menuNoDelete')
                             : t('inventoryManagement.tooltips.delete')
                         }
-                        disableHoverListener={menusLoading || basicMenuFlags.canDelete}
+                        disableHoverListener={menusLoading || menuFlags.canDelete}
                       >
                         <span>
                           <IconButton
                             className="inv-delete-btn"
                             size="small"
-                            disabled={menusLoading || !basicMenuFlags.canDelete}
+                            disabled={menusLoading || !menuFlags.canDelete}
                             onClick={() => handleDeleteItem(item.id)}
                             aria-label={t('inventoryManagement.tooltips.delete')}
                             sx={{
@@ -1848,9 +1830,9 @@ const InventoryManagement: React.FC = () => {
               key={selectedItem ? `edit-${selectedItem.id}` : 'add-new'}
               item={selectedItem}
               onSave={handleSaveItem}
-              canCreate={basicMenuFlags.canCreate}
-              canEdit={basicMenuFlags.canEdit}
-              canMutate={basicMenuFlags.canMutate}
+              canCreate={menuFlags.canCreate}
+              canEdit={menuFlags.canEdit}
+              canMutate={menuFlags.canMutate}
               onPreviewImage={openProductImagePreview}
               onCancel={() => {
                 if (selectedItem) {
@@ -1878,12 +1860,12 @@ const InventoryManagement: React.FC = () => {
             >
               {t('inventoryManagement.actions.close')}
             </Button>
-            <Tooltip title={t('common.menuNoEdit')} disableHoverListener={basicMenuFlags.canEdit}>
+            <Tooltip title={t('common.menuNoEdit')} disableHoverListener={menuFlags.canEdit}>
               <span style={{ display: 'inline-flex' }}>
                 <Button
                   variant="contained"
                   disableElevation
-                  disabled={!basicMenuFlags.canEdit}
+                  disabled={!menuFlags.canEdit}
                   onClick={() => setInventoryDialogMode('edit')}
                   sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
                 >
@@ -1968,7 +1950,7 @@ const InventoryManagement: React.FC = () => {
             />
             <Button
               variant="contained"
-              disabled={masterDialogSaving || !newCategoryInput.trim() || !basicMenuFlags.canMutate}
+              disabled={masterDialogSaving || !newCategoryInput.trim() || !menuFlags.canMutate}
               onClick={handleAddCategoryRow}
             >
               {t('inventoryManagement.actions.add')}
@@ -2018,11 +2000,11 @@ const InventoryManagement: React.FC = () => {
                       <TableRow key={row.id} hover>
                         <TableCell>{row.name}</TableCell>
                         <TableCell align="right">
-                          <Tooltip title={t('common.menuNoEdit')} disableHoverListener={basicMenuFlags.canEdit}>
+                          <Tooltip title={t('common.menuNoEdit')} disableHoverListener={menuFlags.canEdit}>
                             <span>
                               <IconButton
                                 size="small"
-                                disabled={!basicMenuFlags.canEdit}
+                                disabled={!menuFlags.canEdit}
                                 onClick={() => setEditingCategory({ id: row.id, name: row.name })}
                                 aria-label="edit"
                               >
@@ -2030,12 +2012,12 @@ const InventoryManagement: React.FC = () => {
                               </IconButton>
                             </span>
                           </Tooltip>
-                          <Tooltip title={t('common.menuNoDelete')} disableHoverListener={basicMenuFlags.canDelete}>
+                          <Tooltip title={t('common.menuNoDelete')} disableHoverListener={menuFlags.canDelete}>
                             <span>
                               <IconButton
                                 size="small"
                                 onClick={() => handleDeleteCategoryRow(row)}
-                                disabled={masterDialogSaving || !basicMenuFlags.canDelete}
+                                disabled={masterDialogSaving || !menuFlags.canDelete}
                                 aria-label="delete"
                               >
                                 <DeleteIcon fontSize="small" />
@@ -2077,7 +2059,7 @@ const InventoryManagement: React.FC = () => {
           <Button
             variant="contained"
             onClick={handleSaveEditCategory}
-            disabled={masterDialogSaving || !editingCategory?.name?.trim() || !basicMenuFlags.canEdit}
+            disabled={masterDialogSaving || !editingCategory?.name?.trim() || !menuFlags.canEdit}
           >
             {t('inventoryManagement.actions.update')}
           </Button>
@@ -2111,7 +2093,7 @@ const InventoryManagement: React.FC = () => {
             />
             <Button
               variant="contained"
-              disabled={masterDialogSaving || !newWarehouseInput.trim() || !basicMenuFlags.canMutate}
+              disabled={masterDialogSaving || !newWarehouseInput.trim() || !menuFlags.canMutate}
               onClick={handleAddWarehouseRow}
             >
               {t('inventoryManagement.actions.add')}
@@ -2161,11 +2143,11 @@ const InventoryManagement: React.FC = () => {
                       <TableRow key={row.id} hover>
                         <TableCell>{row.name}</TableCell>
                         <TableCell align="right">
-                          <Tooltip title={t('common.menuNoEdit')} disableHoverListener={basicMenuFlags.canEdit}>
+                          <Tooltip title={t('common.menuNoEdit')} disableHoverListener={menuFlags.canEdit}>
                             <span>
                               <IconButton
                                 size="small"
-                                disabled={!basicMenuFlags.canEdit}
+                                disabled={!menuFlags.canEdit}
                                 onClick={() => setEditingWarehouse({ id: row.id, name: row.name })}
                                 aria-label="edit"
                               >
@@ -2173,12 +2155,12 @@ const InventoryManagement: React.FC = () => {
                               </IconButton>
                             </span>
                           </Tooltip>
-                          <Tooltip title={t('common.menuNoDelete')} disableHoverListener={basicMenuFlags.canDelete}>
+                          <Tooltip title={t('common.menuNoDelete')} disableHoverListener={menuFlags.canDelete}>
                             <span>
                               <IconButton
                                 size="small"
                                 onClick={() => handleDeleteWarehouseRow(row)}
-                                disabled={masterDialogSaving || !basicMenuFlags.canDelete}
+                                disabled={masterDialogSaving || !menuFlags.canDelete}
                                 aria-label="delete"
                               >
                                 <DeleteIcon fontSize="small" />
@@ -2220,7 +2202,7 @@ const InventoryManagement: React.FC = () => {
           <Button
             variant="contained"
             onClick={handleSaveEditWarehouse}
-            disabled={masterDialogSaving || !editingWarehouse?.name?.trim() || !basicMenuFlags.canEdit}
+            disabled={masterDialogSaving || !editingWarehouse?.name?.trim() || !menuFlags.canEdit}
           >
             {t('inventoryManagement.actions.update')}
           </Button>
@@ -2254,7 +2236,7 @@ const InventoryManagement: React.FC = () => {
             />
             <Button
               variant="contained"
-              disabled={masterDialogSaving || !newUnitInput.trim() || !basicMenuFlags.canMutate}
+              disabled={masterDialogSaving || !newUnitInput.trim() || !menuFlags.canMutate}
               onClick={handleAddUnitRow}
             >
               {t('inventoryManagement.actions.add')}
@@ -2304,11 +2286,11 @@ const InventoryManagement: React.FC = () => {
                       <TableRow key={row.id} hover>
                         <TableCell>{row.name}</TableCell>
                         <TableCell align="right">
-                          <Tooltip title={t('common.menuNoEdit')} disableHoverListener={basicMenuFlags.canEdit}>
+                          <Tooltip title={t('common.menuNoEdit')} disableHoverListener={menuFlags.canEdit}>
                             <span>
                               <IconButton
                                 size="small"
-                                disabled={!basicMenuFlags.canEdit}
+                                disabled={!menuFlags.canEdit}
                                 onClick={() => setEditingUnit({ id: row.id, name: row.name })}
                                 aria-label="edit"
                               >
@@ -2316,12 +2298,12 @@ const InventoryManagement: React.FC = () => {
                               </IconButton>
                             </span>
                           </Tooltip>
-                          <Tooltip title={t('common.menuNoDelete')} disableHoverListener={basicMenuFlags.canDelete}>
+                          <Tooltip title={t('common.menuNoDelete')} disableHoverListener={menuFlags.canDelete}>
                             <span>
                               <IconButton
                                 size="small"
                                 onClick={() => handleDeleteUnitRow(row)}
-                                disabled={masterDialogSaving || !basicMenuFlags.canDelete}
+                                disabled={masterDialogSaving || !menuFlags.canDelete}
                                 aria-label="delete"
                               >
                                 <DeleteIcon fontSize="small" />
@@ -2363,7 +2345,7 @@ const InventoryManagement: React.FC = () => {
           <Button
             variant="contained"
             onClick={handleSaveEditUnit}
-            disabled={masterDialogSaving || !editingUnit?.name?.trim() || !basicMenuFlags.canEdit}
+            disabled={masterDialogSaving || !editingUnit?.name?.trim() || !menuFlags.canEdit}
           >
             {t('inventoryManagement.actions.update')}
           </Button>

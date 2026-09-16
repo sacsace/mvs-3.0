@@ -35,6 +35,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { departmentService } from '../../services/api';
 import { useStore } from '../../store';
+import { usePageMenuPermission } from '../../context/MenuPermissionContext';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import {
@@ -669,12 +670,26 @@ export const DepartmentManagementPanel: React.FC<{
   );
 };
 
+const DEPARTMENT_MENU_ROUTES = ['/hr/users', '/hr/departments', '/hr'] as const;
+
 const DepartmentManagement: React.FC = () => {
   const { user } = useStore();
+  const { t } = useTranslation();
+  const menuFlags = usePageMenuPermission(DEPARTMENT_MENU_ROUTES);
   return (
-    <DepartmentManagementPanel
-      companyId={user?.company_id != null ? Number(user.company_id) : null}
-    />
+    <Box>
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
+      <DepartmentManagementPanel
+        companyId={user?.company_id != null ? Number(user.company_id) : null}
+        canCreate={menuFlags.canCreate}
+        canEdit={menuFlags.canEdit}
+        canDelete={menuFlags.canDelete}
+      />
+    </Box>
   );
 };
 

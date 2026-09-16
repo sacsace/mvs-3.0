@@ -55,6 +55,10 @@ import {
   mvsTableScrollSx } from '../../theme/mvsLayout';
 import { formatInr, parseInrInput } from '../../utils/formatInr';
 import { getBilingualName } from '../../utils/accountingMasterLabel';
+import { usePageMenuPermission } from '../../context/MenuPermissionContext';
+import { useMenuActionGuard } from '../../hooks/useMenuActionGuard';
+
+const VOUCHER_ENTRY_MENU_ROUTES = ['/accounting/tally-import', '/accounting/books'] as const;
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   payment: <PaymentIcon />,
@@ -80,6 +84,8 @@ type PreviewLine = {
 const VoucherEntry: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const menuFlags = usePageMenuPermission(VOUCHER_ENTRY_MENU_ROUTES);
+  const createGuard = useMenuActionGuard('create', VOUCHER_ENTRY_MENU_ROUTES);
   const {
     canSelectCompany,
     companies,
@@ -134,7 +140,7 @@ const VoucherEntry: React.FC = () => {
   const { ledgerAccounts } = useGlAccounts(true, effectiveCompanyId);
 
   const loadMasters = useCallback(async () => {
-    if (!effectiveCompanyId) return;
+    if (menuFlags.menusLoading || !menuFlags.canRead || !effectiveCompanyId) return;
     setLoading(true);
     try {
       await accountingService.seedAccountingMasters(effectiveCompanyId);
@@ -159,7 +165,7 @@ const VoucherEntry: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [effectiveCompanyId, companyQuery, voucherDate, t]);
+  }, [effectiveCompanyId, companyQuery, voucherDate, t, menuFlags.menusLoading, menuFlags.canRead]);
 
   useEffect(() => {
     loadMasters();
@@ -257,6 +263,7 @@ const VoucherEntry: React.FC = () => {
   };
 
   const handleSave = async (status: 'draft' | 'posted') => {
+    if (!createGuard.guard()) return;
     if (!selectedVoucherType) {
       setError(t('voucherEntry.errors.noVoucherType'));
       return;
@@ -347,6 +354,12 @@ const VoucherEntry: React.FC = () => {
   return (
     <Box sx={mvsPageRootSx}>
       <MvsPageHeader title={t('voucherEntry.title')} description={t('voucherEntry.subtitle')} />
+
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
 
       <AccountingCompanyBar
         canSelectCompany={canSelectCompany}
@@ -661,16 +674,27 @@ const VoucherEntry: React.FC = () => {
 
         <Box sx={{ ...mvsBodySectionHeaderSx, borderRadius: '8px', border: '1px solid #E2E8F0', boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)', justifyContent: 'flex-end' }}>
           <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
-            <Tooltip title={!balanced ? t('voucherEntry.errors.notBalanced') : ''}>
+            <Tooltip title={createGuard.tooltipTitle || (!balanced ? t('voucherEntry.errors.notBalanced') : '')}>
               <span>
-                <Button variant="outlined" sx={mvsBodyOutlinedBtnSx} disabled={saving} onClick={() => void handleSave('draft')}>
+                <Button
+                  variant="outlined"
+                  sx={mvsBodyOutlinedBtnSx}
+                  disabled={saving || createGuard.disabled}
+                  onClick={() => void handleSave('draft')}
+                >
                   {t('voucherEntry.saveDraft')}
                 </Button>
               </span>
             </Tooltip>
-            <Tooltip title={!balanced ? t('voucherEntry.errors.notBalanced') : ''}>
+            <Tooltip title={createGuard.tooltipTitle || (!balanced ? t('voucherEntry.errors.notBalanced') : '')}>
               <span>
-                <Button variant="contained" disableElevation sx={mvsBodyPrimaryBtnSx} disabled={saving || !balanced} onClick={() => void handleSave('posted')}>
+                <Button
+                  variant="contained"
+                  disableElevation
+                  sx={mvsBodyPrimaryBtnSx}
+                  disabled={saving || !balanced || createGuard.disabled}
+                  onClick={() => void handleSave('posted')}
+                >
                   {t('voucherEntry.post')}
                 </Button>
               </span>

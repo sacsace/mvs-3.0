@@ -114,7 +114,8 @@ export const useMenuStore = create<MenuState>()(
       hasMenuPermission: (menuId: number, action: 'view' | 'create' | 'edit' | 'delete') => {
         const { userPermissions } = get();
         const authUser = useStore.getState().user;
-        if (authUser?.role === 'root' || authUser?.role === 'admin') {
+        /** root만 전역 우회 — admin 포함 역할은 메뉴권한관리(user_permissions)를 따름 */
+        if (authUser?.role === 'root') {
           return true;
         }
         const mid = Number(menuId);

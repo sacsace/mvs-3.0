@@ -127,8 +127,8 @@ export const requireMenuPermissionAny = (menuRoutes: string[], flag: MenuPermiss
 export const USER_MANAGEMENT_MENU_ROUTES = ['/hr/users', '/users'];
 
 /**
- * `admin` / `root`는 즉시 허용.
- * 그 외 역할(`user` 등)은 사용자 관리 메뉴에 해당 플래그가 있어야 API 쓰기 가능 — 메뉴권한관리와 서버 정책 일치.
+ * `root`만 즉시 허용.
+ * 그 외 역할(`admin` 포함)은 사용자 관리 메뉴에 해당 플래그가 있어야 API 쓰기 가능.
  */
 export const requireAdminRootOrUserMenuPermission = (flag: MenuPermissionFlag) => {
   const menuCheck = requireMenuPermissionAny(USER_MANAGEMENT_MENU_ROUTES, flag);
@@ -138,7 +138,7 @@ export const requireAdminRootOrUserMenuPermission = (flag: MenuPermissionFlag) =
       res.status(401).json({ success: false, message: '인증이 필요합니다.' });
       return;
     }
-    if (user.role === 'root' || user.role === 'admin') {
+    if (user.role === 'root') {
       next();
       return;
     }
@@ -150,8 +150,8 @@ export const requireAdminRootOrUserMenuPermission = (flag: MenuPermissionFlag) =
 export const VACATION_MENU_ROUTES = ['/hr/leave', '/my/leave'];
 
 /**
- * `admin` / `root`는 즉시 허용.
- * 그 외 역할은 나열된 메뉴 route 중 하나에 대해 `flags` 중 **하나라도** true이면 통과.
+ * `root`만 즉시 허용.
+ * 그 외 역할(`admin` 포함)은 나열된 메뉴 route 중 하나에 대해 `flags` 중 **하나라도** true이면 통과.
  */
 export const requireAdminRootOrMenuPermissionAnyOf = (
   menuRoutes: string[],
@@ -164,7 +164,7 @@ export const requireAdminRootOrMenuPermissionAnyOf = (
         res.status(401).json({ success: false, message: '인증이 필요합니다.' });
         return;
       }
-      if (user.role === 'root' || user.role === 'admin') {
+      if (user.role === 'root') {
         next();
         return;
       }

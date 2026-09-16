@@ -300,6 +300,9 @@ const sapImportUpload = multer({
 });
 
 const SAP_IMPORT_MENU_ROUTE = '/accounting/sap-import';
+const REGULAR_INVOICE_MENU_ROUTE = '/accounting/invoice';
+const E_INVOICE_MENU_ROUTE = '/accounting/e-invoice';
+
 const sapImportViewPermission = requireAdminRootOrMenuPermissionAnyOf(
   [SAP_IMPORT_MENU_ROUTE],
   ['can_view']
@@ -307,6 +310,40 @@ const sapImportViewPermission = requireAdminRootOrMenuPermissionAnyOf(
 const sapImportCreatePermission = requireAdminRootOrMenuPermissionAnyOf(
   [SAP_IMPORT_MENU_ROUTE],
   ['can_create']
+);
+
+const regularInvoiceReadPerm = requireAdminRootOrMenuPermissionAnyOf(
+  [REGULAR_INVOICE_MENU_ROUTE],
+  ['can_view', 'can_create']
+);
+const regularInvoiceCreatePerm = requireAdminRootOrMenuPermissionAnyOf(
+  [REGULAR_INVOICE_MENU_ROUTE],
+  ['can_create']
+);
+const regularInvoiceEditPerm = requireAdminRootOrMenuPermissionAnyOf(
+  [REGULAR_INVOICE_MENU_ROUTE],
+  ['can_edit']
+);
+const regularInvoiceDeletePerm = requireAdminRootOrMenuPermissionAnyOf(
+  [REGULAR_INVOICE_MENU_ROUTE],
+  ['can_delete']
+);
+
+const eInvoiceReadPerm = requireAdminRootOrMenuPermissionAnyOf(
+  [E_INVOICE_MENU_ROUTE],
+  ['can_view', 'can_create']
+);
+const eInvoiceCreatePerm = requireAdminRootOrMenuPermissionAnyOf(
+  [E_INVOICE_MENU_ROUTE],
+  ['can_create']
+);
+const eInvoiceEditPerm = requireAdminRootOrMenuPermissionAnyOf(
+  [E_INVOICE_MENU_ROUTE],
+  ['can_edit']
+);
+const eInvoiceDeletePerm = requireAdminRootOrMenuPermissionAnyOf(
+  [E_INVOICE_MENU_ROUTE],
+  ['can_delete']
 );
 
 // 토큰으로 영수증 업로드 (인증 미들웨어 없음 - 휴대폰에서 QR 스캔 후 호출)
@@ -408,13 +445,14 @@ router.post('/vouchers/:id/approve', restrictAuditToReadOnly, approveVoucherEntr
 router.post('/vouchers/:id/reject', restrictAuditToReadOnly, rejectVoucherEntry);
 
 // 인보이스 관련 라우트
-router.get('/invoices/next-number', getNextInvoiceNumber);
-router.get('/invoices', getInvoices);
-router.get('/invoices/:id', getInvoice);
-router.post('/invoices/:id/approve', restrictAuditToReadOnly, approveInvoice);
-router.post('/invoices/:id/reject', restrictAuditToReadOnly, rejectInvoice);
+router.get('/invoices/next-number', regularInvoiceReadPerm, getNextInvoiceNumber);
+router.get('/invoices', regularInvoiceReadPerm, getInvoices);
+router.get('/invoices/:id', regularInvoiceReadPerm, getInvoice);
+router.post('/invoices/:id/approve', regularInvoiceEditPerm, restrictAuditToReadOnly, approveInvoice);
+router.post('/invoices/:id/reject', regularInvoiceEditPerm, restrictAuditToReadOnly, rejectInvoice);
 router.post(
   '/invoices',
+  regularInvoiceCreatePerm,
   restrictAuditToReadOnly,
   validateBody({
     customer_id: { type: 'number' },
@@ -435,6 +473,7 @@ router.post(
 );
 router.put(
   '/invoices/:id',
+  regularInvoiceEditPerm,
   restrictAuditToReadOnly,
   validateBody({
     customer_id: { type: 'number' },
@@ -455,6 +494,7 @@ router.put(
 );
 router.put(
   '/invoices/:id/status',
+  regularInvoiceEditPerm,
   restrictAuditToReadOnly,
   validateBody({
     status: { type: 'string', maxLength: 20 },
@@ -464,9 +504,10 @@ router.put(
   }),
   updateInvoiceStatus
 );
-router.delete('/invoices/:id', restrictAuditToReadOnly, deleteInvoice);
+router.delete('/invoices/:id', regularInvoiceDeletePerm, restrictAuditToReadOnly, deleteInvoice);
 router.post(
   '/invoices/:id/send-email',
+  regularInvoiceEditPerm,
   restrictAuditToReadOnly,
   validateBody({
     to: { required: true, type: 'string', minLength: 3, maxLength: 255 },
@@ -503,12 +544,13 @@ router.put(
   }),
   updateProformaInvoiceStatus
 );
-router.post('/proforma-invoices/:id/create-e-invoice', restrictAuditToReadOnly, createEInvoiceFromProforma);
+router.post('/proforma-invoices/:id/create-e-invoice', eInvoiceCreatePerm, restrictAuditToReadOnly, createEInvoiceFromProforma);
 
 // E-Invoice 관련 라우트
-router.get('/e-invoices', getEInvoices);
+router.get('/e-invoices', eInvoiceReadPerm, getEInvoices);
 router.post(
   '/e-invoices',
+  eInvoiceCreatePerm,
   restrictAuditToReadOnly,
   validateBody({
     customer_id: { type: 'number' },
@@ -526,14 +568,15 @@ router.post(
 );
 router.put(
   '/e-invoices/:id/status',
+  eInvoiceEditPerm,
   restrictAuditToReadOnly,
   validateBody({
     status: { required: true, type: 'string', maxLength: 20 }
   }),
   updateEInvoiceStatus
 );
-router.post('/e-invoices/:id/generate-irn', restrictAuditToReadOnly, generateEInvoiceIrn);
-router.post('/e-invoices/:id/create-eway-bill', restrictAuditToReadOnly, createEWayBillFromEInvoice);
+router.post('/e-invoices/:id/generate-irn', eInvoiceEditPerm, restrictAuditToReadOnly, generateEInvoiceIrn);
+router.post('/e-invoices/:id/create-eway-bill', eInvoiceCreatePerm, restrictAuditToReadOnly, createEWayBillFromEInvoice);
 
 // E-Way Bill 관련 라우트
 router.get('/eway-bills', getEWayBills);

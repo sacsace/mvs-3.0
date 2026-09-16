@@ -78,6 +78,10 @@ import {
   DOCUMENT_PDF_LINE_HEIGHT_PT,
   DOCUMENT_PDF_MARGINS_MM,
 } from '../../utils/pdf';
+import { usePageMenuPermission } from '../../context/MenuPermissionContext';
+import { useMenuActionGuard } from '../../hooks/useMenuActionGuard';
+
+const REGULAR_INVOICE_MENU_ROUTES = ['/accounting/invoice'] as const;
 
 interface InvoiceItem {
   id?: number;
@@ -224,7 +228,11 @@ const taxSummaryTableSx = {
 
 const RegularInvoice: React.FC = () => {
   const { user } = useStore();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const menuFlags = usePageMenuPermission(REGULAR_INVOICE_MENU_ROUTES);
+  const createGuard = useMenuActionGuard('create', REGULAR_INVOICE_MENU_ROUTES);
+  const editGuard = useMenuActionGuard('edit', REGULAR_INVOICE_MENU_ROUTES);
+  const deleteGuard = useMenuActionGuard('delete', REGULAR_INVOICE_MENU_ROUTES);
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkHandledRef = useRef<string | null>(null);
   const isEnglish = i18n.language === 'en';
@@ -715,8 +723,14 @@ const RegularInvoice: React.FC = () => {
   }, [displayInvoices.length]);
 
   useEffect(() => {
+    if (menuFlags.menusLoading || !menuFlags.canRead) return;
     void loadInvoices();
-  }, [loadInvoices]);
+  }, [loadInvoices, menuFlags.menusLoading, menuFlags.canRead]);
+
+  useEffect(() => {
+    if (menuFlags.menusLoading || createGuard.allowed) return;
+    if (isCreating) setIsCreating(false);
+  }, [menuFlags.menusLoading, createGuard.allowed, isCreating]);
 
   useEffect(() => {
     setPage(1);
@@ -737,6 +751,7 @@ const RegularInvoice: React.FC = () => {
   };
 
   const handleCreateInvoice = () => {
+    if (!createGuard.guard()) return;
     setSelectedInvoice(null);
     setIsEditing(false);
     setIsViewing(false);
@@ -1129,6 +1144,7 @@ const RegularInvoice: React.FC = () => {
   };
 
   const handleSaveInvoice = async () => {
+    if (isEditing ? !editGuard.guard() : !createGuard.guard()) return;
     const emptyItemIndex = formData.items.findIndex((item) => !item.item_name || item.item_name.trim() === '');
     if (emptyItemIndex !== -1) {
       showSnackbar(tr('항목명은 필수입니다.', 'Item name is required.'), 'error');
@@ -1292,6 +1308,7 @@ const RegularInvoice: React.FC = () => {
   };
 
   const handleDeleteInvoice = (id: number, invoiceNumber?: string, paymentStatus?: string) => {
+    if (!deleteGuard.guard()) return;
     if (paymentStatus === 'paid') {
       showSnackbar(tr('정산 완료된 인보이스는 삭제 요청할 수 없습니다.', 'Paid invoices cannot be requested for deletion.'), 'error');
       return;
@@ -1730,6 +1747,12 @@ const RegularInvoice: React.FC = () => {
         mb={!isInvoicePageMode ? 2 : 3}
       />
 
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
+
       {!isInvoicePageMode && (
         <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
           <Tabs
@@ -1821,16 +1844,20 @@ const RegularInvoice: React.FC = () => {
                 >
                   {tr('필터 초기화', 'Reset Filters')}
                 </Button>
-                <Button
-                  variant="contained"
-                  disableElevation
-                  startIcon={<AddIcon />}
-                  disabled={loading}
-                  onClick={handleCreateInvoice}
-                  sx={mvsBodyPrimaryBtnSx}
-                >
-                  {tr('새 인보이스', 'New Invoice')}
-                </Button>
+                <Tooltip title={createGuard.tooltipTitle} disableHoverListener={!createGuard.tooltipTitle}>
+                  <span style={{ display: 'inline-flex' }}>
+                    <Button
+                      variant="contained"
+                      disableElevation
+                      startIcon={<AddIcon />}
+                      disabled={loading || createGuard.disabled}
+                      onClick={handleCreateInvoice}
+                      sx={mvsBodyPrimaryBtnSx}
+                    >
+                      {tr('새 인보이스', 'New Invoice')}
+                    </Button>
+                  </span>
+                </Tooltip>
               </Stack>
             </Grid>
           </Grid>

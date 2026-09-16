@@ -18,6 +18,7 @@ import {
   CircularProgress,
   AlertTitle,
   Pagination,
+  Tooltip,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -47,6 +48,10 @@ import { useTranslation } from 'react-i18next';
 import { useTheme, alpha, type SxProps, type Theme } from '@mui/material/styles';
 import { attendanceService, officeLocationService, vacationService, heresnowIntegrationService } from '../../services/api';
 import { useStore } from '../../store';
+import { usePageMenuPermission } from '../../context/MenuPermissionContext';
+import { useMenuActionGuard } from '../../hooks/useMenuActionGuard';
+
+const ATTENDANCE_MENU_ROUTES = ['/hr/attendance', '/my/attendance', '/hr'] as const;
 
 const ATTENDANCE_PER_PAGE = 10;
 const ATTENDANCE_FILTER_OUTLINED = mvsOutlinedLabelProps;
@@ -131,6 +136,8 @@ const AttendanceManagement: React.FC = () => {
   const theme = useTheme();
   const { user } = useStore();
   const { t, i18n } = useTranslation();
+  const menuFlags = usePageMenuPermission(ATTENDANCE_MENU_ROUTES);
+  const mutateGuard = useMenuActionGuard('mutate', ATTENDANCE_MENU_ROUTES);
   const [attendances, setAttendances] = useState<Attendance[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -352,13 +359,15 @@ const AttendanceManagement: React.FC = () => {
   }, [startDate, endDate, filter.status, t]);
 
   useEffect(() => {
+    if (menuFlags.menusLoading || !menuFlags.canRead) return;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return;
     if (startDate > endDate) return;
     fetchAttendances();
-  }, [fetchAttendances, startDate, endDate]);
+  }, [fetchAttendances, startDate, endDate, menuFlags.menusLoading, menuFlags.canRead]);
 
   // ?? ??
   const handleCheckIn = async () => {
+    if (!mutateGuard.guard()) return;
     if (heresnowManualDisabled) {
       setError(t('attendanceManagement.heresnowManualClockDisabled'));
       return;
@@ -433,6 +442,7 @@ const AttendanceManagement: React.FC = () => {
 
   // ?? ??
   const handleCheckOut = async () => {
+    if (!mutateGuard.guard()) return;
     if (heresnowManualDisabled) {
       setError(t('attendanceManagement.heresnowManualClockDisabled'));
       return;
@@ -681,6 +691,12 @@ const AttendanceManagement: React.FC = () => {
         </Alert>
       )}
 
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
+
       <Alert severity={heresnowManualDisabled ? 'warning' : 'info'} sx={{ mb: 2 }}>
         <AlertTitle>{t('attendanceManagement.heresnowTitle')}</AlertTitle>
         {heresnowManualDisabled
@@ -743,27 +759,35 @@ const AttendanceManagement: React.FC = () => {
               {t('attendanceManagement.todayAttendance')}
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
-              <Button
-                variant="contained"
-                disableElevation
-                size="small"
-                startIcon={<CheckInIcon fontSize="small" />}
-                onClick={handleCheckIn}
-                disabled={heresnowManualDisabled || checkInLoading || !!todayAttendance?.check_in}
-                sx={mvsBodyPrimaryBtnSx}
-              >
-                {checkInLoading ? <CircularProgress size={16} color="inherit" /> : t('attendanceManagement.checkIn')}
-              </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<CheckOutIcon fontSize="small" />}
-                onClick={handleCheckOut}
-                disabled={heresnowManualDisabled || checkOutLoading || !todayAttendance?.check_in || !!todayAttendance?.check_out}
-                sx={mvsBodyOutlinedBtnSx}
-              >
-                {checkOutLoading ? <CircularProgress size={16} /> : t('attendanceManagement.checkOut')}
-              </Button>
+              <Tooltip title={mutateGuard.tooltipTitle} disableHoverListener={!mutateGuard.tooltipTitle}>
+                <span>
+                  <Button
+                    variant="contained"
+                    disableElevation
+                    size="small"
+                    startIcon={<CheckInIcon fontSize="small" />}
+                    onClick={handleCheckIn}
+                    disabled={mutateGuard.disabled || heresnowManualDisabled || checkInLoading || !!todayAttendance?.check_in}
+                    sx={mvsBodyPrimaryBtnSx}
+                  >
+                    {checkInLoading ? <CircularProgress size={16} color="inherit" /> : t('attendanceManagement.checkIn')}
+                  </Button>
+                </span>
+              </Tooltip>
+              <Tooltip title={mutateGuard.tooltipTitle} disableHoverListener={!mutateGuard.tooltipTitle}>
+                <span>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<CheckOutIcon fontSize="small" />}
+                    onClick={handleCheckOut}
+                    disabled={mutateGuard.disabled || heresnowManualDisabled || checkOutLoading || !todayAttendance?.check_in || !!todayAttendance?.check_out}
+                    sx={mvsBodyOutlinedBtnSx}
+                  >
+                    {checkOutLoading ? <CircularProgress size={16} /> : t('attendanceManagement.checkOut')}
+                  </Button>
+                </span>
+              </Tooltip>
             </Box>
           </Box>
 

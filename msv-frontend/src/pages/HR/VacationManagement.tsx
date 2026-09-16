@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -81,7 +81,7 @@ import {
   Favorite as FavoriteIcon } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
-import { findMenuIdByPath } from '../../utils/findMenuByPath';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 import { vacationService } from '../../services/api';
 import { getUploadUrl } from '../../utils/uploadUrl';
 import { useTranslation } from 'react-i18next';
@@ -214,7 +214,7 @@ const VacationManagement: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const leaveBasePath = location.pathname.startsWith('/my/') ? '/my/leave' : '/hr/leave';
-  const { menus, hasMenuPermission, loading: menusLoading } = useMenuStore();
+  const { loading: menusLoading } = useMenuStore();
   const { dialogState: confirmDialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const {
     dialogState: promptDialogState,
@@ -227,35 +227,19 @@ const VacationManagement: React.FC = () => {
   const isRootUser = user?.role === 'root';
   /** 직원별 잔여일·휴가 형태 — admin/root 전용 */
   const canAccessLeaveAdminTabs = hrElevated;
-  const clampLeaveTab = (tab: number) => {
+  const clampLeaveTab = useCallback((tab: number) => {
     if (!Number.isFinite(tab) || tab < 0) return 0;
     if (canAccessLeaveAdminTabs) return Math.min(Math.floor(tab), 4);
     // 일반 사용자: 0=내가 신청한 휴가, 1=휴가 결재
     return Math.min(Math.floor(tab), 1);
-  };
+  }, [canAccessLeaveAdminTabs]);
   /** admin/root 또는 해당 건의 지정 결재자만 승인·반려 (서버와 동일) */
   const canApproveVacationRequest = (request: VacationRequest) =>
     hrElevated ||
     (request.approvedByUserId != null &&
       Number(request.approvedByUserId) === Number(user?.id));
-  const vacationMenuFlags = useMemo(() => {
-    const check = (action: 'view' | 'create' | 'edit' | 'delete') => {
-      if (hrElevated) return true;
-      for (const route of VACATION_MENU_ROUTES) {
-        const mid = findMenuIdByPath(menus, route);
-        if (mid != null && hasMenuPermission(mid, action)) return true;
-      }
-      return false;
-    };
-    return {
-      canView: check('view'),
-      canCreate: check('create'),
-      canEdit: check('edit'),
-      canDelete: check('delete')
-    };
-  }, [menus, hasMenuPermission, user?.role]);
-
-  const canExportVacations = hrElevated || vacationMenuFlags.canView || vacationMenuFlags.canEdit;
+  const menuFlags = useMenuRoutePermissionFlags(VACATION_MENU_ROUTES);
+  const canExportVacations = menuFlags.elevated || menuFlags.canRead || menuFlags.canEdit;
   const [searchParams, setSearchParams] = useSearchParams();
   
   // URL 파라미터에서 탭 인덱스 가져오기
@@ -276,7 +260,7 @@ const VacationManagement: React.FC = () => {
     } else {
       setActiveTab((prev) => clampLeaveTab(prev));
     }
-  }, [tabParam, canAccessLeaveAdminTabs]);
+  }, [tabParam, clampLeaveTab]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -313,21 +297,6 @@ const VacationManagement: React.FC = () => {
   const [processedPage, setProcessedPage] = useState(1);
   const [toolbarMenuAnchor, setToolbarMenuAnchor] = useState<null | HTMLElement>(null);
   const canEditPolicy = canAccessLeaveAdminTabs;
-
-  useEffect(() => {
-    // admin/root: 0=현황, 3=잔여일, 4=휴가 형태
-    if (canAccessLeaveAdminTabs && activeTab === 0) {
-      loadAllVacations();
-    } else if (!(canAccessLeaveAdminTabs && (activeTab === 3 || activeTab === 4))) {
-      loadVacations();
-    }
-    if (canAccessLeaveAdminTabs && activeTab === 3) {
-      void loadLeaveBalances();
-    }
-    if (canAccessLeaveAdminTabs && activeTab === 4) {
-      loadVacationPolicy();
-    }
-  }, [activeTab, canAccessLeaveAdminTabs]);
 
   const loadLeaveBalances = async () => {
     setLeaveBalancesLoading(true);
@@ -506,6 +475,22 @@ const VacationManagement: React.FC = () => {
       /* ignore */
     }
   };
+
+  useEffect(() => {
+    // admin/root: 0=현황, 3=잔여일, 4=휴가 형태
+    if (canAccessLeaveAdminTabs && activeTab === 0) {
+      void loadAllVacations();
+    } else if (!(canAccessLeaveAdminTabs && (activeTab === 3 || activeTab === 4))) {
+      void loadVacations();
+    }
+    if (canAccessLeaveAdminTabs && activeTab === 3) {
+      void loadLeaveBalances();
+    }
+    if (canAccessLeaveAdminTabs && activeTab === 4) {
+      void loadVacationPolicy();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- activeTab·권한 변경 시에만 목록 재조회
+  }, [activeTab, canAccessLeaveAdminTabs]);
 
   const buildPolicyPayload = (overrides: Partial<{
     annualLeaveStartDays: number;
@@ -739,7 +724,7 @@ const VacationManagement: React.FC = () => {
   };
 
   const handleAdd = () => {
-    if (!hrElevated && !vacationMenuFlags.canCreate) {
+    if (!menuFlags.canCreate) {
       setError(t('vacationManagement.noPermissionCreate'));
       return;
     }
@@ -917,14 +902,14 @@ const VacationManagement: React.FC = () => {
     setRejectReason('');
   };
 
-  const canChangeApprover = (request: VacationRequest | null) => {
+  const canChangeApprover = useCallback((request: VacationRequest | null) => {
     if (!request || request.status !== 'pending') return false;
-    return (
+    const canApprove =
       hrElevated ||
-      Number(request.employeeId) === Number(user?.id) ||
-      canApproveVacationRequest(request)
-    );
-  };
+      (request.approvedByUserId != null &&
+        Number(request.approvedByUserId) === Number(user?.id));
+    return hrElevated || Number(request.employeeId) === Number(user?.id) || canApprove;
+  }, [hrElevated, user?.id]);
 
   useEffect(() => {
     if (!detailDialogOpen || !selectedVacation || !canChangeApprover(selectedVacation)) {
@@ -950,7 +935,7 @@ const VacationManagement: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [detailDialogOpen, selectedVacation?.id, selectedVacation?.employeeId, user?.company_id, user?.id]);
+  }, [detailDialogOpen, selectedVacation, canChangeApprover, user?.company_id, user?.id]);
 
   const handleChangeApprover = async (
     nextApprover: { id: number; username: string; department?: string } | null
@@ -1391,7 +1376,7 @@ const VacationManagement: React.FC = () => {
             </Button>
           ) : options.showApplyCta ? (
             <Tooltip
-              title={!hrElevated && !vacationMenuFlags.canCreate ? t('vacationManagement.noPermissionCreate') : ''}
+              title={!menuFlags.canCreate ? t('vacationManagement.noPermissionCreate') : ''}
             >
               <span style={{ display: 'inline-flex' }}>
                 <Button
@@ -1400,7 +1385,7 @@ const VacationManagement: React.FC = () => {
                   size="small"
                   startIcon={<AddIcon fontSize="small" />}
                   onClick={handleAdd}
-                  disabled={!menusLoading && !hrElevated && !vacationMenuFlags.canCreate}
+                  disabled={!menusLoading && !menuFlags.canCreate}
                   sx={mvsBodyPrimaryBtnSx}
                 >
                   {t('vacationManagement.applyLeave')}
@@ -1524,7 +1509,7 @@ const VacationManagement: React.FC = () => {
                     </TableCell>
                   ) : null}
                   <TableCell align="center" onClick={(e) => e.stopPropagation()}>
-                    {options.showDelete && request.status === 'pending' && vacationMenuFlags.canDelete ? (
+                    {options.showDelete && request.status === 'pending' && menuFlags.canDelete ? (
                       <Tooltip title={t('vacationManagement.delete')}>
                         <span style={{ display: 'inline-flex' }}>
                           <IconButton
@@ -2668,7 +2653,7 @@ const VacationManagement: React.FC = () => {
           </Tabs>
 
           <Tooltip
-            title={!hrElevated && !vacationMenuFlags.canCreate ? t('vacationManagement.noPermissionCreate') : ''}
+            title={!menuFlags.canCreate ? t('vacationManagement.noPermissionCreate') : ''}
           >
             <span style={{ display: 'inline-flex', flexShrink: 0 }}>
               <Button
@@ -2677,7 +2662,7 @@ const VacationManagement: React.FC = () => {
                 size="small"
                 startIcon={<AddIcon fontSize="small" />}
                 onClick={handleAdd}
-                disabled={!menusLoading && !hrElevated && !vacationMenuFlags.canCreate}
+                disabled={!menusLoading && !menuFlags.canCreate}
                 sx={mvsBodyPrimaryBtnSx}
               >
                 {t('vacationManagement.applyLeave')}

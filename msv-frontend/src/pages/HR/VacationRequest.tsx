@@ -34,7 +34,7 @@ import {
 import { useStore, useMenuStore } from '../../store';
 import { vacationService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
-import { findMenuIdByPath } from '../../utils/findMenuByPath';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 import { useTranslation } from 'react-i18next';
 
 const VACATION_MENU_ROUTES = ['/hr/leave', '/my/leave'];
@@ -78,23 +78,9 @@ const VacationRequest: React.FC = () => {
   const leaveBasePath = location.pathname.startsWith('/my/') ? '/my/leave' : '/hr/leave';
   const { id } = useParams<{ id?: string }>();
   const { user } = useStore();
-  const { menus, hasMenuPermission, loading: menusLoading } = useMenuStore();
+  const { loading: menusLoading } = useMenuStore();
 
-  const hrElevated = user?.role === 'root' || user?.role === 'admin';
-  const vacationMenuFlags = useMemo(() => {
-    const check = (action: 'view' | 'create' | 'edit' | 'delete') => {
-      if (hrElevated) return true;
-      for (const route of VACATION_MENU_ROUTES) {
-        const mid = findMenuIdByPath(menus, route);
-        if (mid != null && hasMenuPermission(mid, action)) return true;
-      }
-      return false;
-    };
-    return {
-      canCreate: check('create'),
-      canEdit: check('edit')
-    };
-  }, [menus, hasMenuPermission, hrElevated]);
+  const menuFlags = useMenuRoutePermissionFlags(VACATION_MENU_ROUTES);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -190,12 +176,12 @@ const VacationRequest: React.FC = () => {
   useEffect(() => {
     if (menusLoading || !user) return;
     const tabIndex = user.role === 'admin' || user.role === 'root' ? 1 : 0;
-    if (!id && !hrElevated && !vacationMenuFlags.canCreate) {
+    if (!id && !menuFlags.canCreate) {
       setError(t('vacationManagement.noPermissionCreate'));
       const tmr = window.setTimeout(() => navigate(`${leaveBasePath}?tab=${tabIndex}`), 2000);
       return () => window.clearTimeout(tmr);
     }
-    if (id && !hrElevated && !vacationMenuFlags.canEdit) {
+    if (id && !menuFlags.canEdit) {
       setError(t('vacationManagement.noPermissionEditRequest'));
       const tmr = window.setTimeout(() => navigate(`${leaveBasePath}?tab=${tabIndex}`), 2000);
       return () => window.clearTimeout(tmr);
@@ -204,17 +190,17 @@ const VacationRequest: React.FC = () => {
     id,
     user,
     menusLoading,
-    hrElevated,
-    vacationMenuFlags.canCreate,
-    vacationMenuFlags.canEdit,
+    menuFlags.canCreate,
+    menuFlags.canEdit,
     navigate,
-    t
+    t,
+    leaveBasePath,
   ]);
 
   const cannotSaveByMenu =
     !menusLoading &&
-    ((!id && !hrElevated && !vacationMenuFlags.canCreate) ||
-      (!!id && !hrElevated && !vacationMenuFlags.canEdit));
+    ((!id && !menuFlags.canCreate) ||
+      (!!id && !menuFlags.canEdit));
 
   const loadVacationPolicy = async () => {
     try {
@@ -319,11 +305,11 @@ const VacationRequest: React.FC = () => {
     setError(null);
     setSuccess(null);
 
-    if (!id && !hrElevated && !vacationMenuFlags.canCreate) {
+    if (!id && !menuFlags.canCreate) {
       setError(t('vacationManagement.noPermissionCreate'));
       return;
     }
-    if (id && !hrElevated && !vacationMenuFlags.canEdit) {
+    if (id && !menuFlags.canEdit) {
       setError(t('vacationManagement.noPermissionEditRequest'));
       return;
     }

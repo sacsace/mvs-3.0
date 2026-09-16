@@ -8,6 +8,7 @@ import { useStore, useMenuStore } from '../../store';
 import { userUiPreferencesService } from '../../services/api';
 import { ensureI18nLanguage } from '../../locales/i18n';
 import { useMenuLoader, reloadMenusNow } from '../../hooks/useMenuLoader';
+import { MenuPermissionProvider } from '../../context/MenuPermissionContext';
 import { mvsPageShellSx, mvsWorkBoardPageBg, mvsPageContentMaxWidth } from '../../theme/mvsLayout';
 
 /** 서버 prefs의 ko가 클라이언트 영어 선택보다 늦게 도착할 때 UI 언어를 덮어쓰지 않음 */
@@ -70,7 +71,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
 
   useMenuLoader();
-  const isElevated = user?.role === 'root' || user?.role === 'admin';
+  const isElevated = user?.role === 'root';
 
   const handleMobileNavToggle = () => {
     if (isMobileNav) setMobileNavOpen((prev) => !prev);
@@ -500,7 +501,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                   <CircularProgress size={36} />
                 </Box>
               ) : (
-                children
+                <MenuPermissionProvider>{children}</MenuPermissionProvider>
               )}
             </Box>
           </Box>

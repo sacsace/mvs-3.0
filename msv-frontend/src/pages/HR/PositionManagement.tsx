@@ -30,6 +30,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { positionService } from '../../services/api';
 import { useStore } from '../../store';
+import { usePageMenuPermission } from '../../context/MenuPermissionContext';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import {
@@ -749,12 +750,26 @@ export const PositionManagementPanel: React.FC<{
   );
 };
 
+const POSITION_MENU_ROUTES = ['/hr/users', '/hr/positions', '/hr'] as const;
+
 const PositionManagement: React.FC = () => {
   const { user } = useStore();
+  const { t } = useTranslation();
+  const menuFlags = usePageMenuPermission(POSITION_MENU_ROUTES);
   return (
-    <PositionManagementPanel
-      companyId={user?.company_id != null ? Number(user.company_id) : null}
-    />
+    <Box>
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
+      <PositionManagementPanel
+        companyId={user?.company_id != null ? Number(user.company_id) : null}
+        canCreate={menuFlags.canCreate}
+        canEdit={menuFlags.canEdit}
+        canDelete={menuFlags.canDelete}
+      />
+    </Box>
   );
 };
 

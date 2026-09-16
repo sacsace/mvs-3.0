@@ -45,12 +45,34 @@ const USER_EXCEL_EXPORT_COLUMNS = [
   '입사일 (YYYY-MM-DD)',
   '고용형태 (fulltime/contract/parttime/intern/daily)',
   '급여',
+  '은행명',
+  '계좌번호',
+  'IFSC 코드',
   '상태 (active/inactive/suspended)'
 ] as const;
 
 const USER_EXCEL_EXPORT_COL_WIDTHS = [
-  12, 12, 12, 25, 15, 20, 12, 12, 18, 15, 15, 30, 15, 20, 18, 25, 12, 20
+  12, 12, 12, 25, 15, 20, 12, 12, 18, 15, 15, 30, 15, 20, 18, 25, 12, 18, 18, 14, 20
 ];
+
+function normalizeExcelBankAccount(raw: unknown): string | null {
+  const digits = String(raw ?? '').replace(/\s/g, '').replace(/\D/g, '');
+  return digits || null;
+}
+
+function normalizeExcelBankIfsc(raw: unknown): string | null {
+  const value = String(raw ?? '')
+    .replace(/\s/g, '')
+    .replace(/[^A-Za-z0-9]/g, '')
+    .toUpperCase()
+    .slice(0, 11);
+  return value || null;
+}
+
+function normalizeExcelBankName(raw: unknown): string | null {
+  const value = String(raw ?? '').trim();
+  return value || null;
+}
 
 // bcrypt를 사용한 비밀번호 해싱 함수 (authController와 동일)
 const hashPassword = async (password: string): Promise<string> => {
@@ -1786,6 +1808,9 @@ router.get('/excel/sample', authenticateToken, async (req, res) => {
         '입사일 (YYYY-MM-DD)': '2020-01-01',
         '고용형태 (fulltime/contract/parttime/intern/daily)': 'fulltime',
         '급여': '5000000',
+        '은행명': 'HDFC Bank',
+        '계좌번호': '12345678901234',
+        'IFSC 코드': 'HDFC0001234',
         '상태 (active/inactive/suspended)': 'active'
       },
       {
@@ -1806,6 +1831,9 @@ router.get('/excel/sample', authenticateToken, async (req, res) => {
         '입사일 (YYYY-MM-DD)': '2019-06-01',
         '고용형태 (fulltime/contract/parttime/intern/daily)': 'fulltime',
         '급여': '6000000',
+        '은행명': 'State Bank of India',
+        '계좌번호': '98765432109876',
+        'IFSC 코드': 'SBIN0001234',
         '상태 (active/inactive/suspended)': 'active'
       }
     ];
@@ -1833,6 +1861,9 @@ router.get('/excel/sample', authenticateToken, async (req, res) => {
       { wch: 18 }, // 입사일
       { wch: 25 }, // 고용형태
       { wch: 12 }, // 급여
+      { wch: 18 }, // 은행명
+      { wch: 18 }, // 계좌번호
+      { wch: 14 }, // IFSC 코드
       { wch: 20 }  // 상태
     ];
     worksheet['!cols'] = columnWidths;
@@ -1927,6 +1958,9 @@ router.get(
           : '',
         '고용형태 (fulltime/contract/parttime/intern/daily)': userData.employment_type || '',
         '급여': (userData.salary != null && userData.salary !== '') ? '**' : '',
+        '은행명': userData.bank_name || '',
+        '계좌번호': userData.bank_account || '',
+        'IFSC 코드': userData.bank_ifsc || '',
         '상태 (active/inactive/suspended)': userData.status || 'active'
       };
     });
@@ -2234,6 +2268,9 @@ router.post(
             if (raw == null || String(raw).trim() === '' || String(raw).trim() === '**') return null;
             return parseSalaryInput(raw);
           })(),
+          bank_name: normalizeExcelBankName(row['은행명']),
+          bank_account: normalizeExcelBankAccount(row['계좌번호']),
+          bank_ifsc: normalizeExcelBankIfsc(row['IFSC 코드']),
           status: importStatus,
         };
 

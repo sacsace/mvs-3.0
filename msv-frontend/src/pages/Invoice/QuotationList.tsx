@@ -20,7 +20,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  InputAdornment
+  InputAdornment,
+  Alert,
+  Tooltip,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import { mvsPageRootSx } from '../../theme/mvsLayout';
@@ -32,8 +34,18 @@ import {
   FilterList as FilterIcon,
   Download as DownloadIcon
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
+import { usePageMenuPermission } from '../../context/MenuPermissionContext';
+import { useMenuActionGuard } from '../../hooks/useMenuActionGuard';
+
+const QUOTATION_LIST_MENU_ROUTES = ['/accounting/quotation', '/work/quotation', '/quotation/list', '/quotation'] as const;
 
 const QuotationList: React.FC = () => {
+  const { t } = useTranslation();
+  const menuFlags = usePageMenuPermission(QUOTATION_LIST_MENU_ROUTES);
+  const createGuard = useMenuActionGuard('create', QUOTATION_LIST_MENU_ROUTES);
+  const editGuard = useMenuActionGuard('edit', QUOTATION_LIST_MENU_ROUTES);
+  const deleteGuard = useMenuActionGuard('delete', QUOTATION_LIST_MENU_ROUTES);
   const [quotations, setQuotations] = useState([
     {
       id: 1,
@@ -79,16 +91,19 @@ const QuotationList: React.FC = () => {
   const [selectedQuotation, setSelectedQuotation] = useState<any>(null);
 
   const handleAdd = () => {
+    if (!createGuard.guard()) return;
     setSelectedQuotation(null);
     setOpenDialog(true);
   };
 
   const handleEdit = (quotation: any) => {
+    if (!editGuard.guard()) return;
     setSelectedQuotation(quotation);
     setOpenDialog(true);
   };
 
   const handleDelete = (id: number) => {
+    if (!deleteGuard.guard()) return;
     setQuotations(quotations.filter(item => item.id !== id));
   };
 
@@ -127,6 +142,12 @@ const QuotationList: React.FC = () => {
         title="견적서"
         description="견적서를 관리하고 조회하는 페이지입니다."
       />
+
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 3, mb: 3 }}>
         {/* 통계 카드 */}
@@ -221,13 +242,18 @@ const QuotationList: React.FC = () => {
               >
                 내보내기
               </Button>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={handleAdd}
-              >
-                견적서 작성
-              </Button>
+              <Tooltip title={createGuard.tooltipTitle} disableHoverListener={!createGuard.tooltipTitle}>
+                <span>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={handleAdd}
+                    disabled={createGuard.disabled}
+                  >
+                    견적서 작성
+                  </Button>
+                </span>
+              </Tooltip>
             </Box>
           </Box>
         </CardContent>
@@ -298,19 +324,29 @@ const QuotationList: React.FC = () => {
                         <TableCell>{quotation.validUntil}</TableCell>
                         <TableCell>{quotation.createdBy}</TableCell>
                         <TableCell>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleEdit(quotation)}
-                          >
-                            <EditIcon />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDelete(quotation.id)}
-                            color="error"
-                          >
-                            <DeleteIcon />
-                          </IconButton>
+                          <Tooltip title={editGuard.tooltipTitle || t('common.edit')}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleEdit(quotation)}
+                                disabled={editGuard.disabled}
+                              >
+                                <EditIcon />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title={deleteGuard.tooltipTitle || t('common.delete')}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleDelete(quotation.id)}
+                                color="error"
+                                disabled={deleteGuard.disabled}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
                         </TableCell>
                       </TableRow>
                     ))}

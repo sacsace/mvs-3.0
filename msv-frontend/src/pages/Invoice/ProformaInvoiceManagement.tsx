@@ -41,6 +41,11 @@ import {
   Search as SearchIcon
 } from '@mui/icons-material';
 import { api } from '../../services/api';
+import { useTranslation } from 'react-i18next';
+import { usePageMenuPermission } from '../../context/MenuPermissionContext';
+import { useMenuActionGuard } from '../../hooks/useMenuActionGuard';
+
+const PROFORMA_INVOICE_MENU_ROUTES = ['/accounting/e-invoice', '/proforma'] as const;
 
 // TabPanel 컴포넌트 정의
 interface TabPanelProps {
@@ -120,6 +125,10 @@ interface Quotation {
 }
 
 const ProformaInvoiceManagement: React.FC = () => {
+  const { t } = useTranslation();
+  const menuFlags = usePageMenuPermission(PROFORMA_INVOICE_MENU_ROUTES);
+  const createGuard = useMenuActionGuard('create', PROFORMA_INVOICE_MENU_ROUTES);
+  const editGuard = useMenuActionGuard('edit', PROFORMA_INVOICE_MENU_ROUTES);
   const [proformaInvoices, setProformaInvoices] = useState<ProformaInvoice[]>([]);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [, setCustomers] = useState<Customer[]>([]);
@@ -145,6 +154,7 @@ const ProformaInvoiceManagement: React.FC = () => {
 
   // 데이터 로드
   useEffect(() => {
+    if (menuFlags.menusLoading || !menuFlags.canRead) return;
     const fetchData = async () => {
       setLoading(true);
       try {
@@ -171,7 +181,7 @@ const ProformaInvoiceManagement: React.FC = () => {
     };
 
     fetchData();
-  }, []);
+  }, [menuFlags.menusLoading, menuFlags.canRead]);
 
   // 탭 변경
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -180,6 +190,7 @@ const ProformaInvoiceManagement: React.FC = () => {
 
   // 프로포마 인보이스 생성
   const handleCreate = async () => {
+    if (!createGuard.guard()) return;
     try {
       const response = await api.post('/accounting/proforma-invoices', formData);
       if (response.data.success) {
@@ -202,6 +213,7 @@ const ProformaInvoiceManagement: React.FC = () => {
 
   // 견적서에서 프로포마 인보이스 생성
   const handleCreateFromQuotation = async (quotationId: string) => {
+    if (!createGuard.guard()) return;
     try {
       const response = await api.post(`/quotations/${quotationId}/create-proforma-invoice`);
       if (response.data.success) {
@@ -215,6 +227,7 @@ const ProformaInvoiceManagement: React.FC = () => {
 
   // 상태 업데이트
   const handleStatusUpdate = async (id: string, status: string) => {
+    if (!editGuard.guard()) return;
     try {
       const response = await api.put(`/accounting/proforma-invoices/${id}/status`, { status });
       if (response.data.success) {
@@ -282,6 +295,12 @@ const ProformaInvoiceManagement: React.FC = () => {
         </Alert>
       )}
 
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
+
       <Card>
         <CardContent>
           <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
@@ -325,13 +344,21 @@ const ProformaInvoiceManagement: React.FC = () => {
                   <MenuItem value="cancelled">취소됨</MenuItem>
                 </TextField>
               </Box>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => setOpenDialog(true)}
-              >
-                새 프로포마 인보이스
-              </Button>
+              <Tooltip title={createGuard.tooltipTitle} disableHoverListener={!createGuard.tooltipTitle}>
+                <span>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => {
+                      if (!createGuard.guard()) return;
+                      setOpenDialog(true);
+                    }}
+                    disabled={createGuard.disabled}
+                  >
+                    새 프로포마 인보이스
+                  </Button>
+                </span>
+              </Tooltip>
             </Box>
 
             <TableContainer component={Paper}>
@@ -490,6 +517,7 @@ const ProformaInvoiceManagement: React.FC = () => {
                           size="small"
                           startIcon={<AddIcon />}
                           onClick={() => handleCreateFromQuotation(quotation.id)}
+                          disabled={createGuard.disabled}
                         >
                           프로포마 인보이스 생성
                         </Button>
@@ -598,7 +626,7 @@ const ProformaInvoiceManagement: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDialog(false)}>취소</Button>
-          <Button variant="contained" onClick={handleCreate}>
+          <Button variant="contained" onClick={handleCreate} disabled={createGuard.disabled}>
             생성
           </Button>
         </DialogActions>

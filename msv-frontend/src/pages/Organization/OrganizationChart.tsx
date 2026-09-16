@@ -1,4 +1,5 @@
-﻿import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
+import type { NodeMouseHandler } from 'reactflow';
 import {
   Box,
   Typography,
@@ -43,6 +44,7 @@ import { departmentService, positionService } from '../../services/api';
 import { getUploadUrl } from '../../utils/uploadUrl';
 import { formatPositionLabel } from '../../utils/positionLabels';
 import { useTranslation } from 'react-i18next';
+import UserPersonalRecordDialog from '../Users/UserPersonalRecordDialog';
 
 /** 직책명 폴백 순위 (낮을수록 상위). DB sort_order / position_id 우선 */
 const POSITION_NAME_RANK: Record<string, number> = {
@@ -232,6 +234,7 @@ interface OrganizationNode {
     phone?: string;
     avatar?: string;
     employeeCount?: number;
+    userId?: number;
     managerId?: string;
     level: number;
   };
@@ -259,10 +262,12 @@ const PersonNode = ({ data }: { data: any }) => {
       ...orgCardSx,
       borderTop: '3px solid',
       borderTopColor: 'primary.main',
+      cursor: 'pointer',
       transition: 'border-color 0.15s ease',
       '&:hover': {
         borderColor: 'primary.light',
         borderTopColor: 'primary.main',
+        bgcolor: 'action.hover',
       },
     }}
   >
@@ -466,6 +471,7 @@ function buildOrgLayout(
       data: {
         label: userData.username,
         name: userData.username,
+        userId: userData.id,
         position: userData.position || roleLabel,
         department: userData.department || '',
         email: userData.email || '',
@@ -517,6 +523,7 @@ function buildOrgLayout(
           data: {
             label: userData.username,
             name: userData.username,
+            userId: userData.id,
             position: userData.position || '',
             department: userData.department || deptName,
             email: userData.email || '',
@@ -558,6 +565,17 @@ const OrganizationChart: React.FC = () => {
   const [snapshot, setSnapshot] = useState<OrgSnapshot | null>(null);
   const [deptFilter, setDeptFilter] = useState<string>('all');
   const [layoutNonce, setLayoutNonce] = useState(0);
+  const [personalRecordOpen, setPersonalRecordOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<Record<string, any> | null>(null);
+
+  const usersById = useMemo(() => {
+    const map = new Map<number, Record<string, any>>();
+    if (!snapshot) return map;
+    snapshot.activeUsers.forEach((member: any) => {
+      if (member?.id != null) map.set(Number(member.id), member);
+    });
+    return map;
+  }, [snapshot]);
 
   const applyLayout = useCallback(
     (nextSnapshot: OrgSnapshot, filter: string) => {
@@ -706,6 +724,20 @@ const OrganizationChart: React.FC = () => {
   const handleResetLayout = () => {
     if (snapshot) applyLayout(snapshot, deptFilter);
   };
+
+  const handleNodeClick: NodeMouseHandler = useCallback(
+    (_event, node) => {
+      if (node.type !== 'person') return;
+      const rawId = node.data?.userId ?? String(node.id).replace(/^user-/, '');
+      const userId = Number(rawId);
+      if (!Number.isFinite(userId)) return;
+      const member = usersById.get(userId);
+      if (!member) return;
+      setSelectedUser(member);
+      setPersonalRecordOpen(true);
+    },
+    [usersById]
+  );
 
   const reviewMembers = useMemo(() => {
     if (!snapshot || deptFilter === 'all') return [];
@@ -882,6 +914,7 @@ const OrganizationChart: React.FC = () => {
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
+            onNodeClick={handleNodeClick}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             nodesConnectable={false}
@@ -928,6 +961,16 @@ const OrganizationChart: React.FC = () => {
           {error}
         </Alert>
       </Snackbar>
+
+      <UserPersonalRecordDialog
+        open={personalRecordOpen}
+        onClose={() => {
+          setPersonalRecordOpen(false);
+          setSelectedUser(null);
+        }}
+        user={selectedUser}
+        company={snapshot?.company ?? null}
+      />
     </Box>
   );
 };

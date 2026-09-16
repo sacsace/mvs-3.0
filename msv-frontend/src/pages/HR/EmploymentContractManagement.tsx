@@ -74,6 +74,10 @@ import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useStore } from '../../store';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import { usePageMenuPermission } from '../../context/MenuPermissionContext';
+import { useMenuActionGuard } from '../../hooks/useMenuActionGuard';
+
+const EMPLOYMENT_CONTRACT_MENU_ROUTES = ['/hr/employment-contracts', '/hr'] as const;
 
 const ITEMS_PER_PAGE = 10;
 const CONTRACT_FILTER_OUTLINED = mvsOutlinedLabelProps;
@@ -184,9 +188,16 @@ const EmploymentContractManagement: React.FC = () => {
   /** 전자계약서 열람/승인 UI는 항상 영문 */
   const te = useMemo(() => i18n.getFixedT('en'), [i18n]);
   const { user } = useStore();
+  const menuFlags = usePageMenuPermission(EMPLOYMENT_CONTRACT_MENU_ROUTES);
+  const createGuard = useMenuActionGuard('create', EMPLOYMENT_CONTRACT_MENU_ROUTES);
+  const editGuard = useMenuActionGuard('edit', EMPLOYMENT_CONTRACT_MENU_ROUTES);
+  const deleteGuard = useMenuActionGuard('delete', EMPLOYMENT_CONTRACT_MENU_ROUTES);
   const isRoot = user?.role === 'root';
-  const canManage = useMemo(() => ['root', 'admin'].includes(String(user?.role || '')), [user?.role]);
-  const canDelete = isRoot;
+  const canManage = useMemo(
+    () => menuFlags.canMutate || ['root', 'admin'].includes(String(user?.role || '')),
+    [menuFlags.canMutate, user?.role]
+  );
+  const canDelete = isRoot && deleteGuard.allowed;
 
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
 
@@ -500,9 +511,10 @@ const EmploymentContractManagement: React.FC = () => {
     void loadCompanies();
   }, [loadCompanies]);
   useEffect(() => {
+    if (menuFlags.menusLoading || !menuFlags.canRead) return;
     void loadUsers();
     void loadData();
-  }, [loadData, loadUsers]);
+  }, [loadData, loadUsers, menuFlags.menusLoading, menuFlags.canRead]);
 
   const userLabel = (id: number | string | null | undefined) => {
     const uid = Number(id);
@@ -589,6 +601,7 @@ const EmploymentContractManagement: React.FC = () => {
   };
 
   const openWizard = (row?: any) => {
+    if (row ? !editGuard.guard() : !createGuard.guard()) return;
     if (row) {
       setWizardContractId(Number(row.id));
     setContractForm({
@@ -881,6 +894,7 @@ const EmploymentContractManagement: React.FC = () => {
   };
 
   const saveTemplate = async () => {
+    if (editTemplate ? !editGuard.guard() : !createGuard.guard()) return;
     try {
       const payload: any = { ...templateForm, language: 'en' };
       if (isRoot && selectedCompanyId) payload.company_id = Number(selectedCompanyId);
@@ -1061,7 +1075,7 @@ const EmploymentContractManagement: React.FC = () => {
   );
 
   const deleteContract = (contractId: number, title: string) => {
-    if (!canManage) return;
+    if (!canManage || !deleteGuard.guard()) return;
     const displayTitle = toEnglishContractTitle(title) || title;
     showConfirm(
       t('employmentContractManagement.confirmDeleteContract', {
@@ -1356,6 +1370,12 @@ const EmploymentContractManagement: React.FC = () => {
     <Box sx={{ ...mvsPageRootSx }}>
       <MvsPageHeader title={t('employmentContractManagement.pageTitle')} description={t('employmentContractManagement.description')} />
 
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
+
       <Box
         sx={{
           display: 'grid',
@@ -1396,9 +1416,21 @@ const EmploymentContractManagement: React.FC = () => {
             {canManage ? <Tab value="templates" label={t('employmentContractManagement.tabs.templates')} /> : null}
           </Tabs>
           {tab === 'contracts' && canManage ? (
-            <Button variant="contained" disableElevation size="small" startIcon={<AddIcon fontSize="small" />} onClick={() => openWizard()} sx={mvsBodyPrimaryBtnSx}>
-              {t('employmentContractManagement.createContract')}
-            </Button>
+            <Tooltip title={createGuard.tooltipTitle} disableHoverListener={!createGuard.tooltipTitle}>
+              <span>
+                <Button
+                  variant="contained"
+                  disableElevation
+                  size="small"
+                  startIcon={<AddIcon fontSize="small" />}
+                  onClick={() => openWizard()}
+                  disabled={createGuard.disabled}
+                  sx={mvsBodyPrimaryBtnSx}
+                >
+                  {t('employmentContractManagement.createContract')}
+                </Button>
+              </span>
+            </Tooltip>
           ) : null}
           {tab === 'templates' && canManage ? (
             <Box sx={{ display: 'flex', gap: 1 }}>
