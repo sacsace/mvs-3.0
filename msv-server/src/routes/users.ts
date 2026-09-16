@@ -22,6 +22,7 @@ import fs from 'fs';
 import { randomBytes } from 'crypto';
 import { ensureUploadSubdir } from '../utils/uploadPath';
 import { grantEmployeeSelfServicePermissions } from '../utils/employeeSelfServicePermissions';
+import { parseExcelDateOnlyField } from '../utils/parseExcelDateOnly';
 
 let userListHrFieldsAvailable: boolean | null = null;
 
@@ -1990,7 +1991,7 @@ router.post(
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    const data = XLSX.utils.sheet_to_json(worksheet);
+    const data = XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false });
 
     if (!data || data.length === 0) {
       return res.status(400).json({
@@ -2181,6 +2182,32 @@ router.post(
           }
         }
 
+        const birthDateResult = parseExcelDateOnlyField(
+          row['생년월일 (YYYY-MM-DD)'],
+          '생년월일'
+        );
+        if (birthDateResult.ok === false) {
+          results.failed.push({
+            row: i + 2,
+            data: row,
+            error: birthDateResult.error
+          });
+          continue;
+        }
+
+        const hireDateResult = parseExcelDateOnlyField(
+          row['입사일 (YYYY-MM-DD)'],
+          '입사일'
+        );
+        if (hireDateResult.ok === false) {
+          results.failed.push({
+            row: i + 2,
+            data: row,
+            error: hireDateResult.error
+          });
+          continue;
+        }
+
         const userPayload = {
           tenant_id: tenantId,
           company_id: finalCompanyId,
@@ -2192,7 +2219,7 @@ router.post(
           department: row['부서'] ? row['부서'].toString().trim() : null,
           position: row['직책'] ? row['직책'].toString().trim() : null,
           employee_number: employeeNumber || null,
-          birth_date: row['생년월일 (YYYY-MM-DD)'] ? new Date(row['생년월일 (YYYY-MM-DD)'].toString()) : null,
+          birth_date: birthDateResult.value,
           gender: (row['성별 (male/female/other)'] && ['male', 'female', 'other'].includes(row['성별 (male/female/other)'].toString().toLowerCase()))
             ? row['성별 (male/female/other)'].toString().toLowerCase()
             : null,
@@ -2200,7 +2227,7 @@ router.post(
           address: row['주소'] ? row['주소'].toString().trim() : null,
           emergency_contact: row['비상연락처'] ? row['비상연락처'].toString().trim() : null,
           emergency_phone: row['비상연락처 전화번호'] ? row['비상연락처 전화번호'].toString().trim() : null,
-          hire_date: row['입사일 (YYYY-MM-DD)'] ? new Date(row['입사일 (YYYY-MM-DD)'].toString()) : null,
+          hire_date: hireDateResult.value,
           employment_type: (row['고용형태 (fulltime/contract/parttime/intern/daily)'] && ['fulltime', 'contract', 'parttime', 'intern', 'daily'].includes(row['고용형태 (fulltime/contract/parttime/intern/daily)'].toString().toLowerCase()))
             ? row['고용형태 (fulltime/contract/parttime/intern/daily)'].toString().toLowerCase()
             : null,

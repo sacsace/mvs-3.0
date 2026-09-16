@@ -124,6 +124,7 @@ const listViewModeBtnSx = {
 
 /** 사용자 목록 열 너비 — 상태·생성일은 내용에 맞게 좁게 */
 const USER_LIST_COL_WIDTHS = {
+  seq: 40,
   select: 48,
   username: '15%',
   email: '24%',
@@ -132,6 +133,18 @@ const USER_LIST_COL_WIDTHS = {
   position: '15%',
   status: 80,
   created_at: 100,
+} as const;
+
+const userSeqColSx = {
+  width: USER_LIST_COL_WIDTHS.seq,
+  minWidth: USER_LIST_COL_WIDTHS.seq,
+  maxWidth: USER_LIST_COL_WIDTHS.seq,
+  px: { xs: 0.5, sm: 0.75 },
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  fontVariantNumeric: 'tabular-nums',
+  boxSizing: 'border-box',
+  color: 'text.secondary',
 } as const;
 
 const userStatusColSx = {
@@ -2377,6 +2390,7 @@ const UserManagement: React.FC = () => {
                     }}
                   >
                     <colgroup>
+                      <col style={{ width: USER_LIST_COL_WIDTHS.seq }} />
                       <col style={{ width: USER_LIST_COL_WIDTHS.select }} />
                       <col style={{ width: USER_LIST_COL_WIDTHS.username }} />
                       <col style={{ width: USER_LIST_COL_WIDTHS.email }} />
@@ -2388,6 +2402,7 @@ const UserManagement: React.FC = () => {
                     </colgroup>
                     <TableHead sx={mvsTableHeadHighlightSx}>
                       <TableRow>
+                        <TableCell sx={userSeqColSx} align="center" />
                         <TableCell padding="checkbox" align="center">
                           <Checkbox
                             size="small"
@@ -2498,6 +2513,11 @@ const UserManagement: React.FC = () => {
                             cursor: menusLoading || !(hrElevated || userMgmtMenuFlags.canView) ? 'default' : 'pointer',
                           }}
                         >
+                          <TableCell sx={userSeqColSx} align="center">
+                            <Typography variant="body2" color="text.secondary">
+                              {rowNumber}
+                            </Typography>
+                          </TableCell>
                           <TableCell padding="checkbox" align="center" onClick={(e) => e.stopPropagation()}>
                             <Checkbox
                               size="small"
@@ -2508,9 +2528,6 @@ const UserManagement: React.FC = () => {
                           </TableCell>
                           <TableCell sx={{ overflow: 'hidden' }}>
                             <Typography variant="subtitle2" fontWeight={600} noWrap title={rowUser.username}>
-                              <Box component="span" sx={{ color: 'text.secondary', fontWeight: 500, mr: 0.75 }}>
-                                {rowNumber}.
-                              </Box>
                               {rowUser.username}
                             </Typography>
                           </TableCell>
