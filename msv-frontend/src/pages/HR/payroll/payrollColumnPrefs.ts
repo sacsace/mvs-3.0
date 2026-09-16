@@ -1,9 +1,15 @@
-/** 급여 그리드 컬럼 순서·사용자 추가 수당 컬럼 (브라우저 저장) */
+/** 급여 그리드 컬럼 순서·사용자 추가 수당 컬럼 (회사별 브라우저 저장) */
+
+export type PayrollCustomColumnInputMode = 'amount' | 'count';
 
 export type PayrollCustomColumn = {
   /** extra_fields.custom_allowances 키 */
   id: string;
   label: string;
+  /** amount: 셀 값 = 지급액. count: 셀 값 = 횟수, formula 로 금액 산출 */
+  inputMode?: PayrollCustomColumnInputMode;
+  /** count 모드일 때. 변수 n = 사용자 입력 횟수. 예: n * 100 */
+  formula?: string;
 };
 
 export type PayrollColumnPrefs = {
@@ -80,10 +86,19 @@ export function loadPayrollColumnPrefs(companyId?: string | number | null): Payr
     const parsed = JSON.parse(raw) as Partial<PayrollColumnPrefs>;
     const customColumns = Array.isArray(parsed.customColumns)
       ? parsed.customColumns
-          .map((c) => ({
-            id: String((c as PayrollCustomColumn)?.id || '').trim(),
-            label: String((c as PayrollCustomColumn)?.label || '').trim(),
-          }))
+          .map((c) => {
+            const raw = c as PayrollCustomColumn;
+            const inputMode =
+              raw?.inputMode === 'count' || raw?.inputMode === 'amount' ? raw.inputMode : 'amount';
+            const formula =
+              inputMode === 'count' ? String(raw?.formula ?? '').trim() : undefined;
+            return {
+              id: String(raw?.id || '').trim(),
+              label: String(raw?.label || '').trim(),
+              inputMode,
+              ...(formula ? { formula } : {}),
+            };
+          })
           .filter((c) => c.id && c.label)
       : [];
     const order = Array.isArray(parsed.order)

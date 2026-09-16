@@ -5,10 +5,13 @@ import { Delete as DeleteIcon } from '@mui/icons-material';
 import type { PayrollGridRow } from './payrollGridTypes';
 import {
   computeTenureMonths,
+  countEditProps,
   formatMaybeNumericString,
+  formatNumberDisplay,
   numberEditProps,
-  otHourEditProps
+  otHourEditProps,
 } from './payrollGridUtils';
+import { evaluatePayrollColumnFormula } from './payrollColumnFormula';
 import {
   customColumnField,
   type PayrollCustomColumn,
@@ -109,8 +112,48 @@ export function buildPayrollGridColumns({
     });
   });
 
-  const customCols: GridColDef<PayrollGridRow>[] = customColumns.map((col) =>
-    stretchCol({
+  const customCols: GridColDef<PayrollGridRow>[] = customColumns.map((col) => {
+    const isCountFormula = col.inputMode === 'count' && Boolean(String(col.formula || '').trim());
+    if (isCountFormula) {
+      return stretchCol({
+        field: customColumnField(col.id),
+        headerName: col.label,
+        description: String(col.formula || ''),
+        minWidth: 120,
+        editable: allowCellEdit,
+        headerClassName: 'payroll-col-extra',
+        cellClassName: 'payroll-col-extra payroll-col-user-input',
+        ...countEditProps,
+        valueGetter: (_value, row) => row.custom_allowance_inputs?.[col.id] ?? 0,
+        valueSetter: (value, row) => {
+          const n =
+            typeof value === 'number'
+              ? value
+              : parseFloat(String(value ?? '').replace(/,/g, ''));
+          return {
+            ...row,
+            custom_allowance_inputs: {
+              ...(row.custom_allowance_inputs || {}),
+              [col.id]: Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0,
+            },
+          };
+        },
+        renderCell: (params) => {
+          const count = Math.max(0, Number(params.value) || 0);
+          const amount = evaluatePayrollColumnFormula(col.formula, count);
+          const title = count > 0 ? `${count} × (${col.formula}) = ${formatNumberDisplay(amount)}` : String(col.formula || '');
+          return (
+            <Tooltip title={title}>
+              <Typography variant="body2" noWrap sx={{ maxWidth: '100%', fontVariantNumeric: 'tabular-nums' }}>
+                {countEditProps.valueFormatter(params.value)}
+              </Typography>
+            </Tooltip>
+          );
+        },
+      });
+    }
+
+    return stretchCol({
       field: customColumnField(col.id),
       headerName: col.label,
       minWidth: 120,
@@ -132,8 +175,8 @@ export function buildPayrollGridColumns({
           },
         };
       },
-    })
-  );
+    });
+  });
 
   const base: GridColDef<PayrollGridRow>[] = [
     {

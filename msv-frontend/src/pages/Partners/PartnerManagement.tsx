@@ -91,7 +91,7 @@ type PartnerSortKey =
   | 'type'
   | 'industry'
   | 'contact'
-  | 'status';
+  | 'gst';
 type SortDirection = 'asc' | 'desc';
 
 const listViewModeBarSx = {
@@ -173,7 +173,7 @@ const PART_COL_DEFAULTS: Record<string, number> = {
   type: 120,
   industry: 120,
   contact: 160,
-  status: 100,
+  gst: 180,
   actions: 72,
 };
 
@@ -185,7 +185,7 @@ const PART_COL_ALIGN: Record<string, 'left' | 'right' | 'center'> = {
   type: 'left',
   industry: 'left',
   contact: 'left',
-  status: 'left',
+  gst: 'left',
   actions: 'center',
 };
 
@@ -195,7 +195,7 @@ const PART_COL_MIN_WIDTH: Record<string, number> = {
   type: 88,
   industry: 72,
   contact: 100,
-  status: 72,
+  gst: 140,
   actions: 56,
 };
 
@@ -249,6 +249,12 @@ const partnerCheckboxColSx = {
 } as const;
 
 const partnerChipSx = { fontWeight: 500, borderRadius: '8px', fontSize: '0.75rem' } as const;
+
+const formatPartnerGstDisplay = (gstNumbers: string[] | undefined) => {
+  const list = (gstNumbers || []).map((gst) => String(gst || '').trim()).filter(Boolean);
+  if (list.length === 0) return '-';
+  return list.join(', ');
+};
 
 interface Partner {
   id: number;
@@ -857,17 +863,6 @@ const PartnerManagement: React.FC = () => {
     return colorConfig[type] || 'default';
   };
 
-  const getStatusChip = (status: string) => {
-    const statusConfig = {
-      active: { labelKey: 'partnerManagement.active' as const, color: 'success' as const },
-      inactive: { labelKey: 'partnerManagement.inactive' as const, color: 'default' as const },
-      suspended: { labelKey: 'partnerManagement.suspended' as const, color: 'error' as const }
-    };
-    const config = statusConfig[status as keyof typeof statusConfig];
-    if (!config) return null;
-    return <Chip label={t(config.labelKey)} color={config.color} size="small" sx={partnerChipSx} />;
-  };
-
   const getSortValue = (partner: Partner, key: PartnerSortKey): string => {
     switch (key) {
       case 'company':
@@ -878,8 +873,8 @@ const PartnerManagement: React.FC = () => {
         return String(partner.industry || '').toLowerCase();
       case 'contact':
         return String(partner.email || partner.phone || '').toLowerCase();
-      case 'status':
-        return String(partner.status || '').toLowerCase();
+      case 'gst':
+        return formatPartnerGstDisplay(partner.gstNumbers).toLowerCase();
       default:
         return '';
     }
@@ -894,7 +889,10 @@ const PartnerManagement: React.FC = () => {
           partner.representative.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (partner.industry && partner.industry.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (partner.address && partner.address.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        partner.businessNumber.toLowerCase().includes(searchTerm.toLowerCase());
+        partner.businessNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (partner.gstNumbers || []).some((gst) =>
+          String(gst || '').toLowerCase().includes(searchTerm.toLowerCase())
+        );
       const matchesType =
         typeFilter === 'all' ||
         partner.businessType === typeFilter ||
@@ -1052,7 +1050,7 @@ const PartnerManagement: React.FC = () => {
   const tdSx = (key: string) => ({
     ...partnerColBaseSx(key),
     textOverflow:
-      key === 'industry' || key === 'contact'
+      key === 'industry' || key === 'contact' || key === 'gst'
         ? ('ellipsis' as const)
         : undefined,
   });
@@ -1531,7 +1529,7 @@ const PartnerManagement: React.FC = () => {
                   {renderHeadCell('type', t('partnerManagement.companyType'), 'type')}
                   {renderHeadCell('industry', t('partnerManagement.industry'), 'industry')}
                   {renderHeadCell('contact', t('partnerManagement.contact'), 'contact')}
-                  {renderHeadCell('status', t('partnerManagement.status'), 'status')}
+                  {renderHeadCell('gst', t('partnerManagement.gstNumber'), 'gst')}
                   {renderHeadCell('actions', t('partnerManagement.actions'))}
                 </TableRow>
               </TableHead>
@@ -1645,8 +1643,21 @@ const PartnerManagement: React.FC = () => {
                         </Typography>
                       </Box>
                     </TableCell>
-                    <TableCell align={partColTableAlign('status')} sx={tdSx('status')}>
-                      {getStatusChip(partner.status)}
+                    <TableCell align={partColTableAlign('gst')} sx={tdSx('gst')}>
+                      <Typography
+                        component="span"
+                        color="text.secondary"
+                        title={formatPartnerGstDisplay(partner.gstNumbers)}
+                        sx={{
+                          ...partnerListTextSx,
+                          display: 'block',
+                          whiteSpace: 'normal',
+                          wordBreak: 'break-all',
+                          fontVariantNumeric: 'tabular-nums',
+                        }}
+                      >
+                        {formatPartnerGstDisplay(partner.gstNumbers)}
+                      </Typography>
                     </TableCell>
                     <TableCell align={partColTableAlign('actions')} sx={tdSx('actions')} onClick={(e) => e.stopPropagation()}>
                       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>

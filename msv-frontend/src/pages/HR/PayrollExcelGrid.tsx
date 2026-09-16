@@ -10,6 +10,11 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import FormControlLabel from '@mui/material/FormControlLabel';
+import FormControl from '@mui/material/FormControl';
+import FormHelperText from '@mui/material/FormHelperText';
+import InputLabel from '@mui/material/InputLabel';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
 import IconButton from '@mui/material/IconButton';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
@@ -21,8 +26,10 @@ import {
   KeyboardArrowDown as ArrowDownIcon,
   KeyboardArrowUp as ArrowUpIcon,
   DeleteOutline as DeleteOutlineIcon,
+  EditOutlined as EditOutlinedIcon,
   Percent as PercentIcon,
   Reorder as ReorderIcon,
+  ViewColumn as ViewColumnIcon,
 } from '@mui/icons-material';
 import { payrollService } from '../../services/api';
 import type { PayrollGridRow } from './payroll/payrollGridTypes';
@@ -50,7 +57,12 @@ import {
   savePayrollColumnPrefs,
   type PayrollColumnPrefs,
   type PayrollCustomColumn,
+  type PayrollCustomColumnInputMode,
 } from './payroll/payrollColumnPrefs';
+import {
+  isValidPayrollColumnFormula,
+  normalizePayrollColumnFormula,
+} from './payroll/payrollColumnFormula';
 import {
   DEFAULT_SALARY_RATIOS,
   constantPartField,
@@ -122,6 +134,11 @@ const PayrollExcelGrid: React.FC<Props> = ({
   const [orderOpen, setOrderOpen] = useState(false);
   const [ratiosOpen, setRatiosOpen] = useState(false);
   const [newColumnLabel, setNewColumnLabel] = useState('');
+  const [newColumnInputMode, setNewColumnInputMode] = useState<PayrollCustomColumnInputMode>('amount');
+  const [newColumnFormula, setNewColumnFormula] = useState('');
+  const [editColumnOpen, setEditColumnOpen] = useState(false);
+  const [editColumnDraft, setEditColumnDraft] = useState<PayrollCustomColumn | null>(null);
+  const [manageColumnsOpen, setManageColumnsOpen] = useState(false);
   const [salaryRatios, setSalaryRatios] = useState<PayrollSalaryRatios>(() =>
     loadPayrollSalaryRatios(companyId)
   );
@@ -265,21 +282,82 @@ const PayrollExcelGrid: React.FC<Props> = ({
     return map;
   }, [columns]);
 
+  const resetAddColumnForm = () => {
+    setNewColumnLabel('');
+    setNewColumnInputMode('amount');
+    setNewColumnFormula('');
+  };
+
+  const openAddColumnDialog = () => {
+    resetAddColumnForm();
+    setAddOpen(true);
+  };
+
   const handleAddColumn = () => {
     const label = newColumnLabel.trim();
     if (!label) return;
+    const inputMode = newColumnInputMode;
+    const formula =
+      inputMode === 'count' ? normalizePayrollColumnFormula(newColumnFormula) : undefined;
+    if (inputMode === 'count' && !isValidPayrollColumnFormula(formula)) {
+      onError(t('payrollManagement.errors.invalidColumnFormula'));
+      return;
+    }
     const id = createCustomColumnId(label, prefs.customColumns);
     const field = customColumnField(id);
-    const nextCustom: PayrollCustomColumn[] = [...prefs.customColumns, { id, label }];
+    const nextColumn: PayrollCustomColumn = {
+      id,
+      label,
+      inputMode,
+      ...(formula ? { formula } : {}),
+    };
+    const nextCustom: PayrollCustomColumn[] = [...prefs.customColumns, nextColumn];
     const baseOrder =
       prefs.order.length > 0 ? [...prefs.order] : [...PAYROLL_DEFAULT_COLUMN_ORDER];
     const customFields = nextCustom.map((c) => customColumnField(c.id));
     if (!baseOrder.includes(field)) baseOrder.push(field);
     const order = placeCustomColumnsAfterTransport(baseOrder, customFields);
     persistPrefs({ order, customColumns: nextCustom });
-    setNewColumnLabel('');
+    resetAddColumnForm();
     setAddOpen(false);
     onSuccess(t('payrollManagement.columnAdded', { name: label }));
+  };
+
+  const openEditColumnDialog = (column: PayrollCustomColumn) => {
+    setEditColumnDraft({
+      ...column,
+      inputMode: column.inputMode === 'count' ? 'count' : 'amount',
+      formula: column.formula || '',
+    });
+    setEditColumnOpen(true);
+  };
+
+  const handleSaveEditColumn = () => {
+    if (!editColumnDraft) return;
+    const label = editColumnDraft.label.trim();
+    if (!label) return;
+    const inputMode: PayrollCustomColumnInputMode =
+      editColumnDraft.inputMode === 'count' ? 'count' : 'amount';
+    const formula =
+      inputMode === 'count' ? normalizePayrollColumnFormula(editColumnDraft.formula) : undefined;
+    if (inputMode === 'count' && !isValidPayrollColumnFormula(formula)) {
+      onError(t('payrollManagement.errors.invalidColumnFormula'));
+      return;
+    }
+    const nextCustom: PayrollCustomColumn[] = prefs.customColumns.map((col) =>
+      col.id === editColumnDraft.id
+        ? {
+            id: col.id,
+            label,
+            inputMode,
+            ...(inputMode === 'count' && formula ? { formula } : {}),
+          }
+        : col
+    );
+    persistPrefs({ ...prefs, customColumns: nextCustom });
+    setEditColumnOpen(false);
+    setEditColumnDraft(null);
+    onSuccess(t('payrollManagement.columnUpdated', { name: label }));
   };
 
   const moveColumn = (field: string, dir: -1 | 1) => {
@@ -294,11 +372,42 @@ const PayrollExcelGrid: React.FC<Props> = ({
     persistPrefs({ ...prefs, order });
   };
 
-  const removeCustomColumn = (id: string) => {
-    const field = customColumnField(id);
-    persistPrefs({
-      customColumns: prefs.customColumns.filter((c) => c.id !== id),
-      order: prefs.order.filter((f) => f !== field),
+  const removeCustomColumn = useCallback(
+    (id: string) => {
+      const field = customColumnField(id);
+      persistPrefs({
+        customColumns: prefs.customColumns.filter((c) => c.id !== id),
+        order: prefs.order.filter((f) => f !== field),
+      });
+    },
+    [persistPrefs, prefs.customColumns, prefs.order]
+  );
+
+  const confirmRemoveCustomColumn = useCallback(
+    (column: PayrollCustomColumn, onDone?: () => void) => {
+      showConfirm(
+        t('payrollManagement.confirmDeleteColumn', { name: column.label }),
+        () => {
+          removeCustomColumn(column.id);
+          onDone?.();
+          onSuccess(t('payrollManagement.columnDeleted', { name: column.label }));
+        },
+        {
+          title: t('payrollManagement.dialog.deleteColumnTitle'),
+          confirmColor: 'error',
+          confirmText: t('payrollManagement.actions.deleteColumn'),
+          cancelText: t('common.cancel'),
+        }
+      );
+    },
+    [onSuccess, removeCustomColumn, showConfirm, t]
+  );
+
+  const handleDeleteEditColumn = () => {
+    if (!editColumnDraft) return;
+    confirmRemoveCustomColumn(editColumnDraft, () => {
+      setEditColumnOpen(false);
+      setEditColumnDraft(null);
     });
   };
 
@@ -450,11 +559,21 @@ const PayrollExcelGrid: React.FC<Props> = ({
           size="small"
           variant="outlined"
           startIcon={<AddIcon fontSize="small" />}
-          onClick={() => setAddOpen(true)}
+          onClick={openAddColumnDialog}
           disabled={!allowCellEdit}
           sx={mvsBodyOutlinedBtnSx}
         >
           {t('payrollManagement.actions.addColumn')}
+        </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<ViewColumnIcon fontSize="small" />}
+          onClick={() => setManageColumnsOpen(true)}
+          disabled={prefs.customColumns.length === 0}
+          sx={mvsBodyOutlinedBtnSx}
+        >
+          {t('payrollManagement.actions.manageCustomColumns')}
         </Button>
         <Button
           size="small"
@@ -493,7 +612,7 @@ const PayrollExcelGrid: React.FC<Props> = ({
         }}
       >
         <DataGrid
-          key={`${i18n.language}-${prefs.order.join('|')}-${prefs.customColumns.map((c) => c.id).join(',')}-${salaryRatios.parts.map((p) => `${p.id}:${p.label}`).join(',')}`}
+          key={`${i18n.language}-${prefs.order.join('|')}-${prefs.customColumns.map((c) => `${c.id}:${c.inputMode || 'amount'}:${c.formula || ''}`).join(',')}-${salaryRatios.parts.map((p) => `${p.id}:${p.label}`).join(',')}`}
           rows={rows}
           columns={columns}
           loading={loading}
@@ -555,37 +674,250 @@ const PayrollExcelGrid: React.FC<Props> = ({
 
       <Dialog
         open={addOpen}
-        onClose={() => setAddOpen(false)}
+        onClose={() => {
+          setAddOpen(false);
+          resetAddColumnForm();
+        }}
         maxWidth="xs"
         fullWidth
         onKeyDown={(e) => e.stopPropagation()}
       >
         <DialogTitle>{t('payrollManagement.dialog.addColumnTitle')}</DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, pt: 0.5 }}>
           <TextField
             autoFocus
             fullWidth
             margin="dense"
             label={t('payrollManagement.dialog.columnNameLabel')}
-            placeholder="Food Allowance"
+            placeholder="Day shift"
             value={newColumnLabel}
             onChange={(e) => setNewColumnLabel(e.target.value)}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleAddColumn();
-              }
-            }}
+            onKeyDown={(e) => e.stopPropagation()}
           />
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+          <FormControl fullWidth size="small">
+            <InputLabel id="payroll-add-column-input-mode">
+              {t('payrollManagement.dialog.columnInputModeLabel')}
+            </InputLabel>
+            <Select
+              labelId="payroll-add-column-input-mode"
+              label={t('payrollManagement.dialog.columnInputModeLabel')}
+              value={newColumnInputMode}
+              onChange={(e) =>
+                setNewColumnInputMode(e.target.value as PayrollCustomColumnInputMode)
+              }
+            >
+              <MenuItem value="amount">{t('payrollManagement.dialog.columnInputModeAmount')}</MenuItem>
+              <MenuItem value="count">{t('payrollManagement.dialog.columnInputModeCount')}</MenuItem>
+            </Select>
+          </FormControl>
+          {newColumnInputMode === 'count' ? (
+            <TextField
+              fullWidth
+              margin="dense"
+              label={t('payrollManagement.dialog.columnFormulaLabel')}
+              placeholder="n * 100"
+              value={newColumnFormula}
+              onChange={(e) => setNewColumnFormula(e.target.value)}
+              helperText={t('payrollManagement.dialog.columnFormulaHint')}
+              error={
+                Boolean(newColumnFormula.trim()) &&
+                !isValidPayrollColumnFormula(normalizePayrollColumnFormula(newColumnFormula))
+              }
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+          ) : null}
+          <Typography variant="caption" color="text.secondary">
             {t('payrollManagement.dialog.addColumnHint')}
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAddOpen(false)}>{t('common.cancel')}</Button>
-          <Button variant="contained" onClick={handleAddColumn} disabled={!newColumnLabel.trim()}>
+          <Button
+            onClick={() => {
+              setAddOpen(false);
+              resetAddColumnForm();
+            }}
+          >
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleAddColumn}
+            disabled={
+              !newColumnLabel.trim() ||
+              (newColumnInputMode === 'count' &&
+                !isValidPayrollColumnFormula(normalizePayrollColumnFormula(newColumnFormula)))
+            }
+          >
             {t('payrollManagement.actions.addColumn')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={editColumnOpen}
+        onClose={() => {
+          setEditColumnOpen(false);
+          setEditColumnDraft(null);
+        }}
+        maxWidth="xs"
+        fullWidth
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <DialogTitle>{t('payrollManagement.dialog.editColumnTitle')}</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, pt: 0.5 }}>
+          <TextField
+            autoFocus
+            fullWidth
+            margin="dense"
+            label={t('payrollManagement.dialog.columnNameLabel')}
+            value={editColumnDraft?.label || ''}
+            onChange={(e) =>
+              setEditColumnDraft((prev) => (prev ? { ...prev, label: e.target.value } : prev))
+            }
+            onKeyDown={(e) => e.stopPropagation()}
+          />
+          <FormControl fullWidth size="small">
+            <InputLabel id="payroll-edit-column-input-mode">
+              {t('payrollManagement.dialog.columnInputModeLabel')}
+            </InputLabel>
+            <Select
+              labelId="payroll-edit-column-input-mode"
+              label={t('payrollManagement.dialog.columnInputModeLabel')}
+              value={editColumnDraft?.inputMode === 'count' ? 'count' : 'amount'}
+              onChange={(e) =>
+                setEditColumnDraft((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        inputMode: e.target.value as PayrollCustomColumnInputMode,
+                        formula: e.target.value === 'count' ? prev.formula || 'n * 100' : '',
+                      }
+                    : prev
+                )
+              }
+            >
+              <MenuItem value="amount">{t('payrollManagement.dialog.columnInputModeAmount')}</MenuItem>
+              <MenuItem value="count">{t('payrollManagement.dialog.columnInputModeCount')}</MenuItem>
+            </Select>
+          </FormControl>
+          {editColumnDraft?.inputMode === 'count' ? (
+            <TextField
+              fullWidth
+              margin="dense"
+              label={t('payrollManagement.dialog.columnFormulaLabel')}
+              placeholder="n * 150"
+              value={editColumnDraft.formula || ''}
+              onChange={(e) =>
+                setEditColumnDraft((prev) => (prev ? { ...prev, formula: e.target.value } : prev))
+              }
+              helperText={t('payrollManagement.dialog.columnFormulaHint')}
+              error={
+                Boolean(String(editColumnDraft.formula || '').trim()) &&
+                !isValidPayrollColumnFormula(
+                  normalizePayrollColumnFormula(editColumnDraft.formula)
+                )
+              }
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+          ) : null}
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'space-between', px: 2 }}>
+          <Button
+            color="error"
+            onClick={handleDeleteEditColumn}
+            disabled={!editColumnDraft}
+          >
+            {t('payrollManagement.actions.deleteColumn')}
+          </Button>
+          <Box sx={{ display: 'inline-flex', gap: 1 }}>
+            <Button
+              onClick={() => {
+                setEditColumnOpen(false);
+                setEditColumnDraft(null);
+              }}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleSaveEditColumn}
+              disabled={
+                !editColumnDraft?.label.trim() ||
+                (editColumnDraft.inputMode === 'count' &&
+                  !isValidPayrollColumnFormula(
+                    normalizePayrollColumnFormula(editColumnDraft.formula)
+                  ))
+              }
+            >
+              {t('common.save')}
+            </Button>
+          </Box>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={manageColumnsOpen}
+        onClose={() => setManageColumnsOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{t('payrollManagement.dialog.manageCustomColumnsTitle')}</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            {t('payrollManagement.dialog.manageCustomColumnsHint')}
+          </Typography>
+          {prefs.customColumns.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              {t('payrollManagement.empty.noCustomColumns')}
+            </Typography>
+          ) : (
+            <List dense disablePadding>
+              {prefs.customColumns.map((column) => (
+                <ListItem
+                  key={column.id}
+                  divider
+                  secondaryAction={
+                    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}>
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          setManageColumnsOpen(false);
+                          openEditColumnDialog(column);
+                        }}
+                        aria-label="edit"
+                      >
+                        <EditOutlinedIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => confirmRemoveCustomColumn(column)}
+                        aria-label="delete"
+                      >
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  }
+                  sx={{ pr: 10 }}
+                >
+                  <ListItemText
+                    primary={column.label}
+                    secondary={
+                      column.inputMode === 'count' && column.formula
+                        ? t('payrollManagement.customColumnFormulaBadge', {
+                            formula: column.formula,
+                          })
+                        : t('payrollManagement.customColumnAmountBadge')
+                    }
+                  />
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button variant="contained" onClick={() => setManageColumnsOpen(false)}>
+            {t('common.close')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -599,7 +931,18 @@ const PayrollExcelGrid: React.FC<Props> = ({
           <List dense disablePadding>
             {orderedFieldsForDialog.map((field) => {
               const customId = field.startsWith('custom__') ? field.slice('custom__'.length) : null;
+              const customColumn = customId
+                ? prefs.customColumns.find((c) => c.id === customId)
+                : undefined;
               const lockedEdge = field === 'row_no' || field === 'actions';
+              const customSecondary =
+                customColumn?.inputMode === 'count' && customColumn.formula
+                  ? t('payrollManagement.customColumnFormulaBadge', {
+                      formula: customColumn.formula,
+                    })
+                  : customId
+                    ? t('payrollManagement.customColumnBadge')
+                    : undefined;
               return (
                 <ListItem
                   key={field}
@@ -622,11 +965,23 @@ const PayrollExcelGrid: React.FC<Props> = ({
                       >
                         <ArrowDownIcon fontSize="small" />
                       </IconButton>
+                      {customColumn ? (
+                        <IconButton
+                          size="small"
+                          onClick={() => openEditColumnDialog(customColumn)}
+                          aria-label="edit"
+                        >
+                          <EditOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      ) : null}
                       {customId ? (
                         <IconButton
                           size="small"
                           color="error"
-                          onClick={() => removeCustomColumn(customId)}
+                          onClick={() => {
+                            const column = prefs.customColumns.find((c) => c.id === customId);
+                            if (column) confirmRemoveCustomColumn(column);
+                          }}
                           aria-label="delete"
                         >
                           <DeleteOutlineIcon fontSize="small" />
@@ -634,11 +989,11 @@ const PayrollExcelGrid: React.FC<Props> = ({
                       ) : null}
                     </Box>
                   }
-                  sx={{ pr: 14 }}
+                  sx={{ pr: 16 }}
                 >
                   <ListItemText
                     primary={headerLabelByField.get(field) || field}
-                    secondary={customId ? t('payrollManagement.customColumnBadge') : undefined}
+                    secondary={customSecondary}
                   />
                 </ListItem>
               );

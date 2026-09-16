@@ -1790,6 +1790,8 @@ export default {
         completePayroll: 'Finalize payroll',
         exportExcel: 'Export to Excel',
         addColumn: 'Add column',
+        manageCustomColumns: 'Manage custom columns',
+        deleteColumn: 'Delete column',
         reorderColumns: 'Column order',
         resetColumnOrder: 'Reset order',
         editConstants: 'Constant area',
@@ -1802,7 +1804,13 @@ export default {
       },
       columnToolbarHint: 'You can add headers or change their order.',
       columnAdded: 'Column 「{{name}}」 was added.',
+      columnUpdated: 'Column 「{{name}}」 settings were saved.',
+      columnDeleted: 'Column 「{{name}}」 was deleted.',
+      confirmDeleteColumn:
+        'Delete column 「{{name}}」? It will be removed from the grid. Values in saved payroll rows may remain in the database.',
       customColumnBadge: 'Custom column',
+      customColumnAmountBadge: 'Direct amount',
+      customColumnFormulaBadge: 'Count × formula: {{formula}}',
       salaryRatiosShort: 'Constants {{summary}}',
       salaryRatiosSaved: 'Constant area ratios saved.',
       salaryRatiosApplied: 'Applied constant ratios to {{count}} row(s).',
@@ -1813,6 +1821,7 @@ export default {
         noItemsHint: 'Select a pay month and use「Create Payroll」to generate payroll for that month.',
         noResults: 'No payroll matches your filters.',
         noResultsHint: 'Try changing search or department filters, or reset them.',
+        noCustomColumns: 'No custom columns have been added.',
       },
       dialog: {
         createTitle: 'Create Payroll',
@@ -1827,7 +1836,16 @@ export default {
         addColumnTitle: 'Add column',
         columnNameLabel: 'Column name (header)',
         addColumnHint:
-          'New columns appear next to Additional Allowance and are included in payment total.',
+          'New columns appear next to Additional Allowance and are included in payment total. Saved per company.',
+        columnInputModeLabel: 'Input mode',
+        columnInputModeAmount: 'Enter amount directly',
+        columnInputModeCount: 'Count × formula',
+        columnFormulaLabel: 'Formula',
+        columnFormulaHint: 'n = count entered by user. e.g. n * 100, n * 150',
+        editColumnTitle: 'Column settings',
+        deleteColumnTitle: 'Delete column',
+        manageCustomColumnsTitle: 'Manage custom columns',
+        manageCustomColumnsHint: 'Edit or delete columns. Settings are saved per company.',
         reorderColumnsTitle: 'Reorder columns',
         reorderColumnsHint: 'Use ↑↓ to move headers. Custom columns can be deleted.',
         salaryRatiosTitle: 'Constant area (% of salary)',
@@ -1887,7 +1905,8 @@ export default {
         approveError: 'An error occurred while approving payroll.',
         payFailed: 'Failed to pay payroll.',
         payError: 'An error occurred while paying payroll.',
-        exportFailed: 'Failed to export Excel.'
+        exportFailed: 'Failed to export Excel.',
+        invalidColumnFormula: 'Invalid formula. Use n, numbers, and + - * / ( ) only.'
       }
     },
     departmentManagement: {

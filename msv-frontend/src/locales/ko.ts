@@ -1842,6 +1842,8 @@ export default {
         completePayroll: '급여 생성 완료',
         exportExcel: '엑셀로 내보내기',
         addColumn: '컬럼 추가하기',
+        manageCustomColumns: '추가 컬럼 관리',
+        deleteColumn: '컬럼 삭제',
         reorderColumns: '컬럼 순서',
         resetColumnOrder: '순서 초기화',
         editConstants: '상수 영역 설정',
@@ -1854,7 +1856,13 @@ export default {
       },
       columnToolbarHint: '헤더를 추가하거나 순서를 바꿀 수 있습니다.',
       columnAdded: '「{{name}}」 컬럼이 추가되었습니다.',
+      columnUpdated: '「{{name}}」 컬럼 설정을 저장했습니다.',
+      columnDeleted: '「{{name}}」 컬럼을 삭제했습니다.',
+      confirmDeleteColumn:
+        '「{{name}}」 컬럼을 삭제할까요? 그리드에서 제거되며, 이미 저장된 급여 행의 값은 DB에 남을 수 있습니다.',
       customColumnBadge: '사용자 추가 컬럼',
+      customColumnAmountBadge: '금액 직접 입력',
+      customColumnFormulaBadge: '횟수 × 수식: {{formula}}',
       salaryRatiosShort: '상수 {{summary}}',
       salaryRatiosSaved: '상수 영역 비율을 저장했습니다.',
       salaryRatiosApplied: '상수 비율을 {{count}}건에 적용했습니다.',
@@ -1865,6 +1873,7 @@ export default {
         noItemsHint: '급여월을 선택한 뒤「급여 생성」으로 해당 월 급여를 만들어 보세요.',
         noResults: '검색 조건에 맞는 급여가 없습니다.',
         noResultsHint: '검색어나 부서 필터를 바꾸거나 초기화해 보세요.',
+        noCustomColumns: '추가된 사용자 컬럼이 없습니다.',
       },
       dialog: {
         createTitle: '급여 생성',
@@ -1879,7 +1888,16 @@ export default {
         addColumnTitle: '컬럼 추가',
         columnNameLabel: '컬럼명 (헤더)',
         addColumnHint:
-          '추가한 컬럼은 「추가 수당」 옆에 붙고, 지급 합계에 포함됩니다.',
+          '추가한 컬럼은 「추가 수당」 옆에 붙고, 지급 합계에 포함됩니다. 회사별로 저장됩니다.',
+        columnInputModeLabel: '입력 방식',
+        columnInputModeAmount: '금액 직접 입력',
+        columnInputModeCount: '횟수 × 산술식',
+        columnFormulaLabel: '산술식',
+        columnFormulaHint: 'n = 사용자가 입력하는 횟수. 예: n * 100, n * 150',
+        editColumnTitle: '컬럼 설정',
+        deleteColumnTitle: '컬럼 삭제',
+        manageCustomColumnsTitle: '추가 컬럼 관리',
+        manageCustomColumnsHint: '편집·삭제할 컬럼을 선택하세요. 설정은 회사별로 저장됩니다.',
         reorderColumnsTitle: '컬럼 순서 변경',
         reorderColumnsHint: '↑↓로 헤더 위치를 바꿉니다. 사용자 추가 컬럼은 삭제할 수 있습니다.',
         salaryRatiosTitle: '상수 영역 설정 (급여 %)',
@@ -1939,7 +1957,8 @@ export default {
         approveError: '급여 승인 중 오류가 발생했습니다.',
         payFailed: '급여 지급에 실패했습니다.',
         payError: '급여 지급 중 오류가 발생했습니다.',
-        exportFailed: '엑셀 내보내기에 실패했습니다.'
+        exportFailed: '엑셀 내보내기에 실패했습니다.',
+        invalidColumnFormula: '산술식이 올바르지 않습니다. n과 숫자, + - * / ( ) 만 사용할 수 있습니다.'
       }
     },
     departmentManagement: {

@@ -1,6 +1,13 @@
 import type { PayrollGridRow } from './payrollGridTypes';
 import { computeProfessionalTaxByState } from './indianProfessionalTax';
 import {
+  evaluatePayrollColumnFormula,
+} from './payrollColumnFormula';
+import {
+  loadPayrollColumnPrefs,
+  type PayrollCustomColumn,
+} from './payrollColumnPrefs';
+import {
   DEFAULT_SALARY_RATIOS,
   isSystemConstantId,
   loadPayrollSalaryRatios,
@@ -505,7 +512,6 @@ export function shouldPreferTotalSplit(
   return !componentChanged;
 }
 
-/** 급여 합계에 % 비율을 적용한 행 */
 export function applySalaryRatiosToRow(
   row: PayrollGridRow,
   ratios: PayrollSalaryRatios,
@@ -531,6 +537,64 @@ export function applySalaryRatiosToRow(
   );
 }
 
+function isCountFormulaColumn(col: PayrollCustomColumn): boolean {
+  return col.inputMode === 'count' && Boolean(String(col.formula || '').trim());
+}
+
+/** 커스텀 수당 — count+formula 컬럼은 횟수→금액 변환 */
+export function resolveCustomAllowanceAmounts(
+  row: Pick<PayrollGridRow, 'custom_allowances' | 'custom_allowance_inputs'>,
+  customColumns: PayrollCustomColumn[]
+): {
+  custom_allowances: Record<string, number>;
+  custom_allowance_inputs: Record<string, number>;
+  customSum: number;
+} {
+  const rawInputs =
+    row.custom_allowance_inputs && typeof row.custom_allowance_inputs === 'object'
+      ? row.custom_allowance_inputs
+      : {};
+  const rawAmounts =
+    row.custom_allowances && typeof row.custom_allowances === 'object'
+      ? row.custom_allowances
+      : {};
+
+  const custom_allowance_inputs: Record<string, number> = {};
+  const custom_allowances: Record<string, number> = {};
+  let customSum = 0;
+
+  for (const col of customColumns) {
+    if (isCountFormulaColumn(col)) {
+      const inputN = Math.max(0, num(rawInputs[col.id] ?? rawAmounts[col.id]));
+      custom_allowance_inputs[col.id] = inputN;
+      const amount = evaluatePayrollColumnFormula(col.formula, inputN);
+      custom_allowances[col.id] = amount;
+      customSum += amount;
+    }
+  }
+
+  for (const col of customColumns) {
+    if (isCountFormulaColumn(col)) continue;
+    const amount = Math.max(0, num(rawAmounts[col.id]));
+    custom_allowances[col.id] = amount;
+    customSum += amount;
+  }
+
+  for (const [key, val] of Object.entries(rawAmounts)) {
+    if (Object.prototype.hasOwnProperty.call(custom_allowances, key)) continue;
+    const amount = Math.max(0, num(val));
+    custom_allowances[key] = amount;
+    customSum += amount;
+  }
+
+  for (const [key, val] of Object.entries(rawInputs)) {
+    if (Object.prototype.hasOwnProperty.call(custom_allowance_inputs, key)) continue;
+    custom_allowance_inputs[key] = Math.max(0, num(val));
+  }
+
+  return { custom_allowances, custom_allowance_inputs, customSum };
+}
+
 export function recalculatePayrollRow(
   row: PayrollGridRow,
   ctx: PayrollRecalcContext = {},
@@ -540,14 +604,9 @@ export function recalculatePayrollRow(
     opts.salaryRatios ||
     ctx.salaryRatios ||
     loadPayrollSalaryRatios(ctx.companyId);
-  const customAllowances: Record<string, number> = {};
-  const rawCustom = row.custom_allowances && typeof row.custom_allowances === 'object' ? row.custom_allowances : {};
-  let customSum = 0;
-  for (const [key, val] of Object.entries(rawCustom)) {
-    const amount = Math.max(0, num(val));
-    customAllowances[key] = amount;
-    customSum += amount;
-  }
+  const columnPrefs = loadPayrollColumnPrefs(ctx.companyId);
+  const { custom_allowances: customAllowances, custom_allowance_inputs, customSum } =
+    resolveCustomAllowanceAmounts(row, columnPrefs.customColumns);
   const totalSalaryInput = num(row.total_salary);
 
   let basic: number;
@@ -623,6 +682,7 @@ export function recalculatePayrollRow(
     food_allowance: foodAllowance,
     constant_parts,
     custom_allowances: customAllowances,
+    custom_allowance_inputs,
     total_salary: totalSalary,
     days_worked,
     ot_rate: otRate,
@@ -689,6 +749,21 @@ export const otHourEditProps = {
     const n = parseFloat(String(value).replace(/,/g, ''));
     return Number.isFinite(n) ? roundOtHour(n) : 0;
   }
+};
+
+export const countEditProps = {
+  type: 'number' as const,
+  valueFormatter: (value: unknown) => {
+    if (value === '' || value == null) return '0';
+    const n = parseFloat(String(value).replace(/,/g, ''));
+    if (!Number.isFinite(n)) return '0';
+    return String(Math.max(0, Math.floor(n)));
+  },
+  valueParser: (value: unknown) => {
+    if (value === '' || value == null) return 0;
+    const n = parseFloat(String(value).replace(/,/g, ''));
+    return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+  },
 };
 
 export const numberEditProps = {
@@ -824,6 +899,13 @@ export function payrollRecordToGridRow(
       custom_allowances[key] = Math.max(0, num(val));
     }
   }
+  const customInputsRaw = x.custom_allowance_inputs;
+  const custom_allowance_inputs: Record<string, number> = {};
+  if (customInputsRaw && typeof customInputsRaw === 'object' && !Array.isArray(customInputsRaw)) {
+    for (const [key, val] of Object.entries(customInputsRaw as Record<string, unknown>)) {
+      custom_allowance_inputs[key] = Math.max(0, num(val));
+    }
+  }
 
   const advance = num(p.deductions);
 
@@ -847,6 +929,7 @@ export function payrollRecordToGridRow(
     food_allowance: foodAllowance,
     constant_parts,
     custom_allowances,
+    custom_allowance_inputs,
     total_salary: totalSalary,
     total_day_of_month: ex(x, 'total_day_of_month'),
     unpaid_leave: ex(x, 'unpaid_leave'),
@@ -902,6 +985,7 @@ export function gridRowToPayload(
     food_allowance: recalculated.food_allowance,
     constant_parts: recalculated.constant_parts || {},
     custom_allowances: recalculated.custom_allowances || {},
+    custom_allowance_inputs: recalculated.custom_allowance_inputs || {},
     total_salary: recalculated.total_salary,
     total_day_of_month: stripCommaField(recalculated.total_day_of_month),
     unpaid_leave: stripCommaField(recalculated.unpaid_leave),

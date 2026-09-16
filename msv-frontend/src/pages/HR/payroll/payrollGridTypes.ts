@@ -50,6 +50,8 @@ export type PayrollGridRow = {
   sum_total: number;
   /** 사용자 추가 수당 컬럼 값 (컬럼 id → 금액) */
   custom_allowances?: Record<string, number>;
+  /** count 모드 컬럼 — 사용자 입력 횟수 (컬럼 id → 횟수) */
+  custom_allowance_inputs?: Record<string, number>;
   /** extra_fields.indian_pf_mode — 기본 basic_12pct */
   indian_pf_mode?: 'basic_12pct' | 'gross_6pct' | 'epf_12pct_half';
   pf_employee: string;

@@ -72,7 +72,10 @@ export async function exportPayrollGridToExcel(
     }
     const customEntries: Record<string, number> = {};
     for (const col of prefs.customColumns) {
-      customEntries[col.label] = toInt(row.custom_allowances?.[col.id] ?? 0);
+      const isCountFormula = col.inputMode === 'count' && Boolean(String(col.formula || '').trim());
+      customEntries[col.label] = isCountFormula
+        ? toInt(row.custom_allowance_inputs?.[col.id] ?? 0)
+        : toInt(row.custom_allowances?.[col.id] ?? 0);
     }
     return {
       [t('payrollManagement.gridColumns.rowNo')]: toInt(row.row_no),
