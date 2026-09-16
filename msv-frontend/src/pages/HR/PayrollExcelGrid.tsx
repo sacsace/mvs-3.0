@@ -91,7 +91,7 @@ import {
 } from './payroll/payrollGridCellEdit';
 
 export type { PayrollGridRow } from './payroll/payrollGridTypes';
-export { computeTenureMonths, payrollRecordToGridRow } from './payroll';
+export { computeTenureMonths, payrollRecordToGridRow, sortPayrollGridRowsDefault } from './payroll';
 
 type Props = {
   rows: PayrollGridRow[];

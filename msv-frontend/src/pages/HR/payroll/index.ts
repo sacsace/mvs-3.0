@@ -5,5 +5,6 @@ export {
   computeEsicEmployeeFromSumTotal,
   computePfContributions,
   payrollRecordToGridRow,
-  recalculatePayrollRow
+  recalculatePayrollRow,
+  sortPayrollGridRowsDefault,
 } from './payrollGridUtils';

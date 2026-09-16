@@ -1025,3 +1025,19 @@ export function gridRowToPayload(
     extra_fields
   };
 }
+
+function comparePayrollGridText(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+/** 급여 그리드 기본 정렬: 사번 → 부서 → 입사일 (오름차순) */
+export function sortPayrollGridRowsDefault(rows: PayrollGridRow[]): PayrollGridRow[] {
+  const sorted = [...rows].sort((a, b) => {
+    const byEmp = comparePayrollGridText(String(a.emp_id ?? ''), String(b.emp_id ?? ''));
+    if (byEmp !== 0) return byEmp;
+    const byDept = comparePayrollGridText(String(a.department ?? ''), String(b.department ?? ''));
+    if (byDept !== 0) return byDept;
+    return comparePayrollGridText(String(a.joining_date ?? ''), String(b.joining_date ?? ''));
+  });
+  return sorted.map((row, index) => ({ ...row, row_no: index + 1 }));
+}

@@ -42,7 +42,11 @@ import {
 } from '@mui/icons-material';
 import { payrollService, companyService } from '../../services/api';
 import { useStore } from '../../store';
-import PayrollExcelGrid, { payrollRecordToGridRow, type PayrollGridRow } from './PayrollExcelGrid';
+import PayrollExcelGrid, {
+  payrollRecordToGridRow,
+  sortPayrollGridRowsDefault,
+  type PayrollGridRow,
+} from './PayrollExcelGrid';
 import PayrollPayslipDialog from './PayrollPayslipDialog';
 import PayrollSendPayslipsDialog from './PayrollSendPayslipsDialog';
 import type { PayslipHeaderLayout } from './PayslipContent';
@@ -298,10 +302,10 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     return list;
   }, [payrollRecordsForSelectedMonth, searchTerm, departmentFilter]);
 
-  const gridRows = useMemo(
-    () => filteredRecords.map((p, i) => payrollRecordToGridRow(p, i, payrollRecalcContext)),
-    [filteredRecords, payrollRecalcContext, gridSettingsTick]
-  );
+  const gridRows = useMemo(() => {
+    const rows = filteredRecords.map((p, i) => payrollRecordToGridRow(p, i, payrollRecalcContext));
+    return sortPayrollGridRowsDefault(rows);
+  }, [filteredRecords, payrollRecalcContext, gridSettingsTick]);
 
   const departments = useMemo(
     () =>
