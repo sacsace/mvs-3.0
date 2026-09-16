@@ -42,14 +42,46 @@ function appendCellClass(
   };
 }
 
-const LEFT_TEXT_FIELDS = new Set(['employee_email', 'department', 'employee_name']);
+const LEFT_TEXT_FIELDS = new Set([
+  'emp_id',
+  'bank_account',
+  'ifsc',
+  'bank_name',
+  'employee_email',
+  'department',
+  'employee_name',
+]);
+
+const NUMERIC_STRING_FIELDS = new Set([
+  'total_day_of_month',
+  'unpaid_leave',
+  'days_worked',
+  'pf_employee',
+  'pf_employer',
+  'esic_employee',
+  'esic_employer',
+  'pt',
+]);
+
+function payrollNumericSortComparator(v1: unknown, v2: unknown): number {
+  const parse = (v: unknown) => {
+    const n = parseFloat(String(v ?? '').replace(/,/g, ''));
+    return Number.isFinite(n) ? n : 0;
+  };
+  return parse(v1) - parse(v2);
+}
 
 function withPayrollGridDefaults(cols: GridColDef<PayrollGridRow>[]): GridColDef<PayrollGridRow>[] {
   return cols.map((col) => {
     const leftText = LEFT_TEXT_FIELDS.has(col.field);
+    const numericStringSort =
+      NUMERIC_STRING_FIELDS.has(col.field) && col.sortComparator == null
+        ? { sortComparator: payrollNumericSortComparator }
+        : {};
     return {
       ...col,
-      sortable: col.sortable ?? false,
+      sortable: col.sortable ?? true,
+      ...numericStringSort,
       align: leftText ? 'left' : 'center',
       headerAlign: 'center',
       cellClassName: appendCellClass(
@@ -217,7 +249,8 @@ export function buildPayrollGridColumns({
     {
       field: 'row_no',
       headerName: t('payrollManagement.gridColumns.rowNo'),
-      minWidth: 48,
+      minWidth: 46,
+      headerClassName: 'payroll-col-row-no',
       editable: false,
       sortable: false,
     },
@@ -312,7 +345,6 @@ export function buildPayrollGridColumns({
       headerName: t('payrollManagement.gridColumns.workingMonth'),
       minWidth: 56,
       editable: false,
-      sortable: true,
       headerClassName: 'payroll-col-salary-end',
       cellClassName: 'payroll-col-salary-end',
       valueGetter: (_value, row) => computeTenureMonths(row.joining_date, row.working_month),

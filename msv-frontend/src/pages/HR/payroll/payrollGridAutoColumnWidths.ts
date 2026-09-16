@@ -7,8 +7,8 @@ const HEADER_CHAR_PX = 6.4;
 const HEADER_CJK_CHAR_PX = 11;
 const CELL_CJK_CHAR_PX = 7.8;
 const CELL_PAD_PX = 18;
-/** 정렬·메뉴 아이콘 여유 */
-const HEADER_ICON_PAD_PX = 28;
+/** 헤더 좌우 여백 (정렬 화살표 없음) */
+const HEADER_ICON_PAD_PX = 8;
 
 const MAX_WIDTH: Record<string, number> = {
   employee_email: 260,
@@ -64,7 +64,14 @@ function autoWidthForColumn(col: GridColDef<PayrollGridRow>, rows: PayrollGridRo
       1,
       ...rows.map((row, idx) => String(row.row_no ?? idx + 1).length)
     );
-    return Math.max(MIN_COL_WIDTH, headerWidth(col.headerName), textLineWidth(String(maxDigits), false));
+    const contentW = textLineWidth(String(maxDigits), false);
+    const headLine = String(col.headerName ?? '')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join(' ');
+    const headW = textLineWidth(headLine, true);
+    return Math.max(46, contentW + 8, headW + 8);
   }
 
   let width = headerWidth(col.headerName);

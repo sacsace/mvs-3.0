@@ -812,6 +812,7 @@ const PayrollExcelGrid: React.FC<Props> = ({
           onCellClick={handleCellClick}
           disableRowSelectionOnClick
           disableColumnMenu
+          sortingOrder={['asc', 'desc', null]}
           showCellVerticalBorder
           showColumnVerticalBorder
           rowHeight={PAYROLL_ROW_HEIGHT}

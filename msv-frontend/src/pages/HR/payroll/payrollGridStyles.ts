@@ -68,6 +68,8 @@ export const payrollDataGridSx: SxProps<Theme> = (theme) => {
       justifyContent: 'center',
       overflow: 'visible',
       width: '100%',
+      gap: '2px',
+      minWidth: 0,
     },
     '& .MuiDataGrid-columnHeader .MuiDataGrid-columnHeaderTitleContainerContent': {
       overflow: 'visible',
@@ -81,8 +83,36 @@ export const payrollDataGridSx: SxProps<Theme> = (theme) => {
       fontSize: '0.7rem',
       overflow: 'visible',
       textOverflow: 'clip !important',
-      wordBreak: 'keep-all',
-      overflowWrap: 'anywhere',
+      wordBreak: 'normal',
+      overflowWrap: 'normal',
+    },
+    '& .MuiDataGrid-columnHeader.payroll-col-row-no .MuiDataGrid-columnHeaderTitle': {
+      whiteSpace: 'nowrap',
+    },
+
+    /* ── 헤더 정렬 ── */
+    '& .MuiDataGrid-columnHeader--sortable': {
+      cursor: 'pointer',
+      '&:hover': {
+        backgroundColor: light ? '#E8EDF2' : theme.palette.grey[700],
+      },
+    },
+    '& .MuiDataGrid-columnHeader:not(.MuiDataGrid-columnHeader--sortable)': {
+      cursor: 'default',
+    },
+    '& .MuiDataGrid-columnHeader--sorted': {
+      backgroundColor: light ? '#E2E8F0' : theme.palette.grey[700],
+      color: light ? '#334155' : theme.palette.grey[100],
+      '&:focus, &:focus-within': {
+        backgroundColor: light ? '#E2E8F0' : theme.palette.grey[700],
+      },
+    },
+    '& .MuiDataGrid-iconButtonContainer': {
+      display: 'none !important',
+      width: 0,
+      minWidth: 0,
+      margin: 0,
+      padding: 0,
     },
 
     /* ── 데이터 행 — 엑셀형 흰 배경 + 얇은 격자 ── */
