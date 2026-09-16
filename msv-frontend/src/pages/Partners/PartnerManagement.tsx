@@ -91,7 +91,6 @@ type PartnerSortKey =
   | 'type'
   | 'industry'
   | 'contact'
-  | 'contract'
   | 'status';
 type SortDirection = 'asc' | 'desc';
 
@@ -170,11 +169,10 @@ const partnerFormSectionTitleSx = {
 
 const PART_COL_DEFAULTS: Record<string, number> = {
   select: 48,
-  company: 240,
+  company: 390,
   type: 120,
   industry: 120,
   contact: 160,
-  contract: 150,
   status: 100,
   actions: 72,
 };
@@ -187,18 +185,16 @@ const PART_COL_ALIGN: Record<string, 'left' | 'right' | 'center'> = {
   type: 'left',
   industry: 'left',
   contact: 'left',
-  contract: 'left',
   status: 'left',
   actions: 'center',
 };
 
 const PART_COL_MIN_WIDTH: Record<string, number> = {
   select: 48,
-  company: 120,
+  company: 200,
   type: 88,
   industry: 72,
   contact: 100,
-  contract: 120,
   status: 72,
   actions: 56,
 };
@@ -882,8 +878,6 @@ const PartnerManagement: React.FC = () => {
         return String(partner.industry || '').toLowerCase();
       case 'contact':
         return String(partner.email || partner.phone || '').toLowerCase();
-      case 'contract':
-        return String(partner.contractEndDate || '');
       case 'status':
         return String(partner.status || '').toLowerCase();
       default:
@@ -1058,10 +1052,7 @@ const PartnerManagement: React.FC = () => {
   const tdSx = (key: string) => ({
     ...partnerColBaseSx(key),
     textOverflow:
-      key === 'company' ||
-      key === 'industry' ||
-      key === 'contact' ||
-      key === 'contract'
+      key === 'industry' || key === 'contact'
         ? ('ellipsis' as const)
         : undefined,
   });
@@ -1540,7 +1531,6 @@ const PartnerManagement: React.FC = () => {
                   {renderHeadCell('type', t('partnerManagement.companyType'), 'type')}
                   {renderHeadCell('industry', t('partnerManagement.industry'), 'industry')}
                   {renderHeadCell('contact', t('partnerManagement.contact'), 'contact')}
-                  {renderHeadCell('contract', t('partnerManagement.contractExpiryDate'), 'contract')}
                   {renderHeadCell('status', t('partnerManagement.status'), 'status')}
                   {renderHeadCell('actions', t('partnerManagement.actions'))}
                 </TableRow>
@@ -1575,10 +1565,11 @@ const PartnerManagement: React.FC = () => {
                       />
                     </TableCell>
                     <TableCell align={partColTableAlign('company')} sx={tdSx('company')}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, overflow: 'hidden' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', minWidth: 0 }}>
                         <Avatar
                           sx={{
                             mr: 1.25,
+                            mt: 0.125,
                             width: 32,
                             height: 32,
                             fontSize: '0.75rem',
@@ -1593,22 +1584,44 @@ const PartnerManagement: React.FC = () => {
                         >
                           {partner.companyName.charAt(0)}
                         </Avatar>
-                        <Typography
-                          component="span"
-                          fontWeight={400}
-                          noWrap
-                          title={partner.companyName}
-                          sx={{
-                            ...partnerListTextSx,
-                            minWidth: 0,
-                            flex: 1,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            display: 'block',
-                          }}
-                        >
-                          {partner.companyName}
-                        </Typography>
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                          <Typography
+                            component="span"
+                            fontWeight={500}
+                            title={partner.companyName}
+                            sx={{
+                              ...partnerListTextSx,
+                              display: 'block',
+                              whiteSpace: 'normal',
+                              wordBreak: 'break-word',
+                            }}
+                          >
+                            {partner.companyName}
+                          </Typography>
+                          {(partner.businessNumber && partner.businessNumber !== '-') || partner.panNumber ? (
+                            <Typography
+                              component="span"
+                              color="text.secondary"
+                              sx={{
+                                ...partnerListTextSx,
+                                display: 'block',
+                                mt: 0.25,
+                                fontSize: '0.75rem',
+                                whiteSpace: 'normal',
+                                wordBreak: 'break-word',
+                              }}
+                            >
+                              {[
+                                partner.businessNumber && partner.businessNumber !== '-'
+                                  ? `CIN ${partner.businessNumber}`
+                                  : '',
+                                partner.panNumber ? `PAN ${partner.panNumber}` : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </Typography>
+                          ) : null}
+                        </Box>
                       </Box>
                     </TableCell>
                     <TableCell align={partColTableAlign('type')} sx={tdSx('type')}>
@@ -1631,17 +1644,6 @@ const PartnerManagement: React.FC = () => {
                           {partner.email || '-'}
                         </Typography>
                       </Box>
-                    </TableCell>
-                    <TableCell align={partColTableAlign('contract')} sx={tdSx('contract')}>
-                      <Typography
-                        component="span"
-                        color="text.secondary"
-                        noWrap
-                        title={partner.contractEndDate || '-'}
-                        sx={{ ...partnerListTextSx, fontVariantNumeric: 'tabular-nums', display: 'block' }}
-                      >
-                        {partner.contractEndDate || '-'}
-                      </Typography>
                     </TableCell>
                     <TableCell align={partColTableAlign('status')} sx={tdSx('status')}>
                       {getStatusChip(partner.status)}
