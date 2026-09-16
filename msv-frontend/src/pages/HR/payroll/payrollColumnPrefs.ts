@@ -46,7 +46,6 @@ export const PAYROLL_DEFAULT_COLUMN_ORDER: string[] = [
   'days_worked',
   'ot_rate',
   'day_ot_hour',
-  'transport_allowance',
   'sum_total',
   'esic_employer',
   'pf_employer',
@@ -104,7 +103,7 @@ export function loadPayrollColumnPrefs(companyId?: string | number | null): Payr
     const order = Array.isArray(parsed.order)
       ? parsed.order
           .map((f) => String(f))
-          .filter((f) => Boolean(f) && f !== 'food_allowance')
+          .filter((f) => Boolean(f) && f !== 'food_allowance' && f !== 'transport_allowance')
       : [...PAYROLL_DEFAULT_COLUMN_ORDER];
     return { order, customColumns };
   } catch {
@@ -150,13 +149,15 @@ export function createCustomColumnId(label: string, existing: PayrollCustomColum
   return `${id}_${n}`;
 }
 
-/** 사용자 추가 컬럼을 추가 수당(transport_allowance) 바로 뒤로 배치 */
+/** 사용자 추가 컬럼을 OT(시간) 바로 뒤 · 지급 합계 앞에 배치 */
 export function placeCustomColumnsAfterTransport(
   order: string[],
   customFields: string[]
 ): string[] {
   const customSet = new Set(customFields);
-  const withoutCustom = order.filter((f) => !customSet.has(f) && !f.startsWith('custom__'));
+  const withoutCustom = order.filter(
+    (f) => !customSet.has(f) && !f.startsWith('custom__') && f !== 'transport_allowance'
+  );
   const fromOrder = order.filter((f) => f.startsWith('custom__') || customSet.has(f));
   const orderedCustom: string[] = [];
   for (const f of fromOrder) {
@@ -167,11 +168,11 @@ export function placeCustomColumnsAfterTransport(
   }
   if (orderedCustom.length === 0) return withoutCustom;
 
-  const transportIdx = withoutCustom.indexOf('transport_allowance');
+  const otIdx = withoutCustom.indexOf('day_ot_hour');
   const sumIdx = withoutCustom.indexOf('sum_total');
   const insertAt =
-    transportIdx >= 0
-      ? transportIdx + 1
+    otIdx >= 0
+      ? otIdx + 1
       : sumIdx >= 0
         ? sumIdx
         : Math.max(0, withoutCustom.length - 1);

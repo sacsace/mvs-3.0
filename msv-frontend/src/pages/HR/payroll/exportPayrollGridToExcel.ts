@@ -95,7 +95,6 @@ export async function exportPayrollGridToExcel(
       [t('payrollManagement.gridColumns.daysWorked')]: toInt(row.days_worked),
       [t('payrollManagement.gridColumns.otRate')]: toInt(row.ot_rate),
       [hourKey]: roundOtHour(toNum(row.day_ot_hour)),
-      [t('payrollManagement.gridColumns.extraAllowance')]: toInt(row.transport_allowance),
       ...customEntries,
       [t('payrollManagement.gridColumns.sumTotal')]: toInt(row.sum_total),
       [t('payrollManagement.gridColumns.esicEmployer')]: toInt(row.esic_employer),

@@ -1888,7 +1888,7 @@ export default {
         addColumnTitle: '컬럼 추가',
         columnNameLabel: '컬럼명 (헤더)',
         addColumnHint:
-          '추가한 컬럼은 「추가 수당」 옆에 붙고, 지급 합계에 포함됩니다. 회사별로 저장됩니다.',
+          '추가한 컬럼은 OT(시간) 옆에 붙고, 지급 합계에 포함됩니다. 회사별로 저장됩니다.',
         columnInputModeLabel: '입력 방식',
         columnInputModeAmount: '금액 직접 입력',
         columnInputModeCount: '횟수 × 산술식',

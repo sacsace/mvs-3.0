@@ -337,15 +337,6 @@ export function buildPayrollGridColumns({
       ...otHourEditProps
     }),
     stretchCol({
-      field: 'transport_allowance',
-      headerName: t('payrollManagement.gridColumns.extraAllowance'),
-      minWidth: 120,
-      editable: allowCellEdit,
-      headerClassName: 'payroll-col-extra',
-      cellClassName: 'payroll-col-extra payroll-col-user-input',
-      ...numberEditProps
-    }),
-    stretchCol({
       field: 'sum_total',
       headerName: t('payrollManagement.gridColumns.sumTotal'),
       minWidth: 100,
@@ -456,15 +447,15 @@ export function buildPayrollGridColumns({
     }
   ];
 
-  // 커스텀 수당은 기본 위치: 추가 수당(transport_allowance) 다음 → 지급 합계에 합산
+  // 커스텀 수당은 OT(시간) 다음 · 지급 합계 앞
   const withCustom: GridColDef<PayrollGridRow>[] = [];
   for (const col of base) {
     withCustom.push(col);
-    if (col.field === 'transport_allowance') {
+    if (col.field === 'day_ot_hour') {
       withCustom.push(...customCols);
     }
   }
-  if (!base.some((c) => c.field === 'transport_allowance') && customCols.length) {
+  if (!base.some((c) => c.field === 'day_ot_hour') && customCols.length) {
     const sumIdx = withCustom.findIndex((c) => c.field === 'sum_total');
     if (sumIdx >= 0) withCustom.splice(sumIdx, 0, ...customCols);
     else withCustom.push(...customCols);
@@ -478,7 +469,7 @@ export function buildPayrollGridColumns({
     columnOrder?.length ? columnOrder : PAYROLL_DEFAULT_COLUMN_ORDER,
     allFields
   );
-  // 상수 영역 → 기타 수당 옆(근속 다음 ~ 급여합계 앞), 추가 컬럼 → 추가 수당 옆
+  // 상수 영역 → 기타 수당 옆(근속 다음 ~ 급여합계 앞), 추가 컬럼 → OT(시간) 옆
   order = placeConstantPartsAfterOther(order, constantFields);
   order = placeCustomColumnsAfterTransport(order, customFields);
   return order.map((f) => byField.get(f)!).filter(Boolean);

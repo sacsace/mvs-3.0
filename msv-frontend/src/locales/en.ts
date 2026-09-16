@@ -1836,7 +1836,7 @@ export default {
         addColumnTitle: 'Add column',
         columnNameLabel: 'Column name (header)',
         addColumnHint:
-          'New columns appear next to Additional Allowance and are included in payment total. Saved per company.',
+          'New columns appear next to OT hours and are included in payment total. Saved per company.',
         columnInputModeLabel: 'Input mode',
         columnInputModeAmount: 'Enter amount directly',
         columnInputModeCount: 'Count × formula',

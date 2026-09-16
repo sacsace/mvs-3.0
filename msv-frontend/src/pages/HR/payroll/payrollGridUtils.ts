@@ -650,7 +650,7 @@ export function recalculatePayrollRow(
     ot_rate: otRate,
     day_ot_hour: dayOtHour
   });
-  const transport = Math.max(0, num(row.transport_allowance));
+  const transport = 0;
   const proratedPackage = roundInr((totalSalary * worked) / calendarDays);
   const sum_total = roundInr(proratedPackage + overtime + transport + customSum);
 
@@ -691,6 +691,7 @@ export function recalculatePayrollRow(
     ot_eligible: otEligible,
     ot_manual: otManual && dayOtHour > 0,
     overtime,
+    transport_allowance: 0,
     sum_total,
     pf_calc_mode: pfCalcMode,
     pf_employee: pfEmployeeStr,
