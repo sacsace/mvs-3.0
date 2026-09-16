@@ -2481,7 +2481,12 @@ const UserManagement: React.FC = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody sx={userTableBodyRowSx}>
-                      {displayedUsers.map((rowUser) => (
+                      {displayedUsers.map((rowUser, index) => {
+                        const rowNumber =
+                          listViewMode === 'all'
+                            ? index + 1
+                            : (page - 1) * USERS_PER_PAGE + index + 1;
+                        return (
                         <TableRow
                           key={rowUser.id}
                           onClick={() => {
@@ -2503,6 +2508,9 @@ const UserManagement: React.FC = () => {
                           </TableCell>
                           <TableCell sx={{ overflow: 'hidden' }}>
                             <Typography variant="subtitle2" fontWeight={600} noWrap title={rowUser.username}>
+                              <Box component="span" sx={{ color: 'text.secondary', fontWeight: 500, mr: 0.75 }}>
+                                {rowNumber}.
+                              </Box>
                               {rowUser.username}
                             </Typography>
                           </TableCell>
@@ -2545,7 +2553,8 @@ const UserManagement: React.FC = () => {
                             {new Date(rowUser.created_at).toLocaleDateString(dateLocale)}
                           </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </TableContainer>
