@@ -2209,7 +2209,7 @@ export const getExpenseReports = async (req: RequestWithUser, res: Response) => 
             data.requester_position = org.position;
           }
         }
-        return data;
+        return enrichExpenseCommentState(data, row, req.user);
       }),
     });
   } catch (error: any) {
@@ -2252,6 +2252,15 @@ export const getExpenseReportById = async (req: RequestWithUser, res: Response) 
         data.requester_position = org.position;
       }
     }
+    const userId = Number(req.user?.id);
+    if (Number.isFinite(userId) && userId > 0) {
+      try {
+        await markExpenseCommentsReadForUser(expense, userId);
+      } catch (readError) {
+        console.error('지출결의서 댓글 읽음 처리(상세 조회) 오류:', readError);
+      }
+    }
+    enrichExpenseCommentState(data, expense, req.user);
     res.json({ success: true, data });
   } catch (error: any) {
     console.error('지출결의서 상세 조회 오류:', error);
@@ -4615,5 +4624,323 @@ export const rejectInvoice = async (req: RequestWithUser, res: Response) => {
   } catch (error: any) {
     console.error('인보이스 반려 오류:', error);
     res.status(500).json({ success: false, message: '인보이스 반려 중 오류가 발생했습니다.' });
+  }
+};
+
+const sameExpenseCommentId = (left: unknown, right: unknown): boolean => {
+  const a = Number(left);
+  const b = Number(right);
+  return Number.isFinite(a) && Number.isFinite(b) && a > 0 && a === b;
+};
+
+const normalizeExpenseCommentsTree = (comments: any[]): any[] => {
+  if (!Array.isArray(comments) || comments.length === 0) return [];
+  const topLevel: any[] = [];
+  const pendingReplies: any[] = [];
+
+  for (const row of comments) {
+    if (!row || typeof row !== 'object') continue;
+    const parentId = Number(row.parentId ?? row.parent_id ?? 0);
+    if (Number.isFinite(parentId) && parentId > 0) {
+      pendingReplies.push(row);
+      continue;
+    }
+    topLevel.push({
+      ...row,
+      replies: Array.isArray(row.replies) ? [...row.replies] : [],
+    });
+  }
+
+  for (const reply of pendingReplies) {
+    const parentId = Number(reply.parentId ?? reply.parent_id);
+    const parent = topLevel.find((row) => sameExpenseCommentId(row.id, parentId));
+    if (!parent) continue;
+    const nextReply = { ...reply };
+    delete nextReply.parentId;
+    delete nextReply.parent_id;
+    if (!Array.isArray(parent.replies)) parent.replies = [];
+    parent.replies.push(nextReply);
+  }
+
+  return topLevel;
+};
+
+const loadExpenseReportComments = (value: unknown): any[] =>
+  normalizeExpenseCommentsTree(parseExpenseReportComments(value));
+
+const findTopLevelCommentIndex = (comments: any[], parentId: number) =>
+  comments.findIndex((row) => sameExpenseCommentId(row?.id, parentId));
+
+const updateExpenseCommentInTree = (
+  comments: any[],
+  commentId: number,
+  commentText: string,
+  userId: number
+): 'updated' | 'forbidden' | 'missing' => {
+  const apply = (row: any): 'updated' | 'forbidden' | 'missing' => {
+    if (!sameExpenseCommentId(row?.id, commentId)) return 'missing';
+    if (Number(row?.userId) !== Number(userId)) return 'forbidden';
+    row.comment = commentText;
+    row.updatedAt = new Date().toISOString();
+    return 'updated';
+  };
+
+  for (const row of comments) {
+    const topResult = apply(row);
+    if (topResult === 'updated' || topResult === 'forbidden') return topResult;
+    for (const reply of row.replies || []) {
+      const replyResult = apply(reply);
+      if (replyResult === 'updated' || replyResult === 'forbidden') return replyResult;
+    }
+  }
+  return 'missing';
+};
+
+const parseExpenseReportComments = (value: unknown): any[] => {
+  if (value == null) return [];
+  let parsed = value;
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(parsed) ? parsed : [];
+};
+
+const parseExpenseCommentReads = (value: unknown): Record<string, string> => {
+  if (value == null) return {};
+  let parsed = value;
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return {};
+    }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  return parsed as Record<string, string>;
+};
+
+const flattenExpenseReportComments = (comments: any[]): any[] => {
+  const rows: any[] = [];
+  for (const comment of comments) {
+    if (!comment || typeof comment !== 'object') continue;
+    rows.push(comment);
+    if (Array.isArray(comment.replies)) {
+      rows.push(...comment.replies.filter((row) => row && typeof row === 'object'));
+    }
+  }
+  return rows;
+};
+
+const getLatestExpenseCommentAt = (commentsValue: unknown): number => {
+  const comments = loadExpenseReportComments(commentsValue);
+  let latest = 0;
+  for (const row of flattenExpenseReportComments(comments)) {
+    const createdAt = Date.parse(String(row?.createdAt || row?.created_at || ''));
+    const updatedAt = Date.parse(String(row?.updatedAt || row?.updated_at || ''));
+    for (const ts of [createdAt, updatedAt]) {
+      if (Number.isFinite(ts) && ts > latest) latest = ts;
+    }
+  }
+  return latest;
+};
+
+const buildExpenseCommentReadAt = (commentsValue: unknown): string => {
+  const latest = getLatestExpenseCommentAt(commentsValue);
+  const readAtMs = latest > 0 ? Math.max(latest, Date.now()) : Date.now();
+  return new Date(readAtMs).toISOString();
+};
+
+const expenseHasUnreadComments = (expense: any, userId?: number): boolean => {
+  const uid = Number(userId);
+  if (!Number.isFinite(uid) || uid <= 0) return false;
+  const latest = getLatestExpenseCommentAt(expense?.comments);
+  if (latest <= 0) return false;
+  const readAt = Date.parse(String(parseExpenseCommentReads(expense?.comment_reads)[String(uid)] || ''));
+  if (!Number.isFinite(readAt)) return true;
+  return latest > readAt;
+};
+
+const enrichExpenseCommentState = (data: any, expense: any, user: any) => {
+  const latest = getLatestExpenseCommentAt(expense?.comments);
+  data.comment_count = flattenExpenseReportComments(loadExpenseReportComments(expense?.comments)).length;
+  data.last_comment_at = latest > 0 ? new Date(latest).toISOString() : null;
+  data.has_unread_comments = expenseHasUnreadComments(expense, user?.id);
+  if ('comment_reads' in data) delete data.comment_reads;
+  return data;
+};
+
+const markExpenseCommentsReadForUser = async (expense: any, userId: number) => {
+  const reads = {
+    ...parseExpenseCommentReads(expense?.comment_reads),
+    [String(userId)]: buildExpenseCommentReadAt(expense?.comments),
+  };
+  await expense.update({ comment_reads: reads }, { fields: ['comment_reads'] });
+  await expense.reload();
+  return parseExpenseCommentReads(expense.comment_reads);
+};
+
+/** 지출결의서 댓글 읽음 처리 */
+export const markExpenseReportCommentsRead = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = Number(req.user?.id);
+    if (!Number.isFinite(userId) || userId <= 0) {
+      return res.status(401).json({ success: false, message: '로그인이 필요합니다.' });
+    }
+
+    const expense = await (ExpenseReport as any).findOne({
+      where: expenseScopeWhere(req.user, id),
+    });
+    if (!expense) {
+      return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
+    }
+
+    const clientScope = await resolveAssignedClientScope(req.user);
+    if (clientScope.enforced && !expenseMatchesAssignedScope(expense, clientScope)) {
+      return res.status(403).json({ success: false, message: '배정된 고객사의 지출결의서만 조회할 수 있습니다.' });
+    }
+
+    await markExpenseCommentsReadForUser(expense, userId);
+
+    res.json({ success: true, has_unread_comments: false });
+  } catch (error: any) {
+    console.error('지출결의서 댓글 읽음 처리 오류:', error);
+    res.status(500).json({ success: false, message: '댓글 읽음 처리에 실패했습니다.' });
+  }
+};
+
+/** 지출결의서 댓글 추가 */
+export const addExpenseReportComment = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { id } = req.params;
+    const commentText = String(req.body?.comment || '').trim();
+    const parentIdRaw = req.body?.parentId ?? req.body?.parent_id;
+    const parentId =
+      parentIdRaw != null && parentIdRaw !== '' ? Number(parentIdRaw) : null;
+    if (!commentText) {
+      return res.status(400).json({ success: false, message: '댓글 내용을 입력해주세요.' });
+    }
+    if (parentId != null && (!Number.isFinite(parentId) || parentId <= 0)) {
+      return res.status(400).json({ success: false, message: '유효하지 않은 부모 댓글입니다.' });
+    }
+
+    const expense = await (ExpenseReport as any).findOne({
+      where: expenseScopeWhere(req.user, id),
+    });
+    if (!expense) {
+      return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
+    }
+
+    const clientScope = await resolveAssignedClientScope(req.user);
+    if (clientScope.enforced && !expenseMatchesAssignedScope(expense, clientScope)) {
+      return res.status(403).json({ success: false, message: '배정된 고객사의 지출결의서만 조회할 수 있습니다.' });
+    }
+
+    const comments = loadExpenseReportComments(expense.comments);
+    const newComment = {
+      id: Date.now(),
+      userId: req.user?.id,
+      userName: req.user?.username || '알 수 없음',
+      comment: commentText,
+      createdAt: new Date().toISOString(),
+      parentId: parentId || null,
+      replies: [] as any[],
+    };
+
+    if (parentId) {
+      const parentIndex = findTopLevelCommentIndex(comments, parentId);
+      if (parentIndex < 0) {
+        return res.status(404).json({ success: false, message: '부모 댓글을 찾을 수 없습니다.' });
+      }
+      if (!Array.isArray(comments[parentIndex].replies)) {
+        comments[parentIndex].replies = [];
+      }
+      comments[parentIndex].replies.push(newComment);
+    } else {
+      comments.push(newComment);
+    }
+
+    await expense.update({ comments });
+    expense.comments = comments;
+    await expense.reload();
+
+    const commentCount = flattenExpenseReportComments(comments).length;
+    const lastCommentAt = getLatestExpenseCommentAt(comments);
+
+    res.json({
+      success: true,
+      data: newComment,
+      comments,
+      comment_count: commentCount,
+      last_comment_at: lastCommentAt > 0 ? new Date(lastCommentAt).toISOString() : null,
+      has_unread_comments: expenseHasUnreadComments(expense, req.user?.id),
+      message: parentId ? '답글이 추가되었습니다.' : '댓글이 추가되었습니다.',
+    });
+  } catch (error: any) {
+    console.error('지출결의서 댓글 추가 오류:', error);
+    res.status(500).json({ success: false, message: '댓글 추가에 실패했습니다.' });
+  }
+};
+
+/** 지출결의서 댓글 수정 */
+export const updateExpenseReportComment = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { id, commentId } = req.params;
+    const commentText = String(req.body?.comment || '').trim();
+    const targetId = Number(commentId);
+    const userId = Number(req.user?.id);
+
+    if (!commentText) {
+      return res.status(400).json({ success: false, message: '댓글 내용을 입력해주세요.' });
+    }
+    if (!Number.isFinite(targetId) || targetId <= 0) {
+      return res.status(400).json({ success: false, message: '유효하지 않은 댓글입니다.' });
+    }
+    if (!Number.isFinite(userId) || userId <= 0) {
+      return res.status(401).json({ success: false, message: '로그인이 필요합니다.' });
+    }
+
+    const expense = await (ExpenseReport as any).findOne({
+      where: expenseScopeWhere(req.user, id),
+    });
+    if (!expense) {
+      return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
+    }
+
+    const clientScope = await resolveAssignedClientScope(req.user);
+    if (clientScope.enforced && !expenseMatchesAssignedScope(expense, clientScope)) {
+      return res.status(403).json({ success: false, message: '배정된 고객사의 지출결의서만 조회할 수 있습니다.' });
+    }
+
+    const comments = loadExpenseReportComments(expense.comments);
+    const result = updateExpenseCommentInTree(comments, targetId, commentText, userId);
+    if (result === 'forbidden') {
+      return res.status(403).json({ success: false, message: '본인이 작성한 댓글만 수정할 수 있습니다.' });
+    }
+    if (result === 'missing') {
+      return res.status(404).json({ success: false, message: '댓글을 찾을 수 없습니다.' });
+    }
+
+    await expense.update({ comments });
+    expense.comments = comments;
+    await expense.reload();
+
+    const lastCommentAt = getLatestExpenseCommentAt(comments);
+
+    res.json({
+      success: true,
+      comments,
+      comment_count: flattenExpenseReportComments(comments).length,
+      last_comment_at: lastCommentAt > 0 ? new Date(lastCommentAt).toISOString() : null,
+      has_unread_comments: expenseHasUnreadComments(expense, req.user?.id),
+      message: '댓글이 수정되었습니다.',
+    });
+  } catch (error: any) {
+    console.error('지출결의서 댓글 수정 오류:', error);
+    res.status(500).json({ success: false, message: '댓글 수정에 실패했습니다.' });
   }
 };

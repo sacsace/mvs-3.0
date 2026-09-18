@@ -74,10 +74,13 @@ import {
   getWorkBoardCardComments,
   createWorkBoardCardComment,
   deleteWorkBoardCardComment,
+  markWorkBoardCardCommentsRead,
   getWorkBoardMembers,
   inviteWorkBoardMember,
   removeWorkBoardMember,
   updateWorkBoardMember,
+  uploadWorkBoardCardAttachments,
+  deleteWorkBoardCardAttachment,
 } from '../controllers/workBoardController';
 import {
   getWorkAssigneeList,
@@ -204,6 +207,12 @@ router.delete(
   requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
   deleteWorkBoardCardComment
 );
+router.post(
+  '/boards/:boardId/cards/:cardId/comments/read',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_view'),
+  markWorkBoardCardCommentsRead
+);
 router.get('/boards/:boardId/members', requireMenuPermission(MENU_WORK_PROJECTS, 'can_view'), getWorkBoardMembers);
 router.post(
   '/boards/:boardId/members',
@@ -237,6 +246,14 @@ const allowedMimeTypes = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 ];
 const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.pdf', '.doc', '.docx', '.xls', '.xlsx'];
+const allowedExtensionSet = new Set(allowedExtensions);
+const isAllowedWorkAttachment = (file: Express.Multer.File): boolean => {
+  const extension = path.extname(String(file.originalname || '')).toLowerCase();
+  if (!allowedExtensionSet.has(extension)) return false;
+  const mime = String(file.mimetype || '').toLowerCase();
+  if (!mime || mime === 'application/octet-stream') return true;
+  return allowedMimeTypes.includes(mime);
+};
 const ensureUploadDir = () => {
   ensureUploadRoot();
 };
@@ -265,16 +282,72 @@ const upload = multer({
   storage,
   limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const extension = path.extname(file.originalname || '').toLowerCase();
-    if (!allowedMimeTypes.includes(file.mimetype)) {
-      return cb(new Error('허용되지 않은 파일 형식입니다.'));
-    }
-    if (!allowedExtensions.includes(extension)) {
+    if (isAllowedWorkAttachment(file)) return cb(null, true);
+    const extension = path.extname(String(file.originalname || '')).toLowerCase();
+    if (!allowedExtensionSet.has(extension)) {
       return cb(new Error('허용되지 않은 파일 확장자입니다.'));
     }
-    return cb(null, true);
+    return cb(new Error(`허용되지 않은 파일 형식입니다. (${file.mimetype || 'unknown'})`));
   }
 });
+
+const cardAttachmentStorage = multer.diskStorage({
+  destination: (req, _file, cb) => {
+    ensureUploadDir();
+    const cardId = String(req.params.cardId || 'unknown');
+    const dir = path.join(uploadPath, 'work-board-cards', cardId);
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    let original = file.originalname || 'attachment';
+    try {
+      original = Buffer.from(original, 'latin1').toString('utf8');
+    } catch {
+      // keep original
+    }
+    const safeName = original.replace(/[^a-zA-Z0-9.\-_]/g, '_') || 'attachment';
+    let finalName = safeName;
+    let counter = 1;
+    const cardId = String(req.params.cardId || 'unknown');
+    const dir = path.join(uploadPath, 'work-board-cards', cardId);
+    while (fs.existsSync(path.join(dir, finalName))) {
+      const extIndex = safeName.lastIndexOf('.');
+      const base = extIndex > -1 ? safeName.slice(0, extIndex) : safeName;
+      const ext = extIndex > -1 ? safeName.slice(extIndex) : '';
+      finalName = `${base}_${counter}${ext}`;
+      counter += 1;
+    }
+    cb(null, finalName);
+  }
+});
+
+const cardAttachmentUpload = multer({
+  storage: cardAttachmentStorage,
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (isAllowedWorkAttachment(file)) return cb(null, true);
+    const extension = path.extname(String(file.originalname || '')).toLowerCase();
+    if (!allowedExtensionSet.has(extension)) {
+      return cb(new Error('허용되지 않은 파일 확장자입니다.'));
+    }
+    return cb(new Error(`허용되지 않은 파일 형식입니다. (${file.mimetype || 'unknown'})`));
+  }
+});
+
+router.post(
+  '/boards/:boardId/cards/:cardId/attachments',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  cardAttachmentUpload.array('files', 10),
+  uploadWorkBoardCardAttachments
+);
+router.delete(
+  '/boards/:boardId/cards/:cardId/attachments/:storedName',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  deleteWorkBoardCardAttachment
+);
 
 // 업무 통계 관련 라우트
 router.get('/statistics', requireMenuPermission(MENU_WORK_STATISTICS, 'can_view'), getWorkStatistics);

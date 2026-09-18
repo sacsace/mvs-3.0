@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Avatar,
   AvatarGroup,
   Box,
@@ -17,6 +18,9 @@ import {
   InputAdornment,
   ListItemIcon,
   ListItemText,
+  List,
+  ListItem,
+  ListItemAvatar,
   Menu,
   MenuItem,
   Pagination,
@@ -33,13 +37,14 @@ import {
 import {
   Add as AddIcon,
   ArrowBack as ArrowBackIcon,
+  AttachFile as AttachFileIcon,
+  ChatBubble as ChatBubbleIcon,
   ChatBubbleOutline as ChatBubbleOutlineIcon,
   Check as CheckIcon,
   CheckCircle as CheckCircleIcon,
   Close as CloseIcon,
   DeleteOutline as DeleteIcon,
   EditOutlined as EditOutlinedIcon,
-  Link as LinkIcon,
   MoreHoriz as MoreHorizIcon,
   Notes as NotesIcon,
   PersonAdd as PersonAddIcon,
@@ -102,11 +107,124 @@ type BoardCard = {
   position: number;
   list_id?: number;
   created_by?: number | null;
+  created_at?: string | null;
+  createdAt?: string | null;
   completed_at?: string | null;
   assignee_user_id?: number | null;
   assignee?: { id: number; username: string; avatar_url?: string | null };
   comments?: BoardCardComment[];
+  attachments?: unknown;
+  attachment_count?: number;
+  comment_count?: number;
+  has_unread_comments?: boolean;
 };
+
+type BoardCardAttachment = {
+  originalName: string;
+  storedName: string;
+  path: string;
+  mimeType?: string;
+  size?: number;
+  uploadedAt?: string;
+};
+
+const WORK_BOARD_CARD_MAX_ATTACHMENTS = 10;
+const WORK_BOARD_CARD_MAX_FILE_BYTES = 20 * 1024 * 1024;
+const WORK_BOARD_CARD_ALLOWED_EXTENSIONS = new Set([
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.gif',
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+]);
+
+const WORK_BOARD_CARD_ALLOWED_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
+
+const getAttachmentFileExtension = (fileName: string): string => {
+  const base = String(fileName || '').trim();
+  const idx = base.lastIndexOf('.');
+  if (idx <= 0) return '';
+  return base.slice(idx).toLowerCase();
+};
+
+const isAllowedBoardCardAttachmentFile = (file: File): boolean => {
+  const ext = getAttachmentFileExtension(file.name);
+  if (WORK_BOARD_CARD_ALLOWED_EXTENSIONS.has(ext)) return true;
+  const mime = String(file.type || '').toLowerCase();
+  if (!mime || mime === 'application/octet-stream') {
+    return WORK_BOARD_CARD_ALLOWED_EXTENSIONS.has(ext);
+  }
+  return WORK_BOARD_CARD_ALLOWED_MIME_TYPES.has(mime);
+};
+
+const normalizeBoardCardAttachments = (raw: unknown): BoardCardAttachment[] => {
+  let parsed: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((row) => {
+      if (!row || typeof row !== 'object') return null;
+      const item = row as Record<string, unknown>;
+      const storedName = String(item.storedName || item.stored_name || '').trim();
+      const pathRaw = String(item.path || '').trim();
+      const originalName = String(item.originalName || item.original_name || storedName || 'attachment').trim();
+      const pathValue = (pathRaw || (storedName ? `work-board-cards/${storedName}` : ''))
+        .replace(/^\/+/, '')
+        .replace(/^uploads\//i, '');
+      if (!pathValue) return null;
+      return {
+        originalName,
+        storedName: storedName || pathValue.split('/').pop() || originalName,
+        path: pathValue,
+        mimeType:
+          item.mimeType != null || item.mime_type != null
+            ? String(item.mimeType || item.mime_type)
+            : undefined,
+        size: item.size != null && Number.isFinite(Number(item.size)) ? Number(item.size) : undefined,
+        uploadedAt:
+          item.uploadedAt != null || item.uploaded_at != null
+            ? String(item.uploadedAt || item.uploaded_at)
+            : undefined,
+      } satisfies BoardCardAttachment;
+    })
+    .filter(Boolean) as BoardCardAttachment[];
+};
+
+const countBoardCardAttachments = (raw: unknown, attachmentCount?: number): number => {
+  if (typeof attachmentCount === 'number' && Number.isFinite(attachmentCount) && attachmentCount >= 0) {
+    return attachmentCount;
+  }
+  return normalizeBoardCardAttachments(raw).length;
+};
+
+const formatAttachmentFileSize = (bytes?: number): string => {
+  if (!bytes || bytes <= 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const getBoardCardAttachmentUrl = (attachment: BoardCardAttachment): string =>
+  getUploadUrl(attachment.path || attachment.storedName);
 
 type BoardCardComment = {
   id: number;
@@ -115,7 +233,16 @@ type BoardCardComment = {
   parent_id?: number | null;
   content: string;
   created_at?: string;
+  createdAt?: string;
   user?: { id: number; username?: string; userid?: string };
+};
+
+const resolveCommentCreatedAt = (
+  comment: { created_at?: string | null; createdAt?: string | null } | null | undefined
+): string => {
+  const raw = comment?.createdAt ?? comment?.created_at;
+  if (!raw) return '';
+  return String(raw);
 };
 
 function sortBoardCardCommentsThreaded(comments: BoardCardComment[]): BoardCardComment[] {
@@ -128,8 +255,8 @@ function sortBoardCardCommentsThreaded(comments: BoardCardComment[]): BoardCardC
   }
   byParent.forEach((arr) => {
     arr.sort((a: BoardCardComment, b: BoardCardComment) => {
-      const ta = new Date(a.created_at || '').getTime() || 0;
-      const tb = new Date(b.created_at || '').getTime() || 0;
+      const ta = new Date(resolveCommentCreatedAt(a)).getTime() || 0;
+      const tb = new Date(resolveCommentCreatedAt(b)).getTime() || 0;
       return ta - tb;
     });
   });
@@ -157,11 +284,13 @@ type CardDetailState = {
   assigneeUserId: number | null;
   referenceUserIds: number[];
   createdBy: number | null;
+  createdAt: string;
   boardId: number;
   originalBoardId: number;
   listId: number;
   originalListId: number;
   listTitle: string;
+  attachments: BoardCardAttachment[];
 };
 
 type MemberOption = {
@@ -298,16 +427,34 @@ const formatDueDate = (date?: string | null): string => {
   return raw;
 };
 
-const formatDateTime = (value?: string): string => {
+const formatCardCreatedAt = (value?: string | null): string => {
   if (!value) return '';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '';
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mi = String(d.getMinutes()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+  return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`;
+};
+
+const resolveBoardCardCreatedAt = (
+  card: { created_at?: string | null; createdAt?: string | null } | null | undefined
+): string => {
+  const raw = card?.createdAt ?? card?.created_at;
+  if (!raw) return '';
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString();
+};
+
+const formatDateTime = (value?: string | Date | null, locale: 'ko' | 'en' = 'ko'): string => {
+  if (!value) return '';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 };
 
 const DRAG_TRANSITION = 'transform 40ms ease-out';
@@ -848,24 +995,34 @@ function resolveCardFaceAvatars(card: BoardCard, members: BoardMemberLite[]) {
 function KanbanMetaIcon({
   icon,
   count,
+  unread,
 }: {
   icon: React.ReactNode;
   count?: number;
+  unread?: boolean;
 }) {
   return (
     <Box
       sx={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 0.25,
-        color: KANBAN_META_ICON_COLOR,
+        gap: unread ? 0.35 : 0.25,
+        color: unread ? '#FFFFFF' : KANBAN_META_ICON_COLOR,
         fontSize: '0.75rem',
         lineHeight: 1,
+        ...(unread
+          ? {
+              px: 0.55,
+              py: 0.2,
+              borderRadius: '999px',
+              bgcolor: '#E53935',
+            }
+          : {}),
       }}
     >
       {icon}
       {count != null && count > 0 ? (
-        <Box component="span" sx={{ fontSize: '0.6875rem', fontWeight: 600 }}>
+        <Box component="span" sx={{ fontSize: '0.6875rem', fontWeight: 700, lineHeight: 1 }}>
           {count}
         </Box>
       ) : null}
@@ -915,11 +1072,19 @@ const DraggableCard = memo(function DraggableCard({
   const cardAccent = isHexColor(card.color) ? String(card.color) : null;
   const cardBg =
     theme.palette.mode === 'light' ? KANBAN_CARD_BG : alpha(theme.palette.grey[900], 0.88);
-  const commentCount = card.comments?.length ?? 0;
+  const commentCount = card.comment_count ?? card.comments?.length ?? 0;
+  const hasUnreadComments = Boolean(card.has_unread_comments);
+  const attachmentCount = countBoardCardAttachments(card.attachments, card.attachment_count);
   const referenceCount = card.reference_user_ids?.length ?? 0;
   const hasDesc = Boolean(descPlain);
   const faceAvatars = resolveCardFaceAvatars(card, members);
-  const showMeta = hasDesc || commentCount > 0 || referenceCount > 0 || Boolean(card.due_date) || faceAvatars.length > 0;
+  const showMeta =
+    hasDesc ||
+    commentCount > 0 ||
+    attachmentCount > 0 ||
+    referenceCount > 0 ||
+    Boolean(card.due_date) ||
+    faceAvatars.length > 0;
 
   return (
     <Card
@@ -1004,8 +1169,21 @@ const DraggableCard = memo(function DraggableCard({
               ) : null}
               {commentCount > 0 ? (
                 <KanbanMetaIcon
-                  icon={<ChatBubbleOutlineIcon sx={{ fontSize: 15 }} />}
+                  icon={
+                    hasUnreadComments ? (
+                      <ChatBubbleIcon sx={{ fontSize: 14, color: '#FFFFFF' }} />
+                    ) : (
+                      <ChatBubbleOutlineIcon sx={{ fontSize: 15, color: KANBAN_META_ICON_COLOR }} />
+                    )
+                  }
                   count={commentCount}
+                  unread={hasUnreadComments}
+                />
+              ) : null}
+              {attachmentCount > 0 ? (
+                <KanbanMetaIcon
+                  icon={<AttachFileIcon sx={{ fontSize: 15 }} />}
+                  count={attachmentCount}
                 />
               ) : null}
               {card.due_date ? (
@@ -1417,7 +1595,7 @@ const ListColumn = memo(function ListColumn({
   );
 });
 
-const WorkBoardDetailPage: React.FC = () => {
+export default function WorkBoardDetailPage() {
   const theme = useTheme();
   const { boardId: boardIdParam } = useParams();
   const boardId = Number(boardIdParam);
@@ -1476,7 +1654,7 @@ const WorkBoardDetailPage: React.FC = () => {
   const [completedTaskSearch, setCompletedTaskSearch] = useState('');
   const [completedTaskPage, setCompletedTaskPage] = useState(1);
   const [cardSearch, setCardSearch] = useState('');
-  /** user 역할은 본인 카드만. 그 외는 토글로 전환 */
+  /** user 역할은 기본 ON, 토글로 전체/본인 전환 */
   const [onlyMyCards, setOnlyMyCards] = useState(() => user?.role === 'user');
   const [reopeningCardId, setReopeningCardId] = useState<number | null>(null);
 
@@ -1494,6 +1672,14 @@ const WorkBoardDetailPage: React.FC = () => {
   const [cardMoveLists, setCardMoveLists] = useState<BoardList[]>([]);
   const [cardMoveListsLoading, setCardMoveListsLoading] = useState(false);
   const [cardComments, setCardComments] = useState<BoardCardComment[]>([]);
+  const [cardAttachmentUploading, setCardAttachmentUploading] = useState(false);
+  const [cardAttachmentDeleting, setCardAttachmentDeleting] = useState<string | null>(null);
+  const [uploadingAttachmentNames, setUploadingAttachmentNames] = useState<string[]>([]);
+  const [attachmentStatusMessage, setAttachmentStatusMessage] = useState<{
+    severity: 'error' | 'info' | 'success';
+    text: string;
+  } | null>(null);
+  const cardAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [newComment, setNewComment] = useState('');
   const [mentionedUserIds, setMentionedUserIds] = useState<number[]>([]);
   const [mentionQuery, setMentionQuery] = useState('');
@@ -1506,6 +1692,10 @@ const WorkBoardDetailPage: React.FC = () => {
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   /** 칸반 인라인으로 마지막 생성된 카드 id — 세부 화면에서 한 번 저장하기 전까지 댓글 잠금 */
   const lastQuickCreatedCardIdRef = useRef<number | null>(null);
+  /** 늦게 끝난 댓글 조회가 최신 댓글 상태를 덮어쓰지 않도록 */
+  const commentSyncGenRef = useRef(0);
+  /** 이번 상세 진입에서 댓글을 새로 달았으면 칸반 말풍선을 빨간색으로 유지 */
+  const cardCommentPostedRef = useRef(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -1530,6 +1720,55 @@ const WorkBoardDetailPage: React.FC = () => {
       if (!silent) setLoading(false);
     }
   }, [boardId]);
+
+  const patchBoardCardMeta = useCallback(
+    (
+      cardId: number,
+      patch: {
+        comments?: Array<{ id: number; created_at?: string; createdAt?: string }>;
+        comment_count?: number;
+        has_unread_comments?: boolean;
+        attachments?: BoardCardAttachment[];
+        attachment_count?: number;
+      }
+    ) => {
+      setBoard((prev: any) => {
+        if (!prev?.lists) return prev;
+        return {
+          ...prev,
+          lists: prev.lists.map((list: BoardList) => ({
+            ...list,
+            cards: (list.cards || []).map((card: BoardCard) => {
+              if (Number(card.id) !== cardId) return card;
+              const comments = patch.comments ?? card.comments;
+              const comment_count =
+                patch.comment_count ??
+                (Array.isArray(comments) ? comments.length : card.comment_count ?? 0);
+              const attachments =
+                patch.attachments !== undefined ? patch.attachments : card.attachments;
+              const attachment_count =
+                patch.attachment_count ??
+                (patch.attachments !== undefined
+                  ? patch.attachments.length
+                  : countBoardCardAttachments(card.attachments, card.attachment_count));
+              return {
+                ...card,
+                comments,
+                comment_count,
+                attachments,
+                attachment_count,
+                has_unread_comments:
+                  patch.has_unread_comments !== undefined
+                    ? patch.has_unread_comments
+                    : card.has_unread_comments,
+              };
+            }),
+          })),
+        };
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     loadBoard();
@@ -2052,6 +2291,8 @@ const WorkBoardDetailPage: React.FC = () => {
       const blockCommentsUntilDetailSave =
         lastQuickCreatedCardIdRef.current != null &&
         Number(card.id) === Number(lastQuickCreatedCardIdRef.current);
+      cardCommentPostedRef.current = false;
+      commentSyncGenRef.current += 1;
       deepLinkCardHandledRef.current = Number(card.id);
       setCardDetail({
         cardId: card.id,
@@ -2070,14 +2311,18 @@ const WorkBoardDetailPage: React.FC = () => {
           ? card.reference_user_ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
           : [],
         createdBy: card.created_by != null ? Number(card.created_by) : null,
+        createdAt: resolveBoardCardCreatedAt(card),
         boardId,
         originalBoardId: boardId,
         listId,
         originalListId: listId,
-        listTitle
+        listTitle,
+        attachments: normalizeBoardCardAttachments(card.attachments),
       });
       setCardMoveLists([]);
       setCardComments(sortBoardCardCommentsThreaded(card.comments || []));
+      setAttachmentStatusMessage(null);
+      setUploadingAttachmentNames([]);
       setNewComment('');
       setReplyParentId(null);
       setMentionedUserIds([]);
@@ -2160,31 +2405,6 @@ const WorkBoardDetailPage: React.FC = () => {
     void loadMoveBoardOptions();
   }, [cardDetail?.cardId, menuCanEdit, loadMoveBoardOptions]);
 
-  const buildCardDetailLink = useCallback(
-    (cardId: number) => {
-      const path = `/work/projects/${boardId}?card=${cardId}`;
-      if (typeof window === 'undefined') return path;
-      return `${window.location.origin}${path}`;
-    },
-    [boardId]
-  );
-
-  const copyCardDetailLink = useCallback(async () => {
-    if (!cardDetail?.cardId) return;
-    const url = buildCardDetailLink(Number(cardDetail.cardId));
-    try {
-      await navigator.clipboard.writeText(url);
-      showSuccessToast(
-        txt('작업 링크를 복사했습니다. 메신저·메일에 붙여넣어 공유하세요.', 'Task link copied. Paste it in chat or email to share.')
-      );
-    } catch {
-      showErrorPopup(
-        txt('링크 복사에 실패했습니다. 주소창의 URL을 직접 복사해 주세요.', 'Could not copy the link. Please copy the URL from the address bar.'),
-        txt('링크 복사', 'Copy link')
-      );
-    }
-  }, [buildCardDetailLink, cardDetail?.cardId, txt]);
-
   /** 알림·공유 딥링크(?card=)로 진입 시 해당 카드 상세를 자동으로 연다 (URL은 공유용으로 유지) */
   useEffect(() => {
     if (!board?.lists || loading) return;
@@ -2264,6 +2484,8 @@ const WorkBoardDetailPage: React.FC = () => {
               description: savedDesc || undefined,
               position: 0,
               comments: [],
+              created_at: resolveBoardCardCreatedAt(payload) || undefined,
+              createdAt: resolveBoardCardCreatedAt(payload) || undefined,
               assignee_user_id: createdAssigneeId,
               assignee:
                 payload?.assignee ||
@@ -2322,26 +2544,47 @@ const WorkBoardDetailPage: React.FC = () => {
   }, []);
 
   const loadCardComments = useCallback(
-    async (cardId: number) => {
+    async (cardId: number, options?: { markRead?: boolean; syncGen?: number }) => {
+      const syncGen = options?.syncGen ?? ++commentSyncGenRef.current;
       setCommentLoading(true);
       try {
         const res = await workBoardService.getCardComments(boardId, cardId);
+        if (syncGen !== commentSyncGenRef.current) return;
         if (res.success) {
-          setCardComments(sortBoardCardCommentsThreaded(res.data || []));
+          const nextComments = sortBoardCardCommentsThreaded(res.data || []);
+          setCardComments(nextComments);
+          patchBoardCardMeta(cardId, {
+            comments: nextComments.map((row) => ({ id: row.id, created_at: resolveCommentCreatedAt(row) })),
+            comment_count: nextComments.length,
+          });
+          if (options?.markRead !== false) {
+            try {
+              await workBoardService.markCardCommentsRead(boardId, cardId);
+              if (syncGen !== commentSyncGenRef.current) return;
+              patchBoardCardMeta(cardId, { has_unread_comments: false });
+            } catch {
+              /* ignore read marker failures */
+            }
+          }
         }
       } catch (e: any) {
-        showErrorPopup(e, '카드 댓글');
+        if (syncGen === commentSyncGenRef.current) {
+          showErrorPopup(e, '카드 댓글');
+        }
       } finally {
-        setCommentLoading(false);
+        if (syncGen === commentSyncGenRef.current) {
+          setCommentLoading(false);
+        }
       }
     },
-    [boardId]
+    [boardId, patchBoardCardMeta]
   );
 
   useEffect(() => {
     if (!cardDetail?.cardId) return;
     if (cardDetail.blockCommentsUntilDetailSave) return;
-    loadCardComments(cardDetail.cardId);
+    const syncGen = ++commentSyncGenRef.current;
+    void loadCardComments(cardDetail.cardId, { syncGen });
   }, [cardDetail?.cardId, cardDetail?.blockCommentsUntilDetailSave, loadCardComments]);
 
   const submitComment = async () => {
@@ -2373,7 +2616,18 @@ const WorkBoardDetailPage: React.FC = () => {
         replyParentId ?? undefined
       );
       if (res.success) {
-        await loadCardComments(cardDetail.cardId);
+        cardCommentPostedRef.current = true;
+        commentSyncGenRef.current += 1;
+        const syncGen = commentSyncGenRef.current;
+        await loadCardComments(cardDetail.cardId, { markRead: false, syncGen });
+        const nextCount =
+          typeof res.comment_count === 'number'
+            ? res.comment_count
+            : cardComments.length + 1;
+        patchBoardCardMeta(cardDetail.cardId, {
+          comment_count: nextCount,
+          has_unread_comments: true,
+        });
         setNewComment('');
         setReplyParentId(null);
         setMentionedUserIds([]);
@@ -2390,6 +2644,170 @@ const WorkBoardDetailPage: React.FC = () => {
     }
   };
 
+  const uploadCardAttachmentFiles = async (
+    files: File[],
+    cardId = cardDetail?.cardId
+  ): Promise<BoardCardAttachment[] | null> => {
+    if (!cardId || files.length === 0) {
+      return cardDetail?.attachments || [];
+    }
+    const previousCount = cardDetail?.attachments?.length || 0;
+    setUploadingAttachmentNames(files.map((file) => file.name));
+    setAttachmentStatusMessage({
+      severity: 'info',
+      text: txt('첨부 파일을 업로드하는 중…', 'Uploading attachment…'),
+    });
+    setCardAttachmentUploading(true);
+    try {
+      const res = await workBoardService.uploadCardAttachments(boardId, cardId, files);
+      if (!res.success) {
+        const message =
+          res.message || txt('첨부 업로드에 실패했습니다.', 'Failed to upload attachment.');
+        setAttachmentStatusMessage({ severity: 'error', text: message });
+        showErrorPopup(message, txt('카드 세부사항', 'Card details'));
+        return null;
+      }
+      const nextAttachments = normalizeBoardCardAttachments(res.data?.attachments);
+      if (nextAttachments.length <= previousCount) {
+        const message = txt(
+          '파일 업로드에 실패했습니다. 형식(jpg, png, gif, pdf, doc, docx, xls, xlsx)과 용량(20MB 이하)을 확인해 주세요.',
+          'Upload failed. Check file type (jpg, png, gif, pdf, doc, docx, xls, xlsx) and size (max 20MB).'
+        );
+        setAttachmentStatusMessage({ severity: 'error', text: message });
+        showErrorPopup(message, txt('카드 세부사항', 'Card details'));
+        return null;
+      }
+      setCardDetail((prev) => (prev ? { ...prev, attachments: nextAttachments } : prev));
+      patchBoardCardMeta(cardId, {
+        attachments: nextAttachments,
+        attachment_count: nextAttachments.length,
+      });
+      setAttachmentStatusMessage({
+        severity: 'success',
+        text: txt('첨부가 업로드되었습니다.', 'Attachment uploaded.'),
+      });
+      showSuccessToast(txt('첨부가 업로드되었습니다.', 'Attachment uploaded.'));
+      return nextAttachments;
+    } catch (err: any) {
+      const message =
+        err?.response?.data?.message ||
+        err?.message ||
+        txt('첨부 업로드에 실패했습니다.', 'Failed to upload attachment.');
+      setAttachmentStatusMessage({ severity: 'error', text: message });
+      showErrorPopup(err, txt('카드 세부사항', 'Card details'));
+      return null;
+    } finally {
+      setUploadingAttachmentNames([]);
+      setCardAttachmentUploading(false);
+    }
+  };
+
+  const handleCardAttachmentInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      const input = e.target;
+      const files = input.files;
+      if (!files?.length) return;
+
+      if (!cardDetail?.cardId) {
+        const message = txt('카드를 먼저 저장한 뒤 첨부할 수 있습니다.', 'Save the card before attaching files.');
+        setAttachmentStatusMessage({ severity: 'error', text: message });
+        showErrorPopup(message, txt('카드 세부사항', 'Card details'));
+        return;
+      }
+      if (!menuCanEdit) {
+        const message = txt('첨부 파일을 올릴 권한이 없습니다.', 'You do not have permission to upload attachments.');
+        setAttachmentStatusMessage({ severity: 'error', text: message });
+        showErrorPopup(message, txt('카드 세부사항', 'Card details'));
+        return;
+      }
+
+      const remaining =
+        WORK_BOARD_CARD_MAX_ATTACHMENTS - (cardDetail.attachments?.length || 0);
+      if (remaining <= 0) {
+        const message = txt(
+          `첨부는 최대 ${WORK_BOARD_CARD_MAX_ATTACHMENTS}개까지 가능합니다.`,
+          `You can attach up to ${WORK_BOARD_CARD_MAX_ATTACHMENTS} files.`
+        );
+        setAttachmentStatusMessage({ severity: 'error', text: message });
+        showErrorPopup(message, txt('카드 세부사항', 'Card details'));
+        return;
+      }
+
+      const selected: File[] = [];
+      const rejectedNames: string[] = [];
+      for (const file of Array.from(files)) {
+        if (selected.length >= remaining) break;
+        if (!isAllowedBoardCardAttachmentFile(file)) {
+          rejectedNames.push(file.name);
+          continue;
+        }
+        if (file.size > WORK_BOARD_CARD_MAX_FILE_BYTES) {
+          rejectedNames.push(file.name);
+          continue;
+        }
+        selected.push(file);
+      }
+
+      if (selected.length === 0) {
+        const message =
+          rejectedNames.length > 0
+            ? txt(
+                `업로드할 수 없는 파일입니다: ${rejectedNames.join(', ')}`,
+                `These files cannot be uploaded: ${rejectedNames.join(', ')}`
+              )
+            : txt(
+                'jpg, png, gif, pdf, doc, docx, xls, xlsx 파일만 업로드할 수 있습니다.',
+                'Only jpg, png, gif, pdf, doc, docx, xls, and xlsx files are allowed.'
+              );
+        setAttachmentStatusMessage({ severity: 'error', text: message });
+        showErrorPopup(message, txt('카드 세부사항', 'Card details'));
+        return;
+      }
+
+      await uploadCardAttachmentFiles(selected, cardDetail.cardId);
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const openCardAttachmentPicker = () => {
+    if (
+      !cardDetail?.cardId ||
+      cardAttachmentUploading ||
+      cardSaving ||
+      !menuCanEdit ||
+      (cardDetail.attachments?.length || 0) >= WORK_BOARD_CARD_MAX_ATTACHMENTS
+    ) {
+      return;
+    }
+    setAttachmentStatusMessage(null);
+    cardAttachmentInputRef.current?.click();
+  };
+
+  const handleRemoveCardAttachment = async (storedName: string) => {
+    if (!cardDetail?.cardId || !menuCanEdit) return;
+    setCardAttachmentDeleting(storedName);
+    try {
+      const res = await workBoardService.deleteCardAttachment(boardId, cardDetail.cardId, storedName);
+      if (res.success) {
+        const nextAttachments = normalizeBoardCardAttachments(res.data?.attachments);
+        setCardDetail((prev) => (prev ? { ...prev, attachments: nextAttachments } : prev));
+        patchBoardCardMeta(cardDetail.cardId, {
+          attachments: nextAttachments,
+          attachment_count: nextAttachments.length,
+        });
+        await loadBoard({ silent: true });
+        showSuccessToast(txt('첨부가 삭제되었습니다.', 'Attachment removed.'));
+      } else {
+        showErrorPopup(res.message || txt('첨부 삭제에 실패했습니다.', 'Failed to delete attachment.'), txt('카드 세부사항', 'Card details'));
+      }
+    } catch (err: any) {
+      showErrorPopup(err, txt('카드 세부사항', 'Card details'));
+    } finally {
+      setCardAttachmentDeleting(null);
+    }
+  };
+
   const removeComment = async (commentId: number) => {
     if (!cardDetail?.cardId) return;
     if (!menuCanEdit) return;
@@ -2397,7 +2815,14 @@ const WorkBoardDetailPage: React.FC = () => {
     try {
       const res = await workBoardService.deleteCardComment(boardId, cardDetail.cardId, commentId);
       if (res.success) {
-        await loadCardComments(cardDetail.cardId);
+        await loadCardComments(cardDetail.cardId, { markRead: false });
+        patchBoardCardMeta(cardDetail.cardId, {
+          comment_count:
+            typeof res.comment_count === 'number'
+              ? res.comment_count
+              : Math.max(0, cardComments.length - 1),
+          has_unread_comments: Boolean(res.has_unread_comments),
+        });
         setReplyParentId((prev) => (prev === commentId ? null : prev));
       } else {
         showErrorPopup(res.message || '댓글 삭제 실패', '카드 댓글');
@@ -2410,6 +2835,29 @@ const WorkBoardDetailPage: React.FC = () => {
   };
 
   const closeCardDetail = () => {
+    if (cardDetail?.cardId) {
+      const patch: {
+        comments?: Array<{ id: number; created_at?: string; createdAt?: string }>;
+        comment_count?: number;
+        has_unread_comments?: boolean;
+      } = {};
+      if (cardComments.length > 0) {
+        patch.comments = cardComments.map((row) => ({
+          id: row.id,
+          created_at: resolveCommentCreatedAt(row),
+        }));
+        patch.comment_count = cardComments.length;
+      }
+      if (cardCommentPostedRef.current) {
+        patch.has_unread_comments = true;
+      }
+      if (Object.keys(patch).length > 0) {
+        patchBoardCardMeta(cardDetail.cardId, patch);
+      }
+    }
+    cardCommentPostedRef.current = false;
+    setAttachmentStatusMessage(null);
+    setUploadingAttachmentNames([]);
     deepLinkCardHandledRef.current = null;
     setCardDetail(null);
     setCardMoveLists([]);
@@ -2440,6 +2888,13 @@ const WorkBoardDetailPage: React.FC = () => {
 
     const targetBoardId = Number(cardDetail.boardId) || boardId;
     const targetListId = forcedListId ?? cardDetail.listId;
+    if (!targetListId || !Number.isInteger(targetListId) || targetListId <= 0) {
+      showErrorPopup(
+        txt('대분류를 선택해 주세요.', 'Please select a list.'),
+        txt('카드 세부사항', 'Card details')
+      );
+      return;
+    }
     const descriptionForSave = cardDetail.description;
     const boardChanged = targetBoardId !== Number(cardDetail.originalBoardId);
     const listChanged = targetListId !== cardDetail.originalListId || boardChanged;
@@ -2476,7 +2931,7 @@ const WorkBoardDetailPage: React.FC = () => {
         if (!moveRes.success) {
           showErrorPopup(
             moveRes.message ||
-              txt('업무/목록 이동에 실패했습니다.', 'Failed to move the card to another board/list.'),
+              txt('업무/대분류 이동에 실패했습니다.', 'Failed to move the card to another board/list.'),
             txt('카드 세부사항', 'Card details')
           );
           return;
@@ -2828,6 +3283,41 @@ const WorkBoardDetailPage: React.FC = () => {
     if (Number(cardDetail.boardId) === boardId) return lists;
     return cardMoveLists;
   }, [boardId, cardDetail, cardMoveLists, lists]);
+  const handleCardDetailListChange = useCallback(
+    (nextListId: number) => {
+      const targetList = cardDetailListOptions.find((l) => l.id === nextListId);
+      const listAssignee = resolveListAssigneeForCard(targetList);
+      setCardDetail((prev) => {
+        if (!prev) return prev;
+        if (!listAssignee || prev.originalListId === nextListId) {
+          return {
+            ...prev,
+            listId: nextListId,
+            listTitle: targetList?.title || prev.listTitle,
+          };
+        }
+        const prevAssigneeId =
+          prev.assigneeUserId != null ? Number(prev.assigneeUserId) : null;
+        const nextRefs = new Set(
+          (prev.referenceUserIds || [])
+            .map((id) => Number(id))
+            .filter((id) => Number.isInteger(id) && id > 0)
+        );
+        if (prevAssigneeId != null && prevAssigneeId !== listAssignee.id) {
+          nextRefs.add(prevAssigneeId);
+        }
+        nextRefs.delete(listAssignee.id);
+        return {
+          ...prev,
+          listId: nextListId,
+          listTitle: targetList?.title || prev.listTitle,
+          assigneeUserId: listAssignee.id,
+          referenceUserIds: Array.from(nextRefs),
+        };
+      });
+    },
+    [cardDetailListOptions]
+  );
   /** 「업무 완료」 우선, 없으면 완료/Done 키워드, 그래도 없으면 마지막 열 */
   const completedList = resolveCompletedList(lists);
   const activeLists = completedList
@@ -2836,8 +3326,7 @@ const WorkBoardDetailPage: React.FC = () => {
   const normalizedCardSearch = cardSearch.trim().toLowerCase();
   const cardSearchActive = normalizedCardSearch.length > 0;
   const myUserId = user?.id != null ? Number(user.id) : null;
-  const forceOnlyMyCards = user?.role === 'user';
-  const showOnlyMyCards = forceOnlyMyCards || onlyMyCards;
+  const showOnlyMyCards = onlyMyCards;
 
   const isMyWorkCard = useCallback(
     (card: BoardCard) => {
@@ -2896,6 +3385,7 @@ const WorkBoardDetailPage: React.FC = () => {
     });
   }, [
     activeLists,
+    board?.lists,
     board?.members,
     cardSearchActive,
     normalizedCardSearch,
@@ -3352,8 +3842,7 @@ const WorkBoardDetailPage: React.FC = () => {
               control={
                 <Switch
                   size="small"
-                  checked={showOnlyMyCards}
-                  disabled={forceOnlyMyCards}
+                  checked={onlyMyCards}
                   onChange={(e) => setOnlyMyCards(e.target.checked)}
                 />
               }
@@ -3887,35 +4376,163 @@ const WorkBoardDetailPage: React.FC = () => {
           >
             {txt('뒤로 가기', 'Back')}
           </Button>
-          <Box sx={{ flex: 1 }} />
-          <Tooltip title={txt('작업 링크 복사', 'Copy task link')}>
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<LinkIcon sx={{ fontSize: 18 }} />}
-              onClick={() => void copyCardDetailLink()}
-              sx={{
-                minWidth: 0,
-                px: 1.5,
-                py: 0.5,
-                height: 36,
-                fontWeight: 700,
-                fontSize: '0.875rem',
-                letterSpacing: '-0.01em',
-                textTransform: 'none',
-                borderRadius: KANBAN_CONTROL_RADIUS,
-                borderColor: '#CBD5E1',
-                color: '#0F172A',
-                bgcolor: '#FFFFFF',
-                '&:hover': {
-                  borderColor: '#94A3B8',
-                  bgcolor: '#F8FAFC',
-                },
-              }}
-            >
-              {txt('링크 복사', 'Copy link')}
-            </Button>
-          </Tooltip>
+          <Box
+            sx={{
+              ml: 'auto',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              flexWrap: 'wrap',
+              justifyContent: 'flex-end',
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+              <Typography
+                variant="body2"
+                component="span"
+                sx={{
+                  color: '#64748B',
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {txt('업무 보드 변경', 'Change work board')} :
+              </Typography>
+              <TextField
+                select
+                variant="standard"
+                hiddenLabel
+                size="small"
+                value={cardDetail?.boardId || ''}
+                disabled={!menuCanEdit || cardMoveListsLoading}
+                onChange={(e) => {
+                  const nextBoardId = Number(e.target.value);
+                  void (async () => {
+                    await loadListsForMoveBoard(nextBoardId);
+                    setCardDetail((prev) => {
+                      if (!prev) return prev;
+                      if (nextBoardId === Number(prev.originalBoardId)) {
+                        const origList = (board?.lists || []).find(
+                          (l: BoardList) => l.id === prev.originalListId
+                        );
+                        return {
+                          ...prev,
+                          boardId: nextBoardId,
+                          listId: prev.originalListId,
+                          listTitle: origList?.title ?? prev.listTitle,
+                        };
+                      }
+                      if (nextBoardId !== prev.boardId) {
+                        return {
+                          ...prev,
+                          boardId: nextBoardId,
+                          listId: 0,
+                          listTitle: '',
+                        };
+                      }
+                      return { ...prev, boardId: nextBoardId };
+                    });
+                  })();
+                }}
+                InputProps={{ disableUnderline: true }}
+                sx={{
+                  minWidth: 80,
+                  maxWidth: 200,
+                  '& .MuiInput-root': {
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                    color: '#64748B',
+                    '&:before, &:after': { display: 'none' },
+                  },
+                  '& .MuiSelect-select': {
+                    py: 0,
+                    pr: '24px !important',
+                  },
+                }}
+              >
+                {(moveBoardOptions.length > 0
+                  ? moveBoardOptions
+                  : board
+                    ? [{ id: Number(board.id), name: String(board.name || board.id) }]
+                    : []
+                ).map((opt) => (
+                  <MenuItem key={opt.id} value={opt.id}>
+                    {opt.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+              <Typography
+                variant="body2"
+                component="span"
+                sx={{
+                  color: '#64748B',
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {txt('대분류', 'List')} :
+              </Typography>
+              <TextField
+                select
+                variant="standard"
+                hiddenLabel
+                size="small"
+                value={cardDetail?.listId || ''}
+                disabled={!menuCanEdit || cardMoveListsLoading}
+                onChange={(e) => handleCardDetailListChange(Number(e.target.value))}
+                SelectProps={{
+                  displayEmpty: true,
+                  renderValue: (selected) => {
+                    if (!selected) {
+                      return txt('대분류 선택', 'Select list');
+                    }
+                    const list = cardDetailListOptions.find((l) => l.id === Number(selected));
+                    return list
+                      ? displayBoardListTitle(list.title, language)
+                      : String(selected);
+                  },
+                }}
+                InputProps={{ disableUnderline: true }}
+                sx={{
+                  minWidth: 80,
+                  maxWidth: 180,
+                  '& .MuiInput-root': {
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                    color: cardDetail?.listId ? '#64748B' : '#94A3B8',
+                    '&:before, &:after': { display: 'none' },
+                  },
+                  '& .MuiSelect-select': {
+                    py: 0,
+                    pr: '24px !important',
+                  },
+                }}
+              >
+                {cardDetailListOptions.map((list) => (
+                  <MenuItem key={list.id} value={list.id}>
+                    {displayBoardListTitle(list.title, language)}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
+            {cardDetail?.createdAt ? (
+              <Typography
+                variant="body2"
+                sx={{
+                  color: '#64748B',
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {txt('작성일', 'Created')}: {formatCardCreatedAt(cardDetail.createdAt)}
+              </Typography>
+            ) : null}
+          </Box>
         </Box>
         <Box
           sx={{
@@ -3936,14 +4553,6 @@ const WorkBoardDetailPage: React.FC = () => {
               py: 0.32,
             }}
           >
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: '7fr 3fr' },
-              gap: 1.58,
-              alignItems: 'start',
-            }}
-          >
           <TextField
             fullWidth
             size="small"
@@ -3960,72 +4569,6 @@ const WorkBoardDetailPage: React.FC = () => {
             placeholder={txt('카드 제목', 'Card Title')}
             sx={cardDetailOutlinedWhiteSx}
           />
-            <TextField
-              select
-              fullWidth
-              size="small"
-              label={txt('업무 보드', 'Work board')}
-              {...CARD_DETAIL_OUTLINED}
-              variant="outlined"
-              value={cardDetail?.boardId || ''}
-              disabled={!menuCanEdit || cardMoveListsLoading}
-              onChange={(e) => {
-                const nextBoardId = Number(e.target.value);
-                void (async () => {
-                  const nextLists = await loadListsForMoveBoard(nextBoardId);
-                  const preferred =
-                    nextLists.find((l) => !isCompletedListTitle(l.title)) || nextLists[0];
-                  setCardDetail((prev) => {
-                    if (!prev) return prev;
-                    if (!preferred) {
-                      return { ...prev, boardId: nextBoardId, listId: prev.listId };
-                    }
-                    const listAssignee = resolveListAssigneeForCard(preferred);
-                    const nextListId = preferred.id;
-                    if (!listAssignee || prev.originalListId === nextListId) {
-                      return {
-                        ...prev,
-                        boardId: nextBoardId,
-                        listId: nextListId,
-                        listTitle: preferred.title,
-                      };
-                    }
-                    const prevAssigneeId =
-                      prev.assigneeUserId != null ? Number(prev.assigneeUserId) : null;
-                    const nextRefs = new Set(
-                      (prev.referenceUserIds || [])
-                        .map((id) => Number(id))
-                        .filter((id) => Number.isInteger(id) && id > 0)
-                    );
-                    if (prevAssigneeId != null && prevAssigneeId !== listAssignee.id) {
-                      nextRefs.add(prevAssigneeId);
-                    }
-                    nextRefs.delete(listAssignee.id);
-                    return {
-                      ...prev,
-                      boardId: nextBoardId,
-                      listId: nextListId,
-                      listTitle: preferred.title,
-                      assigneeUserId: listAssignee.id,
-                      referenceUserIds: Array.from(nextRefs),
-                    };
-                  });
-                })();
-              }}
-              sx={cardDetailOutlinedWhiteSx}
-            >
-              {(moveBoardOptions.length > 0
-                ? moveBoardOptions
-                : board
-                  ? [{ id: Number(board.id), name: String(board.name || board.id) }]
-                  : []
-              ).map((opt) => (
-                <MenuItem key={opt.id} value={opt.id}>
-                  {opt.name}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Box>
           </Box>
 
           <Box
@@ -4037,60 +4580,10 @@ const WorkBoardDetailPage: React.FC = () => {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' },
+              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
                 gap: 1.58
             }}
           >
-            <TextField
-              select
-              fullWidth
-              size="small"
-              label={txt('목록', 'List')}
-              {...CARD_DETAIL_OUTLINED}
-              variant="outlined"
-              value={cardDetail?.listId || ''}
-              disabled={!menuCanEdit || cardMoveListsLoading}
-              onChange={(e) => {
-                const nextListId = Number(e.target.value);
-                const targetList = cardDetailListOptions.find((l) => l.id === nextListId);
-                const listAssignee = resolveListAssigneeForCard(targetList);
-                setCardDetail((prev) => {
-                  if (!prev) return prev;
-                  if (!listAssignee || prev.originalListId === nextListId) {
-                    return {
-                      ...prev,
-                      listId: nextListId,
-                      listTitle: targetList?.title || prev.listTitle,
-                    };
-                  }
-                  const prevAssigneeId =
-                    prev.assigneeUserId != null ? Number(prev.assigneeUserId) : null;
-                  const nextRefs = new Set(
-                    (prev.referenceUserIds || [])
-                      .map((id) => Number(id))
-                      .filter((id) => Number.isInteger(id) && id > 0)
-                  );
-                  if (prevAssigneeId != null && prevAssigneeId !== listAssignee.id) {
-                    nextRefs.add(prevAssigneeId);
-                  }
-                  nextRefs.delete(listAssignee.id);
-                  return {
-                    ...prev,
-                    listId: nextListId,
-                    listTitle: targetList?.title || prev.listTitle,
-                    assigneeUserId: listAssignee.id,
-                    referenceUserIds: Array.from(nextRefs)
-                  };
-                });
-              }}
-              sx={cardDetailOutlinedWhiteSx}
-            >
-              {cardDetailListOptions.map((list) => (
-                <MenuItem key={list.id} value={list.id}>
-                  {displayBoardListTitle(list.title, language)}
-                </MenuItem>
-              ))}
-            </TextField>
             <TextField
               select
               fullWidth
@@ -4337,6 +4830,171 @@ const WorkBoardDetailPage: React.FC = () => {
               )}
               sx={{ borderRadius: KANBAN_CONTROL_RADIUS, width: '100%' }}
             />
+          </Box>
+
+          <Box
+            sx={{
+              ...cardDetailFormSectionSx,
+              py: 0.32,
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{ ...cardDetailFieldLabelSx, mb: 0.5, ml: 0.25 }}
+            >
+              {txt('첨부파일', 'Attachments')}
+            </Typography>
+            <Typography variant="caption" display="block" sx={{ mb: 1, color: 'text.secondary' }}>
+              {txt(
+                `최대 ${WORK_BOARD_CARD_MAX_ATTACHMENTS}개, 파일당 ${WORK_BOARD_CARD_MAX_FILE_BYTES / (1024 * 1024)}MB 이하`,
+                `Up to ${WORK_BOARD_CARD_MAX_ATTACHMENTS} files, max ${WORK_BOARD_CARD_MAX_FILE_BYTES / (1024 * 1024)} MB each`
+              )}
+            </Typography>
+            {menuCanEdit ? (
+              <>
+                <input
+                  ref={cardAttachmentInputRef}
+                  type="file"
+                  hidden
+                  multiple
+                  accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.xls,.xlsx,image/*,application/pdf"
+                  onChange={(e) => {
+                    void handleCardAttachmentInputChange(e);
+                  }}
+                />
+                <Button
+                  variant="outlined"
+                  color="inherit"
+                  size="small"
+                  disabled={
+                    !cardDetail?.cardId ||
+                    cardAttachmentUploading ||
+                    cardSaving ||
+                    (cardDetail.attachments?.length || 0) >= WORK_BOARD_CARD_MAX_ATTACHMENTS
+                  }
+                  startIcon={
+                    cardAttachmentUploading ? (
+                      <CircularProgress size={16} />
+                    ) : (
+                      <AttachFileIcon sx={{ fontSize: 18 }} />
+                    )
+                  }
+                  onClick={openCardAttachmentPicker}
+                  sx={{
+                    borderRadius: KANBAN_CONTROL_RADIUS,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderStyle: 'dashed',
+                    borderColor: '#CBD5E1',
+                  }}
+                >
+                  {cardAttachmentUploading
+                    ? txt('업로드 중…', 'Uploading…')
+                    : txt('파일 선택', 'Choose files')}
+                </Button>
+              </>
+            ) : null}
+            {attachmentStatusMessage ? (
+              <Alert severity={attachmentStatusMessage.severity} sx={{ mt: 1, py: 0.25 }}>
+                {attachmentStatusMessage.text}
+              </Alert>
+            ) : null}
+            {(cardDetail?.attachments?.length || 0) > 0 || uploadingAttachmentNames.length > 0 ? (
+              <List
+                dense
+                sx={{
+                  mt: 1,
+                  border: '1px solid #E2E8F0',
+                  borderRadius: KANBAN_CONTROL_RADIUS,
+                  overflow: 'hidden',
+                  bgcolor: '#FFFFFF',
+                }}
+              >
+                {uploadingAttachmentNames.map((fileName) => (
+                  <ListItem key={`uploading-${fileName}`}>
+                    <ListItemAvatar>
+                      <Avatar
+                        sx={{
+                          width: 32,
+                          height: 32,
+                          bgcolor: '#FFF7ED',
+                          color: '#C2410C',
+                        }}
+                      >
+                        <CircularProgress size={16} />
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={fileName}
+                      secondary={txt('업로드 중…', 'Uploading…')}
+                    />
+                  </ListItem>
+                ))}
+                {(cardDetail?.attachments || []).map((attachment) => (
+                  <ListItem
+                    key={attachment.storedName}
+                    secondaryAction={
+                      menuCanEdit ? (
+                        <Tooltip title={txt('삭제', 'Remove')}>
+                          <span>
+                            <IconButton
+                              edge="end"
+                              size="small"
+                              disabled={cardAttachmentDeleting === attachment.storedName}
+                              onClick={() => {
+                                void handleRemoveCardAttachment(attachment.storedName);
+                              }}
+                              aria-label={txt('첨부 삭제', 'Remove attachment')}
+                            >
+                              {cardAttachmentDeleting === attachment.storedName ? (
+                                <CircularProgress size={16} />
+                              ) : (
+                                <DeleteIcon fontSize="small" />
+                              )}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      ) : null
+                    }
+                  >
+                    <ListItemAvatar>
+                      <Avatar
+                        sx={{
+                          width: 32,
+                          height: 32,
+                          bgcolor: '#F1F5F9',
+                          color: '#475569',
+                        }}
+                      >
+                        <AttachFileIcon fontSize="small" />
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={
+                        <Box
+                          component="a"
+                          href={getBoardCardAttachmentUrl(attachment)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          sx={{
+                            color: 'inherit',
+                            textDecoration: 'none',
+                            '&:hover': { textDecoration: 'underline' },
+                          }}
+                        >
+                          {attachment.originalName}
+                        </Box>
+                      }
+                      secondary={formatAttachmentFileSize(attachment.size) || undefined}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                {txt('첨부된 파일이 없습니다.', 'No attachments yet.')}
+              </Typography>
+            )}
           </Box>
 
           <Box
@@ -4746,7 +5404,7 @@ const WorkBoardDetailPage: React.FC = () => {
           </Box>
           {!isCommentEnabled && (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              {txt('먼저 제목/목록 등 기본 정보를 입력해 주세요.', 'Please fill in required fields such as title/list first.')}
+              {txt('먼저 제목/대분류 등 기본 정보를 입력해 주세요.', 'Please fill in required fields such as title/list first.')}
             </Typography>
           )}
           <Paper
@@ -4810,15 +5468,32 @@ const WorkBoardDetailPage: React.FC = () => {
                           minWidth: 0
                         }}
                       >
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          component="span"
-                          sx={{ flexShrink: 0, lineHeight: 1.35, fontWeight: 600 }}
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'baseline',
+                            justifyContent: 'space-between',
+                            gap: 1,
+                            flexWrap: 'wrap',
+                          }}
                         >
-                          {(comment.user?.username || txt('알 수 없는 사용자', 'Unknown user'))} ·{' '}
-                          {formatDateTime(comment.created_at)}
-                        </Typography>
+                          <Typography
+                            variant="caption"
+                            component="span"
+                            sx={{ flexShrink: 0, lineHeight: 1.35, fontWeight: 700, color: '#334155' }}
+                          >
+                            {comment.user?.username || txt('알 수 없는 사용자', 'Unknown user')}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            component="span"
+                            sx={{ flexShrink: 0, lineHeight: 1.35, whiteSpace: 'nowrap' }}
+                          >
+                            {formatDateTime(resolveCommentCreatedAt(comment), language) ||
+                              txt('시간 정보 없음', 'No timestamp')}
+                          </Typography>
+                        </Box>
                         <Typography
                           variant="body2"
                           component="span"
@@ -5345,6 +6020,4 @@ const WorkBoardDetailPage: React.FC = () => {
       />
     </Box>
   );
-};
-
-export default WorkBoardDetailPage;
+}

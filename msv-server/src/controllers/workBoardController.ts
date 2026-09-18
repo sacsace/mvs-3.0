@@ -1,9 +1,12 @@
 import { Response } from 'express';
 import { DataTypes, Op } from 'sequelize';
+import fs from 'fs';
+import path from 'path';
 import sequelize from '../config/database';
 import SocketService from '../services/socketService';
 import { pushNotification } from './notificationController';
 import { RequestWithUser } from '../types';
+import { ensureUploadRoot } from '../utils/uploadPath';
 import {
   WorkBoard,
   WorkBoardList,
@@ -155,6 +158,30 @@ const ensureWorkBoardCardSchema = async () => {
     }
   }
 
+  if (!(await tableColumnExists('work_board_cards', 'attachments'))) {
+    try {
+      await queryInterface.addColumn('work_board_cards', 'attachments', {
+        type: DataTypes.JSONB,
+        allowNull: false,
+        defaultValue: []
+      });
+    } catch (error) {
+      if (!isDuplicateColumnError(error)) throw error;
+    }
+  }
+
+  if (!(await tableColumnExists('work_board_cards', 'comment_reads'))) {
+    try {
+      await queryInterface.addColumn('work_board_cards', 'comment_reads', {
+        type: DataTypes.JSONB,
+        allowNull: false,
+        defaultValue: {}
+      });
+    } catch (error) {
+      if (!isDuplicateColumnError(error)) throw error;
+    }
+  }
+
   workBoardCardSchemaEnsured = true;
 };
 
@@ -199,7 +226,7 @@ const buildCardNestedInclude = (light: boolean) => {
     includes.push({
       model: WorkBoardCardComment,
       as: 'comments',
-      attributes: ['id'],
+      attributes: ['id', 'created_at'],
       separate: true
     });
   } else {
@@ -699,7 +726,15 @@ export const getWorkBoardDetail = async (req: RequestWithUser, res: Response) =>
       });
     }
 
-    res.json({ success: true, data: full });
+    const payload = full?.toJSON ? full.toJSON() : full;
+    if (payload?.lists && Array.isArray(payload.lists)) {
+      for (const list of payload.lists) {
+        if (!Array.isArray(list.cards)) continue;
+        list.cards = list.cards.map((card: any) => enrichCardForBoardList(card, user.id));
+      }
+    }
+
+    res.json({ success: true, data: payload });
   } catch (error: any) {
     console.error('getWorkBoardDetail:', error);
     res.status(500).json({
@@ -1752,6 +1787,75 @@ export const deleteWorkBoardCard = async (req: RequestWithUser, res: Response) =
   }
 };
 
+const parseCardCommentReads = (value: unknown): Record<string, string> => {
+  if (value == null) return {};
+  let parsed = value;
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return {};
+    }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  return parsed as Record<string, string>;
+};
+
+const getLatestCardCommentAt = (comments: unknown): number => {
+  if (!Array.isArray(comments)) return 0;
+  let latest = 0;
+  for (const row of comments) {
+    const createdAt = Date.parse(String(row?.created_at || row?.createdAt || ''));
+    if (Number.isFinite(createdAt) && createdAt > latest) latest = createdAt;
+  }
+  return latest;
+};
+
+const cardHasUnreadComments = (card: any, userId?: number): boolean => {
+  const uid = Number(userId);
+  if (!Number.isFinite(uid) || uid <= 0) return false;
+  const latest = getLatestCardCommentAt(card?.comments);
+  if (latest <= 0) return false;
+  const readAt = Date.parse(String(parseCardCommentReads(card?.comment_reads)[String(uid)] || ''));
+  if (!Number.isFinite(readAt)) return true;
+  return latest > readAt;
+};
+
+const buildCardCommentReadAt = (comments: unknown): string => {
+  const latest = getLatestCardCommentAt(comments);
+  if (latest > 0) return new Date(latest).toISOString();
+  return new Date().toISOString();
+};
+
+const enrichCardForBoardList = (card: any, userId?: number) => {
+  const comments = Array.isArray(card?.comments) ? card.comments : [];
+  card.comment_count = comments.length;
+  card.has_unread_comments = cardHasUnreadComments(card, userId);
+  card.attachment_count = normalizeBoardCardAttachments(card?.attachments).length;
+  if ('comment_reads' in card) delete card.comment_reads;
+  return card;
+};
+
+const markCardCommentsReadForUser = async (card: WorkBoardCard, userId: number, comments?: unknown) => {
+  await ensureWorkBoardCardSchema();
+  let latestComments = comments;
+  if (latestComments === undefined) {
+    const rows = await WorkBoardCardComment.findAll({
+      where: { card_id: card.id },
+      attributes: ['created_at'],
+      order: [['created_at', 'DESC']],
+      limit: 1
+    });
+    latestComments = rows;
+  }
+  const reads = {
+    ...parseCardCommentReads((card as any).comment_reads),
+    [String(userId)]: buildCardCommentReadAt(latestComments)
+  };
+  await card.update({ comment_reads: reads }, { fields: ['comment_reads'] });
+  return reads;
+};
+
 export const getWorkBoardCardComments = async (req: RequestWithUser, res: Response) => {
   try {
     const user = req.user!;
@@ -1958,7 +2062,21 @@ export const createWorkBoardCardComment = async (req: RequestWithUser, res: Resp
       );
     }
 
-    return res.status(201).json({ success: true, data: full });
+    const commentRows = await WorkBoardCardComment.findAll({
+      where: { card_id: card.id },
+      attributes: ['created_at']
+    });
+    await card.reload({ attributes: ['comment_reads'] });
+
+    return res.status(201).json({
+      success: true,
+      data: full,
+      comment_count: commentRows.length,
+      has_unread_comments: cardHasUnreadComments(
+        { comments: commentRows, comment_reads: (card as any).comment_reads },
+        user.id
+      )
+    });
   } catch (error: any) {
     if (isMissingCommentsTableError(error)) {
       return res.status(503).json({
@@ -2003,7 +2121,19 @@ export const deleteWorkBoardCardComment = async (req: RequestWithUser, res: Resp
     }
 
     await comment.destroy();
-    return res.json({ success: true, message: '댓글이 삭제되었습니다.' });
+    const remainingComments = await WorkBoardCardComment.findAll({
+      where: { card_id: card.id },
+      attributes: ['id', 'created_at']
+    });
+    return res.json({
+      success: true,
+      message: '댓글이 삭제되었습니다.',
+      comment_count: remainingComments.length,
+      has_unread_comments: cardHasUnreadComments(
+        { ...((card as any).toJSON?.() || card), comments: remainingComments },
+        user.id
+      )
+    });
   } catch (error: any) {
     if (isMissingCommentsTableError(error)) {
       return res.status(503).json({
@@ -2013,6 +2143,38 @@ export const deleteWorkBoardCardComment = async (req: RequestWithUser, res: Resp
     }
     console.error('deleteWorkBoardCardComment:', error);
     return res.status(500).json({ success: false, message: '댓글 삭제에 실패했습니다.' });
+  }
+};
+
+/** 카드 댓글 읽음 처리 */
+export const markWorkBoardCardCommentsRead = async (req: RequestWithUser, res: Response) => {
+  try {
+    await ensureWorkBoardCardSchema();
+    const user = req.user!;
+    const boardId = parseInt(req.params.boardId, 10);
+    const cardId = parseInt(req.params.cardId, 10);
+    const userId = Number(user.id);
+    if (!Number.isFinite(userId) || userId <= 0) {
+      return res.status(401).json({ success: false, message: '로그인이 필요합니다.' });
+    }
+
+    const { board, member } = await findBoardForUser(boardId, user);
+    if (!board || (!member && user.role !== 'root' && user.role !== 'audit')) {
+      return res.status(404).json({ success: false, message: '권한이 없습니다.' });
+    }
+
+    const card = await WorkBoardCard.findByPk(cardId, {
+      include: [{ model: WorkBoardList, as: 'list' }]
+    });
+    if (!card || (card as any).list.board_id !== board.id) {
+      return res.status(404).json({ success: false, message: '카드를 찾을 수 없습니다.' });
+    }
+
+    await markCardCommentsReadForUser(card, userId);
+    return res.json({ success: true, has_unread_comments: false });
+  } catch (error: any) {
+    console.error('markWorkBoardCardCommentsRead:', error);
+    return res.status(500).json({ success: false, message: '댓글 읽음 처리에 실패했습니다.' });
   }
 };
 
@@ -2191,5 +2353,170 @@ export const updateWorkBoardMember = async (req: RequestWithUser, res: Response)
   } catch (error: any) {
     console.error('updateWorkBoardMember:', error);
     return res.status(500).json({ success: false, message: '멤버 역할 변경에 실패했습니다.' });
+  }
+};
+
+const WORK_BOARD_CARD_MAX_ATTACHMENTS = 10;
+
+type BoardCardAttachmentRecord = {
+  originalName: string;
+  storedName: string;
+  path: string;
+  mimeType?: string;
+  size?: number;
+  uploadedAt?: string;
+};
+
+const normalizeBoardCardAttachments = (raw: unknown): BoardCardAttachmentRecord[] => {
+  let parsed: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((row) => {
+      if (!row || typeof row !== 'object') return null;
+      const item = row as Record<string, unknown>;
+      const storedName = String(item.storedName || item.stored_name || '').trim();
+      const pathRaw = String(item.path || '').trim();
+      const originalName = String(item.originalName || item.original_name || storedName || 'attachment').trim();
+      const pathValue = (pathRaw || (storedName ? `work-board-cards/${storedName}` : ''))
+        .replace(/^\/+/, '')
+        .replace(/^uploads\//i, '');
+      if (!pathValue) return null;
+      return {
+        originalName,
+        storedName: storedName || path.basename(pathValue),
+        path: pathValue,
+        mimeType:
+          item.mimeType != null || item.mime_type != null
+            ? String(item.mimeType || item.mime_type)
+            : undefined,
+        size: item.size != null && Number.isFinite(Number(item.size)) ? Number(item.size) : undefined,
+        uploadedAt:
+          item.uploadedAt != null || item.uploaded_at != null
+            ? String(item.uploadedAt || item.uploaded_at)
+            : undefined,
+      } satisfies BoardCardAttachmentRecord;
+    })
+    .filter(Boolean) as BoardCardAttachmentRecord[];
+};
+
+export const uploadWorkBoardCardAttachments = async (req: RequestWithUser, res: Response) => {
+  try {
+    await ensureWorkBoardCardSchema();
+    const user = req.user!;
+    const boardId = parseInt(req.params.boardId, 10);
+    const cardId = parseInt(req.params.cardId, 10);
+    const { board, member } = await findBoardForUser(boardId, user, true);
+    if (!board || (!member && user.role !== 'root')) {
+      return res.status(404).json({ success: false, message: '권한이 없습니다.' });
+    }
+
+    const card = await WorkBoardCard.findByPk(cardId, {
+      include: [{ model: WorkBoardList, as: 'list' }]
+    });
+    if (!card || (card as any).list.board_id !== board.id) {
+      return res.status(404).json({ success: false, message: '카드를 찾을 수 없습니다.' });
+    }
+
+    const files = ((req as any).files || []) as Express.Multer.File[];
+    if (!files.length) {
+      return res.status(400).json({ success: false, message: '파일이 필요합니다.' });
+    }
+
+    const attachments = normalizeBoardCardAttachments((card as any).attachments);
+    if (attachments.length + files.length > WORK_BOARD_CARD_MAX_ATTACHMENTS) {
+      return res.status(400).json({
+        success: false,
+        message: `첨부는 최대 ${WORK_BOARD_CARD_MAX_ATTACHMENTS}개까지 가능합니다.`
+      });
+    }
+
+    const added: BoardCardAttachmentRecord[] = [];
+    for (const file of files) {
+      if (!file.filename) continue;
+      let originalName = file.originalname || file.filename;
+      try {
+        originalName = Buffer.from(originalName, 'latin1').toString('utf8');
+      } catch {
+        // keep original
+      }
+      added.push({
+        originalName,
+        storedName: file.filename,
+        path: `work-board-cards/${cardId}/${file.filename}`,
+        mimeType: file.mimetype,
+        size: file.size,
+        uploadedAt: new Date().toISOString()
+      });
+    }
+
+    if (added.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: '업로드할 수 있는 파일이 없습니다. 형식과 용량을 확인해 주세요.'
+      });
+    }
+
+    const nextAttachments = [...attachments, ...added];
+    await card.update({ attachments: nextAttachments });
+    return res.json({ success: true, data: { attachments: nextAttachments } });
+  } catch (error: any) {
+    console.error('uploadWorkBoardCardAttachments:', error);
+    return res.status(500).json({ success: false, message: '첨부 업로드에 실패했습니다.' });
+  }
+};
+
+export const deleteWorkBoardCardAttachment = async (req: RequestWithUser, res: Response) => {
+  try {
+    await ensureWorkBoardCardSchema();
+    const user = req.user!;
+    const boardId = parseInt(req.params.boardId, 10);
+    const cardId = parseInt(req.params.cardId, 10);
+    const storedName = String(req.body?.storedName || req.params.storedName || '').trim();
+    if (!storedName || storedName.includes('..')) {
+      return res.status(400).json({ success: false, message: '삭제할 첨부 정보가 올바르지 않습니다.' });
+    }
+
+    const { board, member } = await findBoardForUser(boardId, user, true);
+    if (!board || (!member && user.role !== 'root')) {
+      return res.status(404).json({ success: false, message: '권한이 없습니다.' });
+    }
+
+    const card = await WorkBoardCard.findByPk(cardId, {
+      include: [{ model: WorkBoardList, as: 'list' }]
+    });
+    if (!card || (card as any).list.board_id !== board.id) {
+      return res.status(404).json({ success: false, message: '카드를 찾을 수 없습니다.' });
+    }
+
+    const attachments = normalizeBoardCardAttachments((card as any).attachments);
+    const target = attachments.find((row) => row.storedName === storedName);
+    if (!target) {
+      return res.status(404).json({ success: false, message: '첨부를 찾을 수 없습니다.' });
+    }
+
+    const nextAttachments = attachments.filter((row) => row.storedName !== storedName);
+    await card.update({ attachments: nextAttachments });
+
+    try {
+      const uploadRoot = ensureUploadRoot();
+      const absolutePath = path.join(uploadRoot, target.path.replace(/^\/+/, ''));
+      if (absolutePath.startsWith(uploadRoot) && fs.existsSync(absolutePath)) {
+        fs.unlinkSync(absolutePath);
+      }
+    } catch (unlinkError) {
+      console.warn('deleteWorkBoardCardAttachment unlink:', unlinkError);
+    }
+
+    return res.json({ success: true, data: { attachments: nextAttachments } });
+  } catch (error: any) {
+    console.error('deleteWorkBoardCardAttachment:', error);
+    return res.status(500).json({ success: false, message: '첨부 삭제에 실패했습니다.' });
   }
 };

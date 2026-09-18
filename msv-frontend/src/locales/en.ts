@@ -4515,7 +4515,8 @@ export default {
         transfer: 'Remittance list'
       },
       list: {
-        remainingShort: 'Remaining: {{currency}} {{amount}}'
+        remainingShort: 'Remaining: {{currency}} {{amount}}',
+        commentIndicator: 'Comment'
       },
       empty: {
         noResults: 'No expense reports to display.',
@@ -4646,6 +4647,17 @@ export default {
         amountInclTax: 'Incl. tax',
         paidAmount: 'Paid',
         remainingAmount: 'Remaining',
+        comments: 'Comments',
+        commentsEmpty: 'No comments yet.',
+        commentPlaceholder: 'Write a comment',
+        commentSubmit: 'Post comment',
+        commentSubmitting: 'Posting...',
+        reply: 'Reply',
+        replyPlaceholder: 'Write a reply',
+        replySubmit: 'Post reply',
+        commentEdit: 'Edit',
+        commentSave: 'Save',
+        commentEditSubmitting: 'Saving...',
         columns: {
           invoiceDate: 'Invoice date',
           description: 'Description',
@@ -4797,7 +4809,10 @@ export default {
         revisionRejected: 'Expense report has been rejected for correction.',
         edited: 'Expense report has been edited.',
         pdfDownloaded: 'Saved as PDF.',
-        printed: 'Expense report printed.'
+        printed: 'Expense report printed.',
+        commentAdded: 'Comment posted.',
+        replyAdded: 'Reply posted.',
+        commentUpdated: 'Comment updated.'
       },
       errors: {
         loadFailed: 'Failed to load expense data.',
@@ -4835,7 +4850,9 @@ export default {
         changeApproverFailed: 'Failed to change the approver.',
         approverRequired: 'Please select an approver.',
         receiptOrRemarksRequired: 'Attach a receipt, or enter an explanation in remarks if there is no receipt.',
-        resubmitFailed: 'Failed to re-request the expense report.'
+        resubmitFailed: 'Failed to re-request the expense report.',
+        commentAddFailed: 'Failed to post comment.',
+        commentUpdateFailed: 'Failed to update comment.'
       }
     },
     login: {

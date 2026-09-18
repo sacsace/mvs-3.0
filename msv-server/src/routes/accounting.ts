@@ -37,6 +37,9 @@ import {
   retryExpenseTransfer,
   getReceiptUploadToken,
   uploadExpenseReceiptByToken,
+  addExpenseReportComment,
+  updateExpenseReportComment,
+  markExpenseReportCommentsRead,
   getBudgets,
   createBudget,
   updateBudget,
@@ -666,6 +669,29 @@ router.get('/stats', getAccountingStats);
 // 지출결의서 라우트
 router.get('/expenses', getExpenseReports);
 router.get('/expenses/:id', getExpenseReportById);
+router.post(
+  '/expenses/:id/comments',
+  restrictAuditToReadOnly,
+  validateBody({
+    comment: { required: true, type: 'string', minLength: 1, maxLength: 2000 },
+    parentId: { required: false, type: 'number' },
+    parent_id: { required: false, type: 'number' },
+  }),
+  addExpenseReportComment
+);
+router.put(
+  '/expenses/:id/comments/:commentId',
+  restrictAuditToReadOnly,
+  validateBody({
+    comment: { required: true, type: 'string', minLength: 1, maxLength: 2000 },
+  }),
+  updateExpenseReportComment
+);
+router.post(
+  '/expenses/:id/comments/read',
+  restrictAuditToReadOnly,
+  markExpenseReportCommentsRead
+);
 router.get('/expenses/:id/receipt-upload-token', getReceiptUploadToken);
 router.post('/expenses/:id/upload-receipt', restrictAuditToReadOnly, receiptUpload.array('files'), uploadExpenseReceiptById);
 router.delete('/expenses/:id/receipt', restrictAuditToReadOnly, deleteExpenseReceipt);

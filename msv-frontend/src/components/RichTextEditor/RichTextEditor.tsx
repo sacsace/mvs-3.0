@@ -23,7 +23,7 @@ import {
   Straighten,
   Image as ImageIcon,
 } from '@mui/icons-material';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import { Table as TableExtension } from '@tiptap/extension-table';
@@ -72,10 +72,10 @@ const ResizableImage = Image.extend({
         },
       },
       align: {
-        default: 'center',
-        parseHTML: (element) => element.getAttribute('data-align') || 'center',
+        default: 'left',
+        parseHTML: (element) => element.getAttribute('data-align') || 'left',
         renderHTML: (attributes) => {
-          const align = String(attributes.align || 'center');
+          const align = String(attributes.align || 'left');
           const marginStyle =
             align === 'left'
               ? '12px auto 12px 0'
@@ -91,6 +91,15 @@ const ResizableImage = Image.extend({
     };
   },
 });
+
+type ImageAlign = 'left' | 'center' | 'right';
+
+type RichTextEditorInstance = Editor;
+
+const insertImageWithAlign = (ed: RichTextEditorInstance, src: string, align: ImageAlign = 'left') => {
+  ed.chain().focus().setImage({ src }).run();
+  ed.chain().focus().updateAttributes('image', { align }).run();
+};
 
 export type RichTextEditorProps = {
   value: string;
@@ -115,9 +124,11 @@ const editorContentSx = (minHeight: number): SxProps<Theme> => ({
       maxWidth: '100%',
       height: 'auto',
       display: 'block',
-      margin: '12px auto',
       borderRadius: 4,
     },
+    '& img[data-align="left"]': { margin: '12px 0 12px 0' },
+    '& img[data-align="center"]': { margin: '12px auto' },
+    '& img[data-align="right"]': { margin: '12px 0 12px auto' },
     '& table': {
       borderCollapse: 'collapse',
       width: '100%',
@@ -154,7 +165,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
         allowBase64: true,
         HTMLAttributes: {
           class: 'resizable-image',
-          style: 'display: block; margin: 12px auto; max-width: 100%; clear: both;',
+          style: 'display: block; max-width: 100%; clear: both;',
         },
       }),
       TableExtension.configure({ resizable: true }),
@@ -191,7 +202,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
                 const reader = new FileReader();
                 reader.onload = (e) => {
                   const result = e.target?.result as string;
-                  if (result) ed.chain().focus().setImage({ src: result }).run();
+                  if (result) insertImageWithAlign(ed, result, 'left');
                 };
                 reader.readAsDataURL(file);
               }
@@ -267,7 +278,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
     const reader = new FileReader();
     reader.onload = (e) => {
       const result = e.target?.result as string;
-      if (result) editor.chain().focus().setImage({ src: result }).updateAttributes('image', { align: 'center' }).run();
+      if (result) insertImageWithAlign(editor, result, 'left');
     };
     reader.readAsDataURL(file);
   };

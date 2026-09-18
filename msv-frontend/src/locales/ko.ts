@@ -4566,7 +4566,8 @@ export default {
         transfer: '송금할 리스트'
       },
       list: {
-        remainingShort: '잔금 {{currency}} {{amount}}'
+        remainingShort: '잔금 {{currency}} {{amount}}',
+        commentIndicator: '댓글'
       },
       empty: {
         noResults: '표시할 지출결의서가 없습니다.',
@@ -4697,6 +4698,17 @@ export default {
         amountInclTax: '세금 포함',
         paidAmount: '지급 완료',
         remainingAmount: '잔금',
+        comments: '댓글',
+        commentsEmpty: '등록된 댓글이 없습니다.',
+        commentPlaceholder: '댓글을 입력하세요',
+        commentSubmit: '댓글 등록',
+        commentSubmitting: '등록 중...',
+        reply: '답글',
+        replyPlaceholder: '답글을 입력하세요',
+        replySubmit: '답글 등록',
+        commentEdit: '수정',
+        commentSave: '저장',
+        commentEditSubmitting: '저장 중...',
         columns: {
           invoiceDate: '송장 일자',
           description: '설명',
@@ -4847,7 +4859,10 @@ export default {
         revisionRejected: '지출결의서를 수정 반려했습니다.',
         edited: '지출결의서를 수정했습니다.',
         pdfDownloaded: 'PDF 파일로 저장했습니다.',
-        printed: '지출결의서를 인쇄했습니다.'
+        printed: '지출결의서를 인쇄했습니다.',
+        commentAdded: '댓글이 등록되었습니다.',
+        replyAdded: '답글이 등록되었습니다.',
+        commentUpdated: '댓글이 수정되었습니다.'
       },
       errors: {
         loadFailed: '지출 데이터를 불러오는데 실패했습니다.',
@@ -4855,6 +4870,8 @@ export default {
         pdfDownloadFailed: 'PDF 저장에 실패했습니다.',
         attachmentPreviewFailed:
           '미리보기를 불러오지 못했습니다. 다운로드하거나 새 탭에서 열어 주세요.',
+        commentAddFailed: '댓글 등록에 실패했습니다.',
+        commentUpdateFailed: '댓글 수정에 실패했습니다.',
         createDraftFailed: '지출결의서 초안 생성에 실패했습니다.',
         requiredTitlePurpose: '제목과 지출 목적은 필수입니다.',
         draftNotReadyRetry: '초안이 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.',

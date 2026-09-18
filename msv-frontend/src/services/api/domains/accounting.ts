@@ -163,6 +163,25 @@ export const accountingService = {
     return response.data;
   },
 
+  addExpenseReportComment: async (id: number, comment: string, parentId?: number | null) => {
+    const payload: { comment: string; parentId?: number } = { comment };
+    if (parentId != null && Number.isFinite(parentId) && parentId > 0) {
+      payload.parentId = parentId;
+    }
+    const response = await api.post(`/accounting/expenses/${id}/comments`, payload);
+    return response.data;
+  },
+
+  markExpenseCommentsRead: async (id: number) => {
+    const response = await api.post(`/accounting/expenses/${id}/comments/read`);
+    return response.data;
+  },
+
+  updateExpenseReportComment: async (id: number, commentId: number, comment: string) => {
+    const response = await api.put(`/accounting/expenses/${id}/comments/${commentId}`, { comment });
+    return response.data;
+  },
+
   // 지출결?�서 ?�성
   createExpenseReport: async (data: any) => {
     const response = await api.post('/accounting/expenses', data);

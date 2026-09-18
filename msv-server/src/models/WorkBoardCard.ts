@@ -13,6 +13,8 @@ interface WorkBoardCardAttributes {
   due_date?: string | null;
   created_by?: number | null;
   completed_at?: Date | null;
+  attachments?: any;
+  comment_reads?: any;
   created_at?: Date;
   updated_at?: Date;
   deleted_at?: Date | null;
@@ -50,6 +52,8 @@ class WorkBoardCard
   public due_date?: string | null;
   public created_by?: number | null;
   public completed_at?: Date | null;
+  public attachments?: any;
+  public comment_reads?: any;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
   public readonly deleted_at!: Date | null;
@@ -72,6 +76,8 @@ WorkBoardCard.init(
     due_date: { type: DataTypes.DATEONLY, allowNull: true },
     created_by: { type: DataTypes.INTEGER, allowNull: true },
     completed_at: { type: DataTypes.DATE, allowNull: true },
+    attachments: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    comment_reads: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
     deleted_at: { type: DataTypes.DATE, allowNull: true }
   },
   {

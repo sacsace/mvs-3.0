@@ -23,6 +23,8 @@ interface ExpenseReportAttributes {
   due_date?: Date;
   notes?: string;
   attachments?: any;
+  comments?: any;
+  comment_reads?: any;
   approval_id?: number;
   payment_request_status?: string;
   payment_requested_at?: Date;
@@ -59,6 +61,8 @@ interface ExpenseReportCreationAttributes extends Optional<
   | 'due_date'
   | 'notes'
   | 'attachments'
+  | 'comments'
+  | 'comment_reads'
   | 'is_active'
   | 'created_at'
   | 'updated_at'
@@ -86,6 +90,8 @@ class ExpenseReport extends Model<ExpenseReportAttributes, ExpenseReportCreation
   public due_date?: Date;
   public notes?: string;
   public attachments?: any;
+  public comments?: any;
+  public comment_reads?: any;
   public approval_id?: number;
   public payment_request_status?: string;
   public payment_requested_at?: Date;
@@ -141,6 +147,8 @@ ExpenseReport.init(
     due_date: { type: DataTypes.DATEONLY, allowNull: true },
     notes: { type: DataTypes.TEXT, allowNull: true },
     attachments: { type: DataTypes.JSONB, allowNull: true, defaultValue: '[]' },
+    comments: { type: DataTypes.JSONB, allowNull: true, defaultValue: '[]' },
+    comment_reads: { type: DataTypes.JSONB, allowNull: true, defaultValue: '{}' },
     approval_id: { type: DataTypes.INTEGER, allowNull: true },
     payment_request_status: { type: DataTypes.STRING(30), allowNull: true, defaultValue: 'not_requested' },
     payment_requested_at: { type: DataTypes.DATE, allowNull: true },

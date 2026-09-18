@@ -75,7 +75,10 @@ import {
   QrCode2 as QrCodeIcon,
   ArrowForward as ArrowForwardIcon,
   OpenInNew as OpenInNewIcon,
-  InsertDriveFile as FileIcon } from '@mui/icons-material';
+  InsertDriveFile as FileIcon,
+  ChatBubble as ChatBubbleIcon,
+  ChatBubbleOutline as ChatBubbleOutlineIcon,
+  Reply as ReplyIcon } from '@mui/icons-material';
 import { useStore } from '../../store';
 import { useNavigate } from 'react-router-dom';
 import { accountingService, companyService, workAssigneeListService } from '../../services/api';
@@ -111,10 +114,15 @@ const expenseApprovalFilterFieldSx = {
 /** expense-receipts/1784..._IMG.jpg → IMG.jpg */
 const getReceiptDisplayName = (filePath: string): string => {
   const base = String(filePath || '').split(/[/\\]/).pop() || String(filePath || '');
+  let display: string;
   // 표준명 yyyyMMdd_PV|RT|RI (...) 은 그대로 표시
-  if (/^\d{8}_[A-Za-z]/.test(base)) return base;
+  if (/^\d{8}_[A-Za-z]/.test(base)) display = base;
   // 레거시 timestamp_원본명
-  return base.replace(/^\d+_/, '') || base;
+  else display = base.replace(/^\d+_/, '') || base;
+  if (String(filePath || '').includes('expense-remittance-proofs')) {
+    return stripFileExtensionForDisplay(display);
+  }
+  return display;
 };
 
 const isImageReceipt = (filePath: string): boolean =>
@@ -276,6 +284,10 @@ interface ExpenseApprovalItem {
   dueDate: string;
   notes?: string;
   attachments: ExpenseAttachment[];
+  comments: ExpenseReportComment[];
+  commentCount?: number;
+  lastCommentAt?: string;
+  hasUnreadComments?: boolean;
   itemMeta?: Record<string, any>;
   approvalId?: number;
   paymentRequestStatus?: string;
@@ -331,6 +343,211 @@ interface ApprovalStep {
   escalatedToId?: number;
   escalatedToName?: string;
 }
+
+interface ExpenseReportComment {
+  id: number;
+  userId?: number;
+  userName: string;
+  comment: string;
+  createdAt: string;
+  updatedAt?: string;
+  parentId?: number | null;
+  replies?: ExpenseReportComment[];
+}
+
+const parseExpenseCommentId = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
+const parseExpenseReportCommentRow = (row: Record<string, unknown>): ExpenseReportComment | null => {
+  const comment = String(row.comment || '').trim();
+  if (!comment) return null;
+  const parsedId = parseExpenseCommentId(row.id);
+  if (!parsedId) return null;
+  const repliesRaw = Array.isArray(row.replies) ? row.replies : [];
+  const replies = repliesRaw
+    .map((item) =>
+      item && typeof item === 'object'
+        ? parseExpenseReportCommentRow(item as Record<string, unknown>)
+        : null
+    )
+    .filter(Boolean) as ExpenseReportComment[];
+  return {
+    id: parsedId,
+    userId: row.userId != null ? Number(row.userId) : undefined,
+    userName: String(row.userName || row.user_name || '—'),
+    comment,
+    createdAt: String(row.createdAt || row.created_at || ''),
+    updatedAt: String(row.updatedAt || row.updated_at || '') || undefined,
+    parentId:
+      row.parentId != null || row.parent_id != null
+        ? Number(row.parentId ?? row.parent_id)
+        : null,
+    replies,
+  };
+};
+
+const parseExpenseReportComments = (value: unknown): ExpenseReportComment[] => {
+  if (value == null) return [];
+  let parsed: unknown = value;
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((row) => (row && typeof row === 'object' ? parseExpenseReportCommentRow(row as Record<string, unknown>) : null))
+    .filter((row): row is ExpenseReportComment => !!row && !row.parentId);
+};
+
+const getExpenseLastCommentAt = (comments: ExpenseReportComment[] = []): number => {
+  let latest = 0;
+  const walk = (rows: ExpenseReportComment[]) => {
+    for (const row of rows) {
+      for (const value of [row.createdAt, row.updatedAt]) {
+        const ts = Date.parse(String(value || ''));
+        if (Number.isFinite(ts) && ts > latest) latest = ts;
+      }
+      if (row.replies?.length) walk(row.replies);
+    }
+  };
+  walk(comments);
+  return latest;
+};
+
+const resolveExpenseLastCommentAt = (expense: ExpenseApprovalItem): string => {
+  const fromField = Date.parse(String(expense.lastCommentAt || ''));
+  if (Number.isFinite(fromField) && fromField > 0) {
+    return new Date(fromField).toISOString();
+  }
+  const ts = getExpenseLastCommentAt(expense.comments);
+  return ts > 0 ? new Date(ts).toISOString() : '';
+};
+
+const getExpenseLastCommentTime = (expense: ExpenseApprovalItem): number => {
+  const ts = Date.parse(resolveExpenseLastCommentAt(expense));
+  return Number.isFinite(ts) ? ts : 0;
+};
+
+const countExpenseComments = (comments: ExpenseReportComment[] = []): number => {
+  let count = 0;
+  const walk = (rows: ExpenseReportComment[]) => {
+    for (const row of rows) {
+      count += 1;
+      if (row.replies?.length) walk(row.replies);
+    }
+  };
+  walk(comments);
+  return count;
+};
+
+const compareExpenseDefaultListOrder = (
+  a: ExpenseApprovalItem,
+  b: ExpenseApprovalItem,
+  resolveStatus: (expense: ExpenseApprovalItem) => string
+) => {
+  if (a.hasUnreadComments !== b.hasUnreadComments) {
+    return a.hasUnreadComments ? -1 : 1;
+  }
+
+  const aCount = a.commentCount ?? countExpenseComments(a.comments);
+  const bCount = b.commentCount ?? countExpenseComments(b.comments);
+  if ((aCount > 0) !== (bCount > 0)) {
+    return aCount > 0 ? -1 : 1;
+  }
+
+  const byLastComment = getExpenseLastCommentTime(b) - getExpenseLastCommentTime(a);
+  if (byLastComment !== 0) return byLastComment;
+
+  const byPriority = (PRIORITY_SORT_ORDER[a.priority] ?? 9) - (PRIORITY_SORT_ORDER[b.priority] ?? 9);
+  if (byPriority !== 0) return byPriority;
+
+  const byDate = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  if (byDate !== 0) return byDate;
+
+  return (
+    (DEFAULT_LIST_STATUS_SORT[resolveStatus(a)] ?? 99) -
+    (DEFAULT_LIST_STATUS_SORT[resolveStatus(b)] ?? 99)
+  );
+};
+
+const ExpenseCommentCountBadge: React.FC<{ expense: ExpenseApprovalItem }> = ({ expense }) => {
+  const count = expense.commentCount ?? countExpenseComments(expense.comments);
+  if (count <= 0) return null;
+  const isUnread = Boolean(expense.hasUnreadComments);
+  return (
+    <Box
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 0.25,
+        flexShrink: 0,
+        lineHeight: 1,
+      }}
+      aria-label={`${count}`}
+    >
+      {isUnread ? (
+        <Box
+          sx={{
+            position: 'relative',
+            width: 20,
+            height: 18,
+            flexShrink: 0,
+          }}
+        >
+          <ChatBubbleIcon
+            sx={{
+              fontSize: 20,
+              color: '#DC2626',
+              display: 'block',
+            }}
+          />
+          <Box
+            component="span"
+            sx={{
+              position: 'absolute',
+              top: 2,
+              left: 2,
+              right: 2,
+              bottom: 5,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: count > 9 ? '0.5rem' : '0.5625rem',
+              fontWeight: 700,
+              color: '#FFFFFF',
+              lineHeight: 1,
+              transform: 'translateY(1px)',
+            }}
+          >
+            {count}
+          </Box>
+        </Box>
+      ) : (
+        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25, color: '#64748B' }}>
+          <ChatBubbleOutlineIcon sx={{ fontSize: 15 }} />
+          <Box component="span" sx={{ fontSize: '0.6875rem', fontWeight: 700 }}>
+            {count}
+          </Box>
+        </Box>
+      )}
+    </Box>
+  );
+};
+
+const submitExpenseCommentOnEnter = (
+  event: React.KeyboardEvent,
+  submit: () => void,
+  disabled?: boolean
+) => {
+  if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing || disabled) return;
+  event.preventDefault();
+  submit();
+};
 
 /** 전자결재 문서 작성과 동일한 문서 틀 스타일 */
 const EXPENSE_LINE = '#E2E8F0';
@@ -491,6 +708,30 @@ const expenseTaxTableContainerSx = {
   width: '100%',
   overflow: 'visible',
   overflowX: 'hidden',
+} as const;
+
+/** 세금/합계 박스 너비 */
+const expenseTaxBoxWidthSx = {
+  width: { xs: '100%', sm: EXPENSE_TAX_BOX_WIDTH_PX },
+  minWidth: { xs: '100%', sm: EXPENSE_TAX_BOX_WIDTH_PX },
+  maxWidth: '100%',
+  overflow: 'visible',
+} as const;
+
+/** 세금/합계 박스 — 단독 우측 정렬 */
+const expenseTaxAlignedBoxSx = {
+  ...expenseTaxBoxWidthSx,
+  ml: { xs: 0, sm: 'auto' },
+} as const;
+
+/** 지출 항목 아래 — 첨부(좌) + 세금/합계(우) */
+const expenseDetailFooterRowSx = {
+  display: 'flex',
+  flexDirection: { xs: 'column', sm: 'row' },
+  alignItems: { xs: 'stretch', sm: 'flex-start' },
+  justifyContent: 'space-between',
+  gap: { xs: 2, sm: 1.5 },
+  width: '100%',
 } as const;
 
 const ClampText: React.FC<{ children: React.ReactNode; title?: string; sx?: object }> = ({
@@ -873,6 +1114,14 @@ const getFileExtension = (fileName: string) => {
   return base.slice(idx + 1);
 };
 
+/** UI 표시용 — 확장자 제외 */
+const stripFileExtensionForDisplay = (fileName: string): string => {
+  const base = String(fileName || '').split(/[/\\]/).pop() || String(fileName || '');
+  const idx = base.lastIndexOf('.');
+  if (idx <= 0) return base;
+  return base.slice(0, idx);
+};
+
 /** 확장자는 유지하고 표시 파일명만 변경 */
 const renameFileKeepingExtension = (file: File, nextName: string): File => {
   const cleaned = stripCorporateSuffixFromFilename(
@@ -911,6 +1160,18 @@ const PRIORITY_SORT_ORDER: Record<string, number> = {
   high: 1,
   medium: 2,
   low: 3,
+};
+
+/** 기본 목록 정렬: 검토중 → 반려 → 승인 */
+const DEFAULT_LIST_STATUS_SORT: Record<string, number> = {
+  in_review: 0,
+  submitted: 0,
+  revision_rejected: 1,
+  rejected: 1,
+  approved: 2,
+  draft: 3,
+  awaiting_tax: 4,
+  paid: 5,
 };
 
 const STATUS_SORT_ORDER: Record<string, number> = {
@@ -1178,8 +1439,11 @@ const ExpenseApproval: React.FC = () => {
   const deleteGuard = useMenuActionGuard('delete', EXPENSE_APPROVAL_MENU_ROUTES);
   const isRootUser = user?.role === 'root';
   const hasTransferAccess = Boolean(user?.is_payment_officer) || isRootUser;
+  const resolveDefaultTransferCompanyFilterId = useCallback((): number | '' => {
+    const userCompanyId = Number(user?.company_id);
+    return Number.isFinite(userCompanyId) && userCompanyId > 0 ? userCompanyId : '';
+  }, [user?.company_id]);
   const [expenses, setExpenses] = useState<ExpenseApprovalItem[]>([]);
-  const [filteredExpenses, setFilteredExpenses] = useState<ExpenseApprovalItem[]>([]);
   const [, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -1199,7 +1463,7 @@ const ExpenseApproval: React.FC = () => {
   const [companyFilterId, setCompanyFilterId] = useState<number | ''>('');
   const [companyOptions, setCompanyOptions] = useState<Array<{ id: number; name: string }>>([]);
   const [listSortKey, setListSortKey] = useState<ExpenseListSortKey | null>(null);
-  const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('desc');
+  const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [companyLogo, setCompanyLogo] = useState('');
@@ -1283,6 +1547,12 @@ const ExpenseApproval: React.FC = () => {
   const [reasonText, setReasonText] = useState('');
   const [reasonTargetId, setReasonTargetId] = useState<number | null>(null);
   const [approverSaving, setApproverSaving] = useState(false);
+  const [expenseCommentDraft, setExpenseCommentDraft] = useState('');
+  const [expenseCommentReplyTo, setExpenseCommentReplyTo] = useState<number | null>(null);
+  const [expenseCommentReplyDraft, setExpenseCommentReplyDraft] = useState('');
+  const [expenseCommentEditingId, setExpenseCommentEditingId] = useState<number | null>(null);
+  const [expenseCommentEditDraft, setExpenseCommentEditDraft] = useState('');
+  const [expenseCommentSubmitting, setExpenseCommentSubmitting] = useState(false);
   const parseExpenseItems = (value: any) => {
     if (!value) return { rows: [], meta: {} };
     let parsed = value;
@@ -1306,6 +1576,8 @@ const ExpenseApproval: React.FC = () => {
 
   const mapExpense = (expense: any): ExpenseApprovalItem => {
     const parsedItems = parseExpenseItems(expense.items);
+    const parsedComments = parseExpenseReportComments(expense.comments);
+    const parsedLastCommentAt = getExpenseLastCommentAt(parsedComments);
     return {
     id: expense.id,
     expenseId: expense.expense_id || '',
@@ -1327,6 +1599,12 @@ const ExpenseApproval: React.FC = () => {
     dueDate: expense.due_date || '',
     notes: expense.notes || '',
     attachments: normalizeExpenseAttachments(expense.attachments),
+    comments: parsedComments,
+    commentCount: Math.max(Number(expense.comment_count) || 0, countExpenseComments(parsedComments)),
+    lastCommentAt:
+      String(expense.last_comment_at || '').trim() ||
+      (parsedLastCommentAt > 0 ? new Date(parsedLastCommentAt).toISOString() : ''),
+    hasUnreadComments: Boolean(expense.has_unread_comments),
     itemMeta: parsedItems.meta,
     approvalId: expense.approval_id || undefined,
     paymentRequestStatus: expense.payment_request_status || undefined,
@@ -1636,7 +1914,7 @@ const ExpenseApproval: React.FC = () => {
     t,
   ]);
 
-  const filterExpenses = useCallback(() => {
+  const filteredExpenses = useMemo(() => {
     let filtered = expenses;
 
     if (listTab === 'written' && user?.id) {
@@ -1644,7 +1922,6 @@ const ExpenseApproval: React.FC = () => {
     }
     if (listTab === 'received' && user?.id) {
       filtered = filtered.filter(expense => {
-        // 초안은 승인자가 지정돼 있어도 '승인 제출' 전까지 받은 목록에 노출하지 않음
         if (expense.status === 'draft') return false;
         if (expense.currentApproverId === user.id) return true;
         if (expense.itemMeta?.checkedById && Number(expense.itemMeta.checkedById) === user.id) return true;
@@ -1656,8 +1933,6 @@ const ExpenseApproval: React.FC = () => {
       if (!hasTransferAccess) {
         filtered = [];
       } else {
-        // 승인·지급완료 건을 송금 목록 대상으로 두고, 상태 필터로 송금완료까지 검색
-        // 기본(전체)에서는 지급/송금 완료 건 숨김 — transfer_completed 선택 시에만 표시
         filtered = filtered.filter((expense) => {
           if (expense.status !== 'approved' && expense.status !== 'paid') return false;
           const transferKey = getTransferFilterKey(expense);
@@ -1681,17 +1956,14 @@ const ExpenseApproval: React.FC = () => {
       );
     }
 
-    // 송금 탭은 transfer_* 상태 필터를 위에서 적용
     if (listTab !== 'transfer') {
       if (statusFilter === 'paid') {
-        // 지급완료는 명시 선택 시에만 표시
         filtered = filtered.filter((expense) => isExpensePaidForList(expense));
       } else if (statusFilter) {
         filtered = filtered.filter(
           (expense) => !isExpensePaidForList(expense) && expense.status === statusFilter
         );
       } else {
-        // 전체: 지급완료 제외
         filtered = filtered.filter((expense) => !isExpensePaidForList(expense));
       }
     }
@@ -1700,7 +1972,7 @@ const ExpenseApproval: React.FC = () => {
       filtered = filtered.filter((expense) => expense.priority === priorityFilter);
     }
 
-    setFilteredExpenses(filtered);
+    return filtered;
   }, [
     expenses,
     searchTerm,
@@ -1940,10 +2212,6 @@ const ExpenseApproval: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    filterExpenses();
-  }, [filterExpenses]);
-
-  useEffect(() => {
     if (!hasTransferAccess && listTab === 'transfer') {
       setListTab('written');
     }
@@ -2084,9 +2352,39 @@ const ExpenseApproval: React.FC = () => {
     }
   };
 
+  const syncExpenseReadState = useCallback((expenseId: number, patch: Partial<ExpenseApprovalItem>) => {
+    setExpenses((prev) =>
+      prev.map((item) => (item.id === expenseId ? { ...item, ...patch, hasUnreadComments: false } : item))
+    );
+    setSelectedExpense((prev) => (prev && prev.id === expenseId ? { ...prev, ...patch, hasUnreadComments: false } : prev));
+  }, []);
+
   const handleViewExpense = (expense: ExpenseApprovalItem) => {
-    setSelectedExpense(expense);
+    setSelectedExpense({ ...expense, hasUnreadComments: false });
+    setExpenses((prev) =>
+      prev.map((item) => (item.id === expense.id ? { ...item, hasUnreadComments: false } : item))
+    );
     setViewMode('view');
+
+    void (async () => {
+      try {
+        const response = await accountingService.getExpenseReport(expense.id);
+        if (!response?.success || !response.data) return;
+        const mapped = mapExpense(response.data);
+        syncExpenseReadState(expense.id, {
+          comments: mapped.comments,
+          commentCount: mapped.commentCount,
+          lastCommentAt: mapped.lastCommentAt,
+        });
+      } catch {
+        try {
+          await accountingService.markExpenseCommentsRead(expense.id);
+          syncExpenseReadState(expense.id, {});
+        } catch {
+          // keep optimistic unread=false for current session only
+        }
+      }
+    })();
   };
 
   const handleEditExpense = (expense: ExpenseApprovalItem) => {
@@ -2489,7 +2787,7 @@ const ExpenseApproval: React.FC = () => {
   const resolvePreviewDownloadName = useCallback(() => {
     if (!previewAttachment) return 'download';
     const original = getReceiptDisplayName(previewAttachment);
-    const ext = getFileExtension(original);
+    const ext = getFileExtension(previewAttachment);
     const draft = stripCorporateSuffixFromFilename(
       String(previewDownloadName || '')
         .replace(/[\\/:*?"<>|]/g, '_')
@@ -3018,14 +3316,14 @@ const ExpenseApproval: React.FC = () => {
       { type: file.type, lastModified: file.lastModified }
     );
     setPaymentProofFile(named);
-    setProofNameDraft(named.name);
+    setProofNameDraft(stripFileExtensionForDisplay(named.name));
   }, [partners, selectedExpense]);
 
   const applyProofFileName = useCallback((nextName: string) => {
     setPaymentProofFile((prev) => {
       if (!prev) return prev;
       const renamed = renameFileKeepingExtension(prev, nextName);
-      setProofNameDraft(renamed.name);
+      setProofNameDraft(stripFileExtensionForDisplay(renamed.name));
       return renamed;
     });
   }, []);
@@ -3109,6 +3407,9 @@ const ExpenseApproval: React.FC = () => {
       setSuccess(t('expenseApproval.success.paymentCompleted'));
         setSelectedExpense(null);
         setListTab('transfer');
+        if (isRootUser) {
+          setCompanyFilterId(resolveDefaultTransferCompanyFilterId());
+        }
         setViewMode('list');
       }
     } catch (err: any) {
@@ -3237,17 +3538,7 @@ const ExpenseApproval: React.FC = () => {
       left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' }) * dir;
     rows.sort((a, b) => {
       if (!listSortKey) {
-        if (listTab === 'received') {
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        }
-        const byStatus =
-          (STATUS_SORT_ORDER[resolveDisplayStatus(a)] ?? 99) -
-          (STATUS_SORT_ORDER[resolveDisplayStatus(b)] ?? 99);
-        if (byStatus !== 0) return byStatus;
-        const byPriority =
-          (PRIORITY_SORT_ORDER[a.priority] ?? 9) - (PRIORITY_SORT_ORDER[b.priority] ?? 9);
-        if (byPriority !== 0) return byPriority;
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        return compareExpenseDefaultListOrder(a, b, resolveDisplayStatus);
       }
       switch (listSortKey) {
         case 'createdAt':
@@ -3315,6 +3606,140 @@ const ExpenseApproval: React.FC = () => {
       );
     } finally {
       setApproverSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    setExpenseCommentDraft('');
+    setExpenseCommentReplyTo(null);
+    setExpenseCommentReplyDraft('');
+    setExpenseCommentEditingId(null);
+    setExpenseCommentEditDraft('');
+  }, [selectedExpense?.id]);
+
+  const syncExpenseComments = (
+    expenseId: number,
+    nextComments: ExpenseReportComment[],
+    options?: { commentCount?: number; hasUnreadComments?: boolean }
+  ) => {
+    const nextCount = options?.commentCount ?? countExpenseComments(nextComments);
+    const latest = getExpenseLastCommentAt(nextComments);
+    const lastCommentAt = latest > 0 ? new Date(latest).toISOString() : new Date().toISOString();
+    const patch = {
+      comments: nextComments,
+      commentCount: nextCount,
+      lastCommentAt,
+      hasUnreadComments: options?.hasUnreadComments ?? true,
+    };
+    setSelectedExpense((prev) => (prev && prev.id === expenseId ? { ...prev, ...patch } : prev));
+    setExpenses((prev) => prev.map((item) => (item.id === expenseId ? { ...item, ...patch } : item)));
+  };
+
+  const handleBackToExpenseList = useCallback(async () => {
+    if (selectedExpense?.id) {
+      const commentCount =
+        selectedExpense.commentCount ?? countExpenseComments(selectedExpense.comments);
+      const lastCommentAt = resolveExpenseLastCommentAt(selectedExpense);
+      const hasUnreadComments = selectedExpense.hasUnreadComments ?? false;
+
+      setExpenses((prev) =>
+        prev.map((item) =>
+          item.id === selectedExpense.id
+            ? {
+                ...item,
+                comments: selectedExpense.comments,
+                commentCount,
+                lastCommentAt,
+                hasUnreadComments,
+              }
+            : item
+        )
+      );
+      setSelectedExpense((prev) =>
+        prev && prev.id === selectedExpense.id ? { ...prev, hasUnreadComments } : prev
+      );
+    }
+    setListSortKey(null);
+    setListSortDir('asc');
+    setViewMode('list');
+  }, [selectedExpense]);
+
+  const canEditExpenseComment = useCallback(
+    (comment: ExpenseReportComment) => isSameUserId(comment.userId, user?.id),
+    [user?.id]
+  );
+
+  const startExpenseCommentEdit = (comment: ExpenseReportComment) => {
+    setExpenseCommentEditingId(comment.id);
+    setExpenseCommentEditDraft(comment.comment);
+    setExpenseCommentReplyTo(null);
+    setExpenseCommentReplyDraft('');
+  };
+
+  const cancelExpenseCommentEdit = () => {
+    setExpenseCommentEditingId(null);
+    setExpenseCommentEditDraft('');
+  };
+
+  const handleAddExpenseComment = async (parentId?: number) => {
+    if (!selectedExpense || expenseCommentSubmitting) return;
+    const text = parentId ? expenseCommentReplyDraft.trim() : expenseCommentDraft.trim();
+    if (!text) return;
+    setExpenseCommentSubmitting(true);
+    setError('');
+    try {
+      const response = await accountingService.addExpenseReportComment(
+        selectedExpense.id,
+        text,
+        parentId
+      );
+      if (!response?.success) {
+        throw new Error(response?.message || t('expenseApproval.errors.commentAddFailed'));
+      }
+      const nextComments = parseExpenseReportComments(response.comments);
+      syncExpenseComments(selectedExpense.id, nextComments, {
+        commentCount: Number(response.comment_count) || undefined,
+        hasUnreadComments: Boolean(response.has_unread_comments ?? true),
+      });
+      if (parentId) {
+        setExpenseCommentReplyDraft('');
+        setExpenseCommentReplyTo(null);
+        setSuccess(t('expenseApproval.success.replyAdded'));
+      } else {
+        setExpenseCommentDraft('');
+        setSuccess(t('expenseApproval.success.commentAdded'));
+      }
+    } catch (error: any) {
+      setError(error?.response?.data?.message || error?.message || t('expenseApproval.errors.commentAddFailed'));
+    } finally {
+      setExpenseCommentSubmitting(false);
+    }
+  };
+
+  const handleUpdateExpenseComment = async (commentId: number) => {
+    if (!selectedExpense || expenseCommentSubmitting || !expenseCommentEditDraft.trim()) return;
+    setExpenseCommentSubmitting(true);
+    setError('');
+    try {
+      const response = await accountingService.updateExpenseReportComment(
+        selectedExpense.id,
+        commentId,
+        expenseCommentEditDraft.trim()
+      );
+      if (!response?.success) {
+        throw new Error(response?.message || t('expenseApproval.errors.commentUpdateFailed'));
+      }
+      const nextComments = parseExpenseReportComments(response.comments);
+      syncExpenseComments(selectedExpense.id, nextComments, {
+        commentCount: Number(response.comment_count) || undefined,
+        hasUnreadComments: Boolean(response.has_unread_comments ?? true),
+      });
+      cancelExpenseCommentEdit();
+      setSuccess(t('expenseApproval.success.commentUpdated'));
+    } catch (error: any) {
+      setError(error?.response?.data?.message || error?.message || t('expenseApproval.errors.commentUpdateFailed'));
+    } finally {
+      setExpenseCommentSubmitting(false);
     }
   };
 
@@ -4729,6 +5154,114 @@ const ExpenseApproval: React.FC = () => {
       return nodes;
     })();
 
+    const renderExpenseCommentBody = (comment: ExpenseReportComment, options?: { compact?: boolean; allowReply?: boolean }) => {
+      const compact = options?.compact;
+      const allowReply = options?.allowReply !== false;
+      const isEditing = expenseCommentEditingId === comment.id;
+      const fontSize = compact ? '0.8125rem' : undefined;
+
+      if (isEditing) {
+        return (
+          <Box sx={{ mt: 0.5, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, alignItems: { sm: 'flex-start' } }}>
+            <TextField
+              fullWidth
+              multiline
+              minRows={2}
+              size="small"
+              autoFocus
+              value={expenseCommentEditDraft}
+              onChange={(e) => setExpenseCommentEditDraft(e.target.value)}
+              onKeyDown={(e) =>
+                submitExpenseCommentOnEnter(
+                  e,
+                  () => void handleUpdateExpenseComment(comment.id),
+                  expenseCommentSubmitting || !expenseCommentEditDraft.trim()
+                )
+              }
+              disabled={expenseCommentSubmitting}
+            />
+            <Box sx={{ display: 'flex', gap: 0.75, flexShrink: 0 }}>
+              <Button
+                variant="contained"
+                disableElevation
+                onClick={() => void handleUpdateExpenseComment(comment.id)}
+                disabled={expenseCommentSubmitting || !expenseCommentEditDraft.trim()}
+                sx={{ ...mvsBodyPrimaryBtnSx, whiteSpace: 'nowrap' }}
+              >
+                {expenseCommentSubmitting
+                  ? t('expenseApproval.detail.commentEditSubmitting')
+                  : t('expenseApproval.detail.commentSave')}
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={cancelExpenseCommentEdit}
+                disabled={expenseCommentSubmitting}
+                sx={mvsBodyOutlinedBtnSx}
+              >
+                {t('common.cancel')}
+              </Button>
+            </Box>
+          </Box>
+        );
+      }
+
+      return (
+        <>
+          <Typography
+            variant="body2"
+            sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize }}
+          >
+            {comment.comment}
+          </Typography>
+          {menuFlags.canRead ? (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.25, mt: 0.5 }}>
+              {allowReply ? (
+                <Button
+                  size="small"
+                  startIcon={<ReplyIcon sx={{ fontSize: '0.95rem !important' }} />}
+                  onClick={() => {
+                    cancelExpenseCommentEdit();
+                    if (expenseCommentReplyTo === comment.id) {
+                      setExpenseCommentReplyTo(null);
+                      setExpenseCommentReplyDraft('');
+                      return;
+                    }
+                    setExpenseCommentReplyTo(comment.id);
+                    setExpenseCommentReplyDraft('');
+                  }}
+                  sx={{
+                    px: 0.5,
+                    minWidth: 0,
+                    textTransform: 'none',
+                    fontSize: '0.75rem',
+                    color: 'text.secondary',
+                  }}
+                >
+                  {t('expenseApproval.detail.reply')}
+                </Button>
+              ) : null}
+              {canEditExpenseComment(comment) ? (
+                <Button
+                  size="small"
+                  startIcon={<EditIcon sx={{ fontSize: '0.95rem !important' }} />}
+                  onClick={() => startExpenseCommentEdit(comment)}
+                  sx={{
+                    px: 0.5,
+                    minWidth: 0,
+                    textTransform: 'none',
+                    fontSize: '0.75rem',
+                    color: 'text.secondary',
+                  }}
+                >
+                  {t('expenseApproval.detail.commentEdit')}
+                </Button>
+              ) : null}
+            </Box>
+          ) : null}
+        </>
+      );
+    };
+
     return (
       <Box sx={{ ...mvsPageRootSx }}>
         <Box className="expense-no-print">
@@ -4738,7 +5271,7 @@ const ExpenseApproval: React.FC = () => {
             <>
             <Button
               variant="outlined"
-              onClick={() => setViewMode('list')}
+              onClick={() => void handleBackToExpenseList()}
               sx={mvsBodyOutlinedBtnSx}
             >
               {t('expenseApproval.actions.backToList')}
@@ -5229,112 +5762,12 @@ const ExpenseApproval: React.FC = () => {
               </TableContainer>
             </Box>
 
+            <Box sx={expenseDetailFooterRowSx}>
+            {/* 첨부파일 — 표 왼쪽 하단 */}
             <Box
-              className="expense-pdf-tax"
-              sx={{
-                width: { xs: '100%', sm: EXPENSE_TAX_BOX_WIDTH_PX },
-                minWidth: { xs: '100%', sm: EXPENSE_TAX_BOX_WIDTH_PX },
-                maxWidth: '100%',
-                ml: { xs: 0, sm: 'auto' },
-                overflow: 'visible',
-              }}
+              className="expense-pdf-plain expense-pdf-hide"
+              sx={{ flex: 1, minWidth: 0, width: { xs: '100%', sm: 'auto' } }}
             >
-              <Typography variant="subtitle2" sx={sectionTitleSx}>{t('expenseApproval.voucher.sectionTax')}</Typography>
-              <TableContainer sx={expenseTaxTableContainerSx}>
-                <Table size="small" sx={expenseTaxTableSx}>
-                  <colgroup>
-                    <col />
-                    <col style={{ width: EXPENSE_TAX_RATE_COL_WIDTH_PX }} />
-                    <col style={{ width: EXPENSE_TAX_AMOUNT_COL_WIDTH_PX }} />
-                  </colgroup>
-                  <TableBody>
-                    <TableRow sx={{ bgcolor: EXPENSE_HEADER_BG }}>
-                      <TableCell colSpan={2} sx={{ color: EXPENSE_HEADER_FG, fontWeight: 600 }}>
-                        {t('expenseApproval.voucher.taxSubtotal')}
-                      </TableCell>
-                      <TableCell align="right" sx={{ ...expenseAmountCellSx, fontWeight: 600, color: EXPENSE_HEADER_FG }}>
-                        {formatAmount(taxSummary.subtotal)}
-                      </TableCell>
-                    </TableRow>
-                    {([
-                      { label: 'IGST (B)', rate: taxSummary.igstRate, amount: taxSummary.igstAmount },
-                      { label: 'CGST (C)', rate: taxSummary.cgstRate, amount: taxSummary.cgstAmount },
-                      { label: 'SGST (D)', rate: taxSummary.sgstRate, amount: taxSummary.sgstAmount },
-                    ] as const).map((row) => (
-                      <TableRow key={row.label}>
-                        <TableCell>{row.label}</TableCell>
-                        <TableCell align="center" sx={{ color: 'text.secondary' }}>{row.rate}%</TableCell>
-                        <TableCell align="right" sx={expenseAmountCellSx}>
-                          {formatAmount(row.amount)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {taxSummary.tdsEnabled ? (
-                      <TableRow>
-                        <TableCell>TDS (E)</TableCell>
-                        <TableCell align="center" sx={{ color: 'text.secondary' }}>{taxSummary.tdsRate}%</TableCell>
-                        <TableCell align="right" sx={expenseAmountCellSx}>
-                          −{formatAmount(taxSummary.tdsAmount)}
-                        </TableCell>
-                      </TableRow>
-                    ) : null}
-                    <TableRow className="expense-pdf-grand-row" sx={{ bgcolor: EXPENSE_TOTAL_BG }}>
-                      <TableCell className="expense-pdf-grand" colSpan={2} sx={{ fontWeight: 700, borderBottom: 'none', color: EXPENSE_TOTAL_FG }}>
-                        {t('expenseApproval.voucher.grandTotal')}
-                      </TableCell>
-                      <TableCell
-                        className="expense-pdf-grand"
-                        align="right"
-                        sx={{ ...expenseAmountCellSx, fontWeight: 700, borderBottom: 'none', color: EXPENSE_TOTAL_FG }}
-                      >
-                        {displayExpenseCurrency(selectedExpense.currency)} {formatAmount(taxSummary.grandTotal)}
-                      </TableCell>
-                    </TableRow>
-                    {(Number(selectedExpense.paidAmount || 0) > 0 ||
-                      isPaymentApproved ||
-                      remittanceEntries.length > 0) && (
-                      <>
-                        {remittanceEntries.length > 0
-                          ? remittanceEntries.map((row, index) => (
-                              <TableRow key={`${row.timestamp || 'remit'}-${index}`}>
-                                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                                  {t('expenseApproval.detail.paidAmount')} {formatRemittanceDateTime(row.timestamp)}
-                                </TableCell>
-                                <TableCell />
-                                <TableCell align="right" sx={expenseAmountCellSx}>
-                                  {displayExpenseCurrency(selectedExpense.currency)} {formatAmount(row.amount)}
-                                </TableCell>
-                              </TableRow>
-                            ))
-                          : (
-                            <TableRow>
-                              <TableCell>{t('expenseApproval.detail.paidAmount')}</TableCell>
-                              <TableCell />
-                              <TableCell align="right" sx={expenseAmountCellSx}>
-                                {displayExpenseCurrency(selectedExpense.currency)}{' '}
-                                {formatAmount(Number(selectedExpense.paidAmount || 0))}
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 700 }}>
-                            {t('expenseApproval.detail.remainingAmount')}
-                          </TableCell>
-                          <TableCell />
-                          <TableCell align="right" sx={{ ...expenseAmountCellSx, fontWeight: 700, color: 'warning.main' }}>
-                            {displayExpenseCurrency(selectedExpense.currency)}{' '}
-                            {formatAmount(getExpenseRemainingAmount(selectedExpense))}
-                          </TableCell>
-                        </TableRow>
-                      </>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Box>
-
-            {/* 첨부파일 */}
-            <Box className="expense-pdf-plain expense-pdf-hide">
               <Typography variant="subtitle2" sx={sectionTitleSx}>{t('expenseApproval.detail.attachments')}</Typography>
               {expenseIsAwaitingTaxInvoice(selectedExpense) && (
                 <Alert severity="warning" sx={{ mb: 1.5, py: 0.5 }}>
@@ -5433,6 +5866,105 @@ const ExpenseApproval: React.FC = () => {
                   {t('expenseApproval.voucher.receiptNone')}
                         </Typography>
                       )}
+            </Box>
+
+            <Box
+              className="expense-pdf-tax"
+              sx={{ ...expenseTaxBoxWidthSx, flexShrink: 0 }}
+            >
+              <Typography variant="subtitle2" sx={sectionTitleSx}>{t('expenseApproval.voucher.sectionTax')}</Typography>
+              <TableContainer sx={expenseTaxTableContainerSx}>
+                <Table size="small" sx={expenseTaxTableSx}>
+                  <colgroup>
+                    <col />
+                    <col style={{ width: EXPENSE_TAX_RATE_COL_WIDTH_PX }} />
+                    <col style={{ width: EXPENSE_TAX_AMOUNT_COL_WIDTH_PX }} />
+                  </colgroup>
+                  <TableBody>
+                    <TableRow sx={{ bgcolor: EXPENSE_HEADER_BG }}>
+                      <TableCell colSpan={2} sx={{ color: EXPENSE_HEADER_FG, fontWeight: 600 }}>
+                        {t('expenseApproval.voucher.taxSubtotal')}
+                      </TableCell>
+                      <TableCell align="right" sx={{ ...expenseAmountCellSx, fontWeight: 600, color: EXPENSE_HEADER_FG }}>
+                        {formatAmount(taxSummary.subtotal)}
+                      </TableCell>
+                    </TableRow>
+                    {([
+                      { label: 'IGST (B)', rate: taxSummary.igstRate, amount: taxSummary.igstAmount },
+                      { label: 'CGST (C)', rate: taxSummary.cgstRate, amount: taxSummary.cgstAmount },
+                      { label: 'SGST (D)', rate: taxSummary.sgstRate, amount: taxSummary.sgstAmount },
+                    ] as const).map((row) => (
+                      <TableRow key={row.label}>
+                        <TableCell>{row.label}</TableCell>
+                        <TableCell align="center" sx={{ color: 'text.secondary' }}>{row.rate}%</TableCell>
+                        <TableCell align="right" sx={expenseAmountCellSx}>
+                          {formatAmount(row.amount)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {taxSummary.tdsEnabled ? (
+                      <TableRow>
+                        <TableCell>TDS (E)</TableCell>
+                        <TableCell align="center" sx={{ color: 'text.secondary' }}>{taxSummary.tdsRate}%</TableCell>
+                        <TableCell align="right" sx={expenseAmountCellSx}>
+                          −{formatAmount(taxSummary.tdsAmount)}
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                    <TableRow className="expense-pdf-grand-row" sx={{ bgcolor: EXPENSE_TOTAL_BG }}>
+                      <TableCell className="expense-pdf-grand" colSpan={2} sx={{ fontWeight: 700, borderBottom: 'none', color: EXPENSE_TOTAL_FG }}>
+                        {t('expenseApproval.voucher.grandTotal')}
+                      </TableCell>
+                      <TableCell
+                        className="expense-pdf-grand"
+                        align="right"
+                        sx={{ ...expenseAmountCellSx, fontWeight: 700, borderBottom: 'none', color: EXPENSE_TOTAL_FG }}
+                      >
+                        {displayExpenseCurrency(selectedExpense.currency)} {formatAmount(taxSummary.grandTotal)}
+                      </TableCell>
+                    </TableRow>
+                    {(Number(selectedExpense.paidAmount || 0) > 0 ||
+                      isPaymentApproved ||
+                      remittanceEntries.length > 0) && (
+                      <>
+                        {remittanceEntries.length > 0
+                          ? remittanceEntries.map((row, index) => (
+                              <TableRow key={`${row.timestamp || 'remit'}-${index}`}>
+                                <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                                  {t('expenseApproval.detail.paidAmount')} {formatRemittanceDateTime(row.timestamp)}
+                                </TableCell>
+                                <TableCell />
+                                <TableCell align="right" sx={expenseAmountCellSx}>
+                                  {displayExpenseCurrency(selectedExpense.currency)} {formatAmount(row.amount)}
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          : (
+                            <TableRow>
+                              <TableCell>{t('expenseApproval.detail.paidAmount')}</TableCell>
+                              <TableCell />
+                              <TableCell align="right" sx={expenseAmountCellSx}>
+                                {displayExpenseCurrency(selectedExpense.currency)}{' '}
+                                {formatAmount(Number(selectedExpense.paidAmount || 0))}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 700 }}>
+                            {t('expenseApproval.detail.remainingAmount')}
+                          </TableCell>
+                          <TableCell />
+                          <TableCell align="right" sx={{ ...expenseAmountCellSx, fontWeight: 700, color: 'warning.main' }}>
+                            {displayExpenseCurrency(selectedExpense.currency)}{' '}
+                            {formatAmount(getExpenseRemainingAmount(selectedExpense))}
+                          </TableCell>
+                        </TableRow>
+                      </>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
             </Box>
 
             {/* 송금 확인증 */}
@@ -5625,6 +6157,160 @@ const ExpenseApproval: React.FC = () => {
               )}
             </Box>
 
+            <Box
+              className="expense-no-print expense-pdf-hide"
+              sx={{
+                mt: 2,
+                width: '100%',
+                boxSizing: 'border-box',
+                border: `1px solid ${EXPENSE_LINE}`,
+                bgcolor: EXPENSE_MUTED_BG,
+                p: 1.5,
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ ...sectionTitleSx, mb: 1 }}>
+                {t('expenseApproval.detail.comments')}
+              </Typography>
+              {selectedExpense.comments.length > 0 ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, mb: 1.5 }}>
+                  {selectedExpense.comments.map((comment) => (
+                    <Box key={comment.id}>
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                        <Avatar sx={{ width: 28, height: 28, fontSize: '0.75rem', bgcolor: '#CBD5E1', color: '#0F172A' }}>
+                          {(comment.userName || '?').charAt(0)}
+                        </Avatar>
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'baseline', mb: 0.25 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {comment.userName}
+                            </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {formatRemittanceDateTime(comment.updatedAt || comment.createdAt)}
+                          </Typography>
+                        </Box>
+                          {renderExpenseCommentBody(comment)}
+                          {expenseCommentReplyTo === comment.id && menuFlags.canRead ? (
+                            <Box sx={{ mt: 1, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, alignItems: { sm: 'flex-start' } }}>
+                              <TextField
+                                fullWidth
+                                multiline
+                                minRows={2}
+                                size="small"
+                                autoFocus
+                                placeholder={t('expenseApproval.detail.replyPlaceholder')}
+                                value={expenseCommentReplyDraft}
+                                onChange={(e) => setExpenseCommentReplyDraft(e.target.value)}
+                                onKeyDown={(e) =>
+                                  submitExpenseCommentOnEnter(
+                                    e,
+                                    () => void handleAddExpenseComment(comment.id),
+                                    expenseCommentSubmitting || !expenseCommentReplyDraft.trim()
+                                  )
+                                }
+                                disabled={expenseCommentSubmitting}
+                              />
+                              <Box sx={{ display: 'flex', gap: 0.75, flexShrink: 0 }}>
+                                <Button
+                                  variant="contained"
+                                  disableElevation
+                                  onClick={() => void handleAddExpenseComment(comment.id)}
+                                  disabled={expenseCommentSubmitting || !expenseCommentReplyDraft.trim()}
+                                  sx={{ ...mvsBodyPrimaryBtnSx, whiteSpace: 'nowrap' }}
+                                >
+                                  {expenseCommentSubmitting
+                                    ? t('expenseApproval.detail.commentSubmitting')
+                                    : t('expenseApproval.detail.replySubmit')}
+                                </Button>
+                                <Button
+                                  variant="outlined"
+                                  onClick={() => {
+                                    setExpenseCommentReplyTo(null);
+                                    setExpenseCommentReplyDraft('');
+                                  }}
+                                  disabled={expenseCommentSubmitting}
+                                  sx={mvsBodyOutlinedBtnSx}
+                                >
+                                  {t('common.cancel')}
+                                </Button>
+                              </Box>
+                            </Box>
+                          ) : null}
+                        </Box>
+                      </Box>
+                      {(comment.replies || []).length > 0 ? (
+                        <Box
+                          sx={{
+                            mt: 1,
+                            ml: 4.5,
+                            pl: 1.5,
+                            borderLeft: `2px solid ${EXPENSE_LINE}`,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 1,
+                          }}
+                        >
+                          {(comment.replies || []).map((reply) => (
+                            <Box key={reply.id} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                              <Avatar sx={{ width: 24, height: 24, fontSize: '0.7rem', bgcolor: '#E2E8F0', color: '#0F172A' }}>
+                                {(reply.userName || '?').charAt(0)}
+                              </Avatar>
+                              <Box sx={{ minWidth: 0, flex: 1 }}>
+                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'baseline', mb: 0.25 }}>
+                                  <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8125rem' }}>
+                                    {reply.userName}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {formatRemittanceDateTime(reply.updatedAt || reply.createdAt)}
+                                  </Typography>
+                                </Box>
+                                {renderExpenseCommentBody(reply, { compact: true, allowReply: false })}
+                              </Box>
+                            </Box>
+                          ))}
+                        </Box>
+                      ) : null}
+                    </Box>
+                  ))}
+                </Box>
+              ) : (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  {t('expenseApproval.detail.commentsEmpty')}
+                </Typography>
+              )}
+              {menuFlags.canRead ? (
+                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, alignItems: { sm: 'flex-start' } }}>
+                  <TextField
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    size="small"
+                    placeholder={t('expenseApproval.detail.commentPlaceholder')}
+                    value={expenseCommentDraft}
+                    onChange={(e) => setExpenseCommentDraft(e.target.value)}
+                    onKeyDown={(e) =>
+                      submitExpenseCommentOnEnter(
+                        e,
+                        () => void handleAddExpenseComment(),
+                        expenseCommentSubmitting || !expenseCommentDraft.trim()
+                      )
+                    }
+                    disabled={expenseCommentSubmitting}
+                  />
+                  <Button
+                    variant="contained"
+                    disableElevation
+                    onClick={() => void handleAddExpenseComment()}
+                    disabled={expenseCommentSubmitting || !expenseCommentDraft.trim()}
+                    sx={{ ...mvsBodyPrimaryBtnSx, flexShrink: 0, alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
+                  >
+                    {expenseCommentSubmitting
+                      ? t('expenseApproval.detail.commentSubmitting')
+                      : t('expenseApproval.detail.commentSubmit')}
+                  </Button>
+                </Box>
+              ) : null}
+            </Box>
+
             <Dialog open={reasonDialogOpen} onClose={closeReasonDialog} maxWidth="sm" fullWidth>
               <DialogTitle>
                 {reasonDialogType === 'payment-approve'
@@ -5770,7 +6456,7 @@ const ExpenseApproval: React.FC = () => {
                           }
                           if (e.key === 'Escape') {
                             e.preventDefault();
-                            setProofNameDraft(paymentProofFile.name);
+                            setProofNameDraft(stripFileExtensionForDisplay(paymentProofFile.name));
                             (e.target as HTMLInputElement).blur();
                           }
                         }}
@@ -5954,12 +6640,12 @@ const ExpenseApproval: React.FC = () => {
             setListTab(value);
             setStatusFilter('');
             setPage(1);
-            if (value !== 'transfer') {
+            setListSortKey(null);
+            setListSortDir('asc');
+            if (value === 'transfer') {
+              setCompanyFilterId(resolveDefaultTransferCompanyFilterId());
+            } else {
               setCompanyFilterId('');
-            }
-            if (value === 'received') {
-              setListSortKey('createdAt');
-              setListSortDir('desc');
             }
           }}
           sx={{
@@ -6218,7 +6904,13 @@ const ExpenseApproval: React.FC = () => {
                   setSearchTerm('');
                   setStatusFilter('');
                   setPriorityFilter('');
-                setCompanyFilterId('');
+                setCompanyFilterId(
+                  listTab === 'transfer' && isRootUser
+                    ? resolveDefaultTransferCompanyFilterId()
+                    : ''
+                );
+                setListSortKey(null);
+                setListSortDir('asc');
                 setPage(1);
                 }}
               sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
@@ -6352,9 +7044,12 @@ const ExpenseApproval: React.FC = () => {
                       : '-'}
                   </TableCell>
                   <TableCell sx={{ minWidth: 0 }}>
-                    <Typography variant="subtitle2" fontWeight="bold" noWrap>
+                    <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, gap: 0.5 }}>
+                      <Typography variant="subtitle2" fontWeight="bold" noWrap sx={{ minWidth: 0 }}>
                         {expense.title}
                       </Typography>
+                      <ExpenseCommentCountBadge expense={expense} />
+                    </Box>
                     {isRootUser && listTab === 'transfer' && expense.companyName ? (
                       <Typography variant="caption" color="text.secondary" display="block" noWrap>
                         {expense.companyName}

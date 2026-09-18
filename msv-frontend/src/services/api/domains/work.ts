@@ -139,6 +139,24 @@ export const workBoardService = {
     const response = await api.delete(`/work/boards/${boardId}/cards/${cardId}/comments/${commentId}`);
     return response.data;
   },
+  markCardCommentsRead: async (boardId: number, cardId: number) => {
+    const response = await api.post(`/work/boards/${boardId}/cards/${cardId}/comments/read`);
+    return response.data;
+  },
+  uploadCardAttachments: async (boardId: number, cardId: number, files: File[]) => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    const response = await api.post(`/work/boards/${boardId}/cards/${cardId}/attachments`, formData, {
+      timeout: 120000,
+    });
+    return response.data;
+  },
+  deleteCardAttachment: async (boardId: number, cardId: number, storedName: string) => {
+    const response = await api.delete(
+      `/work/boards/${boardId}/cards/${cardId}/attachments/${encodeURIComponent(storedName)}`
+    );
+    return response.data;
+  },
   getMembers: async (boardId: number) => {
     const response = await api.get(`/work/boards/${boardId}/members`);
     return response.data;
