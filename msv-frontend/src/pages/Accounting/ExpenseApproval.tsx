@@ -213,6 +213,7 @@ interface ExpenseItem {
   amount?: number;
   /** TDS 양식 전용 */
   pan?: string;
+  deducteePartnerId?: string;
   tdsRate?: number;
   deducteeType?: 'company' | 'other';
   tdsSection?: string;
@@ -220,7 +221,29 @@ interface ExpenseItem {
   tdsAmount?: number;
   tdsInterest?: number;
   remarks?: string;
+  /** GST 전표 유형 전용 */
+  gstRowKey?: 'sale' | 'inputCredit' | 'rcm' | 'earlierCredit';
+  taxableValue?: number;
+  igst?: number;
+  cgst?: number;
+  sgst?: number;
 }
+
+type GstSummaryRowKey = NonNullable<ExpenseItem['gstRowKey']>;
+
+const GST_SUMMARY_ROW_ORDER: GstSummaryRowKey[] = ['sale', 'inputCredit', 'earlierCredit', 'rcm'];
+
+const GST_SUMMARY_ROW_DEFS: Array<{
+  key: GstSummaryRowKey;
+  labelKey: string;
+  withPeriod?: boolean;
+  fields: { taxable?: boolean; igst?: boolean; cgst?: boolean; sgst?: boolean };
+}> = [
+  { key: 'sale', labelKey: 'gstRowSale', withPeriod: true, fields: { taxable: true, igst: true, cgst: true, sgst: true } },
+  { key: 'inputCredit', labelKey: 'gstRowInputCredit', withPeriod: true, fields: { taxable: true, igst: true, cgst: true, sgst: true } },
+  { key: 'earlierCredit', labelKey: 'gstRowEarlierCredit', fields: { taxable: true, igst: true, cgst: true, sgst: true } },
+  { key: 'rcm', labelKey: 'gstRowRcm', fields: { taxable: true, igst: true, cgst: true, sgst: true } },
+];
 
 type ExpenseFormType = 'general' | 'gst' | 'tds';
 
@@ -243,8 +266,35 @@ const calcTdsLineAmounts = (item: {
   const rate = Number(item.tdsRate || 0);
   const tdsAmt = floorMoney(base * (rate / 100));
   const interest = floorMoney(Number(item.tdsInterest || 0));
-  const payable = floorMoney(Math.max(0, base - tdsAmt));
+  const payable = floorMoney(base - tdsAmt);
   return { base, tdsAmt, interest, payable, lineTotal: floorMoney(tdsAmt + interest) };
+};
+
+const sumTdsBaseByDeducteeType = (
+  items: Array<{
+    amount?: number;
+    unitPrice?: number;
+    qty?: number;
+    tdsRate?: number;
+    tdsInterest?: number;
+    deducteeType?: string;
+  }> | undefined,
+  type: 'company' | 'other'
+) =>
+  floorMoney(
+    (items || []).reduce((sum, item) => {
+      const isCompany = String(item.deducteeType || '').toLowerCase() === 'company';
+      if (type === 'company' ? !isCompany : isCompany) return sum;
+      return sum + calcTdsLineAmounts(item).base;
+    }, 0)
+  );
+
+const formatSignedAmount = (value: number) => {
+  const n = floorMoney(value);
+  if (n < 0) {
+    return `(${Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 0 })})`;
+  }
+  return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
 };
 
 interface PartnerOption {
@@ -428,11 +478,6 @@ const resolveExpenseLastCommentAt = (expense: ExpenseApprovalItem): string => {
   return ts > 0 ? new Date(ts).toISOString() : '';
 };
 
-const getExpenseLastCommentTime = (expense: ExpenseApprovalItem): number => {
-  const ts = Date.parse(resolveExpenseLastCommentAt(expense));
-  return Number.isFinite(ts) ? ts : 0;
-};
-
 const countExpenseComments = (comments: ExpenseReportComment[] = []): number => {
   let count = 0;
   const walk = (rows: ExpenseReportComment[]) => {
@@ -450,29 +495,22 @@ const compareExpenseDefaultListOrder = (
   b: ExpenseApprovalItem,
   resolveStatus: (expense: ExpenseApprovalItem) => string
 ) => {
+  // 1) 안 읽은 댓글
   if (a.hasUnreadComments !== b.hasUnreadComments) {
     return a.hasUnreadComments ? -1 : 1;
   }
 
-  const aCount = a.commentCount ?? countExpenseComments(a.comments);
-  const bCount = b.commentCount ?? countExpenseComments(b.comments);
-  if ((aCount > 0) !== (bCount > 0)) {
-    return aCount > 0 ? -1 : 1;
-  }
+  // 2) 상태: 제출 → 검토 → 승인 → …
+  const byStatus =
+    (STATUS_SORT_ORDER[resolveStatus(a)] ?? 99) - (STATUS_SORT_ORDER[resolveStatus(b)] ?? 99);
+  if (byStatus !== 0) return byStatus;
 
-  const byLastComment = getExpenseLastCommentTime(b) - getExpenseLastCommentTime(a);
-  if (byLastComment !== 0) return byLastComment;
-
+  // 3) 우선순위: 긴급 → 높음 → 보통 → 낮음
   const byPriority = (PRIORITY_SORT_ORDER[a.priority] ?? 9) - (PRIORITY_SORT_ORDER[b.priority] ?? 9);
   if (byPriority !== 0) return byPriority;
 
-  const byDate = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-  if (byDate !== 0) return byDate;
-
-  return (
-    (DEFAULT_LIST_STATUS_SORT[resolveStatus(a)] ?? 99) -
-    (DEFAULT_LIST_STATUS_SORT[resolveStatus(b)] ?? 99)
-  );
+  // 4) 작성일: 최근 → 과거
+  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
 };
 
 const ExpenseCommentCountBadge: React.FC<{ expense: ExpenseApprovalItem }> = ({ expense }) => {
@@ -562,8 +600,98 @@ const EXPENSE_STAMP_HEADER_BG = '#F1F5F9';
 const EXPENSE_STAMP_LABEL = '#0F172A';
 const EXPENSE_VENDOR_BG = '#FFFFFF';
 /** 협력업체 섹션 외곽선 — 일반 테두리보다 뚜렷하게 (결재란 외곽선과 동일 톤) */
-const EXPENSE_VENDOR_LINE = '#94A3B8';
+const EXPENSE_VENDOR_LINE = '#64748B';
 const EXPENSE_VENDOR_SUB = '#64748B';
+
+/** GST 요약표 — 숫자열·합계행 간격 (colgroup % + 입력 fullWidth) */
+const GST_SUMMARY_NUM_COL_PERCENT = '15%';
+const GST_SUMMARY_ROW_TOTAL_COL_PERCENT = '11%';
+const GST_SUMMARY_DETAIL_COL_PERCENT = '24%';
+
+const gstSummaryTableSx = {
+  tableLayout: 'fixed' as const,
+  width: '100%',
+} as const;
+
+const gstSummaryDataCellSx = {
+  py: 0.55,
+  px: 0.375,
+  borderBottom: `1px solid ${EXPENSE_LINE}`,
+  verticalAlign: 'middle' as const,
+} as const;
+
+const gstSummaryDetailCellSx = {
+  ...gstSummaryDataCellSx,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+} as const;
+
+const gstSummaryNumCellSx = {
+  ...gstSummaryDataCellSx,
+  px: 0.25,
+  whiteSpace: 'nowrap' as const,
+} as const;
+
+const gstSummaryNumFieldSx = {
+  width: '100%',
+  maxWidth: '100%',
+  display: 'block',
+  '& .MuiOutlinedInput-root': {
+    width: '100%',
+    height: 36,
+    borderRadius: '4px',
+    bgcolor: '#FFFFFF',
+    '& fieldset': { borderColor: '#CBD5E1' },
+    '&:hover fieldset': { borderColor: '#94A3B8' },
+    '& .MuiOutlinedInput-input': {
+      py: 0.5,
+      px: 0.625,
+      fontSize: '0.875rem',
+      textAlign: 'right',
+      fontVariantNumeric: 'tabular-nums',
+    },
+  },
+} as const;
+
+const gstSummaryTotalRowSx = {
+  bgcolor: EXPENSE_MUTED_BG,
+  '& .MuiTableCell-root': {
+    py: 1.2,
+    px: 0.75,
+    borderTop: `2px solid ${EXPENSE_LINE}`,
+    borderBottom: `1px solid ${EXPENSE_LINE}`,
+    bgcolor: EXPENSE_MUTED_BG,
+    fontWeight: 700,
+    fontSize: '0.875rem',
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1.45,
+    verticalAlign: 'middle',
+  },
+} as const;
+
+const gstSummaryPayableRowSx = {
+  bgcolor: EXPENSE_TOTAL_BG,
+  '& .MuiTableCell-root': {
+    py: 0.9,
+    px: 0.75,
+    bgcolor: EXPENSE_TOTAL_BG,
+    fontWeight: 700,
+    borderBottom: 'none',
+    verticalAlign: 'middle',
+  },
+} as const;
+
+const gstSummaryColGroup = (
+  <colgroup>
+    <col style={{ width: '4%' }} />
+    <col style={{ width: GST_SUMMARY_DETAIL_COL_PERCENT }} />
+    <col style={{ width: GST_SUMMARY_NUM_COL_PERCENT }} />
+    <col style={{ width: GST_SUMMARY_NUM_COL_PERCENT }} />
+    <col style={{ width: GST_SUMMARY_NUM_COL_PERCENT }} />
+    <col style={{ width: GST_SUMMARY_NUM_COL_PERCENT }} />
+    <col style={{ width: GST_SUMMARY_ROW_TOTAL_COL_PERCENT }} />
+  </colgroup>
+);
 
 /** 좌측 헤더·섹션 제목·항목명 공통 시작점 (테두리와 겹치지 않는 최소 여백) */
 const EXPENSE_TEXT_PAD_LEFT = '6px';
@@ -706,8 +834,45 @@ const expenseTaxTableSx = {
 const expenseTaxTableContainerSx = {
   border: `1px solid ${EXPENSE_LINE}`,
   width: '100%',
+  // MUI TableContainer 기본 overflowX:auto + overflowX만 hidden 시
+  // CSS 규약상 overflowY가 auto로 바뀌어 불필요 스크롤이 생김
+  overflow: 'hidden',
+} as const;
+
+/** TDS 합계 박스 — 라벨 2줄이 ... 없이 들어가도록 기본 세금 박스보다 넓게 */
+const EXPENSE_TDS_TAX_BOX_WIDTH_PX = 460;
+
+const expenseTdsTaxBoxSx = {
+  width: { xs: '100%', sm: EXPENSE_TDS_TAX_BOX_WIDTH_PX },
+  minWidth: { xs: '100%', sm: EXPENSE_TDS_TAX_BOX_WIDTH_PX },
+  maxWidth: '100%',
+  ml: { xs: 0, sm: 'auto' },
   overflow: 'visible',
-  overflowX: 'hidden',
+} as const;
+
+/** TDS 합계(라벨+금액 2열) — 라벨은 줄바꿈 허용(말줄임 금지), 금액열만 고정 */
+const expenseTdsTaxTableSx = {
+  ...compactTableSx,
+  tableLayout: 'fixed',
+  width: '100%',
+  '& .MuiTableRow-root': {
+    height: 'auto',
+  },
+  '& .MuiTableCell-root': {
+    ...compactTableSx['& .MuiTableCell-root'],
+    height: 'auto !important',
+    minHeight: 52,
+    padding: '14px 12px !important',
+    whiteSpace: 'normal',
+    overflow: 'visible',
+    textOverflow: 'clip',
+    lineHeight: '22px !important',
+  },
+  '& .MuiTableCell-root:last-child': {
+    ...expenseAmountCellSx,
+    whiteSpace: 'nowrap',
+    verticalAlign: 'middle',
+  },
 } as const;
 
 /** 세금/합계 박스 너비 */
@@ -835,6 +1000,44 @@ const expenseApprovalStampWrapSx = {
   width: 'auto',
 } as const;
 
+/** 승인자 Autocomplete — 이름 길이에 맞게 너비 확장, 잘림 방지 */
+const expenseApproverAutocompleteSx = {
+  width: 'max-content',
+  minWidth: 140,
+  maxWidth: '100%',
+  '& .MuiAutocomplete-inputRoot': {
+    flexWrap: 'nowrap',
+    paddingRight: '48px !important',
+  },
+  '& .MuiAutocomplete-input': {
+    width: 'auto !important',
+    minWidth: '6ch !important',
+    textOverflow: 'clip',
+  },
+  '& .MuiAutocomplete-endAdornment': {
+    top: '50%',
+    transform: 'translateY(-50%)',
+    right: 0,
+  },
+} as const;
+
+const expenseApproverAutocompleteSlotProps = {
+  paper: {
+    sx: {
+      width: 'max-content',
+      minWidth: 180,
+      maxWidth: 'min(480px, 90vw)',
+    },
+  },
+  listbox: {
+    sx: {
+      '& .MuiAutocomplete-option': {
+        whiteSpace: 'nowrap',
+      },
+    },
+  },
+} as const;
+
 const ExpenseFlowStamp = ({
   label,
   name,
@@ -855,13 +1058,13 @@ const ExpenseFlowStamp = ({
   <Box
     className={`expense-flow-stamp${relaxedLabel ? ' expense-flow-stamp--relaxed-label' : ''}`}
     sx={{
-      width: wide ? 222 : fluidWidth ? 'auto' : 140,
-      minWidth: wide ? 222 : relaxedLabel ? 168 : fluidWidth ? 120 : 140,
-      maxWidth: wide ? 222 : relaxedLabel ? 'none' : fluidWidth ? 240 : 140,
+      width: wide ? 222 : fluidWidth ? 'max-content' : 140,
+      minWidth: wide ? 222 : relaxedLabel ? 168 : fluidWidth ? 140 : 140,
+      maxWidth: wide ? 222 : relaxedLabel ? 'none' : fluidWidth ? 'none' : 140,
       flexShrink: 0,
       border: `1px solid ${EXPENSE_STAMP_LINE}`,
       bgcolor: '#FFFFFF',
-      overflow: 'hidden',
+      overflow: fluidWidth ? 'visible' : 'hidden',
       opacity: muted ? 0.65 : 1,
       display: 'flex',
       flexDirection: 'column',
@@ -899,6 +1102,9 @@ const ExpenseFlowStamp = ({
         alignItems: 'center',
         justifyContent: 'center',
         px: 1,
+        width: fluidWidth ? 'max-content' : '100%',
+        minWidth: '100%',
+        boxSizing: 'border-box',
       }}
     >
       {children || (
@@ -909,9 +1115,9 @@ const ExpenseFlowStamp = ({
             color: EXPENSE_STAMP_LABEL,
             textAlign: 'center',
             whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            maxWidth: '100%',
+            overflow: fluidWidth ? 'visible' : 'hidden',
+            textOverflow: fluidWidth ? 'clip' : 'ellipsis',
+            maxWidth: fluidWidth ? 'none' : '100%',
           }}
         >
           {name}
@@ -1147,13 +1353,212 @@ const floorMoney = (value: number): number => {
   return n >= 0 ? Math.floor(n) : Math.ceil(n);
 };
 
+/** 수량·단가 등 소수 둘째 자리까지 반올림 */
+const roundDecimal2 = (value: number): number => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100) / 100;
+};
+
 const formatAmount = (value: number) =>
   floorMoney(value).toLocaleString('en-US', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   });
 
+const formatDecimal2 = (value: number) =>
+  roundDecimal2(value).toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+
+const hasVoucherGstRates = (data: {
+  formType: ExpenseFormType;
+  igstRate?: number;
+  cgstRate?: number;
+  sgstRate?: number;
+}) =>
+  data.formType === 'general' &&
+  (Number(data.igstRate || 0) > 0 ||
+    Number(data.cgstRate || 0) > 0 ||
+    Number(data.sgstRate || 0) > 0);
+
+const calcVoucherGstAmount = (subtotal: number, rate: number) =>
+  roundDecimal2(subtotal * (Number(rate || 0) / 100));
+
+const getGstPeriodLabel = (referenceDate?: string, language?: string) => {
+  const base = referenceDate ? new Date(`${referenceDate}T12:00:00`) : new Date();
+  if (!Number.isFinite(base.getTime())) return '';
+  const period = new Date(base.getFullYear(), base.getMonth() - 1, 1);
+  const year = period.getFullYear();
+  if (language?.startsWith('ko')) {
+    return `${period.getMonth() + 1}월 -${year}`;
+  }
+  const fmt = new Intl.DateTimeFormat('en-US', { month: 'long' });
+  return `${fmt.format(period)} -${year}`;
+};
+
+/** Professional Tax 행 라벨용 (예: August 26) */
+const getGstPeriodShortLabel = (referenceDate?: string, language?: string) => {
+  const base = referenceDate ? new Date(`${referenceDate}T12:00:00`) : new Date();
+  if (!Number.isFinite(base.getTime())) return '';
+  const period = new Date(base.getFullYear(), base.getMonth() - 1, 1);
+  const yy = String(period.getFullYear()).slice(-2);
+  if (language?.startsWith('ko')) {
+    return `${period.getMonth() + 1}월 ${yy}`;
+  }
+  const fmt = new Intl.DateTimeFormat('en-US', { month: 'long' });
+  return `${fmt.format(period)} ${yy}`;
+};
+
+const buildPaymentVoucherTitle = (kind: 'GST' | 'TDS', referenceDate?: string) => {
+  const raw = String(referenceDate || '').slice(0, 10);
+  const parsed = raw ? new Date(`${raw}T12:00:00`) : new Date();
+  const date = Number.isFinite(parsed.getTime()) ? parsed : new Date();
+  return `${kind} Payment Voucher (${date.getFullYear()}년 ${date.getMonth() + 1}월)`;
+};
+
+const calcGstSummaryRowTotal = (item: Pick<ExpenseItem, 'igst' | 'cgst' | 'sgst'>) =>
+  roundDecimal2(Number(item.igst || 0) + Number(item.cgst || 0) + Number(item.sgst || 0));
+
+const applyGstSummaryRowRules = (item: ExpenseItem): ExpenseItem => {
+  const next: ExpenseItem = { ...item };
+  next.total = calcGstSummaryRowTotal(next);
+  return next;
+};
+
+const calcGstSummaryColumnTotals = (items: ExpenseItem[]) => {
+  const raw = GST_SUMMARY_ROW_DEFS.reduce(
+    (acc, rowDef) => {
+      const item =
+        getGstLineByKey(items, rowDef.key) ||
+        mapSavedGstSummaryItem({ id: `gst-${rowDef.key}` } as ExpenseItem, rowDef.key);
+      acc.taxableValue += Number(item.taxableValue || 0);
+      acc.igst += Number(item.igst || 0);
+      acc.cgst += Number(item.cgst || 0);
+      acc.sgst += Number(item.sgst || 0);
+      acc.total += calcGstSummaryRowTotal(item);
+      return acc;
+    },
+    { taxableValue: 0, igst: 0, cgst: 0, sgst: 0, total: 0 }
+  );
+  return {
+    taxableValue: roundDecimal2(raw.taxableValue),
+    igst: roundDecimal2(raw.igst),
+    cgst: roundDecimal2(raw.cgst),
+    sgst: roundDecimal2(raw.sgst),
+    total: roundDecimal2(raw.total),
+  };
+};
+
+const getGstLineByKey = (items: ExpenseItem[], key: GstSummaryRowKey) =>
+  items.find((item) => item.gstRowKey === key);
+
+/** Excel H13: (A)-(B)-(C)+(D) — 행 Total = SUM(IGST:SGST) */
+const calcGstPayableAmount = (items: ExpenseItem[]) => {
+  const sale = calcGstSummaryRowTotal(getGstLineByKey(items, 'sale') || {});
+  const inputCredit = calcGstSummaryRowTotal(getGstLineByKey(items, 'inputCredit') || {});
+  const rcm = calcGstSummaryRowTotal(getGstLineByKey(items, 'rcm') || {});
+  const earlierCredit = calcGstSummaryRowTotal(getGstLineByKey(items, 'earlierCredit') || {});
+  return roundDecimal2(sale - inputCredit - earlierCredit + rcm);
+};
+
+/** Excel H13 + rounding, H15 = H13 + Professional Tax */
+const calcGstFinalPayable = (
+  items: ExpenseItem[],
+  roundingAdjustment = 0,
+  professionalTax = 0
+) =>
+  roundDecimal2(
+    calcGstPayableAmount(items) +
+      Number(roundingAdjustment || 0) +
+      Number(professionalTax || 0)
+  );
+
+const createGstSummaryLineItems = (): ExpenseItem[] =>
+  GST_SUMMARY_ROW_ORDER.map((key) => ({
+    id: `gst-${key}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    invoiceDate: '',
+    description: '',
+    qty: 0,
+    unitPrice: 0,
+    total: 0,
+    gstRowKey: key,
+    taxableValue: 0,
+    igst: 0,
+    cgst: 0,
+    sgst: 0,
+  }));
+
+const mapSavedGstSummaryItem = (item: ExpenseItem, key?: GstSummaryRowKey): ExpenseItem => {
+  const mapped: ExpenseItem = {
+    id: item.id || `gst-${key || item.gstRowKey || 'row'}-${Date.now()}`,
+    invoiceDate: '',
+    description: item.description || '',
+    qty: 0,
+    unitPrice: 0,
+    total: 0,
+    gstRowKey: (item.gstRowKey || key) as GstSummaryRowKey | undefined,
+    taxableValue: roundDecimal2(Number(item.taxableValue || 0)),
+    igst: roundDecimal2(Number(item.igst || 0)),
+    cgst: roundDecimal2(Number(item.cgst || 0)),
+    sgst: roundDecimal2(Number(item.sgst || 0)),
+  };
+  mapped.total = calcGstSummaryRowTotal(mapped);
+  return applyGstSummaryRowRules(mapped);
+};
+
+const parseGstSummaryLineItems = (items: ExpenseItem[]): ExpenseItem[] => {
+  if (items.some((item) => item.gstRowKey)) {
+    return GST_SUMMARY_ROW_ORDER.map((key) => {
+      const found = items.find((item) => item.gstRowKey === key);
+      return found ? mapSavedGstSummaryItem(found, key) : mapSavedGstSummaryItem({ id: `gst-${key}` } as ExpenseItem, key);
+    });
+  }
+  return createGstSummaryLineItems();
+};
+
 const GST_SPLIT_RATE = 9;
+
+/** CGST/SGST 허용 세율(%) */
+const ALLOWED_CGST_SGST_RATES = [2.5, 6, 9, 20] as const;
+/** IGST 허용 세율(%) — 반쪽 세율의 2배 */
+const ALLOWED_IGST_RATES = [5, 12, 18, 40] as const;
+
+const normalizeAllowedHalfGstRate = (value: number): number => {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return ALLOWED_CGST_SGST_RATES.find((rate) => Math.abs(rate - n) < 0.001) ?? 0;
+};
+
+const normalizeAllowedIgstRate = (value: number): number => {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return ALLOWED_IGST_RATES.find((rate) => Math.abs(rate - n) < 0.001) ?? 0;
+};
+
+const formatGstRateOption = (rate: number) =>
+  Number.isInteger(rate) ? String(rate) : rate.toFixed(1);
+
+const normalizeVoucherGstRates = (data: {
+  igstRate?: number;
+  cgstRate?: number;
+  sgstRate?: number;
+}) => {
+  const igstRate = normalizeAllowedIgstRate(Number(data.igstRate || 0));
+  let cgstRate = normalizeAllowedHalfGstRate(Number(data.cgstRate || 0));
+  let sgstRate = normalizeAllowedHalfGstRate(Number(data.sgstRate || 0));
+
+  if (igstRate > 0) {
+    return { igstRate, cgstRate: 0, sgstRate: 0 };
+  }
+  if (cgstRate > 0) {
+    sgstRate = cgstRate;
+  } else if (sgstRate > 0) {
+    cgstRate = sgstRate;
+  }
+  return { igstRate: 0, cgstRate, sgstRate };
+};
 
 const PRIORITY_SORT_ORDER: Record<string, number> = {
   urgent: 0,
@@ -1162,26 +1567,15 @@ const PRIORITY_SORT_ORDER: Record<string, number> = {
   low: 3,
 };
 
-/** 기본 목록 정렬: 검토중 → 반려 → 승인 */
-const DEFAULT_LIST_STATUS_SORT: Record<string, number> = {
-  in_review: 0,
-  submitted: 0,
-  revision_rejected: 1,
-  rejected: 1,
-  approved: 2,
-  draft: 3,
-  awaiting_tax: 4,
-  paid: 5,
-};
-
+/** 기본·상태 컬럼 정렬: 제출 → 검토 → 승인 → … */
 const STATUS_SORT_ORDER: Record<string, number> = {
-  in_review: 0,
-  submitted: 1,
-  revision_rejected: 2,
-  draft: 3,
-  approved: 4,
-  awaiting_tax: 5,
-  paid: 6,
+  submitted: 0,
+  in_review: 1,
+  approved: 2,
+  awaiting_tax: 3,
+  paid: 4,
+  revision_rejected: 5,
+  draft: 6,
   rejected: 7,
 };
 
@@ -1293,6 +1687,7 @@ const calcExpenseTax = (
     tdsRate?: number;
     tdsAmount?: number;
     tdsInterest?: number;
+    deducteeType?: string;
   }> | undefined,
   meta: Record<string, any> | undefined,
   companyGstNumber = '',
@@ -1327,15 +1722,44 @@ const calcExpenseTax = (
       sgstAmount: 0,
       tdsAmount: tdsSum,
       tdsInterestAmount: interestSum,
-      grandTotal: floorMoney(Math.max(0, gross - tdsSum)),
+      tdsOtherDeducteeSum: sumTdsBaseByDeducteeType(rows, 'other'),
+      tdsCompanyDeducteeSum: sumTdsBaseByDeducteeType(rows, 'company'),
+      grandTotal: floorMoney(gross - tdsSum),
     };
   }
 
-  const subtotal = floorMoney(
+  if (formType === 'gst') {
+    const roundingAdjustment = readMetaNumber(meta, 'gstRoundingAdjustment', 'gst_rounding_adjustment');
+    const professionalTax = readMetaNumber(meta, 'gstProfessionalTax', 'gst_professional_tax');
+    const payable = calcGstFinalPayable(rows as ExpenseItem[], roundingAdjustment, professionalTax);
+    return {
+      formType,
+      subtotal: calcGstPayableAmount(rows as ExpenseItem[]),
+      igstRate: 0,
+      cgstRate: 0,
+      sgstRate: 0,
+      tdsEnabled: false,
+      tdsRate: 0,
+      igstAmount: 0,
+      cgstAmount: 0,
+      sgstAmount: 0,
+      tdsAmount: 0,
+      tdsInterestAmount: 0,
+      grandTotal: payable,
+    };
+  }
+
+  const subtotal = roundDecimal2(
     rows.reduce((sum, item) => sum + Number(item.total ?? item.amount ?? 0), 0)
   );
 
-  if (formType === 'general') {
+  const igstRateMeta = readMetaNumber(meta, 'igstRate', 'igst_rate');
+  const cgstRateMeta = readMetaNumber(meta, 'cgstRate', 'cgst_rate');
+  const sgstRateMeta = readMetaNumber(meta, 'sgstRate', 'sgst_rate');
+  const hasGstRatesInMeta =
+    igstRateMeta > 0 || cgstRateMeta > 0 || sgstRateMeta > 0;
+
+  if (formType === 'general' && !hasGstRatesInMeta) {
     return {
       formType,
       subtotal,
@@ -1353,9 +1777,30 @@ const calcExpenseTax = (
     };
   }
 
-  let igstRate = readMetaNumber(meta, 'igstRate', 'igst_rate');
-  let cgstRate = readMetaNumber(meta, 'cgstRate', 'cgst_rate');
-  let sgstRate = readMetaNumber(meta, 'sgstRate', 'sgst_rate');
+  if (formType === 'general' && hasGstRatesInMeta) {
+    const igstAmount = calcVoucherGstAmount(subtotal, igstRateMeta);
+    const cgstAmount = calcVoucherGstAmount(subtotal, cgstRateMeta);
+    const sgstAmount = calcVoucherGstAmount(subtotal, sgstRateMeta);
+    return {
+      formType: 'general' as ExpenseFormType,
+      subtotal,
+      igstRate: igstRateMeta,
+      cgstRate: cgstRateMeta,
+      sgstRate: sgstRateMeta,
+      tdsEnabled: false,
+      tdsRate: 0,
+      igstAmount,
+      cgstAmount,
+      sgstAmount,
+      tdsAmount: 0,
+      tdsInterestAmount: 0,
+      grandTotal: roundDecimal2(subtotal + igstAmount + cgstAmount + sgstAmount),
+    };
+  }
+
+  let igstRate = igstRateMeta;
+  let cgstRate = cgstRateMeta;
+  let sgstRate = sgstRateMeta;
   const legacyTds = Boolean(meta?.tdsEnabled ?? meta?.tds_enabled);
   const tdsRate = legacyTds ? readMetaNumber(meta, 'tdsRate', 'tds_rate') : 0;
   const gstNumber = String(meta?.gstNumber || meta?.gst_number || '').trim();
@@ -1365,10 +1810,10 @@ const calcExpenseTax = (
     cgstRate = resolved.cgstRate;
     sgstRate = resolved.sgstRate;
   }
-  const igstAmount = floorMoney(subtotal * (igstRate / 100));
-  const cgstAmount = floorMoney(subtotal * (cgstRate / 100));
-  const sgstAmount = floorMoney(subtotal * (sgstRate / 100));
-  const tdsAmount = floorMoney(subtotal * (tdsRate / 100));
+  const igstAmount = calcVoucherGstAmount(subtotal, igstRate);
+  const cgstAmount = calcVoucherGstAmount(subtotal, cgstRate);
+  const sgstAmount = calcVoucherGstAmount(subtotal, sgstRate);
+  const tdsAmount = roundDecimal2(subtotal * (tdsRate / 100));
   return {
     formType,
     subtotal,
@@ -1382,7 +1827,7 @@ const calcExpenseTax = (
     sgstAmount,
     tdsAmount,
     tdsInterestAmount: 0,
-    grandTotal: floorMoney(subtotal + igstAmount + cgstAmount + sgstAmount - tdsAmount),
+    grandTotal: roundDecimal2(subtotal + igstAmount + cgstAmount + sgstAmount - tdsAmount),
   };
 };
 
@@ -1514,7 +1959,9 @@ const ExpenseApproval: React.FC = () => {
     cgstRate: 0,
     sgstRate: 0,
     tdsEnabled: false,
-    tdsRate: 0
+    tdsRate: 0,
+    gstRoundingAdjustment: 0,
+    gstProfessionalTax: 0,
   });
   const [qrOpen, setQrOpen] = useState(false);
   const [qrToken, setQrToken] = useState('');
@@ -1636,28 +2083,35 @@ const ExpenseApproval: React.FC = () => {
         lineItems.reduce((sum, item) => sum + calcTdsLineAmounts(item).base, 0)
       );
     }
-    return floorMoney(lineItems.reduce((sum, item) => sum + Number(item.total || 0), 0));
+    if (voucherData.formType === 'gst') {
+      return calcGstFinalPayable(
+        lineItems,
+        voucherData.gstRoundingAdjustment,
+        voucherData.gstProfessionalTax
+      );
+    }
+    return roundDecimal2(lineItems.reduce((sum, item) => sum + Number(item.total || 0), 0));
   }, [lineItems, voucherData.formType]);
   const igstAmount = useMemo(
     () =>
-      voucherData.formType === 'gst'
-        ? floorMoney(subtotalAmount * (Number(voucherData.igstRate || 0) / 100))
+      hasVoucherGstRates(voucherData)
+        ? calcVoucherGstAmount(subtotalAmount, voucherData.igstRate)
         : 0,
-    [subtotalAmount, voucherData.formType, voucherData.igstRate]
+    [subtotalAmount, voucherData]
   );
   const cgstAmount = useMemo(
     () =>
-      voucherData.formType === 'gst'
-        ? floorMoney(subtotalAmount * (Number(voucherData.cgstRate || 0) / 100))
+      hasVoucherGstRates(voucherData)
+        ? calcVoucherGstAmount(subtotalAmount, voucherData.cgstRate)
         : 0,
-    [subtotalAmount, voucherData.formType, voucherData.cgstRate]
+    [subtotalAmount, voucherData]
   );
   const sgstAmount = useMemo(
     () =>
-      voucherData.formType === 'gst'
-        ? floorMoney(subtotalAmount * (Number(voucherData.sgstRate || 0) / 100))
+      hasVoucherGstRates(voucherData)
+        ? calcVoucherGstAmount(subtotalAmount, voucherData.sgstRate)
         : 0,
-    [subtotalAmount, voucherData.formType, voucherData.sgstRate]
+    [subtotalAmount, voucherData]
   );
   const tdsAmount = useMemo(() => {
     if (voucherData.formType === 'tds') {
@@ -1668,19 +2122,43 @@ const ExpenseApproval: React.FC = () => {
         }, 0)
       );
     }
-    if (voucherData.formType === 'gst' && voucherData.tdsEnabled) {
-      return floorMoney(subtotalAmount * (Number(voucherData.tdsRate || 0) / 100));
+    if (hasVoucherGstRates(voucherData) && voucherData.tdsEnabled) {
+      return calcVoucherGstAmount(subtotalAmount, voucherData.tdsRate);
     }
     return 0;
-  }, [lineItems, subtotalAmount, voucherData.formType, voucherData.tdsEnabled, voucherData.tdsRate]);
+  }, [lineItems, subtotalAmount, voucherData]);
+  const tdsOtherDeducteeSum = useMemo(
+    () =>
+      voucherData.formType === 'tds' ? sumTdsBaseByDeducteeType(lineItems, 'other') : 0,
+    [lineItems, voucherData.formType]
+  );
+  const tdsCompanyDeducteeSum = useMemo(
+    () =>
+      voucherData.formType === 'tds' ? sumTdsBaseByDeducteeType(lineItems, 'company') : 0,
+    [lineItems, voucherData.formType]
+  );
   const totalAmount = useMemo(() => {
     if (voucherData.formType === 'tds') {
-      return floorMoney(Math.max(0, subtotalAmount - tdsAmount));
+      return floorMoney(subtotalAmount - tdsAmount);
     }
-    if (voucherData.formType === 'general') return subtotalAmount;
-    return floorMoney(subtotalAmount + igstAmount + cgstAmount + sgstAmount - tdsAmount);
+    if (voucherData.formType === 'gst') {
+      return calcGstFinalPayable(
+        lineItems,
+        voucherData.gstRoundingAdjustment,
+        voucherData.gstProfessionalTax
+      );
+    }
+    if (
+      voucherData.formType === 'general' &&
+      !hasVoucherGstRates(voucherData) &&
+      !voucherData.tdsEnabled
+    ) {
+      return subtotalAmount;
+    }
+    return roundDecimal2(subtotalAmount + igstAmount + cgstAmount + sgstAmount - tdsAmount);
   }, [
-    voucherData.formType,
+    voucherData,
+    lineItems,
     subtotalAmount,
     igstAmount,
     cgstAmount,
@@ -1751,7 +2229,7 @@ const ExpenseApproval: React.FC = () => {
     (statusOverride?: ExpenseApprovalItem['status']) => ({
       title: formData.title,
       purpose: formData.purpose,
-      total_amount: floorMoney(totalAmount),
+      total_amount: roundDecimal2(totalAmount),
       currency: 'INR',
       requester_name: user?.username || '',
       requester_department: user?.department || '',
@@ -1761,11 +2239,45 @@ const ExpenseApproval: React.FC = () => {
       due_date: formData.dueDate || null,
       notes: formData.notes || '',
       items: {
-        rows: lineItems.map((item) => ({
-          ...item,
-          unitPrice: floorMoney(Number(item.unitPrice || 0)),
-          total: floorMoney(Number(item.total || 0)),
-        })),
+        rows: lineItems.map((item) => {
+          if (voucherData.formType === 'gst' && item.gstRowKey) {
+            const mapped = {
+              ...item,
+              taxableValue: roundDecimal2(Number(item.taxableValue || 0)),
+              igst: roundDecimal2(Number(item.igst || 0)),
+              cgst: roundDecimal2(Number(item.cgst || 0)),
+              sgst: roundDecimal2(Number(item.sgst || 0)),
+            };
+            return {
+              ...mapped,
+              total: calcGstSummaryRowTotal(mapped),
+            };
+          }
+          return {
+            ...item,
+            qty: roundDecimal2(Number(item.qty || 0)),
+            unitPrice: roundDecimal2(Number(item.unitPrice || 0)),
+            total: roundDecimal2(Number(item.total || 0)),
+            ...(voucherData.formType === 'tds'
+              ? (() => {
+                  const calc = calcTdsLineAmounts(item);
+                  return {
+                    amount: calc.base,
+                    unitPrice: calc.base,
+                    qty: 1,
+                    pan: String(item.pan || ''),
+                    deducteePartnerId: item.deducteePartnerId ? String(item.deducteePartnerId) : '',
+                    tdsRate: Number(item.tdsRate || 0),
+                    deducteeType: item.deducteeType === 'company' ? 'company' : 'other',
+                    tdsSection: String(item.tdsSection || ''),
+                    tdsCode: String(item.tdsCode || ''),
+                    tdsAmount: calc.tdsAmt,
+                    total: calc.payable,
+                  };
+                })()
+              : {}),
+          };
+        }),
         meta: {
           ...voucherData,
           checkedById: voucherData.approvedById || '',
@@ -2095,7 +2607,7 @@ const ExpenseApproval: React.FC = () => {
     ) {
       return;
     }
-    setVoucherData((prev) => ({ ...prev, ...nextRates }));
+    setVoucherData((prev) => ({ ...prev, ...normalizeVoucherGstRates(nextRates) }));
   }, [
     viewMode,
     voucherData.gstNumber,
@@ -2198,7 +2710,8 @@ const ExpenseApproval: React.FC = () => {
       const name = String(p.company_name || '').toLowerCase();
       const holder = String(p.account_holder || p.representative || '').toLowerCase();
       const gst = (p.gstNumbers || []).join(' ').toLowerCase();
-      return name.includes(q) || holder.includes(q) || gst.includes(q);
+      const pan = String(p.pan_number || '').toLowerCase();
+      return name.includes(q) || holder.includes(q) || gst.includes(q) || pan.includes(q);
     });
     matched.sort((a, b) => {
       const an = a.company_name.toLowerCase();
@@ -2210,6 +2723,30 @@ const ExpenseApproval: React.FC = () => {
     });
     return matched.slice(0, 50);
   }, []);
+
+  const handleSelectTdsDeductee = (id: string, value: PartnerOption | string | null) => {
+    setLineItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        if (value && typeof value !== 'string') {
+          return {
+            ...item,
+            description: value.company_name || '',
+            pan: String(value.pan_number || '').toUpperCase(),
+            deducteePartnerId: String(value.id),
+          };
+        }
+        const name = typeof value === 'string' ? value : '';
+        return {
+          ...item,
+          description: name,
+          deducteePartnerId: '',
+          // 파트너 선택이 아니면 PAN은 수동 유지(이름만 지울 때 PAN 유지)
+          pan: name ? item.pan : item.pan,
+        };
+      })
+    );
+  };
 
   useEffect(() => {
     if (!hasTransferAccess && listTab === 'transfer') {
@@ -2401,9 +2938,12 @@ const ExpenseApproval: React.FC = () => {
       notes: expense.notes || ''
     });
     const savedItems = (expense.items || []).map((item) => {
-      const qty = Number(item.qty || 1);
-      const unitPrice = floorMoney(Number(item.unitPrice || item.amount || 0));
+      const qty = roundDecimal2(Number(item.qty || 1));
+      const unitPrice = roundDecimal2(Number(item.unitPrice || item.amount || 0));
       const formType = resolveExpenseFormType(meta);
+      if (formType === 'gst') {
+        return mapSavedGstSummaryItem(item, item.gstRowKey as GstSummaryRowKey | undefined);
+      }
       if (formType === 'tds') {
         const base = floorMoney(Number(item.amount ?? item.total ?? unitPrice));
         const tdsRate = Number(item.tdsRate || 0);
@@ -2419,6 +2959,7 @@ const ExpenseApproval: React.FC = () => {
           unitPrice: base,
           amount: base,
           pan: item.pan || '',
+          deducteePartnerId: item.deducteePartnerId != null ? String(item.deducteePartnerId) : '',
           tdsRate,
           deducteeType: item.deducteeType === 'company' ? 'company' as const : 'other' as const,
           tdsSection: item.tdsSection || '',
@@ -2426,7 +2967,7 @@ const ExpenseApproval: React.FC = () => {
           tdsAmount: tdsAmt,
           tdsInterest,
           remarks: item.remarks || '',
-          total: floorMoney(Math.max(0, base - tdsAmt)),
+          total: floorMoney(base - tdsAmt),
         };
       }
       return {
@@ -2435,10 +2976,19 @@ const ExpenseApproval: React.FC = () => {
         description: item.description || '',
         qty,
         unitPrice,
-        total: floorMoney(Number(item.total || item.amount || qty * unitPrice)),
+        total: roundDecimal2(Number(item.total || item.amount || qty * unitPrice)),
       };
     });
-    setLineItems(savedItems.length > 0 ? savedItems : [createEmptyLineItem(resolveExpenseFormType(meta))]);
+    const resolvedFormType = resolveExpenseFormType(meta);
+    setLineItems(
+      savedItems.length > 0
+        ? resolvedFormType === 'gst'
+          ? parseGstSummaryLineItems(savedItems)
+          : savedItems
+        : resolvedFormType === 'gst'
+          ? createGstSummaryLineItems()
+          : [createEmptyLineItem(resolvedFormType)]
+    );
     setCurrentAttachments(expense.attachments || []);
     setVoucherData({
       formType: resolveExpenseFormType(meta),
@@ -2462,11 +3012,15 @@ const ExpenseApproval: React.FC = () => {
       remarks: meta.remarks || '',
       checkedById: meta.checkedById != null ? String(meta.checkedById) : '',
       approvedById: meta.approvedById != null ? String(meta.approvedById) : '',
-      igstRate: Number(meta.igstRate || meta.igst_rate || 0),
-      cgstRate: Number(meta.cgstRate || meta.cgst_rate || 0),
-      sgstRate: Number(meta.sgstRate || meta.sgst_rate || 0),
+      ...normalizeVoucherGstRates({
+        igstRate: Number(meta.igstRate || meta.igst_rate || 0),
+        cgstRate: Number(meta.cgstRate || meta.cgst_rate || 0),
+        sgstRate: Number(meta.sgstRate || meta.sgst_rate || 0),
+      }),
       tdsEnabled: Boolean(meta.tdsEnabled ?? meta.tds_enabled),
-      tdsRate: Number(meta.tdsRate || meta.tds_rate || 0)
+      tdsRate: Number(meta.tdsRate || meta.tds_rate || 0),
+      gstRoundingAdjustment: Number(meta.gstRoundingAdjustment ?? meta.gst_rounding_adjustment ?? 0),
+      gstProfessionalTax: Number(meta.gstProfessionalTax ?? meta.gst_professional_tax ?? 0),
     });
     setPartnerInputValue(
       String(meta.department || '').trim() ||
@@ -2519,7 +3073,9 @@ const ExpenseApproval: React.FC = () => {
       cgstRate: 0,
       sgstRate: 0,
       tdsEnabled: false,
-      tdsRate: 0
+      tdsRate: 0,
+      gstRoundingAdjustment: 0,
+      gstProfessionalTax: 0,
     });
     setDraftId(null);
     setHeaderStatusBanner('');
@@ -2530,7 +3086,7 @@ const ExpenseApproval: React.FC = () => {
 
   const handleSaveExpense = async (editReason?: string) => {
     if (viewMode === 'edit' ? !editGuard.guard() : !createGuard.guard()) return;
-    if (!formData.title.trim() || !formData.purpose.trim()) {
+    if (!formData.title.trim()) {
       setError(t('expenseApproval.errors.requiredTitlePurpose'));
       return;
     }
@@ -2538,7 +3094,11 @@ const ExpenseApproval: React.FC = () => {
       setError(t('expenseApproval.errors.approverRequired'));
       return;
     }
-    if (!currentAttachments.length && !String(voucherData.remarks || '').trim()) {
+    if (
+      voucherData.formType !== 'tds' &&
+      !currentAttachments.length &&
+      !String(voucherData.remarks || '').trim()
+    ) {
       setError(t('expenseApproval.errors.receiptOrRemarksRequired'));
       return;
     }
@@ -2599,6 +3159,7 @@ const ExpenseApproval: React.FC = () => {
         unitPrice: 0,
         amount: 0,
         pan: '',
+        deducteePartnerId: '',
         tdsRate: 0,
         deducteeType: 'other',
         tdsSection: '',
@@ -2624,13 +3185,62 @@ const ExpenseApproval: React.FC = () => {
     setVoucherData((prev) => ({
       ...prev,
       formType: next,
-      igstRate: next === 'gst' ? prev.igstRate : 0,
-      cgstRate: next === 'gst' ? prev.cgstRate : 0,
-      sgstRate: next === 'gst' ? prev.sgstRate : 0,
-      tdsEnabled: next === 'gst' ? prev.tdsEnabled : false,
-      tdsRate: next === 'gst' ? prev.tdsRate : 0,
+      igstRate: next === 'general' ? prev.igstRate : 0,
+      cgstRate: next === 'general' ? prev.cgstRate : 0,
+      sgstRate: next === 'general' ? prev.sgstRate : 0,
+      tdsEnabled: next === 'general' ? prev.tdsEnabled : false,
+      tdsRate: next === 'general' ? prev.tdsRate : 0,
+      gstRoundingAdjustment: next === 'gst' ? prev.gstRoundingAdjustment : 0,
+      gstProfessionalTax: next === 'gst' ? prev.gstProfessionalTax : 0,
     }));
-    setLineItems([createEmptyLineItem(next)]);
+    setLineItems(next === 'gst' ? createGstSummaryLineItems() : [createEmptyLineItem(next)]);
+    if (next === 'gst' || next === 'tds') {
+      setFormData((prev) => ({
+        ...prev,
+        title: buildPaymentVoucherTitle(next === 'gst' ? 'GST' : 'TDS', voucherData.voucherDate),
+      }));
+    }
+  };
+
+  const handleUpdateGstSummaryRow = (
+    id: string,
+    field: 'taxableValue' | 'igst' | 'cgst' | 'sgst',
+    value: number
+  ) => {
+    setLineItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        const nextItem: ExpenseItem = applyGstSummaryRowRules({
+          ...item,
+          [field]: roundDecimal2(Number(value || 0)),
+        });
+        return nextItem;
+      })
+    );
+  };
+
+  const patchVoucherTaxRates = (patch: Partial<typeof voucherData>) => {
+    setVoucherData((prev) => {
+      const next = { ...prev, ...patch };
+
+      if ('cgstRate' in patch) {
+        const cgst = normalizeAllowedHalfGstRate(Number(patch.cgstRate ?? 0));
+        next.cgstRate = cgst;
+        next.sgstRate = cgst;
+        if (cgst > 0) next.igstRate = 0;
+      }
+
+      if ('igstRate' in patch) {
+        const igst = normalizeAllowedIgstRate(Number(patch.igstRate ?? 0));
+        next.igstRate = igst;
+        if (igst > 0) {
+          next.cgstRate = 0;
+          next.sgstRate = 0;
+        }
+      }
+
+      return next;
+    });
   };
 
   const handleAddLineItem = () => {
@@ -2666,12 +3276,15 @@ const ExpenseApproval: React.FC = () => {
           nextItem.total = calc.payable;
           return nextItem;
         }
+        if (field === 'qty') {
+          nextItem.qty = roundDecimal2(Number(value || 0));
+        }
         if (field === 'unitPrice') {
-          nextItem.unitPrice = floorMoney(Number(value || 0));
+          nextItem.unitPrice = roundDecimal2(Number(value || 0));
         }
         const qty = Number(nextItem.qty || 0);
         const unitPrice = Number(nextItem.unitPrice || 0);
-        nextItem.total = floorMoney(qty * unitPrice);
+        nextItem.total = roundDecimal2(qty * unitPrice);
         return nextItem;
       })
     );
@@ -2878,7 +3491,7 @@ const ExpenseApproval: React.FC = () => {
 
   const renderAttachmentList = (
     files: ExpenseAttachment[] | string[],
-    options?: { deletable?: boolean; onDelete?: (file: ExpenseAttachment) => void }
+    options?: { deletable?: boolean; onDelete?: (file: ExpenseAttachment) => void; typeLabel?: string }
   ) => (
     <Box
       sx={{
@@ -2892,9 +3505,10 @@ const ExpenseApproval: React.FC = () => {
         const displayName = getReceiptDisplayName(file.path);
         const image = isImageReceipt(file.path);
         const typeLabel =
-          file.invoiceType === 'proforma'
+          options?.typeLabel ||
+          (file.invoiceType === 'proforma'
             ? t('expenseApproval.voucher.invoiceTypeProforma')
-            : t('expenseApproval.voucher.invoiceTypeTax');
+            : t('expenseApproval.voucher.invoiceTypeTax'));
         const showTypeBadge = !file.path.includes('expense-remittance-proofs');
         const canDelete =
           Boolean(options?.deletable && options?.onDelete) &&
@@ -3038,7 +3652,13 @@ const ExpenseApproval: React.FC = () => {
 
   const handleUploadReceipts = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    if (!receiptInvoiceType) {
+    const activeFormType =
+      viewMode === 'view' || viewMode === 'edit'
+        ? resolveExpenseFormType(selectedExpense?.itemMeta)
+        : voucherData.formType;
+    const invoiceTypeForUpload: ExpenseInvoiceType =
+      activeFormType === 'gst' ? 'tax' : receiptInvoiceType;
+    if (activeFormType !== 'gst' && !receiptInvoiceType) {
       setError(t('expenseApproval.errors.invoiceTypeRequired'));
       return;
     }
@@ -3059,7 +3679,15 @@ const ExpenseApproval: React.FC = () => {
         String(lineItems[0]?.description || '').trim() ||
         'PV';
       const renamed = Array.from(files).map((file) => {
-        const ext = getFileExtension(file.name) || (file.type.includes('pdf') ? 'pdf' : 'jpg');
+        const mimeExt = String(file.type || '')
+          .split('/')
+          .pop()
+          ?.replace(/^jpeg$/, 'jpg')
+          .replace(/^vnd\.ms-excel$/, 'xls')
+          .replace(/^vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet$/, 'xlsx')
+          .replace(/^vnd\.openxmlformats-officedocument\.wordprocessingml\.document$/, 'docx')
+          .replace(/^msword$/, 'doc');
+        const ext = getFileExtension(file.name) || mimeExt || 'bin';
         const nextName = buildDocumentDownloadFilename({
           code: 'PV',
           companyName: companyLabel,
@@ -3071,7 +3699,7 @@ const ExpenseApproval: React.FC = () => {
       const response = await accountingService.uploadExpenseReceiptById(
         activeExpenseId,
         renamed,
-        receiptInvoiceType
+        invoiceTypeForUpload
       );
       if (!response?.success) {
         throw new Error(response?.message || t('expenseApproval.errors.receiptUploadFailed'));
@@ -3082,9 +3710,11 @@ const ExpenseApproval: React.FC = () => {
         setSelectedExpense({ ...selectedExpense, attachments: next });
       }
       setSuccess(
-        receiptInvoiceType === 'proforma'
-          ? t('expenseApproval.success.proformaAttached')
-          : t('expenseApproval.success.taxInvoiceAttached')
+        activeFormType === 'gst'
+          ? t('expenseApproval.success.calculationAttached')
+          : invoiceTypeForUpload === 'proforma'
+            ? t('expenseApproval.success.proformaAttached')
+            : t('expenseApproval.success.taxInvoiceAttached')
       );
     } catch (uploadError: any) {
       setError(
@@ -3782,6 +4412,34 @@ const ExpenseApproval: React.FC = () => {
 
   const dateLocale = useMemo(() => (i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US'), [i18n.language]);
   const formLangAttr = i18n.language?.startsWith('ko') ? 'ko' : 'en';
+  const gstPeriodLabel = useMemo(
+    () => getGstPeriodLabel(voucherData.voucherDate, i18n.language),
+    [voucherData.voucherDate, i18n.language]
+  );
+  const gstPeriodShortLabel = useMemo(
+    () => getGstPeriodShortLabel(voucherData.voucherDate, i18n.language),
+    [voucherData.voucherDate, i18n.language]
+  );
+  const gstPayableAmount = useMemo(
+    () =>
+      voucherData.formType === 'gst'
+        ? roundDecimal2(
+            calcGstPayableAmount(lineItems) + Number(voucherData.gstRoundingAdjustment || 0)
+          )
+        : 0,
+    [lineItems, voucherData.formType, voucherData.gstRoundingAdjustment]
+  );
+  const gstTotalPayableAmount = useMemo(
+    () =>
+      voucherData.formType === 'gst'
+        ? calcGstFinalPayable(
+            lineItems,
+            voucherData.gstRoundingAdjustment,
+            voucherData.gstProfessionalTax
+          )
+        : 0,
+    [lineItems, voucherData.formType, voucherData.gstRoundingAdjustment, voucherData.gstProfessionalTax]
+  );
 
   const formatRemittanceDateTime = (value?: string) => {
     if (!value) return '-';
@@ -4117,7 +4775,16 @@ const ExpenseApproval: React.FC = () => {
 
                   <ArrowForwardIcon sx={{ color: '#94A3B8', fontSize: 20, flexShrink: 0 }} />
 
-                  <Box sx={{ width: 222, border: `1px solid ${EXPENSE_STAMP_LINE}`, bgcolor: '#FFFFFF', overflow: 'hidden' }}>
+                  <Box
+                    sx={{
+                      minWidth: 160,
+                      width: 'max-content',
+                      maxWidth: 'min(480px, 100%)',
+                      border: `1px solid ${EXPENSE_STAMP_LINE}`,
+                      bgcolor: '#FFFFFF',
+                      overflow: 'visible',
+                    }}
+                  >
                     <Box
                       sx={{
                         px: 0.5,
@@ -4137,12 +4804,14 @@ const ExpenseApproval: React.FC = () => {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        px: 0.5,
+                        px: 0.75,
                         py: 0.5,
+                        width: 'max-content',
+                        minWidth: '100%',
+                        boxSizing: 'border-box',
                       }}
                     >
                   <Autocomplete
-                        fullWidth
                         size="small"
                         options={selectableApprovers}
                     getOptionLabel={(option) => option.name}
@@ -4159,6 +4828,8 @@ const ExpenseApproval: React.FC = () => {
                           }
                           setVoucherData({ ...voucherData, approvedById: value ? String(value.id) : '' });
                         }}
+                        sx={expenseApproverAutocompleteSx}
+                        slotProps={expenseApproverAutocompleteSlotProps}
                     renderInput={(params) => (
                           <TextField
                             {...params}
@@ -4174,8 +4845,15 @@ const ExpenseApproval: React.FC = () => {
                                 fontSize: '0.8125rem',
                                 fontWeight: 600,
                                 justifyContent: 'center',
+                                flexWrap: 'nowrap',
                               },
-                              '& .MuiInputBase-input': { textAlign: 'center', py: 0.25 },
+                              '& .MuiInputBase-input': {
+                                textAlign: 'center',
+                                py: 0.25,
+                                whiteSpace: 'nowrap',
+                                textOverflow: 'clip',
+                                overflow: 'visible',
+                              },
                             }}
                           />
                         )}
@@ -4264,7 +4942,6 @@ const ExpenseApproval: React.FC = () => {
                       label={t('expenseApproval.voucher.labelPurpose')}
                     value={formData.purpose}
                     onChange={(e) => setFormData({ ...formData, purpose: e.target.value })}
-                    required
                     fullWidth
                       size="small"
                     multiline
@@ -4533,6 +5210,400 @@ const ExpenseApproval: React.FC = () => {
               <Typography variant="subtitle2" sx={sectionTitleSx}>
                 {t('expenseApproval.voucher.sectionItems')}
               </Typography>
+              {voucherData.formType === 'gst' ? (
+                <TableContainer
+                  sx={{
+                    mb: 1,
+                    borderRadius: '4px',
+                    border: `1px solid ${EXPENSE_LINE}`,
+                    overflowX: 'auto',
+                  }}
+                >
+                  <Table size="small" sx={gstSummaryTableSx}>
+                    {gstSummaryColGroup}
+                    <TableHead
+                      sx={{
+                        bgcolor: EXPENSE_HEADER_BG,
+                        '& .MuiTableCell-head': {
+                          bgcolor: EXPENSE_HEADER_BG,
+                          color: EXPENSE_HEADER_FG,
+                          fontWeight: 600,
+                          fontSize: '0.75rem',
+                          letterSpacing: '0.02em',
+                          textTransform: 'none',
+                          borderBottom: `1px solid ${EXPENSE_LINE}`,
+                          borderTop: '2px solid #94A3B8',
+                          py: 0.55,
+                          px: 0.75,
+                          whiteSpace: 'nowrap',
+                        },
+                      }}
+                    >
+                      <TableRow>
+                        <TableCell sx={{ width: 40 }}>{t('expenseApproval.voucher.tableNo')}</TableCell>
+                        <TableCell>{t('expenseApproval.voucher.gstTableDetail')}</TableCell>
+                        <TableCell align="right" sx={gstSummaryNumCellSx}>
+                          {t('expenseApproval.voucher.gstTableTaxableValue')}
+                        </TableCell>
+                        <TableCell align="right" sx={gstSummaryNumCellSx}>
+                          {t('expenseApproval.voucher.gstTableIgst')}
+                        </TableCell>
+                        <TableCell align="right" sx={gstSummaryNumCellSx}>
+                          {t('expenseApproval.voucher.gstTableCgst')}
+                        </TableCell>
+                        <TableCell align="right" sx={gstSummaryNumCellSx}>
+                          {t('expenseApproval.voucher.gstTableSgst')}
+                        </TableCell>
+                        <TableCell align="right" sx={gstSummaryNumCellSx}>
+                          {t('expenseApproval.voucher.gstTableRowTotal')}
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {GST_SUMMARY_ROW_DEFS.map((rowDef, index) => {
+                        const item = getGstLineByKey(lineItems, rowDef.key) || mapSavedGstSummaryItem({ id: `gst-${rowDef.key}` } as ExpenseItem, rowDef.key);
+                        const renderGstCell = (field: 'taxableValue' | 'igst' | 'cgst' | 'sgst') => {
+                          const cellValue = field === 'taxableValue' ? item.taxableValue : item[field];
+                          return (
+                            <TextField
+                              type="number"
+                              size="small"
+                              fullWidth
+                              value={cellValue ?? 0}
+                              onChange={(e) =>
+                                handleUpdateGstSummaryRow(item.id, field, Number(e.target.value || 0))
+                              }
+                              inputProps={{ min: 0, step: 0.01 }}
+                              sx={gstSummaryNumFieldSx}
+                            />
+                          );
+                        };
+                        return (
+                          <TableRow key={rowDef.key}>
+                            <TableCell sx={gstSummaryDataCellSx}>{index + 1}</TableCell>
+                            <TableCell sx={gstSummaryDetailCellSx}>
+                              <Typography variant="body2" sx={{ fontSize: '0.8125rem', lineHeight: 1.35 }}>
+                                {t(`expenseApproval.voucher.${rowDef.labelKey}`, {
+                                  period: rowDef.withPeriod ? gstPeriodLabel : undefined,
+                                })}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right" sx={gstSummaryNumCellSx}>
+                              {renderGstCell('taxableValue')}
+                            </TableCell>
+                            <TableCell align="right" sx={gstSummaryNumCellSx}>
+                              {renderGstCell('igst')}
+                            </TableCell>
+                            <TableCell align="right" sx={gstSummaryNumCellSx}>
+                              {renderGstCell('cgst')}
+                            </TableCell>
+                            <TableCell align="right" sx={gstSummaryNumCellSx}>
+                              {renderGstCell('sgst')}
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{ ...gstSummaryNumCellSx, fontVariantNumeric: 'tabular-nums' }}
+                            >
+                              {formatDecimal2(calcGstSummaryRowTotal(item))}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      {(() => {
+                        const cols = calcGstSummaryColumnTotals(lineItems);
+                        return (
+                          <TableRow sx={gstSummaryTotalRowSx}>
+                            <TableCell />
+                            <TableCell>{t('expenseApproval.voucher.gstTableColumnTotal')}</TableCell>
+                            <TableCell align="right">{formatDecimal2(cols.taxableValue)}</TableCell>
+                            <TableCell align="right">{formatDecimal2(cols.igst)}</TableCell>
+                            <TableCell align="right">{formatDecimal2(cols.cgst)}</TableCell>
+                            <TableCell align="right">{formatDecimal2(cols.sgst)}</TableCell>
+                            <TableCell align="right">{formatDecimal2(cols.total)}</TableCell>
+                          </TableRow>
+                        );
+                      })()}
+                      <TableRow sx={gstSummaryPayableRowSx}>
+                        <TableCell colSpan={6} sx={{ color: EXPENSE_TOTAL_FG }}>
+                          {t('expenseApproval.voucher.gstPayableLabel')}
+                        </TableCell>
+                        <TableCell align="right" sx={{ color: EXPENSE_TOTAL_FG, fontVariantNumeric: 'tabular-nums' }}>
+                          {formatDecimal2(gstPayableAmount)}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              ) : voucherData.formType === 'tds' ? (
+                <>
+                  <TableContainer
+                    sx={{
+                      mb: 1,
+                      borderRadius: '4px',
+                      border: `1px solid ${EXPENSE_LINE}`,
+                      overflowX: 'auto',
+                    }}
+                  >
+                    <Table size="small" sx={{ tableLayout: 'auto', minWidth: 1100 }}>
+                      <TableHead
+                        sx={{
+                          bgcolor: EXPENSE_HEADER_BG,
+                          '& .MuiTableCell-head': {
+                            bgcolor: EXPENSE_HEADER_BG,
+                            color: EXPENSE_HEADER_FG,
+                            fontWeight: 600,
+                            fontSize: '0.75rem',
+                            letterSpacing: '0.02em',
+                            textTransform: 'none',
+                            borderBottom: `1px solid ${EXPENSE_LINE}`,
+                            borderTop: '2px solid #94A3B8',
+                            py: 0.55,
+                            px: 0.75,
+                            whiteSpace: 'nowrap',
+                          },
+                        }}
+                      >
+                        <TableRow>
+                          <TableCell sx={{ width: 40 }}>{t('expenseApproval.voucher.tableNo')}</TableCell>
+                          <TableCell>{t('expenseApproval.voucher.tdsColDate')}</TableCell>
+                          <TableCell>{t('expenseApproval.voucher.tdsColPan')}</TableCell>
+                          <TableCell sx={{ minWidth: 220 }}>{t('expenseApproval.voucher.tdsColDeducteeName')}</TableCell>
+                          <TableCell align="right">{t('expenseApproval.voucher.tdsColAmount')}</TableCell>
+                          <TableCell align="center">{t('expenseApproval.voucher.tdsColRate')}</TableCell>
+                          <TableCell sx={{ minWidth: 148, whiteSpace: 'pre-line', lineHeight: 1.25 }}>
+                            {t('expenseApproval.voucher.tdsColDeducteeType')}
+                          </TableCell>
+                          <TableCell>{t('expenseApproval.voucher.tdsColSection')}</TableCell>
+                          <TableCell>{t('expenseApproval.voucher.tdsColCode')}</TableCell>
+                          <TableCell align="right">{t('expenseApproval.voucher.tdsColTds')}</TableCell>
+                          <TableCell sx={{ width: 40 }} />
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {lineItems.map((item, index) => {
+                          const calc = calcTdsLineAmounts(item);
+                          return (
+                            <TableRow key={item.id}>
+                              <TableCell sx={lineItemCellSx}>{index + 1}</TableCell>
+                              <TableCell sx={{ ...lineItemCellSx, width: 140 }}>
+                                <TextField
+                                  type="date"
+                                  size="small"
+                                  fullWidth
+                                  value={item.invoiceDate || ''}
+                                  onChange={(e) =>
+                                    handleUpdateLineItem(item.id, 'invoiceDate', e.target.value)
+                                  }
+                                  inputProps={{ lang: formLangAttr }}
+                                  sx={lineItemFieldSx}
+                                />
+                              </TableCell>
+                              <TableCell sx={{ ...lineItemCellSx, minWidth: 120 }}>
+                                <TextField
+                                  size="small"
+                                  fullWidth
+                                  value={item.pan || ''}
+                                  onChange={(e) =>
+                                    handleUpdateLineItem(item.id, 'pan', e.target.value.toUpperCase())
+                                  }
+                                  inputProps={{ maxLength: 10 }}
+                                  sx={lineItemFieldSx}
+                                />
+                              </TableCell>
+                              <TableCell sx={{ ...lineItemCellSx, minWidth: 240 }}>
+                                <Autocomplete
+                                  freeSolo
+                                  size="small"
+                                  options={partners}
+                                  filterOptions={filterPartnerOptions}
+                                  getOptionLabel={(option) =>
+                                    typeof option === 'string' ? option : option.company_name || ''
+                                  }
+                                  isOptionEqualToValue={(a, b) => {
+                                    if (typeof a === 'string' || typeof b === 'string') {
+                                      return String(a) === String(b);
+                                    }
+                                    return Number(a.id) === Number(b.id);
+                                  }}
+                                  value={
+                                    (item.deducteePartnerId &&
+                                      partners.find((p) => String(p.id) === String(item.deducteePartnerId))) ||
+                                    item.description ||
+                                    null
+                                  }
+                                  onChange={(_, value) => handleSelectTdsDeductee(item.id, value)}
+                                  onInputChange={(_, newInput, reason) => {
+                                    if (reason === 'input') {
+                                      setLineItems((prev) =>
+                                        prev.map((row) =>
+                                          row.id === item.id
+                                            ? {
+                                                ...row,
+                                                description: newInput,
+                                                deducteePartnerId: '',
+                                              }
+                                            : row
+                                        )
+                                      );
+                                    }
+                                    if (reason === 'clear') {
+                                      handleSelectTdsDeductee(item.id, null);
+                                    }
+                                  }}
+                                  renderOption={(props, option) => (
+                                    <li {...props} key={option.id}>
+                                      <Box sx={{ minWidth: 0, py: 0.25 }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                                          {option.company_name}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary" noWrap>
+                                          {[option.pan_number, option.account_holder, option.gstNumbers?.[0]]
+                                            .filter(Boolean)
+                                            .join(' · ') || '-'}
+                                        </Typography>
+                                      </Box>
+                                    </li>
+                                  )}
+                                  noOptionsText={
+                                    partnerLoadError
+                                      ? t('expenseApproval.voucher.partnerLoadFailed')
+                                      : partnerScopeEnforced && partners.length === 0
+                                        ? t('expenseApproval.voucher.partnerScopeEmpty')
+                                        : t('partnerManagement.empty.noResults')
+                                  }
+                                  renderInput={(params) => (
+                                    <TextField
+                                      {...params}
+                                      size="small"
+                                      placeholder={t('expenseApproval.voucher.tdsDeducteeSearchHint')}
+                                      sx={lineItemFieldSx}
+                                    />
+                                  )}
+                                  sx={{
+                                    minWidth: 220,
+                                    '& .MuiAutocomplete-inputRoot': {
+                                      py: 0,
+                                      ...((lineItemFieldSx as any)['& .MuiOutlinedInput-root'] || {}),
+                                    },
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell align="right" sx={lineItemCellSx}>
+                                <TextField
+                                  type="number"
+                                  size="small"
+                                  value={item.amount ?? 0}
+                                  onChange={(e) =>
+                                    handleUpdateLineItem(item.id, 'amount', Number(e.target.value || 0))
+                                  }
+                                  inputProps={{ step: 1 }}
+                                  sx={{
+                                    ...lineItemFieldSx,
+                                    minWidth: 100,
+                                    '& input': { textAlign: 'right', px: 0.75 },
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell align="center" sx={lineItemCellSx}>
+                                <TextField
+                                  type="number"
+                                  size="small"
+                                  value={item.tdsRate ?? 0}
+                                  onChange={(e) =>
+                                    handleUpdateLineItem(item.id, 'tdsRate', Number(e.target.value || 0))
+                                  }
+                                  inputProps={{ min: 0, step: 0.01 }}
+                                  sx={{
+                                    ...lineItemFieldSx,
+                                    width: 80,
+                                    '& input': { textAlign: 'right', px: 0.75 },
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell sx={lineItemCellSx}>
+                                <Select
+                                  size="small"
+                                  fullWidth
+                                  value={item.deducteeType === 'company' ? 'company' : 'other'}
+                                  onChange={(e) =>
+                                    handleUpdateLineItem(
+                                      item.id,
+                                      'deducteeType',
+                                      e.target.value as 'company' | 'other'
+                                    )
+                                  }
+                                  sx={{
+                                    ...lineItemFieldSx,
+                                    '& .MuiSelect-select': { py: 0.5, fontSize: '0.8125rem' },
+                                  }}
+                                >
+                                  <MenuItem value="company">
+                                    {t('expenseApproval.voucher.tdsDeducteeCompany')}
+                                  </MenuItem>
+                                  <MenuItem value="other">
+                                    {t('expenseApproval.voucher.tdsDeducteeOther')}
+                                  </MenuItem>
+                                </Select>
+                              </TableCell>
+                              <TableCell sx={{ ...lineItemCellSx, minWidth: 88 }}>
+                                <TextField
+                                  size="small"
+                                  fullWidth
+                                  value={item.tdsSection || ''}
+                                  onChange={(e) =>
+                                    handleUpdateLineItem(item.id, 'tdsSection', e.target.value)
+                                  }
+                                  sx={lineItemFieldSx}
+                                />
+                              </TableCell>
+                              <TableCell sx={{ ...lineItemCellSx, minWidth: 80 }}>
+                                <TextField
+                                  size="small"
+                                  fullWidth
+                                  value={item.tdsCode || ''}
+                                  onChange={(e) =>
+                                    handleUpdateLineItem(item.id, 'tdsCode', e.target.value)
+                                  }
+                                  sx={lineItemFieldSx}
+                                />
+                              </TableCell>
+                              <TableCell align="right" sx={{ ...lineItemCellSx, fontVariantNumeric: 'tabular-nums' }}>
+                                {formatSignedAmount(calc.tdsAmt)}
+                              </TableCell>
+                              <TableCell sx={lineItemCellSx}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleRemoveLineItem(item.id)}
+                                  sx={{ p: 0.25 }}
+                                  aria-label={t('common.delete')}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        {lineItems.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={11} align="center">
+                              {t('expenseApproval.voucher.lineItemsEmpty')}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  <Button
+                    variant="outlined"
+                    startIcon={<AddIcon />}
+                    onClick={handleAddLineItem}
+                    sx={{ mt: 1, textTransform: 'none', borderRadius: '8px' }}
+                  >
+                    {t('expenseApproval.voucher.tdsAddRow')}
+                  </Button>
+                </>
+              ) : (
+                <>
               <TableContainer
                 sx={{
                   mb: 1,
@@ -4604,7 +5675,7 @@ const ExpenseApproval: React.FC = () => {
                           onChange={(e) => handleUpdateLineItem(item.id, 'qty', Number(e.target.value || 0))}
                           onKeyDown={handleLineItemKeyDown(item.id, 'qty', index)}
                           size="small"
-                          inputProps={{ min: 0 }}
+                          inputProps={{ min: 0, step: 0.01 }}
                           inputRef={setInputRef(item.id, 'qty')}
                           sx={{
                             ...lineItemFieldSx,
@@ -4621,14 +5692,14 @@ const ExpenseApproval: React.FC = () => {
                           onChange={(e) => handleUpdateLineItem(item.id, 'unitPrice', Number(e.target.value || 0))}
                           onKeyDown={handleLineItemKeyDown(item.id, 'unitPrice', index)}
                           size="small"
-                          inputProps={{ min: 0, step: 1 }}
+                          inputProps={{ min: 0, step: 0.01 }}
                           fullWidth
                           placeholder={t('expenseApproval.voucher.placeholderUnitPrice')}
                           inputRef={setInputRef(item.id, 'unitPrice')}
                           sx={lineItemFieldSx}
                         />
                       </TableCell>
-                      <TableCell align="right" sx={lineItemCellSx}>{formatAmount(item.total)}</TableCell>
+                      <TableCell align="right" sx={lineItemCellSx}>{formatDecimal2(item.total)}</TableCell>
                       <TableCell align="right" sx={lineItemCellSx}>
                         <IconButton size="small" onClick={() => handleRemoveLineItem(item.id)} sx={{ p: 0.25 }}>
                           <DeleteIcon fontSize="small" />
@@ -4654,8 +5725,93 @@ const ExpenseApproval: React.FC = () => {
               >
                 {t('expenseApproval.voucher.addItem')}
               </Button>
+                </>
+              )}
             </Box>
 
+            {voucherData.formType === 'tds' && (
+              <Box
+                className="expense-pdf-tax"
+                sx={{
+                  mb: 1,
+                  ...expenseTdsTaxBoxSx,
+                  borderRadius: '4px',
+                  p: { xs: 1, sm: 1.25 },
+                  bgcolor: 'background.paper',
+                  border: `1px solid ${EXPENSE_LINE}`,
+                }}
+              >
+                <Typography variant="subtitle2" sx={sectionTitleSx}>
+                  {t('expenseApproval.voucher.sectionTax')}
+                </Typography>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 2,
+                    py: 1.25,
+                    px: 1.25,
+                    mb: 1,
+                    borderRadius: '4px',
+                    bgcolor: EXPENSE_HEADER_BG,
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: EXPENSE_HEADER_FG,
+                      fontWeight: 600,
+                      fontSize: '0.8125rem',
+                      whiteSpace: 'pre-line',
+                      lineHeight: 1.25,
+                      pr: 1,
+                      flex: 1,
+                      minWidth: 0,
+                    }}
+                  >
+                    {t('expenseApproval.voucher.tdsSumOtherDeductee')}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: EXPENSE_HEADER_FG, fontWeight: 600, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                    {formatSignedAmount(tdsOtherDeducteeSum)}
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
+                    pt: 1.25,
+                    px: 1.25,
+                    pb: 1.25,
+                    borderRadius: '4px',
+                    bgcolor: EXPENSE_TOTAL_BG,
+                    border: `1px solid ${EXPENSE_TOTAL_LINE}`,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 2,
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 700,
+                      color: EXPENSE_TOTAL_FG,
+                      whiteSpace: 'pre-line',
+                      lineHeight: 1.25,
+                      pr: 1,
+                      flex: 1,
+                      minWidth: 0,
+                    }}
+                  >
+                    {t('expenseApproval.voucher.tdsSumCompanyDeductee')}
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: EXPENSE_TOTAL_FG }}>
+                    {formatSignedAmount(tdsCompanyDeducteeSum)}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+
+            {voucherData.formType === 'general' && (
             <Box
               className="expense-pdf-tax"
               sx={{
@@ -4690,7 +5846,7 @@ const ExpenseApproval: React.FC = () => {
                   {t('expenseApproval.voucher.taxSubtotal')}
                 </Typography>
                 <Typography variant="body2" sx={{ color: EXPENSE_HEADER_FG, fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                  {formatAmount(subtotalAmount)}
+                  {formatDecimal2(subtotalAmount)}
                 </Typography>
               </Box>
 
@@ -4716,9 +5872,33 @@ const ExpenseApproval: React.FC = () => {
               </Box>
 
               {([
-                { key: 'igst', label: 'IGST (B)', rate: voucherData.igstRate, setRate: (v: number) => setVoucherData({ ...voucherData, igstRate: v }), amount: igstAmount },
-                { key: 'cgst', label: 'CGST (C)', rate: voucherData.cgstRate, setRate: (v: number) => setVoucherData({ ...voucherData, cgstRate: v }), amount: cgstAmount },
-                { key: 'sgst', label: 'SGST (D)', rate: voucherData.sgstRate, setRate: (v: number) => setVoucherData({ ...voucherData, sgstRate: v }), amount: sgstAmount },
+                {
+                  key: 'igst',
+                  label: 'IGST (B)',
+                  rate: voucherData.igstRate,
+                  allowedRates: ALLOWED_IGST_RATES,
+                  onRateChange: (v: number) => patchVoucherTaxRates({ igstRate: v }),
+                  amount: igstAmount,
+                  readOnly: false,
+                },
+                {
+                  key: 'cgst',
+                  label: 'CGST (C)',
+                  rate: voucherData.cgstRate,
+                  allowedRates: ALLOWED_CGST_SGST_RATES,
+                  onRateChange: (v: number) => patchVoucherTaxRates({ cgstRate: v }),
+                  amount: cgstAmount,
+                  readOnly: false,
+                },
+                {
+                  key: 'sgst',
+                  label: 'SGST (D)',
+                  rate: voucherData.sgstRate,
+                  allowedRates: ALLOWED_CGST_SGST_RATES,
+                  onRateChange: (v: number) => patchVoucherTaxRates({ cgstRate: v }),
+                  amount: sgstAmount,
+                  readOnly: true,
+                },
               ] as const).map((row) => (
                 <Box
                   key={row.key}
@@ -4734,26 +5914,46 @@ const ExpenseApproval: React.FC = () => {
                   <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8125rem', gridColumn: { xs: '1 / -1', sm: 'auto' } }}>
                     {row.label}
                   </Typography>
-                  <TextField
+                  <FormControl
                     size="small"
-                    type="number"
-                    value={row.rate}
-                    onChange={(e) => row.setRate(Number(e.target.value || 0))}
-                    InputProps={{
-                      endAdornment: <InputAdornment position="end">%</InputAdornment> }}
-                    inputProps={{ min: 0, step: 0.01 }}
                     sx={{
                       width: { xs: '100%', sm: 'auto' },
                       maxWidth: { xs: 120, sm: 'none' },
                       gridColumn: { xs: '1', sm: 'auto' },
-                      '& .MuiOutlinedInput-root': {
+                    }}
+                  >
+                    <Select
+                      value={
+                        row.allowedRates.some((rate) => Math.abs(rate - Number(row.rate || 0)) < 0.001)
+                          ? String(row.rate)
+                          : ''
+                      }
+                      displayEmpty
+                      disabled={row.readOnly}
+                      onChange={(e) => row.onRateChange(Number(e.target.value || 0))}
+                      sx={{
                         height: 32,
                         borderRadius: '4px',
-                        bgcolor: '#FFFFFF',
-                        '& fieldset': { borderColor: '#CBD5E1' },
-                        '& .MuiOutlinedInput-input': { py: 0.4, fontSize: '0.8125rem' },
-                      } }}
-                  />
+                        bgcolor: row.readOnly ? '#F8FAFC' : '#FFFFFF',
+                        fontSize: '0.8125rem',
+                        '& .MuiOutlinedInput-notchedOutline': { borderColor: '#CBD5E1' },
+                        '& .MuiSelect-select': { py: 0.4, pr: '28px !important' },
+                      }}
+                      renderValue={(selected) => {
+                        if (!selected) return '-';
+                        return `${formatGstRateOption(Number(selected))}%`;
+                      }}
+                    >
+                      <MenuItem value="">
+                        <em>-</em>
+                      </MenuItem>
+                      {row.allowedRates.map((rate) => (
+                        <MenuItem key={rate} value={String(rate)}>
+                          {formatGstRateOption(rate)}%
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
                   <Typography
                     variant="body2"
                     sx={{
@@ -4763,7 +5963,7 @@ const ExpenseApproval: React.FC = () => {
                       fontWeight: 500,
                       fontSize: '0.8125rem' }}
                   >
-                    {formatAmount(row.amount)}
+                    {formatDecimal2(row.amount)}
                   </Typography>
                 </Box>
               ))}
@@ -4817,7 +6017,7 @@ const ExpenseApproval: React.FC = () => {
                           color: 'text.secondary',
                           fontWeight: 500 }}
                       >
-                        −{formatAmount(tdsAmount)}
+                        −{formatDecimal2(tdsAmount)}
                       </Typography>
                     </Box>
                   </Box>
@@ -4843,89 +6043,119 @@ const ExpenseApproval: React.FC = () => {
                   {t('expenseApproval.voucher.grandTotal')}
                 </Typography>
                 <Typography variant="body1" sx={{ fontWeight: 700, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', color: EXPENSE_TOTAL_FG }}>
-                  {formatAmount(totalAmount)}
+                  {formatDecimal2(totalAmount)}
                 </Typography>
               </Box>
             </Box>
+            )}
 
             <TextField
               label={
-                currentAttachments.length
+                voucherData.formType === 'tds' || currentAttachments.length
                   ? t('expenseApproval.voucher.remarksIfAny')
-                  : t('expenseApproval.voucher.remarksRequired')
+                  : voucherData.formType === 'gst'
+                    ? t('expenseApproval.voucher.remarksRequiredGst')
+                    : t('expenseApproval.voucher.remarksRequired')
               }
               value={voucherData.remarks}
               onChange={(e) => setVoucherData({ ...voucherData, remarks: e.target.value })}
               fullWidth
               multiline
               minRows={3}
-              required={!currentAttachments.length}
+              required={voucherData.formType !== 'tds' && !currentAttachments.length}
               helperText={
-                currentAttachments.length
+                voucherData.formType === 'tds' || currentAttachments.length
                   ? undefined
-                  : t('expenseApproval.voucher.remarksRequiredHint')
+                  : voucherData.formType === 'gst'
+                    ? t('expenseApproval.voucher.remarksRequiredGstHint')
+                    : t('expenseApproval.voucher.remarksRequiredHint')
               }
               sx={{ mt: 2, ...softFieldSx }}
             />
 
+            {voucherData.formType !== 'tds' && (
+              <>
             <Divider sx={{ my: 1.5, borderColor: alpha(theme.palette.text.primary, 0.08) }} />
 
             <Box sx={sectionShellSx}>
               <Typography variant="subtitle2" sx={sectionTitleSx}>
-                {t('expenseApproval.voucher.sectionReceipts')}
+                {voucherData.formType === 'gst'
+                  ? t('expenseApproval.voucher.sectionCalculationAttachments')
+                  : t('expenseApproval.voucher.sectionReceipts')}
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                {t('expenseApproval.voucher.invoiceTypeHint')}
-              </Typography>
-              <RadioGroup
-                row
-                value={receiptInvoiceType}
-                onChange={(e) => setReceiptInvoiceType(e.target.value as ExpenseInvoiceType)}
-                sx={{ mb: 1 }}
-              >
-                <FormControlLabel
-                  value="tax"
-                  control={<Radio size="small" />}
-                  label={t('expenseApproval.voucher.invoiceTypeTax')}
-                />
-                <FormControlLabel
-                  value="proforma"
-                  control={<Radio size="small" />}
-                  label={t('expenseApproval.voucher.invoiceTypeProforma')}
-                />
-              </RadioGroup>
+              {voucherData.formType === 'gst' ? (
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, pl: EXPENSE_TEXT_PAD_LEFT }}>
+                  {t('expenseApproval.voucher.gstPaymentCalculationLabel')}
+                </Typography>
+              ) : (
+                <>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                    {t('expenseApproval.voucher.invoiceTypeHint')}
+                  </Typography>
+                  <RadioGroup
+                    row
+                    value={receiptInvoiceType}
+                    onChange={(e) => setReceiptInvoiceType(e.target.value as ExpenseInvoiceType)}
+                    sx={{ mb: 1 }}
+                  >
+                    <FormControlLabel
+                      value="tax"
+                      control={<Radio size="small" />}
+                      label={t('expenseApproval.voucher.invoiceTypeTax')}
+                    />
+                    <FormControlLabel
+                      value="proforma"
+                      control={<Radio size="small" />}
+                      label={t('expenseApproval.voucher.invoiceTypeProforma')}
+                    />
+                  </RadioGroup>
+                </>
+              )}
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
-                <Button variant="outlined" startIcon={<QrCodeIcon />} onClick={handleOpenQr} disabled={qrLoading} sx={{ textTransform: 'none', borderRadius: '8px' }}>
-                  {qrLoading ? t('expenseApproval.voucher.receiptQrLoading') : t('expenseApproval.voucher.receiptQr')}
-                </Button>
+                {voucherData.formType !== 'gst' && (
+                  <Button variant="outlined" startIcon={<QrCodeIcon />} onClick={handleOpenQr} disabled={qrLoading} sx={{ textTransform: 'none', borderRadius: '8px' }}>
+                    {qrLoading ? t('expenseApproval.voucher.receiptQrLoading') : t('expenseApproval.voucher.receiptQr')}
+                  </Button>
+                )}
                 <Button variant="outlined" component="label" disabled={uploadingReceipts} sx={{ textTransform: 'none', borderRadius: '8px' }}>
                   {uploadingReceipts ? t('expenseApproval.voucher.receiptUploading') : t('expenseApproval.voucher.receiptUpload')}
                   <input
                     hidden
                     multiple
                     type="file"
-                    accept="image/*,application/pdf"
+                    {...(voucherData.formType === 'gst'
+                      ? {}
+                      : { accept: 'image/*,application/pdf' })}
                     onChange={(e) => {
                       void handleUploadReceipts(e.target.files);
                       e.target.value = '';
                     }}
                   />
                 </Button>
-                <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadExpenseData} sx={{ textTransform: 'none', borderRadius: '8px' }}>
-                  {t('expenseApproval.voucher.refresh')}
-                </Button>
+                {voucherData.formType !== 'gst' && (
+                  <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadExpenseData} sx={{ textTransform: 'none', borderRadius: '8px' }}>
+                    {t('expenseApproval.voucher.refresh')}
+                  </Button>
+                )}
               </Box>
               {currentAttachments.length ? (
                 renderAttachmentList(currentAttachments, {
                   deletable: true,
                   onDelete: handleDeleteReceipt,
+                  ...(voucherData.formType === 'gst'
+                    ? { typeLabel: t('expenseApproval.voucher.gstPaymentCalculationLabel') }
+                    : {}),
                 })
               ) : (
                 <Typography variant="body2" color="text.secondary">
-                  {t('expenseApproval.voucher.receiptNone')}
+                  {voucherData.formType === 'gst'
+                    ? t('expenseApproval.voucher.calculationNone')
+                    : t('expenseApproval.voucher.receiptNone')}
                 </Typography>
               )}
             </Box>
+              </>
+            )}
 
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 3 }}>
               <Button variant="outlined" onClick={() => setViewMode('list')} sx={mvsBodyOutlinedBtnSx}>
@@ -5088,6 +6318,10 @@ const ExpenseApproval: React.FC = () => {
       accountNumber: meta.accountNumber || linkedPartner?.account_number || '-',
       ifsc: meta.ifsc || linkedPartner?.bank_ifsc || '-',
     };
+    const hasVendorInfo = [partnerName, ...Object.values(partnerDetail)].some((value) => {
+      const text = String(value || '').trim();
+      return Boolean(text) && text !== '-';
+    });
     const voucherNo = meta.voucherNo || selectedExpense.expenseId || '-';
     const voucherDate = meta.voucherDate || selectedExpense.dueDate || selectedExpense.createdAt || '';
     const isRequester = isSameUserId(user?.id, selectedExpense.requesterId);
@@ -5108,6 +6342,15 @@ const ExpenseApproval: React.FC = () => {
       companyGstNumber,
       companyGstState
     );
+    const detailFormType = resolveExpenseFormType(meta);
+    const detailGstPeriodLabel = getGstPeriodLabel(
+      String(meta.voucherDate || voucherDate || selectedExpense.createdAt || ''),
+      i18n.language
+    );
+    const detailGstItems =
+      detailFormType === 'gst' ? parseGstSummaryLineItems(selectedExpense.items || []) : [];
+    const detailGstPayable =
+      detailFormType === 'gst' ? calcGstPayableAmount(detailGstItems) : 0;
     const remittanceEntries = getExpenseRemittanceEntries(selectedExpense);
     const approvalFlowNodes = (() => {
       const steps = [...(selectedExpense.approvalFlow || [])].sort(
@@ -5445,7 +6688,6 @@ const ExpenseApproval: React.FC = () => {
                             >
                               {canChangeApproverThis && node.editable ? (
                                 <Autocomplete
-                                  fullWidth
                                   size="small"
                                   disabled={approverSaving}
                                   options={selectableApprovers}
@@ -5459,14 +6701,8 @@ const ExpenseApproval: React.FC = () => {
                                   onChange={(_, value) => {
                                     handleChangeApprover(value);
                                   }}
-                                  sx={{
-                                    width: '100%',
-                                    '& .MuiAutocomplete-endAdornment': {
-                                      top: '50%',
-                                      transform: 'translateY(-50%)',
-                                      right: 0,
-                                    },
-                                  }}
+                                  sx={expenseApproverAutocompleteSx}
+                                  slotProps={expenseApproverAutocompleteSlotProps}
                                   renderInput={(params) => (
                                     <TextField
                                       {...params}
@@ -5485,12 +6721,16 @@ const ExpenseApproval: React.FC = () => {
                                           minHeight: 32,
                                           height: 32,
                                           alignItems: 'center',
+                                          flexWrap: 'nowrap',
                                         },
                                         '& .MuiInputBase-input': {
                                           textAlign: 'center',
                                           py: 0,
                                           height: 32,
                                           boxSizing: 'border-box',
+                                          whiteSpace: 'nowrap',
+                                          textOverflow: 'clip',
+                                          overflow: 'visible',
                                         },
                                       }}
                                     />
@@ -5611,7 +6851,8 @@ const ExpenseApproval: React.FC = () => {
               </TableContainer>
             </Box>
 
-            {/* 대금을 받는 협력업체 */}
+            {/* 대금을 받는 협력업체 — 표시할 정보가 없으면 숨김 */}
+            {hasVendorInfo && (
             <Box className="expense-pdf-section">
               <Typography className="expense-pdf-section-title" variant="subtitle2" sx={sectionTitleSx}>
                   {t('expenseApproval.voucher.sectionVendor')}
@@ -5685,12 +6926,192 @@ const ExpenseApproval: React.FC = () => {
                 </Table>
               </TableContainer>
             </Box>
+            )}
 
             {/* 지출 항목 */}
             <Box className="expense-pdf-section">
               <Typography className="expense-pdf-section-title" variant="subtitle2" sx={sectionTitleSx}>
                   {t('expenseApproval.detail.items')}
               </Typography>
+              {detailFormType === 'gst' ? (
+                <TableContainer sx={{ border: `1px solid ${EXPENSE_LINE}`, overflowX: 'auto' }}>
+                  <Table size="small" sx={gstSummaryTableSx}>
+                    {gstSummaryColGroup}
+                    <TableHead
+                      sx={{
+                        bgcolor: EXPENSE_HEADER_BG,
+                        '& .MuiTableCell-head': {
+                          bgcolor: EXPENSE_HEADER_BG,
+                          color: EXPENSE_HEADER_FG,
+                          fontWeight: 600,
+                          fontSize: '0.75rem',
+                          textTransform: 'none',
+                          letterSpacing: '0.02em',
+                          borderTop: '2px solid #94A3B8',
+                          borderBottom: `1px solid ${EXPENSE_LINE}`,
+                          whiteSpace: 'nowrap',
+                        },
+                      }}
+                    >
+                      <TableRow>
+                        <TableCell sx={{ width: 40 }}>{t('expenseApproval.voucher.tableNo')}</TableCell>
+                        <TableCell>{t('expenseApproval.voucher.gstTableDetail')}</TableCell>
+                        <TableCell align="right" sx={gstSummaryNumCellSx}>
+                          {t('expenseApproval.voucher.gstTableTaxableValue')}
+                        </TableCell>
+                        <TableCell align="right" sx={gstSummaryNumCellSx}>
+                          {t('expenseApproval.voucher.gstTableIgst')}
+                        </TableCell>
+                        <TableCell align="right" sx={gstSummaryNumCellSx}>
+                          {t('expenseApproval.voucher.gstTableCgst')}
+                        </TableCell>
+                        <TableCell align="right" sx={gstSummaryNumCellSx}>
+                          {t('expenseApproval.voucher.gstTableSgst')}
+                        </TableCell>
+                        <TableCell align="right" sx={gstSummaryNumCellSx}>
+                          {t('expenseApproval.voucher.gstTableRowTotal')}
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {GST_SUMMARY_ROW_DEFS.map((rowDef, index) => {
+                        const item =
+                          getGstLineByKey(detailGstItems, rowDef.key) ||
+                          mapSavedGstSummaryItem({ id: `gst-${rowDef.key}` } as ExpenseItem, rowDef.key);
+                        return (
+                          <TableRow key={rowDef.key}>
+                            <TableCell sx={gstSummaryDataCellSx}>{index + 1}</TableCell>
+                            <TableCell sx={{ ...gstSummaryDetailCellSx, ...wrapCellSx }}>
+                              <ClampText>
+                                {t(`expenseApproval.voucher.${rowDef.labelKey}`, {
+                                  period: rowDef.withPeriod ? detailGstPeriodLabel : undefined,
+                                })}
+                              </ClampText>
+                            </TableCell>
+                            <TableCell align="right" sx={{ ...gstSummaryNumCellSx, ...expenseAmountCellSx }}>
+                              {formatAmount(Number(item.taxableValue || 0))}
+                            </TableCell>
+                            <TableCell align="right" sx={{ ...gstSummaryNumCellSx, ...expenseAmountCellSx }}>
+                              {formatAmount(Number(item.igst || 0))}
+                            </TableCell>
+                            <TableCell align="right" sx={{ ...gstSummaryNumCellSx, ...expenseAmountCellSx }}>
+                              {formatAmount(Number(item.cgst || 0))}
+                            </TableCell>
+                            <TableCell align="right" sx={{ ...gstSummaryNumCellSx, ...expenseAmountCellSx }}>
+                              {formatAmount(Number(item.sgst || 0))}
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{ ...gstSummaryNumCellSx, ...expenseAmountCellSx }}
+                            >
+                              {formatDecimal2(calcGstSummaryRowTotal(item))}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      {(() => {
+                        const cols = calcGstSummaryColumnTotals(detailGstItems);
+                        return (
+                          <TableRow sx={gstSummaryTotalRowSx}>
+                            <TableCell />
+                            <TableCell>{t('expenseApproval.voucher.gstTableColumnTotal')}</TableCell>
+                            <TableCell align="right">{formatAmount(cols.taxableValue)}</TableCell>
+                            <TableCell align="right">{formatAmount(cols.igst)}</TableCell>
+                            <TableCell align="right">{formatAmount(cols.cgst)}</TableCell>
+                            <TableCell align="right">{formatAmount(cols.sgst)}</TableCell>
+                            <TableCell align="right">{formatDecimal2(cols.total)}</TableCell>
+                          </TableRow>
+                        );
+                      })()}
+                      <TableRow sx={gstSummaryPayableRowSx}>
+                        <TableCell colSpan={6} sx={{ color: EXPENSE_TOTAL_FG }}>
+                          {t('expenseApproval.voucher.gstPayableLabel')}
+                        </TableCell>
+                        <TableCell align="right" sx={{ ...expenseAmountCellSx, color: EXPENSE_TOTAL_FG }}>
+                          {formatDecimal2(detailGstPayable)}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              ) : detailFormType === 'tds' ? (
+                <TableContainer sx={{ border: `1px solid ${EXPENSE_LINE}`, overflowX: 'auto' }}>
+                  <Table size="small" sx={{ tableLayout: 'auto', minWidth: 1100 }}>
+                    <TableHead
+                      sx={{
+                        bgcolor: EXPENSE_HEADER_BG,
+                        '& .MuiTableCell-head': {
+                          bgcolor: EXPENSE_HEADER_BG,
+                          color: EXPENSE_HEADER_FG,
+                          fontWeight: 600,
+                          fontSize: '0.75rem',
+                          textTransform: 'none',
+                          letterSpacing: '0.02em',
+                          borderTop: '2px solid #94A3B8',
+                          borderBottom: `1px solid ${EXPENSE_LINE}`,
+                          whiteSpace: 'nowrap',
+                        },
+                      }}
+                    >
+                      <TableRow>
+                        <TableCell sx={{ width: 40 }}>{t('expenseApproval.voucher.tableNo')}</TableCell>
+                        <TableCell>{t('expenseApproval.voucher.tdsColDate')}</TableCell>
+                        <TableCell>{t('expenseApproval.voucher.tdsColPan')}</TableCell>
+                        <TableCell sx={{ minWidth: 220 }}>{t('expenseApproval.voucher.tdsColDeducteeName')}</TableCell>
+                        <TableCell align="right">{t('expenseApproval.voucher.tdsColAmount')}</TableCell>
+                        <TableCell align="center">{t('expenseApproval.voucher.tdsColRate')}</TableCell>
+                        <TableCell sx={{ minWidth: 148, whiteSpace: 'pre-line', lineHeight: 1.25 }}>
+                          {t('expenseApproval.voucher.tdsColDeducteeType')}
+                        </TableCell>
+                        <TableCell>{t('expenseApproval.voucher.tdsColSection')}</TableCell>
+                        <TableCell>{t('expenseApproval.voucher.tdsColCode')}</TableCell>
+                        <TableCell align="right">{t('expenseApproval.voucher.tdsColTds')}</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {(selectedExpense.items || []).length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={10} align="center" sx={{ color: 'text.secondary' }}>
+                            {t('expenseApproval.voucher.lineItemsEmpty')}
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        (selectedExpense.items || []).map((item, index) => {
+                          const calc = calcTdsLineAmounts(item);
+                          return (
+                            <TableRow key={item.id || index}>
+                              <TableCell>{index + 1}</TableCell>
+                              <TableCell>
+                                {formatLocalYmd(item.invoiceDate || item.date) || '-'}
+                              </TableCell>
+                              <TableCell>{item.pan || '-'}</TableCell>
+                              <TableCell sx={wrapCellSx}>
+                                <ClampText>{item.description || '-'}</ClampText>
+                              </TableCell>
+                              <TableCell align="right" sx={expenseAmountCellSx}>
+                                {formatSignedAmount(calc.base)}
+                              </TableCell>
+                              <TableCell align="center">
+                                {Number(item.tdsRate || 0).toFixed(2)}%
+                              </TableCell>
+                              <TableCell>
+                                {item.deducteeType === 'company'
+                                  ? t('expenseApproval.voucher.tdsDeducteeCompany')
+                                  : t('expenseApproval.voucher.tdsDeducteeOther')}
+                              </TableCell>
+                              <TableCell>{item.tdsSection || '-'}</TableCell>
+                              <TableCell>{item.tdsCode || '-'}</TableCell>
+                              <TableCell align="right" sx={expenseAmountCellSx}>
+                                {formatSignedAmount(Number(item.tdsAmount ?? calc.tdsAmt))}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              ) : (
               <TableContainer sx={{ border: `1px solid ${EXPENSE_LINE}`, overflowX: 'hidden', overflowY: 'visible' }}>
                 <Table size="small" className="expense-pdf-items" sx={expenseItemsTableSx}>
                   <colgroup>
@@ -5745,12 +7166,14 @@ const ExpenseApproval: React.FC = () => {
                           <TableCell className="expense-pdf-items-numeric-block" sx={expenseItemsNumericBlockCellSx}>
                             <Box className="expense-pdf-items-numeric-grid" sx={expenseItemsNumericGridSx}>
                               <Box />
-                              <Box sx={expenseItemsNumericValueCellSx}>{item.qty ?? '-'}</Box>
                               <Box sx={expenseItemsNumericValueCellSx}>
-                                {formatAmount(item.unitPrice ?? item.amount ?? 0)}
+                                {item.qty != null ? formatDecimal2(Number(item.qty)) : '-'}
+                              </Box>
+                              <Box sx={expenseItemsNumericValueCellSx}>
+                                {formatDecimal2(item.unitPrice ?? item.amount ?? 0)}
                               </Box>
                               <Box sx={{ ...expenseItemsNumericValueCellSx, ...expenseAmountCellSx }}>
-                                {formatAmount(item.total ?? item.amount ?? 0)}
+                                {formatDecimal2(item.total ?? item.amount ?? 0)}
                               </Box>
                             </Box>
                           </TableCell>
@@ -5760,16 +7183,27 @@ const ExpenseApproval: React.FC = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
+              )}
             </Box>
 
-            <Box sx={expenseDetailFooterRowSx}>
-            {/* 첨부파일 — 표 왼쪽 하단 */}
+            <Box
+              sx={{
+                ...expenseDetailFooterRowSx,
+                ...(detailFormType === 'tds' ? { justifyContent: 'flex-end' } : {}),
+              }}
+            >
+            {/* 첨부파일 — 표 왼쪽 하단 (TDS는 영수증 첨부 없음) */}
+            {detailFormType !== 'tds' && (
             <Box
               className="expense-pdf-plain expense-pdf-hide"
               sx={{ flex: 1, minWidth: 0, width: { xs: '100%', sm: 'auto' } }}
             >
-              <Typography variant="subtitle2" sx={sectionTitleSx}>{t('expenseApproval.detail.attachments')}</Typography>
-              {expenseIsAwaitingTaxInvoice(selectedExpense) && (
+              <Typography variant="subtitle2" sx={sectionTitleSx}>
+                {detailFormType === 'gst'
+                  ? t('expenseApproval.voucher.sectionCalculationAttachments')
+                  : t('expenseApproval.detail.attachments')}
+              </Typography>
+              {detailFormType !== 'gst' && expenseIsAwaitingTaxInvoice(selectedExpense) && (
                 <Alert severity="warning" sx={{ mb: 1.5, py: 0.5 }}>
                   {t('expenseApproval.detail.awaitingTaxInvoiceHint')}
                 </Alert>
@@ -5792,6 +7226,7 @@ const ExpenseApproval: React.FC = () => {
                   !approvedWithProforma &&
                   (canEditThis || awaitingTax);
                 const taxOnlyUpload = awaitingTax;
+                const isGstForm = detailFormType === 'gst';
 
                 if (!showInvoiceUpload) {
                   if (isRemittanceView || approvedWithProforma) {
@@ -5806,7 +7241,11 @@ const ExpenseApproval: React.FC = () => {
 
                 return (
                   <Box sx={{ mb: 1.5 }}>
-                    {taxOnlyUpload ? (
+                    {isGstForm ? (
+                      <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.75, pl: EXPENSE_TEXT_PAD_LEFT }}>
+                        {t('expenseApproval.voucher.gstPaymentCalculationLabel')}
+                      </Typography>
+                    ) : taxOnlyUpload ? (
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
                         {t('expenseApproval.detail.uploadTaxInvoiceOnly')}
                       </Typography>
@@ -5836,21 +7275,21 @@ const ExpenseApproval: React.FC = () => {
                       size="small"
                       sx={{ textTransform: 'none', borderRadius: '8px' }}
                       onClick={() => {
-                        if (taxOnlyUpload) setReceiptInvoiceType('tax');
+                        if (taxOnlyUpload || isGstForm) setReceiptInvoiceType('tax');
                       }}
                     >
                       {uploadingReceipts
                         ? t('expenseApproval.voucher.receiptUploading')
-                        : taxOnlyUpload
+                        : taxOnlyUpload && !isGstForm
                           ? t('expenseApproval.voucher.uploadTaxInvoice')
                           : t('expenseApproval.voucher.receiptUpload')}
                       <input
                         hidden
                         multiple
                         type="file"
-                        accept="image/*,application/pdf"
+                        {...(isGstForm ? {} : { accept: 'image/*,application/pdf' })}
                         onChange={(e) => {
-                          if (taxOnlyUpload) setReceiptInvoiceType('tax');
+                          if (taxOnlyUpload || isGstForm) setReceiptInvoiceType('tax');
                           void handleUploadReceipts(e.target.files);
                           e.target.value = '';
                         }}
@@ -5860,14 +7299,60 @@ const ExpenseApproval: React.FC = () => {
                 );
               })()}
               {selectedExpense.attachments.length > 0 ? (
-                renderAttachmentList(selectedExpense.attachments)
+                renderAttachmentList(selectedExpense.attachments, {
+                  ...(detailFormType === 'gst'
+                    ? { typeLabel: t('expenseApproval.voucher.gstPaymentCalculationLabel') }
+                    : {}),
+                })
               ) : (
                       <Typography variant="body2" color="text.secondary">
-                  {t('expenseApproval.voucher.receiptNone')}
+                  {detailFormType === 'gst'
+                    ? t('expenseApproval.voucher.calculationNone')
+                    : t('expenseApproval.voucher.receiptNone')}
                         </Typography>
                       )}
             </Box>
+            )}
 
+            {detailFormType === 'tds' && (
+              <Box className="expense-pdf-tax" sx={{ ...expenseTdsTaxBoxSx, flexShrink: 0 }}>
+                <Typography variant="subtitle2" sx={sectionTitleSx}>
+                  {t('expenseApproval.voucher.sectionTax')}
+                </Typography>
+                <TableContainer sx={expenseTaxTableContainerSx}>
+                  <Table size="small" sx={expenseTdsTaxTableSx}>
+                    <TableBody>
+                      <TableRow sx={{ bgcolor: EXPENSE_HEADER_BG }}>
+                        <TableCell sx={{ color: EXPENSE_HEADER_FG, fontWeight: 600, whiteSpace: 'pre-line' }}>
+                          {t('expenseApproval.voucher.tdsSumOtherDeductee')}
+                        </TableCell>
+                        <TableCell align="right" sx={{ ...expenseAmountCellSx, fontWeight: 600, color: EXPENSE_HEADER_FG }}>
+                          {formatSignedAmount(taxSummary.tdsOtherDeducteeSum || 0)}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow className="expense-pdf-grand-row" sx={{ bgcolor: EXPENSE_TOTAL_BG }}>
+                        <TableCell
+                          className="expense-pdf-grand"
+                          sx={{ fontWeight: 700, borderBottom: 'none', color: EXPENSE_TOTAL_FG, whiteSpace: 'pre-line' }}
+                        >
+                          {t('expenseApproval.voucher.tdsSumCompanyDeductee')}
+                        </TableCell>
+                        <TableCell
+                          className="expense-pdf-grand"
+                          align="right"
+                          sx={{ ...expenseAmountCellSx, fontWeight: 700, borderBottom: 'none', color: EXPENSE_TOTAL_FG }}
+                        >
+                          {displayExpenseCurrency(selectedExpense.currency)}{' '}
+                          {formatSignedAmount(taxSummary.tdsCompanyDeducteeSum || 0)}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            )}
+
+            {detailFormType === 'general' && (
             <Box
               className="expense-pdf-tax"
               sx={{ ...expenseTaxBoxWidthSx, flexShrink: 0 }}
@@ -5886,7 +7371,7 @@ const ExpenseApproval: React.FC = () => {
                         {t('expenseApproval.voucher.taxSubtotal')}
                       </TableCell>
                       <TableCell align="right" sx={{ ...expenseAmountCellSx, fontWeight: 600, color: EXPENSE_HEADER_FG }}>
-                        {formatAmount(taxSummary.subtotal)}
+                        {formatDecimal2(taxSummary.subtotal)}
                       </TableCell>
                     </TableRow>
                     {([
@@ -5898,7 +7383,7 @@ const ExpenseApproval: React.FC = () => {
                         <TableCell>{row.label}</TableCell>
                         <TableCell align="center" sx={{ color: 'text.secondary' }}>{row.rate}%</TableCell>
                         <TableCell align="right" sx={expenseAmountCellSx}>
-                          {formatAmount(row.amount)}
+                          {formatDecimal2(row.amount)}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -5907,7 +7392,7 @@ const ExpenseApproval: React.FC = () => {
                         <TableCell>TDS (E)</TableCell>
                         <TableCell align="center" sx={{ color: 'text.secondary' }}>{taxSummary.tdsRate}%</TableCell>
                         <TableCell align="right" sx={expenseAmountCellSx}>
-                          −{formatAmount(taxSummary.tdsAmount)}
+                          −{formatDecimal2(taxSummary.tdsAmount)}
                         </TableCell>
                       </TableRow>
                     ) : null}
@@ -5920,7 +7405,7 @@ const ExpenseApproval: React.FC = () => {
                         align="right"
                         sx={{ ...expenseAmountCellSx, fontWeight: 700, borderBottom: 'none', color: EXPENSE_TOTAL_FG }}
                       >
-                        {displayExpenseCurrency(selectedExpense.currency)} {formatAmount(taxSummary.grandTotal)}
+                        {displayExpenseCurrency(selectedExpense.currency)} {formatDecimal2(taxSummary.grandTotal)}
                       </TableCell>
                     </TableRow>
                     {(Number(selectedExpense.paidAmount || 0) > 0 ||
@@ -5965,6 +7450,7 @@ const ExpenseApproval: React.FC = () => {
                 </Table>
               </TableContainer>
             </Box>
+            )}
             </Box>
 
             {/* 송금 확인증 */}

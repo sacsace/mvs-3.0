@@ -2400,6 +2400,12 @@ const expenseHasRemarks = (itemsValue: any, notes?: string) => {
   return remarks.length > 0;
 };
 
+const isExpenseTdsForm = (itemsValue: any) => {
+  const meta = mergeExpenseItemsMeta(itemsValue, {}).meta || {};
+  const raw = String(meta.formType || meta.form_type || '').trim().toLowerCase();
+  return raw === 'tds';
+};
+
 const receiptOrRemarksRequiredMessage =
   '영수증을 첨부하거나, 영수증이 없으면 비고에 설명을 입력해주세요.';
 
@@ -2912,11 +2918,12 @@ export const createExpenseReport = async (req: RequestWithUser, res: Response) =
     const safePurpose = typeof purpose === 'string' ? purpose : '';
     const createStatus = status === 'submitted' ? 'submitted' : 'draft';
 
-    if (createStatus === 'submitted' && (!safeTitle.trim() || !safePurpose.trim())) {
+    if (createStatus === 'submitted' && !safeTitle.trim()) {
       return res.status(400).json({ success: false, message: '필수 항목이 누락되었습니다.' });
     }
     if (
       createStatus === 'submitted' &&
+      !isExpenseTdsForm(items) &&
       !expenseHasReceipts(attachments) &&
       !expenseHasRemarks(items, notes)
     ) {
@@ -3138,6 +3145,7 @@ export const updateExpenseReport = async (req: RequestWithUser, res: Response) =
     }
     if (
       isSubmit &&
+      !isExpenseTdsForm(nextBody.items != null ? nextBody.items : expense.items) &&
       !expenseHasReceipts(nextBody.attachments != null ? nextBody.attachments : expense.attachments) &&
       !expenseHasRemarks(nextBody.items != null ? nextBody.items : expense.items, nextBody.notes != null ? nextBody.notes : expense.notes)
     ) {
@@ -3292,7 +3300,11 @@ export const updateExpenseReportStatus = async (req: RequestWithUser, res: Respo
       if (!designatedId) {
         return res.status(400).json({ success: false, message: '승인권자를 선택해주세요.' });
       }
-      if (!expenseHasReceipts(expense.attachments) && !expenseHasRemarks(expense.items, expense.notes)) {
+      if (
+        !isExpenseTdsForm(expense.items) &&
+        !expenseHasReceipts(expense.attachments) &&
+        !expenseHasRemarks(expense.items, expense.notes)
+      ) {
         return res.status(400).json({ success: false, message: receiptOrRemarksRequiredMessage });
       }
     }

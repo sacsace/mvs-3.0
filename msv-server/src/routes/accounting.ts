@@ -159,11 +159,11 @@ const receiptStorage = multer.diskStorage({
 });
 const receiptUpload = multer({
   storage: receiptStorage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
-    if (allowed.includes(file.mimetype)) return cb(null, true);
-    cb(new Error('이미지 또는 PDF만 업로드 가능합니다.'));
+    // GST 계산식 첨부: 엑셀·PDF·이미지 등 모든 형식 허용
+    if (file) return cb(null, true);
+    cb(new Error('파일이 없습니다.'));
   }
 });
 
@@ -727,7 +727,7 @@ router.put(
     requester_position: { type: 'string', maxLength: 100 },
     total_amount: { type: 'number' },
     currency: { type: 'string', maxLength: 10 },
-    purpose: { type: 'string', minLength: 1 },
+    purpose: { type: 'string' },
     status: { type: 'string', oneOf: ['draft', 'submitted'] },
     priority: { type: 'string', oneOf: ['low', 'medium', 'high', 'urgent'] },
     due_date: { type: 'string', pattern: datePattern },
