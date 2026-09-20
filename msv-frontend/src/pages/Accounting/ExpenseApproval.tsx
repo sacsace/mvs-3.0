@@ -2280,6 +2280,8 @@ const ExpenseApproval: React.FC = () => {
 
   const loadExpenseData = useCallback(async () => {
     setLoading(true);
+    // 탭/회사 필터 변경 직후 이전 목록이 한 프레임 보이는 깜빡임 방지
+    setExpenses([]);
     try {
       const params: Record<string, number> = {};
       if (isRootUser && companyFilterId) {
@@ -2784,7 +2786,41 @@ const ExpenseApproval: React.FC = () => {
             const nameKey = normalizePartnerCompanyName(p.company_name).trim().toLowerCase();
             return Boolean(nameKey) && allowedNames.has(nameKey);
           });
-        setPartners(normalized);
+
+        // 파트너 관리와 동일: 정규화된 회사명이 같으면 1건만 유지
+        // (계좌·주소 정보가 더 많은 쪽을 우선, 동점이면 id가 작은 쪽)
+        const partnerCompleteness = (p: PartnerOption) =>
+          (p.bank_name ? 4 : 0) +
+          (p.account_number ? 4 : 0) +
+          (p.bank_ifsc ? 2 : 0) +
+          (p.account_holder ? 2 : 0) +
+          (p.pan_number ? 1 : 0) +
+          ((p.gstNumbers || []).length > 0 || p.business_number ? 1 : 0) +
+          (String(p.address || '').trim().length > 20 ? 1 : 0);
+
+        const byId = new Map<number, PartnerOption>();
+        for (const row of normalized) {
+          if (!byId.has(row.id)) byId.set(row.id, row);
+        }
+        const byName = new Map<string, PartnerOption>();
+        for (const row of Array.from(byId.values())) {
+          const nameKey = normalizePartnerCompanyName(row.company_name).trim().toLowerCase();
+          if (!nameKey) {
+            byName.set(`__id_${row.id}`, row);
+            continue;
+          }
+          const existing = byName.get(nameKey);
+          if (!existing) {
+            byName.set(nameKey, row);
+            continue;
+          }
+          const scoreNew = partnerCompleteness(row);
+          const scoreOld = partnerCompleteness(existing);
+          if (scoreNew > scoreOld || (scoreNew === scoreOld && row.id < existing.id)) {
+            byName.set(nameKey, row);
+          }
+        }
+        setPartners(Array.from(byName.values()));
       } catch {
         setPartnerLoadError(true);
         setPartners([]);
@@ -8566,8 +8602,14 @@ const ExpenseApproval: React.FC = () => {
             setListSortKey(null);
             setListSortDir('asc');
             if (value === 'transfer') {
-              setCompanyFilterId(resolveDefaultTransferCompanyFilterId());
-            } else {
+              const nextCompanyId = resolveDefaultTransferCompanyFilterId();
+              // 송금 탭은 회사 필터로 재조회 → 이전 목록이 잠깐 보이지 않게 비움
+              if (nextCompanyId !== companyFilterId) {
+                setExpenses([]);
+              }
+              setCompanyFilterId(nextCompanyId);
+            } else if (companyFilterId !== '') {
+              setExpenses([]);
               setCompanyFilterId('');
             }
           }}
