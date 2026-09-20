@@ -659,6 +659,7 @@ const WorkStatistics: React.FC = () => {
   const currentUserId = user?.id != null ? Number(user.id) : null;
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>('');
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [ownCompanyName, setOwnCompanyName] = useState('');
   const effectiveCompanyId = useMemo(() => {
     if (isRoot) {
       return selectedCompanyId !== '' ? Number(selectedCompanyId) : null;
@@ -697,7 +698,20 @@ const WorkStatistics: React.FC = () => {
   }, []);
 
   const loadCompanies = useCallback(async () => {
-    if (!isRoot) return;
+    if (!isRoot) {
+      const companyId = Number(user?.company_id || 0);
+      if (!Number.isFinite(companyId) || companyId <= 0) {
+        setOwnCompanyName('');
+        return;
+      }
+      try {
+        const company = await useReferenceDataStore.getState().fetchCompanyById(companyId);
+        setOwnCompanyName(String(company?.name || '').trim());
+      } catch {
+        setOwnCompanyName('');
+      }
+      return;
+    }
     try {
       const rows = await useReferenceDataStore.getState().fetchCompanies();
       const mapped = rows.map((c: any) => ({
@@ -2217,11 +2231,7 @@ const WorkStatistics: React.FC = () => {
               isRoot
                 ? companies.find((c) => Number(c.id) === Number(selectedCompanyId))?.name ||
                   t('workStatistics.filters.all')
-                : String(
-                    companies.find((c) => Number(c.id) === Number(user?.company_id))?.name ||
-                      user?.company_name ||
-                      '-'
-                  )
+                : ownCompanyName || '-'
             }
             departmentLabel={departmentFilter || t('workStatistics.filters.all')}
             formatDays={formatDaysLabel}
