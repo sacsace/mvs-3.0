@@ -4807,6 +4807,7 @@ export default {
         taxColRate: '세율',
         taxColAmount: '금액',
         tdsApply: 'TDS 적용',
+        autoDiscount: 'Discount',
         grandTotal: '최종 합계 (A+B+C+D)−E',
         remarksIfAny: '비고 (선택)',
         remarksRequired: '비고 (영수증 없음 · 필수)',

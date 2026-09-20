@@ -602,6 +602,8 @@ const EXPENSE_VENDOR_BG = '#FFFFFF';
 /** 협력업체 섹션 외곽선 — 일반 테두리보다 뚜렷하게 (결재란 외곽선과 동일 톤) */
 const EXPENSE_VENDOR_LINE = '#64748B';
 const EXPENSE_VENDOR_SUB = '#64748B';
+/** 협력업체 라벨(헤더) 셀 — 기본 muted보다 한 단계 진하게 */
+const EXPENSE_VENDOR_LABEL_BG = '#D0DCE8';
 
 /** GST 요약표 — 숫자열·합계행 간격 (colgroup % + 입력 fullWidth) */
 const GST_SUMMARY_NUM_COL_PERCENT = '15%';
@@ -935,6 +937,13 @@ const kvLabelCellSx = {
   textIndent: 0,
   ml: 0,
   boxSizing: 'border-box',
+} as const;
+
+const vendorKvLabelCellSx = {
+  ...kvLabelCellSx,
+  bgcolor: `${EXPENSE_VENDOR_LABEL_BG} !important`,
+  color: EXPENSE_HEADER_FG,
+  fontWeight: 400,
 } as const;
 
 const voucherMetaWrapSx = {
@@ -1369,6 +1378,17 @@ const roundDecimal2 = (value: number): number => {
   return Math.round(n * 100) / 100;
 };
 
+/** 합산액의 소수(파이사) 부분을 Discount로 분리하고 정수 합계를 반환 */
+const splitAutoPaiseDiscount = (amount: number) => {
+  const rounded = roundDecimal2(amount);
+  const payable = floorMoney(rounded);
+  const discount = roundDecimal2(rounded - payable);
+  return {
+    payable,
+    discount: discount > 0 ? discount : 0,
+  };
+};
+
 const formatAmount = (value: number) =>
   floorMoney(value).toLocaleString('en-US', {
     minimumFractionDigits: 0,
@@ -1719,6 +1739,7 @@ const calcExpenseTax = (
       tdsInterestAmount: interestSum,
       tdsOtherDeducteeSum: sumTdsBaseByDeducteeType(rows, 'other'),
       tdsCompanyDeducteeSum: sumTdsBaseByDeducteeType(rows, 'company'),
+      discountAmount: 0,
       grandTotal: floorMoney(gross - tdsSum),
     };
   }
@@ -1740,6 +1761,7 @@ const calcExpenseTax = (
       sgstAmount: 0,
       tdsAmount: 0,
       tdsInterestAmount: 0,
+      discountAmount: 0,
       grandTotal: payable,
     };
   }
@@ -1758,38 +1780,48 @@ const calcExpenseTax = (
 
   // GST 번호 없으면 GST 지급(세율·세액) 불가 — 저장된 세율이 있어도 0 처리
   if (formType === 'general' && !hasGstNumber) {
+    const legacyTds = Boolean(meta?.tdsEnabled ?? meta?.tds_enabled);
+    const tdsRate = legacyTds ? readMetaNumber(meta, 'tdsRate', 'tds_rate') : 0;
+    const tdsAmount = legacyTds ? calcVoucherGstAmount(subtotal, tdsRate) : 0;
+    const split = splitAutoPaiseDiscount(subtotal - tdsAmount);
     return {
       formType,
       subtotal,
       igstRate: 0,
       cgstRate: 0,
       sgstRate: 0,
-      tdsEnabled: false,
-      tdsRate: 0,
+      tdsEnabled: legacyTds,
+      tdsRate,
       igstAmount: 0,
       cgstAmount: 0,
       sgstAmount: 0,
-      tdsAmount: 0,
+      tdsAmount,
       tdsInterestAmount: 0,
-      grandTotal: subtotal,
+      discountAmount: split.discount,
+      grandTotal: split.payable,
     };
   }
 
   if (formType === 'general' && !hasGstRatesInMeta) {
+    const legacyTds = Boolean(meta?.tdsEnabled ?? meta?.tds_enabled);
+    const tdsRate = legacyTds ? readMetaNumber(meta, 'tdsRate', 'tds_rate') : 0;
+    const tdsAmount = legacyTds ? calcVoucherGstAmount(subtotal, tdsRate) : 0;
+    const split = splitAutoPaiseDiscount(subtotal - tdsAmount);
     return {
       formType,
       subtotal,
       igstRate: 0,
       cgstRate: 0,
       sgstRate: 0,
-      tdsEnabled: false,
-      tdsRate: 0,
+      tdsEnabled: legacyTds,
+      tdsRate,
       igstAmount: 0,
       cgstAmount: 0,
       sgstAmount: 0,
-      tdsAmount: 0,
+      tdsAmount,
       tdsInterestAmount: 0,
-      grandTotal: subtotal,
+      discountAmount: split.discount,
+      grandTotal: split.payable,
     };
   }
 
@@ -1797,20 +1829,25 @@ const calcExpenseTax = (
     const igstAmount = calcVoucherGstAmount(subtotal, igstRateMeta);
     const cgstAmount = calcVoucherGstAmount(subtotal, cgstRateMeta);
     const sgstAmount = calcVoucherGstAmount(subtotal, sgstRateMeta);
+    const legacyTds = Boolean(meta?.tdsEnabled ?? meta?.tds_enabled);
+    const tdsRate = legacyTds ? readMetaNumber(meta, 'tdsRate', 'tds_rate') : 0;
+    const tdsAmount = legacyTds ? calcVoucherGstAmount(subtotal, tdsRate) : 0;
+    const split = splitAutoPaiseDiscount(subtotal + igstAmount + cgstAmount + sgstAmount - tdsAmount);
     return {
       formType: 'general' as ExpenseFormType,
       subtotal,
       igstRate: igstRateMeta,
       cgstRate: cgstRateMeta,
       sgstRate: sgstRateMeta,
-      tdsEnabled: false,
-      tdsRate: 0,
+      tdsEnabled: legacyTds,
+      tdsRate,
       igstAmount,
       cgstAmount,
       sgstAmount,
-      tdsAmount: 0,
+      tdsAmount,
       tdsInterestAmount: 0,
-      grandTotal: roundDecimal2(subtotal + igstAmount + cgstAmount + sgstAmount),
+      discountAmount: split.discount,
+      grandTotal: split.payable,
     };
   }
 
@@ -1824,6 +1861,7 @@ const calcExpenseTax = (
   const cgstAmount = calcVoucherGstAmount(subtotal, cgstRate);
   const sgstAmount = calcVoucherGstAmount(subtotal, sgstRate);
   const tdsAmount = roundDecimal2(subtotal * (tdsRate / 100));
+  const split = splitAutoPaiseDiscount(subtotal + igstAmount + cgstAmount + sgstAmount - tdsAmount);
   return {
     formType,
     subtotal,
@@ -1837,7 +1875,8 @@ const calcExpenseTax = (
     sgstAmount,
     tdsAmount,
     tdsInterestAmount: 0,
-    grandTotal: roundDecimal2(subtotal + igstAmount + cgstAmount + sgstAmount - tdsAmount),
+    discountAmount: split.discount,
+    grandTotal: split.payable,
   };
 };
 
@@ -1994,7 +2033,7 @@ const ExpenseApproval: React.FC = () => {
   /** 초안 생성 중복 방지 (의존성 루프/StrictMode 대비) */
   const draftInitInFlightRef = useRef(false);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const inputRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
   const [uploadingReceipts, setUploadingReceipts] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [reasonDialogOpen, setReasonDialogOpen] = useState(false);
@@ -2123,6 +2162,46 @@ const ExpenseApproval: React.FC = () => {
         : 0,
     [subtotalAmount, voucherData]
   );
+  /** 회사·협력업체 GSTIN 앞 2자리(주 코드) 비교 → 주내 CGST/SGST, 주간 IGST */
+  const partnerGstStateCode = useMemo(
+    () => gstStateCode(voucherData.gstNumber),
+    [voucherData.gstNumber]
+  );
+  const effectiveCompanyGstState = useMemo(
+    () => companyGstState || gstStateCode(companyGstNumber),
+    [companyGstState, companyGstNumber]
+  );
+  const canCompareGstStates = Boolean(partnerGstStateCode && effectiveCompanyGstState);
+  const isIntraStateGst =
+    canCompareGstStates && partnerGstStateCode === effectiveCompanyGstState;
+  const isInterStateGst =
+    canCompareGstStates && partnerGstStateCode !== effectiveCompanyGstState;
+
+  // 주 코드가 바뀌면 비활성 세율은 0으로 정리
+  useEffect(() => {
+    if (voucherData.formType !== 'general') return;
+    if (!hasExpenseGstNumber(voucherData.gstNumber) || !canCompareGstStates) return;
+    if (isIntraStateGst) {
+      setVoucherData((prev) =>
+        Number(prev.igstRate || 0) === 0 ? prev : { ...prev, igstRate: 0 }
+      );
+      return;
+    }
+    if (isInterStateGst) {
+      setVoucherData((prev) =>
+        Number(prev.cgstRate || 0) === 0 && Number(prev.sgstRate || 0) === 0
+          ? prev
+          : { ...prev, cgstRate: 0, sgstRate: 0 }
+      );
+    }
+  }, [
+    voucherData.formType,
+    voucherData.gstNumber,
+    canCompareGstStates,
+    isIntraStateGst,
+    isInterStateGst,
+  ]);
+
   const tdsAmount = useMemo(() => {
     if (voucherData.formType === 'tds') {
       return floorMoney(
@@ -2132,7 +2211,8 @@ const ExpenseApproval: React.FC = () => {
         }, 0)
       );
     }
-    if (hasVoucherGstRates(voucherData) && voucherData.tdsEnabled) {
+    // 일반 전표: TDS 적용 시 합계(A) 기준으로 계산 (GST 세율 유무와 무관)
+    if (voucherData.formType === 'general' && voucherData.tdsEnabled) {
       return calcVoucherGstAmount(subtotalAmount, voucherData.tdsRate);
     }
     return 0;
@@ -2163,12 +2243,34 @@ const ExpenseApproval: React.FC = () => {
       !hasVoucherGstRates(voucherData) &&
       !voucherData.tdsEnabled
     ) {
-      return subtotalAmount;
+      return splitAutoPaiseDiscount(subtotalAmount).payable;
     }
-    return roundDecimal2(subtotalAmount + igstAmount + cgstAmount + sgstAmount - tdsAmount);
+    return splitAutoPaiseDiscount(
+      subtotalAmount + igstAmount + cgstAmount + sgstAmount - tdsAmount
+    ).payable;
   }, [
     voucherData,
     lineItems,
+    subtotalAmount,
+    igstAmount,
+    cgstAmount,
+    sgstAmount,
+    tdsAmount,
+  ]);
+
+  const autoDiscountAmount = useMemo(() => {
+    if (voucherData.formType !== 'general') return 0;
+    if (
+      !hasVoucherGstRates(voucherData) &&
+      !voucherData.tdsEnabled
+    ) {
+      return splitAutoPaiseDiscount(subtotalAmount).discount;
+    }
+    return splitAutoPaiseDiscount(
+      subtotalAmount + igstAmount + cgstAmount + sgstAmount - tdsAmount
+    ).discount;
+  }, [
+    voucherData,
     subtotalAmount,
     igstAmount,
     cgstAmount,
@@ -3218,22 +3320,32 @@ const ExpenseApproval: React.FC = () => {
       if (!hasExpenseGstNumber(prev.gstNumber)) {
         return { ...prev, igstRate: 0, cgstRate: 0, sgstRate: 0 };
       }
+      const partnerState = gstStateCode(prev.gstNumber);
+      const companyState = companyGstState || gstStateCode(companyGstNumber);
+      const canCompare = Boolean(partnerState && companyState);
+      const intra = canCompare && partnerState === companyState;
+      const inter = canCompare && partnerState !== companyState;
+
       const next = { ...prev, ...patch };
 
       if ('cgstRate' in patch) {
+        if (!intra) {
+          return { ...prev, cgstRate: 0, sgstRate: 0 };
+        }
         const cgst = normalizeAllowedHalfGstRate(Number(patch.cgstRate ?? 0));
         next.cgstRate = cgst;
         next.sgstRate = cgst;
-        if (cgst > 0) next.igstRate = 0;
+        next.igstRate = 0;
       }
 
       if ('igstRate' in patch) {
+        if (!inter) {
+          return { ...prev, igstRate: 0 };
+        }
         const igst = normalizeAllowedIgstRate(Number(patch.igstRate ?? 0));
         next.igstRate = igst;
-        if (igst > 0) {
-          next.cgstRate = 0;
-          next.sgstRate = 0;
-        }
+        next.cgstRate = 0;
+        next.sgstRate = 0;
       }
 
       return next;
@@ -3287,7 +3399,7 @@ const ExpenseApproval: React.FC = () => {
     );
   };
 
-  const setInputRef = (id: string, field: string) => (el: HTMLInputElement | null) => {
+  const setInputRef = (id: string, field: string) => (el: HTMLInputElement | HTMLTextAreaElement | null) => {
     inputRefs.current[`${id}-${field}`] = el;
   };
 
@@ -3298,6 +3410,23 @@ const ExpenseApproval: React.FC = () => {
 
   const handleLineItemKeyDown = (id: string, field: string, rowIndex: number) => (event: React.KeyboardEvent) => {
     if (event.key !== 'Enter') return;
+    // 설명: Alt+Enter → 줄바꿈, Enter → 다음 칸
+    if (field === 'description' && event.altKey) {
+      event.preventDefault();
+      const target = event.target as HTMLTextAreaElement;
+      const start = target.selectionStart ?? target.value.length;
+      const end = target.selectionEnd ?? target.value.length;
+      const next = `${target.value.slice(0, start)}\n${target.value.slice(end)}`;
+      handleUpdateLineItem(id, 'description', next);
+      requestAnimationFrame(() => {
+        const el = inputRefs.current[`${id}-description`] as HTMLTextAreaElement | null;
+        if (!el) return;
+        const pos = start + 1;
+        el.focus();
+        el.setSelectionRange(pos, pos);
+      });
+      return;
+    }
     event.preventDefault();
     if (field === 'invoiceDate') {
       focusField(id, 'description');
@@ -4868,35 +4997,72 @@ const ExpenseApproval: React.FC = () => {
                 display: 'flex',
                 flexWrap: 'wrap',
                 alignItems: 'center',
-                gap: 1,
+                gap: 1.5,
                 px: 0.25,
               }}
             >
-              <Typography variant="body2" sx={{ fontWeight: 700, mr: 0.5 }}>
-                {t('expenseApproval.voucher.formTypeLabel')}
-              </Typography>
-              <RadioGroup
-                row
-                value={voucherData.formType}
-                onChange={(e) => handleChangeFormType(e.target.value as ExpenseFormType)}
-                sx={{ gap: { xs: 0, sm: 1 } }}
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700, mr: 0.5, flexShrink: 0 }}>
+                  {t('expenseApproval.voucher.formTypeLabel')}
+                </Typography>
+                <RadioGroup
+                  row
+                  value={voucherData.formType}
+                  onChange={(e) => handleChangeFormType(e.target.value as ExpenseFormType)}
+                  sx={{ gap: { xs: 0, sm: 1 } }}
+                >
+                  <FormControlLabel
+                    value="general"
+                    control={<Radio size="small" />}
+                    label={t('expenseApproval.voucher.formTypeGeneral')}
+                  />
+                  <FormControlLabel
+                    value="gst"
+                    control={<Radio size="small" />}
+                    label={t('expenseApproval.voucher.formTypeGst')}
+                  />
+                  <FormControlLabel
+                    value="tds"
+                    control={<Radio size="small" />}
+                    label={t('expenseApproval.voucher.formTypeTds')}
+                  />
+                </RadioGroup>
+              </Box>
+              <FormControl
+                size="small"
+                sx={{
+                  ...softFieldSx,
+                  width: { xs: '100%', sm: 160 },
+                  minWidth: { sm: 140 },
+                  flexShrink: 0,
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '4px',
+                    bgcolor: EXPENSE_TOTAL_BG,
+                    '& fieldset': { borderColor: EXPENSE_TOTAL_LINE },
+                    '&:hover fieldset': { borderColor: '#FCA5A5' },
+                    '&.Mui-focused fieldset': { borderColor: EXPENSE_TOTAL_FG },
+                  },
+                  '& .MuiInputLabel-root': { color: EXPENSE_TOTAL_FG },
+                  '& .MuiInputLabel-root.Mui-focused': { color: EXPENSE_TOTAL_FG },
+                }}
               >
-                <FormControlLabel
-                  value="general"
-                  control={<Radio size="small" />}
-                  label={t('expenseApproval.voucher.formTypeGeneral')}
-                />
-                <FormControlLabel
-                  value="gst"
-                  control={<Radio size="small" />}
-                  label={t('expenseApproval.voucher.formTypeGst')}
-                />
-                <FormControlLabel
-                  value="tds"
-                  control={<Radio size="small" />}
-                  label={t('expenseApproval.voucher.formTypeTds')}
-                />
-              </RadioGroup>
+                <InputLabel>{t('expenseApproval.filters.priority')}</InputLabel>
+                <Select
+                  label={t('expenseApproval.filters.priority')}
+                  value={formData.priority}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      priority: e.target.value as 'low' | 'medium' | 'high' | 'urgent',
+                    })
+                  }
+                >
+                  <MenuItem value="low">{t('expenseApproval.priority.low')}</MenuItem>
+                  <MenuItem value="medium">{t('expenseApproval.priority.medium')}</MenuItem>
+                  <MenuItem value="high">{t('expenseApproval.priority.high')}</MenuItem>
+                  <MenuItem value="urgent">{t('expenseApproval.priority.urgent')}</MenuItem>
+                </Select>
+              </FormControl>
             </Box>
             {/* 지출 신청 */}
             <Box>
@@ -4912,22 +5078,22 @@ const ExpenseApproval: React.FC = () => {
                     tableLayout: 'fixed',
                     width: '100%',
                     '& .expense-request-meta-label': {
-                      textAlign: 'center !important',
-                      paddingLeft: '0 !important',
-                      paddingRight: '0 !important',
+                      textAlign: 'left !important',
+                      paddingLeft: `${EXPENSE_TEXT_PAD_LEFT} !important`,
+                      paddingRight: '8px !important',
                       backgroundColor: '#D8E2EC !important',
                       color: `${EXPENSE_HEADER_FG} !important`,
-                      fontWeight: '600 !important',
+                      fontWeight: '400 !important',
                     },
                   }}
                 >
                   <colgroup>
-                    <col style={{ width: 72 }} />
-                    <col style={{ width: '22%' }} />
-                    <col style={{ width: 88 }} />
-                    <col style={{ width: '34%' }} />
-                    <col style={{ width: 72 }} />
+                    <col style={{ width: EXPENSE_KV_LABEL_WIDTH_PX }} />
                     <col style={{ width: '18%' }} />
+                    <col style={{ width: 132 }} />
+                    <col style={{ width: '30%' }} />
+                    <col style={{ width: 100 }} />
+                    <col style={{ width: '14%' }} />
                   </colgroup>
                   <TableBody>
                     <TableRow>
@@ -4935,28 +5101,31 @@ const ExpenseApproval: React.FC = () => {
                         className="expense-request-meta-label"
                         sx={{
                           ...kvLabelCellSx,
-                          width: 72,
-                          minWidth: 72,
-                          maxWidth: 72,
+                          width: EXPENSE_KV_LABEL_WIDTH_PX,
+                          minWidth: EXPENSE_KV_LABEL_WIDTH_PX,
+                          maxWidth: EXPENSE_KV_LABEL_WIDTH_PX,
+                          fontWeight: 400,
                         }}
                       >
                         {t('expenseApproval.columns.requester')}
                       </TableCell>
-                      <TableCell sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <TableCell sx={{ fontWeight: 400, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {user?.username || '-'}
                       </TableCell>
                       <TableCell
                         className="expense-request-meta-label"
                         sx={{
                           ...kvLabelCellSx,
-                          width: 88,
-                          minWidth: 88,
-                          maxWidth: 88,
+                          width: 132,
+                          minWidth: 132,
+                          maxWidth: 132,
+                          fontWeight: 400,
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         {t('expenseApproval.voucher.departmentRole')}
                       </TableCell>
-                      <TableCell sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <TableCell sx={{ fontWeight: 400, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {[user?.department, user?.position]
                           .filter((v) => v && String(v).trim() && String(v).trim() !== '-')
                           .join(' / ') || '-'}
@@ -4965,14 +5134,16 @@ const ExpenseApproval: React.FC = () => {
                         className="expense-request-meta-label"
                         sx={{
                           ...kvLabelCellSx,
-                          width: 72,
-                          minWidth: 72,
-                          maxWidth: 72,
+                          width: 100,
+                          minWidth: 100,
+                          maxWidth: 100,
+                          fontWeight: 400,
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         {t('expenseApproval.voucher.labelDateCreated')}
                       </TableCell>
-                      <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      <TableCell sx={{ fontWeight: 400, whiteSpace: 'nowrap' }}>
                         {formData.dueDate
                           ? new Date(`${formData.dueDate}T00:00:00`).toLocaleDateString(dateLocale)
                           : new Date().toLocaleDateString(dateLocale)}
@@ -5007,19 +5178,6 @@ const ExpenseApproval: React.FC = () => {
                       sx={softFieldSx}
                   />
                 </Box>
-                  <FormControl fullWidth size="small" sx={softFieldSx}>
-                    <InputLabel>{t('expenseApproval.filters.priority')}</InputLabel>
-                      <Select
-                      label={t('expenseApproval.filters.priority')}
-                        value={formData.priority}
-                      onChange={(e) => setFormData({ ...formData, priority: e.target.value as 'low' | 'medium' | 'high' | 'urgent' })}
-                      >
-                        <MenuItem value="low">{t('expenseApproval.priority.low')}</MenuItem>
-                        <MenuItem value="medium">{t('expenseApproval.priority.medium')}</MenuItem>
-                        <MenuItem value="high">{t('expenseApproval.priority.high')}</MenuItem>
-                        <MenuItem value="urgent">{t('expenseApproval.priority.urgent')}</MenuItem>
-                      </Select>
-                    </FormControl>
                 </Box>
               </Box>
               </Box>
@@ -5044,7 +5202,8 @@ const ExpenseApproval: React.FC = () => {
               >
                 {t('expenseApproval.voucher.vendorGroupDoc')}
               </Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1, mb: 1.25 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 1.25 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' }, gap: 1 }}>
                   <Autocomplete
                   sx={softFieldSx}
                   fullWidth
@@ -5141,6 +5300,8 @@ const ExpenseApproval: React.FC = () => {
                   InputProps={{ readOnly: true }}
                   sx={softFieldSx}
                   />
+              </Box>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 1 }}>
                   <TextField
                   label={t('expenseApproval.voucher.labelGstNumber')}
                     value={voucherData.gstNumber}
@@ -5158,6 +5319,14 @@ const ExpenseApproval: React.FC = () => {
                   size="small"
                   sx={softFieldSx}
                   />
+                <TextField
+                  label={t('expenseApproval.voucher.labelPanNumber')}
+                  value={voucherData.partnerPan}
+                  onChange={(e) => setVoucherData({ ...voucherData, partnerPan: e.target.value })}
+                  fullWidth
+                  size="small"
+                  sx={softFieldSx}
+                />
                   <TextField
                   label={t('expenseApproval.voucher.labelVoucherDate')}
                     type="date"
@@ -5169,18 +5338,12 @@ const ExpenseApproval: React.FC = () => {
                     inputProps={{ lang: formLangAttr }}
                   sx={softFieldSx}
                 />
+              </Box>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 1 }}>
                 <TextField
                   label={t('expenseApproval.voucher.labelRepresentative')}
                   value={voucherData.partnerRepresentative}
                   onChange={(e) => setVoucherData({ ...voucherData, partnerRepresentative: e.target.value })}
-                  fullWidth
-                  size="small"
-                  sx={softFieldSx}
-                />
-                <TextField
-                  label={t('expenseApproval.voucher.labelPanNumber')}
-                  value={voucherData.partnerPan}
-                  onChange={(e) => setVoucherData({ ...voucherData, partnerPan: e.target.value })}
                   fullWidth
                   size="small"
                   sx={softFieldSx}
@@ -5201,15 +5364,17 @@ const ExpenseApproval: React.FC = () => {
                   size="small"
                   sx={softFieldSx}
                 />
+              </Box>
                 <TextField
                   label={t('expenseApproval.voucher.labelPartnerAddress')}
                   value={formatEnglishSentenceLabel(voucherData.partnerAddress)}
                   onChange={(e) => setVoucherData({ ...voucherData, partnerAddress: e.target.value })}
                   fullWidth
                   size="small"
-                  sx={{ ...softFieldSx, gridColumn: { md: '1 / -1' } }}
+                  sx={softFieldSx}
                 />
                 </Box>
+              <Box sx={{ mt: 1.25, pt: 0.25 }}>
               <Typography
                 variant="caption"
                 sx={{ fontWeight: 600, display: 'block', mb: 0.75, color: EXPENSE_VENDOR_SUB }}
@@ -5250,6 +5415,7 @@ const ExpenseApproval: React.FC = () => {
                   sx={softFieldSx}
                 />
                 </Box>
+              </Box>
               </Box>
               </Box>
             </Box>
@@ -5711,9 +5877,28 @@ const ExpenseApproval: React.FC = () => {
                           onKeyDown={handleLineItemKeyDown(item.id, 'description', index)}
                           size="small"
                           fullWidth
+                          multiline
+                          minRows={1}
+                          maxRows={4}
                           placeholder={t('expenseApproval.voucher.placeholderDescription')}
                           inputRef={setInputRef(item.id, 'description')}
-                          sx={lineItemFieldSx}
+                          sx={{
+                            ...lineItemFieldSx,
+                            '& .MuiOutlinedInput-root': {
+                              height: 'auto',
+                              minHeight: 30,
+                              borderRadius: '4px',
+                              bgcolor: '#FFFFFF',
+                              alignItems: 'flex-start',
+                              '& fieldset': { borderColor: '#CBD5E1' },
+                              '&:hover fieldset': { borderColor: '#94A3B8' },
+                              '& textarea': {
+                                py: 0.25,
+                                fontSize: '0.8125rem',
+                                lineHeight: 1.35,
+                              },
+                            },
+                          }}
                         />
                       </TableCell>
                       <TableCell align="right" sx={{ ...lineItemCellSx, width: 72, maxWidth: 72 }}>
@@ -5928,6 +6113,8 @@ const ExpenseApproval: React.FC = () => {
                   onRateChange: (v: number) => patchVoucherTaxRates({ igstRate: v }),
                   amount: igstAmount,
                   readOnly: false,
+                  enabled:
+                    hasExpenseGstNumber(voucherData.gstNumber) && isInterStateGst,
                 },
                 {
                   key: 'cgst',
@@ -5937,6 +6124,8 @@ const ExpenseApproval: React.FC = () => {
                   onRateChange: (v: number) => patchVoucherTaxRates({ cgstRate: v }),
                   amount: cgstAmount,
                   readOnly: false,
+                  enabled:
+                    hasExpenseGstNumber(voucherData.gstNumber) && isIntraStateGst,
                 },
                 {
                   key: 'sgst',
@@ -5946,6 +6135,8 @@ const ExpenseApproval: React.FC = () => {
                   onRateChange: (v: number) => patchVoucherTaxRates({ cgstRate: v }),
                   amount: sgstAmount,
                   readOnly: true,
+                  enabled:
+                    hasExpenseGstNumber(voucherData.gstNumber) && isIntraStateGst,
                 },
               ] as const).map((row) => (
                 <Box
@@ -5957,6 +6148,7 @@ const ExpenseApproval: React.FC = () => {
                     alignItems: 'center',
                     py: 0.35,
                     borderBottom: `1px solid ${EXPENSE_LINE}`,
+                    opacity: row.enabled ? 1 : 0.55,
                     '&:last-of-type': { borderBottom: 'none', pb: 0 } }}
                 >
                   <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8125rem', gridColumn: { xs: '1 / -1', sm: 'auto' } }}>
@@ -5977,13 +6169,13 @@ const ExpenseApproval: React.FC = () => {
                           : ''
                       }
                       displayEmpty
-                      disabled={row.readOnly || !hasExpenseGstNumber(voucherData.gstNumber)}
+                      disabled={row.readOnly || !row.enabled}
                       onChange={(e) => row.onRateChange(Number(e.target.value || 0))}
                       sx={{
                         height: 32,
                         borderRadius: '4px',
                         bgcolor:
-                          row.readOnly || !hasExpenseGstNumber(voucherData.gstNumber)
+                          row.readOnly || !row.enabled
                             ? '#F8FAFC'
                             : '#FFFFFF',
                         fontSize: '0.8125rem',
@@ -6073,6 +6265,40 @@ const ExpenseApproval: React.FC = () => {
                     </Box>
                   </Box>
                 </Collapse>
+                {autoDiscountAmount > 0 ? (
+                  <Box
+                    sx={{
+                      mt: 0.5,
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr auto', sm: 'minmax(88px,auto) 88px 1fr' },
+                      gap: 1,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8125rem', gridColumn: { xs: '1 / -1', sm: 'auto' } }}>
+                      {t('expenseApproval.voucher.autoDiscount')}
+                      {!voucherData.tdsEnabled ? ' (E)' : ''}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: 'text.secondary', textAlign: { xs: 'left', sm: 'center' }, fontSize: '0.75rem' }}
+                    >
+                      —
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        textAlign: 'right',
+                        fontVariantNumeric: 'tabular-nums',
+                        color: 'text.secondary',
+                        fontWeight: 500,
+                        fontSize: '0.8125rem',
+                      }}
+                    >
+                      −{formatDecimal2(autoDiscountAmount)}
+                    </Typography>
+                  </Box>
+                ) : null}
               </Box>
 
               <Box
@@ -6854,7 +7080,14 @@ const ExpenseApproval: React.FC = () => {
               >
                 <Typography
                   className="expense-pdf-title"
-                  sx={{ fontWeight: 700, fontSize: '1rem', color: '#0F172A', lineHeight: 1, display: 'flex', alignItems: 'center' }}
+                  sx={{
+                    fontWeight: 400,
+                    fontSize: '0.8125rem',
+                    color: '#0F172A',
+                    lineHeight: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
                 >
                   {selectedExpense.title || t('expenseApproval.detail.title')}
                   </Typography>
@@ -6870,107 +7103,241 @@ const ExpenseApproval: React.FC = () => {
               <Typography className="expense-pdf-section-title" variant="subtitle2" sx={sectionTitleSx}>
                   {t('expenseApproval.voucher.sectionRequest')}
               </Typography>
-              <TableContainer sx={{ border: `1px solid ${EXPENSE_LINE}`, bgcolor: '#FFFFFF', overflowX: 'hidden' }}>
-                <Table size="small" sx={compactTableSx}>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell className="expense-pdf-kv-label" sx={kvLabelCellSx}>{t('expenseApproval.columns.requester')}</TableCell>
-                      <TableCell sx={{ fontWeight: 600, ...wrapCellSx }}>
-                        <ClampText>{selectedExpense.requesterName || '-'}</ClampText>
-                      </TableCell>
-                      <TableCell className="expense-pdf-kv-label" sx={kvLabelCellSx}>{t('expenseApproval.voucher.departmentRole')}</TableCell>
-                      <TableCell sx={{ fontWeight: 600, ...wrapCellSx }}>
-                        <ClampText>
-                          {[selectedExpense.requesterDepartment, selectedExpense.requesterPosition]
-                            .filter((v) => v && String(v).trim() && String(v).trim() !== '-')
-                            .join(' / ') || '-'}
-                        </ClampText>
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="expense-pdf-kv-label" sx={{ ...kvLabelCellSx, borderBottom: 'none' }}>
-                        {t('expenseApproval.detail.purpose')}
-                      </TableCell>
-                      <TableCell colSpan={3} sx={{ borderBottom: 'none', fontWeight: 600, ...wrapCellSx }}>
-                        <ClampText title={String(selectedExpense.purpose || '')}>
-                          {selectedExpense.purpose || '-'}
-                        </ClampText>
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </TableContainer>
+              <Box
+                sx={{
+                  border: `1px solid ${EXPENSE_LINE}`,
+                  bgcolor: '#FFFFFF',
+                  overflow: 'hidden',
+                }}
+              >
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: `${EXPENSE_KV_LABEL_WIDTH_PX}px minmax(0, 1fr)`,
+                    minHeight: COMPACT_ROW_HEIGHT,
+                    borderBottom: `1px solid ${EXPENSE_LINE}`,
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <Box
+                    className="expense-pdf-kv-label expense-request-meta-label"
+                    sx={{
+                      ...kvLabelCellSx,
+                      display: 'flex',
+                      alignItems: 'center',
+                      height: '100%',
+                      borderRight: `1px solid ${EXPENSE_LINE}`,
+                      bgcolor: '#D8E2EC !important',
+                      color: `${EXPENSE_HEADER_FG} !important`,
+                      fontWeight: 400,
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    {t('expenseApproval.columns.requester')}
+                  </Box>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: {
+                        xs: '1fr',
+                        sm: 'minmax(0, 1fr) 132px minmax(0, 1.4fr) 100px minmax(0, 0.85fr)',
+                      },
+                      alignItems: 'stretch',
+                      minWidth: 0,
+                      minHeight: COMPACT_ROW_HEIGHT,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        px: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        minWidth: 0,
+                        fontWeight: 400,
+                        borderRight: { sm: `1px solid ${EXPENSE_LINE}` },
+                      }}
+                    >
+                      <ClampText>{selectedExpense.requesterName || '-'}</ClampText>
+                    </Box>
+                    <Box
+                      className="expense-pdf-kv-label expense-request-meta-label"
+                      sx={{
+                        display: { xs: 'none', sm: 'flex' },
+                        alignItems: 'center',
+                        px: 1,
+                        bgcolor: '#D8E2EC',
+                        color: EXPENSE_HEADER_FG,
+                        fontWeight: 400,
+                        fontSize: '0.8125rem',
+                        borderRight: `1px solid ${EXPENSE_LINE}`,
+                        boxSizing: 'border-box',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {t('expenseApproval.voucher.departmentRole')}
+                    </Box>
+                    <Box
+                      sx={{
+                        display: { xs: 'none', sm: 'flex' },
+                        px: 1,
+                        alignItems: 'center',
+                        minWidth: 0,
+                        fontWeight: 400,
+                        borderRight: `1px solid ${EXPENSE_LINE}`,
+                      }}
+                    >
+                      <ClampText>
+                        {[selectedExpense.requesterDepartment, selectedExpense.requesterPosition]
+                          .filter((v) => v && String(v).trim() && String(v).trim() !== '-')
+                          .join(' / ') || '-'}
+                      </ClampText>
+                    </Box>
+                    <Box
+                      className="expense-pdf-kv-label expense-request-meta-label"
+                      sx={{
+                        display: { xs: 'none', sm: 'flex' },
+                        alignItems: 'center',
+                        px: 1,
+                        bgcolor: '#D8E2EC',
+                        color: EXPENSE_HEADER_FG,
+                        fontWeight: 400,
+                        fontSize: '0.8125rem',
+                        borderRight: `1px solid ${EXPENSE_LINE}`,
+                        boxSizing: 'border-box',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {t('expenseApproval.voucher.labelDateCreated')}
+                    </Box>
+                    <Box
+                      sx={{
+                        display: { xs: 'none', sm: 'flex' },
+                        px: 1,
+                        alignItems: 'center',
+                        fontWeight: 400,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {voucherDate
+                        ? new Date(String(voucherDate).slice(0, 10) + 'T00:00:00').toLocaleDateString(dateLocale)
+                        : selectedExpense.createdAt
+                          ? new Date(String(selectedExpense.createdAt).slice(0, 10) + 'T00:00:00').toLocaleDateString(
+                              dateLocale
+                            )
+                          : '-'}
+                    </Box>
+                  </Box>
+                </Box>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: `${EXPENSE_KV_LABEL_WIDTH_PX}px minmax(0, 1fr)`,
+                    minHeight: COMPACT_ROW_HEIGHT,
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <Box
+                    className="expense-pdf-kv-label"
+                    sx={{
+                      ...kvLabelCellSx,
+                      display: 'flex',
+                      alignItems: 'center',
+                      height: '100%',
+                      borderRight: `1px solid ${EXPENSE_LINE}`,
+                      fontWeight: 400,
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    {t('expenseApproval.detail.purpose')}
+                  </Box>
+                  <Box sx={{ px: 1, py: 0.75, display: 'flex', alignItems: 'center', minWidth: 0, fontWeight: 600 }}>
+                    <ClampText title={String(selectedExpense.purpose || '')}>
+                      {selectedExpense.purpose || '-'}
+                    </ClampText>
+                  </Box>
+                </Box>
+              </Box>
             </Box>
 
             {/* 대금을 받는 협력업체 — 표시할 정보가 없으면 숨김 */}
             {hasVendorInfo && (
             <Box className="expense-pdf-section">
-              <Typography className="expense-pdf-section-title" variant="subtitle2" sx={sectionTitleSx}>
+              <Typography className="expense-pdf-section-title" variant="subtitle2" sx={{ ...sectionTitleSx, fontWeight: 400 }}>
                   {t('expenseApproval.voucher.sectionVendor')}
               </Typography>
               <TableContainer sx={{ border: `1px solid ${EXPENSE_VENDOR_LINE}`, bgcolor: '#FFFFFF', overflowX: 'hidden' }}>
                 <Table size="small" sx={compactTableSx}>
                   <TableBody>
                     <TableRow>
-                      <TableCell className="expense-pdf-kv-label" sx={kvLabelCellSx}>{t('expenseApproval.voucher.labelPartner')}</TableCell>
-                      <TableCell sx={{ fontWeight: 600, ...wrapCellSx }}>
-                        <ClampText title={partnerName}>{partnerName}</ClampText>
+                      <TableCell className="expense-pdf-kv-label" sx={vendorKvLabelCellSx}>{t('expenseApproval.voucher.labelPartner')}</TableCell>
+                      <TableCell sx={{ fontWeight: 400, ...wrapCellSx }}>
+                        <ClampText title={formatEnglishSentenceLabel(partnerName)}>
+                          {formatEnglishSentenceLabel(partnerName) || '-'}
+                        </ClampText>
                       </TableCell>
-                      <TableCell className="expense-pdf-kv-label" sx={kvLabelCellSx}>{t('expenseApproval.voucher.labelGstNumber')}</TableCell>
-                      <TableCell sx={{ fontWeight: 600, ...wrapCellSx }}>
+                      <TableCell className="expense-pdf-kv-label" sx={vendorKvLabelCellSx}>{t('expenseApproval.voucher.labelGstNumber')}</TableCell>
+                      <TableCell sx={{ fontWeight: 400, ...wrapCellSx }}>
                         <ClampText title={String(partnerDetail.gstNumber || '')}>{partnerDetail.gstNumber}</ClampText>
                       </TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell className="expense-pdf-kv-label" sx={kvLabelCellSx}>{t('expenseApproval.voucher.labelRepresentative')}</TableCell>
-                      <TableCell sx={{ fontWeight: 600, ...wrapCellSx }}>
-                        <ClampText>{partnerDetail.partnerRepresentative}</ClampText>
+                      <TableCell className="expense-pdf-kv-label" sx={vendorKvLabelCellSx}>{t('expenseApproval.voucher.labelRepresentative')}</TableCell>
+                      <TableCell sx={{ fontWeight: 400, ...wrapCellSx }}>
+                        <ClampText title={formatEnglishSentenceLabel(partnerDetail.partnerRepresentative)}>
+                          {formatEnglishSentenceLabel(partnerDetail.partnerRepresentative) || '-'}
+                        </ClampText>
                       </TableCell>
-                      <TableCell className="expense-pdf-kv-label" sx={kvLabelCellSx}>{t('expenseApproval.voucher.labelPanNumber')}</TableCell>
-                      <TableCell sx={{ fontWeight: 600, ...wrapCellSx }}>
+                      <TableCell className="expense-pdf-kv-label" sx={vendorKvLabelCellSx}>{t('expenseApproval.voucher.labelPanNumber')}</TableCell>
+                      <TableCell sx={{ fontWeight: 400, ...wrapCellSx }}>
                         <ClampText>{partnerDetail.partnerPan}</ClampText>
                       </TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell className="expense-pdf-kv-label" sx={kvLabelCellSx}>{t('expenseApproval.voucher.labelPartnerPhone')}</TableCell>
-                      <TableCell sx={{ fontWeight: 600, ...wrapCellSx }}>
+                      <TableCell className="expense-pdf-kv-label" sx={vendorKvLabelCellSx}>{t('expenseApproval.voucher.labelPartnerPhone')}</TableCell>
+                      <TableCell sx={{ fontWeight: 400, ...wrapCellSx }}>
                         <ClampText>{partnerDetail.partnerPhone}</ClampText>
                       </TableCell>
-                      <TableCell className="expense-pdf-kv-label" sx={kvLabelCellSx}>{t('expenseApproval.voucher.labelPartnerEmail')}</TableCell>
-                      <TableCell sx={{ fontWeight: 600, ...wrapCellSx }}>
-                        <ClampText title={String(partnerDetail.partnerEmail || '')}>
-                          {partnerDetail.partnerEmail}
+                      <TableCell className="expense-pdf-kv-label" sx={vendorKvLabelCellSx}>{t('expenseApproval.voucher.labelPartnerEmail')}</TableCell>
+                      <TableCell sx={{ fontWeight: 400, ...wrapCellSx }}>
+                        <ClampText title={formatEnglishSentenceLabel(partnerDetail.partnerEmail)}>
+                          {formatEnglishSentenceLabel(partnerDetail.partnerEmail) || '-'}
                         </ClampText>
                       </TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell className="expense-pdf-kv-label" sx={kvLabelCellSx}>
+                      <TableCell className="expense-pdf-kv-label" sx={vendorKvLabelCellSx}>
                         {t('expenseApproval.voucher.labelPartnerAddress')}
                       </TableCell>
-                      <TableCell colSpan={3} sx={{ fontWeight: 600, ...wrapCellSx }}>
+                      <TableCell colSpan={3} sx={{ fontWeight: 400, ...wrapCellSx }}>
                         <ClampText title={formatEnglishSentenceLabel(partnerDetail.partnerAddress)}>
                           {formatEnglishSentenceLabel(partnerDetail.partnerAddress) || '-'}
                         </ClampText>
                       </TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell className="expense-pdf-kv-label" sx={kvLabelCellSx}>{t('expenseApproval.voucher.labelAccountHolder')}</TableCell>
-                      <TableCell sx={{ fontWeight: 600, ...wrapCellSx }}>
-                        <ClampText title={String(partnerDetail.acHolder || '')}>{partnerDetail.acHolder}</ClampText>
+                      <TableCell className="expense-pdf-kv-label" sx={vendorKvLabelCellSx}>{t('expenseApproval.voucher.labelAccountHolder')}</TableCell>
+                      <TableCell sx={{ fontWeight: 400, ...wrapCellSx }}>
+                        <ClampText title={formatEnglishSentenceLabel(partnerDetail.acHolder)}>
+                          {formatEnglishSentenceLabel(partnerDetail.acHolder) || '-'}
+                        </ClampText>
                       </TableCell>
-                      <TableCell className="expense-pdf-kv-label" sx={kvLabelCellSx}>{t('expenseApproval.voucher.labelBankName')}</TableCell>
-                      <TableCell sx={{ fontWeight: 600, ...wrapCellSx }}>
-                        <ClampText>{partnerDetail.bank}</ClampText>
+                      <TableCell className="expense-pdf-kv-label" sx={vendorKvLabelCellSx}>{t('expenseApproval.voucher.labelBankName')}</TableCell>
+                      <TableCell sx={{ fontWeight: 400, ...wrapCellSx }}>
+                        <ClampText title={formatEnglishSentenceLabel(partnerDetail.bank)}>
+                          {formatEnglishSentenceLabel(partnerDetail.bank) || '-'}
+                        </ClampText>
                       </TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell className="expense-pdf-kv-label" sx={kvLabelCellSx}>{t('expenseApproval.voucher.labelAccountNumber')}</TableCell>
-                      <TableCell sx={{ fontWeight: 600, ...wrapCellSx }}>
+                      <TableCell className="expense-pdf-kv-label" sx={vendorKvLabelCellSx}>{t('expenseApproval.voucher.labelAccountNumber')}</TableCell>
+                      <TableCell sx={{ fontWeight: 400, ...wrapCellSx }}>
                         <ClampText>{partnerDetail.accountNumber}</ClampText>
                       </TableCell>
-                      <TableCell className="expense-pdf-kv-label" sx={kvLabelCellSx}>{t('expenseApproval.voucher.labelIfsc')}</TableCell>
-                      <TableCell sx={{ fontWeight: 600, ...wrapCellSx }}>
-                        <ClampText>{partnerDetail.ifsc}</ClampText>
+                      <TableCell className="expense-pdf-kv-label" sx={vendorKvLabelCellSx}>{t('expenseApproval.voucher.labelIfsc')}</TableCell>
+                      <TableCell sx={{ fontWeight: 400, ...wrapCellSx }}>
+                        <ClampText title={String(partnerDetail.ifsc || '').toUpperCase()}>
+                          {partnerDetail.ifsc ? String(partnerDetail.ifsc).toUpperCase() : '-'}
+                        </ClampText>
                       </TableCell>
                     </TableRow>
                   </TableBody>
@@ -7211,8 +7578,13 @@ const ExpenseApproval: React.FC = () => {
                       selectedExpense.items.map((item) => (
                       <TableRow key={item.id || item.description}>
                         <TableCell>{item.invoiceDate || '-'}</TableCell>
-                          <TableCell sx={wrapCellSx}>
-                            <ClampText title={String(item.description || '')}>{item.description || '-'}</ClampText>
+                          <TableCell sx={{ ...wrapCellSx, whiteSpace: 'pre-line !important' }}>
+                            <ClampText
+                              title={String(item.description || '')}
+                              sx={{ whiteSpace: 'pre-line', WebkitLineClamp: 'unset', maxHeight: 'none' }}
+                            >
+                              {item.description || '-'}
+                            </ClampText>
                           </TableCell>
                           <TableCell className="expense-pdf-items-numeric-block" sx={expenseItemsNumericBlockCellSx}>
                             <Box className="expense-pdf-items-numeric-grid" sx={expenseItemsNumericGridSx}>
@@ -7445,6 +7817,18 @@ const ExpenseApproval: React.FC = () => {
                         <TableCell align="center" sx={{ color: 'text.secondary' }}>{taxSummary.tdsRate}%</TableCell>
                         <TableCell align="right" sx={expenseAmountCellSx}>
                           −{formatDecimal2(taxSummary.tdsAmount)}
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                    {Number(taxSummary.discountAmount || 0) > 0 ? (
+                      <TableRow>
+                        <TableCell>
+                          {t('expenseApproval.voucher.autoDiscount')}
+                          {!taxSummary.tdsEnabled ? ' (E)' : ''}
+                        </TableCell>
+                        <TableCell align="center" sx={{ color: 'text.secondary' }}>—</TableCell>
+                        <TableCell align="right" sx={expenseAmountCellSx}>
+                          −{formatDecimal2(taxSummary.discountAmount)}
                         </TableCell>
                       </TableRow>
                     ) : null}

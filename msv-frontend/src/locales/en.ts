@@ -4757,6 +4757,7 @@ export default {
         taxColRate: 'Rate',
         taxColAmount: 'Amount',
         tdsApply: 'Apply TDS',
+        autoDiscount: 'Discount',
         grandTotal: 'Grand total (A+B+C+D)−E',
         remarksIfAny: 'Remarks (optional)',
         remarksRequired: 'Remarks (required without receipt)',
