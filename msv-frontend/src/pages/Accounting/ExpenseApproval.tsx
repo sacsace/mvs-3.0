@@ -1376,13 +1376,21 @@ const formatDecimal2 = (value: number) =>
     maximumFractionDigits: 2,
   });
 
+const hasExpenseGstNumber = (value?: string | null) => {
+  const s = String(value || '').replace(/\s/g, '').trim();
+  return Boolean(s) && s !== '-';
+};
+
+/** 일반 전표: GST 번호가 있고 세율이 입력된 경우에만 GST 적용 */
 const hasVoucherGstRates = (data: {
   formType: ExpenseFormType;
+  gstNumber?: string;
   igstRate?: number;
   cgstRate?: number;
   sgstRate?: number;
 }) =>
   data.formType === 'general' &&
+  hasExpenseGstNumber(data.gstNumber) &&
   (Number(data.igstRate || 0) > 0 ||
     Number(data.cgstRate || 0) > 0 ||
     Number(data.sgstRate || 0) > 0);
@@ -1738,8 +1746,29 @@ const calcExpenseTax = (
   const igstRateMeta = readMetaNumber(meta, 'igstRate', 'igst_rate');
   const cgstRateMeta = readMetaNumber(meta, 'cgstRate', 'cgst_rate');
   const sgstRateMeta = readMetaNumber(meta, 'sgstRate', 'sgst_rate');
+  const gstNumberMeta = String(meta?.gstNumber || meta?.gst_number || '').trim();
+  const hasGstNumber = hasExpenseGstNumber(gstNumberMeta);
   const hasGstRatesInMeta =
-    igstRateMeta > 0 || cgstRateMeta > 0 || sgstRateMeta > 0;
+    hasGstNumber && (igstRateMeta > 0 || cgstRateMeta > 0 || sgstRateMeta > 0);
+
+  // GST 번호 없으면 GST 지급(세율·세액) 불가 — 저장된 세율이 있어도 0 처리
+  if (formType === 'general' && !hasGstNumber) {
+    return {
+      formType,
+      subtotal,
+      igstRate: 0,
+      cgstRate: 0,
+      sgstRate: 0,
+      tdsEnabled: false,
+      tdsRate: 0,
+      igstAmount: 0,
+      cgstAmount: 0,
+      sgstAmount: 0,
+      tdsAmount: 0,
+      tdsInterestAmount: 0,
+      grandTotal: subtotal,
+    };
+  }
 
   if (formType === 'general' && !hasGstRatesInMeta) {
     return {
@@ -2257,6 +2286,9 @@ const ExpenseApproval: React.FC = () => {
         meta: {
           ...voucherData,
           checkedById: voucherData.approvedById || '',
+          ...(voucherData.formType === 'general' && !hasExpenseGstNumber(voucherData.gstNumber)
+            ? { igstRate: 0, cgstRate: 0, sgstRate: 0 }
+            : {}),
         },
       },
       status: statusOverride,
@@ -2964,11 +2996,15 @@ const ExpenseApproval: React.FC = () => {
       remarks: meta.remarks || '',
       checkedById: meta.checkedById != null ? String(meta.checkedById) : '',
       approvedById: meta.approvedById != null ? String(meta.approvedById) : '',
-      ...normalizeVoucherGstRates({
-        igstRate: Number(meta.igstRate || meta.igst_rate || 0),
-        cgstRate: Number(meta.cgstRate || meta.cgst_rate || 0),
-        sgstRate: Number(meta.sgstRate || meta.sgst_rate || 0),
-      }),
+      ...normalizeVoucherGstRates(
+        hasExpenseGstNumber(meta.gstNumber || pickPartnerGstNumber(linkedPartner || ({} as PartnerOption)) || '')
+          ? {
+              igstRate: Number(meta.igstRate || meta.igst_rate || 0),
+              cgstRate: Number(meta.cgstRate || meta.cgst_rate || 0),
+              sgstRate: Number(meta.sgstRate || meta.sgst_rate || 0),
+            }
+          : { igstRate: 0, cgstRate: 0, sgstRate: 0 }
+      ),
       tdsEnabled: Boolean(meta.tdsEnabled ?? meta.tds_enabled),
       tdsRate: Number(meta.tdsRate || meta.tds_rate || 0),
       gstRoundingAdjustment: Number(meta.gstRoundingAdjustment ?? meta.gst_rounding_adjustment ?? 0),
@@ -3173,6 +3209,10 @@ const ExpenseApproval: React.FC = () => {
 
   const patchVoucherTaxRates = (patch: Partial<typeof voucherData>) => {
     setVoucherData((prev) => {
+      // GST 번호 없으면 세율 입력·적용 불가
+      if (!hasExpenseGstNumber(prev.gstNumber)) {
+        return { ...prev, igstRate: 0, cgstRate: 0, sgstRate: 0 };
+      }
       const next = { ...prev, ...patch };
 
       if ('cgstRate' in patch) {
@@ -5050,9 +5090,13 @@ const ExpenseApproval: React.FC = () => {
                   label={t('expenseApproval.voucher.labelGstNumber')}
                     value={voucherData.gstNumber}
                   onChange={(e) => {
+                    const gstNumber = e.target.value;
                     setVoucherData({
                       ...voucherData,
-                      gstNumber: e.target.value,
+                      gstNumber,
+                      ...(!hasExpenseGstNumber(gstNumber)
+                        ? { igstRate: 0, cgstRate: 0, sgstRate: 0 }
+                        : {}),
                     });
                   }}
                     fullWidth
@@ -5878,12 +5922,15 @@ const ExpenseApproval: React.FC = () => {
                           : ''
                       }
                       displayEmpty
-                      disabled={row.readOnly}
+                      disabled={row.readOnly || !hasExpenseGstNumber(voucherData.gstNumber)}
                       onChange={(e) => row.onRateChange(Number(e.target.value || 0))}
                       sx={{
                         height: 32,
                         borderRadius: '4px',
-                        bgcolor: row.readOnly ? '#F8FAFC' : '#FFFFFF',
+                        bgcolor:
+                          row.readOnly || !hasExpenseGstNumber(voucherData.gstNumber)
+                            ? '#F8FAFC'
+                            : '#FFFFFF',
                         fontSize: '0.8125rem',
                         '& .MuiOutlinedInput-notchedOutline': { borderColor: '#CBD5E1' },
                         '& .MuiSelect-select': { py: 0.4, pr: '28px !important' },
