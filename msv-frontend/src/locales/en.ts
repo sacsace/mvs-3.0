@@ -2140,7 +2140,8 @@ export default {
         completionComparison: 'Completion Comparison',
         cardStatusDistribution: 'Card Status Distribution',
         efficiencyAnalysis: 'Personal Efficiency',
-        processingTimeAnalysis: 'Processing Time Analysis'
+        processingTimeAnalysis: 'Processing Time Analysis',
+        evaluation: 'Work Evaluation'
       },
       sections: {
         personalEfficiencyDetail: 'Personal Efficiency Detail',
@@ -2221,6 +2222,36 @@ export default {
         noProcessingTimeData: 'No processing time data to display.',
         noPersonalEfficiencyData: 'No personal efficiency data to display.',
         noUserCards: 'No work cards for this assignee.'
+      },
+      evaluation: {
+        reportTitle: 'Work Evaluation Report',
+        metaCompany: 'Company: {{company}}',
+        metaPeriod: 'Period: {{period}}',
+        metaDepartment: 'Department scope: {{department}}',
+        metaAssignees: 'Assignees in scope: {{count}}',
+        grade: 'Overall grade',
+        compositeScore: 'Composite score',
+        none: 'None',
+        summaryTitle: '1. Executive summary',
+        summaryBody:
+          'Overall grade under the current filters is {{grade}}. Average personal efficiency is {{efficiency}}, on-time rate {{onTime}}, and average completion rate {{completionAvg}}. Of {{assigned}} assigned cards, {{completed}} are done (overall completion {{overall}}). Average completed processing time is {{avgDays}}; team median is {{medianDays}}.',
+        statusTitle: '2. Card status distribution',
+        statusBody:
+          'Of {{total}} cards: To do {{todo}} ({{todoPct}}), In progress {{progress}} ({{progressPct}}), Done {{done}} ({{donePct}}), Unassigned {{unassigned}} ({{unassignedPct}}). A high unfinished share indicates bottlenecks or priority issues.',
+        timeTitle: '3. Processing time analysis',
+        timeBody:
+          'Completed processing time — median {{medianDays}}, average {{avgDays}}, fastest {{minDays}}, slowest {{maxDays}}. Of {{completedSamples}} completed samples, {{over14Count}} ({{over14Pct}}) took 14+ days, signaling long lead-time risk.',
+        peopleTitle: '4. Assignee performance',
+        topPerformers: 'Relative top performers: {{names}}',
+        needsSupport: 'Needs focused support: {{names}}',
+        riskTitle: '5. Risk points',
+        riskOverdue: 'Assignees with most overdue cards: {{names}} ({{count}} overdue total). Re-check deadlines and priorities.',
+        riskAging: 'Assignees with longest open elapsed time: {{names}}. Consider reassigning or splitting long-open cards.',
+        actionsTitle: '6. Recommended actions',
+        action1: 'Review 14+ day and overdue cards weekly; reconfirm owners and due dates.',
+        action2: 'Assign owners to unassigned cards or close unnecessary ones to shrink the active queue.',
+        action3: 'For lower efficiency/on-time assignees, rebalance load and clarify Definition of Done.',
+        action4: 'Share practices from top performers and standardize work types with high variance vs team median.'
       },
       cardList: {
         title: '{{name}} — Work cards',

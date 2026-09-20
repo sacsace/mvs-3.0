@@ -2193,7 +2193,8 @@ export default {
         completionComparison: '완료율 비교',
         cardStatusDistribution: '카드 상태 분포',
         efficiencyAnalysis: '개인 효율 분석',
-        processingTimeAnalysis: '처리 시간 분석'
+        processingTimeAnalysis: '처리 시간 분석',
+        evaluation: '업무 평가'
       },
       sections: {
         personalEfficiencyDetail: '담당자별 효율 상세',
@@ -2274,6 +2275,36 @@ export default {
         noProcessingTimeData: '표시할 처리 시간 데이터가 없습니다.',
         noPersonalEfficiencyData: '표시할 개인 효율 데이터가 없습니다.',
         noUserCards: '해당 담당자의 업무 카드가 없습니다.'
+      },
+      evaluation: {
+        reportTitle: '업무 평가 보고서',
+        metaCompany: '대상 회사: {{company}}',
+        metaPeriod: '평가 기간: {{period}}',
+        metaDepartment: '부서 범위: {{department}}',
+        metaAssignees: '평가 대상 인원: {{count}}명',
+        grade: '종합 등급',
+        compositeScore: '종합 점수',
+        none: '해당 없음',
+        summaryTitle: '1. 종합 요약',
+        summaryBody:
+          '현재 필터 기준 종합 등급은 {{grade}}입니다. 평균 종합 효율 {{efficiency}}, 평균 기한 준수율 {{onTime}}, 평균 완료율 {{completionAvg}}입니다. 총 배정 {{assigned}}건 중 {{completed}}건이 완료되어 전체 완료율은 {{overall}}입니다. 완료 카드 평균 처리 시간은 {{avgDays}}, 팀 완료 중앙값은 {{medianDays}}입니다.',
+        statusTitle: '2. 카드 상태 분포 분석',
+        statusBody:
+          '전체 카드 {{total}}건 중 할 일 {{todo}}건({{todoPct}}), 진행 중 {{progress}}건({{progressPct}}), 완료 {{done}}건({{donePct}}), 미배정 {{unassigned}}건({{unassignedPct}})입니다. 미완료(할 일+진행) 비중이 높으면 병목·우선순위 재조정이 필요합니다.',
+        timeTitle: '3. 처리 시간 분석',
+        timeBody:
+          '완료 처리 시간 중앙값 {{medianDays}}, 평균 {{avgDays}}, 최단 {{minDays}}, 최장 {{maxDays}}입니다. 완료 표본 {{completedSamples}}건 중 14일 이상 구간이 {{over14Count}}건({{over14Pct}})으로, 장기 지연 완료 비중이 높을수록 리드타임 관리가 필요합니다.',
+        peopleTitle: '4. 담당자별 성과',
+        topPerformers: '상대적 상위 성과: {{names}}',
+        needsSupport: '집중 지원 필요: {{names}}',
+        riskTitle: '5. 리스크 포인트',
+        riskOverdue: '지연 카드가 많은 담당자: {{names}} (지연 합계 {{count}}건). 기한·우선순위 재점검이 필요합니다.',
+        riskAging: '미완료 경과 시간이 긴 담당자: {{names}}. 장기 미해결 카드의 재배분·분해를 검토하세요.',
+        actionsTitle: '6. 권고 조치',
+        action1: '14일 이상·지연 카드를 주간 스탠드업에서 우선 리뷰하고 담당·기한을 재확정한다.',
+        action2: '미배정 카드는 소유자를 지정하거나, 불필요 시 종료하여 진행 중 큐를 줄인다.',
+        action3: '하위 효율·준수율 담당자에게는 배정량 조정과 완료 기준(Definition of Done)을 명확히 한다.',
+        action4: '상위 성과 담당자의 처리 방식을 공유하고, 팀 중앙값 대비 편차가 큰 업무 유형을 표준화한다.'
       },
       cardList: {
         title: '{{name}} 업무 목록',

@@ -44,6 +44,7 @@ import {
   mvsTableHeadHighlightSx,
   mvsTableBodyRowSx,
 } from '../../theme/mvsLayout';
+import WorkStatisticsEvaluationPanel from './WorkStatisticsEvaluationPanel';
 import { useTranslation } from 'react-i18next';
 import { useTheme, alpha } from '@mui/material/styles';
 import {
@@ -1432,6 +1433,8 @@ const WorkStatistics: React.FC = () => {
           <Tabs
             value={tabValue}
             onChange={(_e, newValue) => setTabValue(newValue)}
+            variant="scrollable"
+            scrollButtons="auto"
             sx={{
               minHeight: 40,
               px: { xs: 1, sm: 1.5 },
@@ -1460,6 +1463,7 @@ const WorkStatistics: React.FC = () => {
             <Tab label={t('workStatistics.tabs.cardStatusDistribution')} />
             <Tab label={t('workStatistics.tabs.efficiencyAnalysis')} />
             <Tab label={t('workStatistics.tabs.processingTimeAnalysis')} />
+            <Tab label={t('workStatistics.tabs.evaluation')} />
           </Tabs>
         </Box>
 
@@ -2193,6 +2197,35 @@ const WorkStatistics: React.FC = () => {
               </TableBody>
             </Table>
           </TableContainer>
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={5}>
+          <WorkStatisticsEvaluationPanel
+            statistics={filteredStatistics}
+            statusSummary={statusSummary}
+            completedDurationDistribution={completedDurationDistribution}
+            teamCompletedStats={teamCompletedStats}
+            averageEfficiency={averageEfficiency}
+            averageOnTimeRate={averageOnTimeRate}
+            averageProductivity={averageProductivity}
+            totalAssigned={totalAssigned}
+            totalCompleted={totalTasksCompleted}
+            overallCompletionRate={completionRate}
+            averageProcessingDays={hoursToDays(averageProcessingTime)}
+            periodLabel={periodFilter || t('workStatistics.filters.all')}
+            companyLabel={
+              isRoot
+                ? companies.find((c) => Number(c.id) === Number(selectedCompanyId))?.name ||
+                  t('workStatistics.filters.all')
+                : String(
+                    companies.find((c) => Number(c.id) === Number(user?.company_id))?.name ||
+                      user?.company_name ||
+                      '-'
+                  )
+            }
+            departmentLabel={departmentFilter || t('workStatistics.filters.all')}
+            formatDays={formatDaysLabel}
+          />
         </TabPanel>
       </Card>
 
