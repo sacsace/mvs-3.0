@@ -767,6 +767,9 @@ const expenseAmountCellSx = {
   whiteSpace: 'nowrap',
   overflow: 'visible',
   textOverflow: 'clip',
+  // 오른쪽 외곽선에 맞춰 숫자 정렬 (compact 기본 8px보다 좁게)
+  paddingRight: '2px !important',
+  paddingLeft: '8px !important',
 } as const;
 
 const expenseItemsNumericGridSx = {
@@ -822,13 +825,14 @@ const expenseTaxTableSx = {
     overflow: 'visible',
     textOverflow: 'clip',
   },
-  '& .MuiTableCell-root:nth-of-type(2)': {
+  // 합계/최종합계처럼 colSpan으로 칸이 2개만 있을 때도 금액열 스타일 유지
+  '& .MuiTableCell-root:nth-of-type(2):not(:last-child)': {
     width: EXPENSE_TAX_RATE_COL_WIDTH_PX,
     minWidth: EXPENSE_TAX_RATE_COL_WIDTH_PX,
     maxWidth: EXPENSE_TAX_RATE_COL_WIDTH_PX,
     textAlign: 'center',
   },
-  '& .MuiTableCell-root:nth-of-type(3)': expenseAmountCellSx,
+  '& .MuiTableCell-root:last-child': expenseAmountCellSx,
 } as const;
 
 const expenseTaxTableContainerSx = {
@@ -7312,9 +7316,10 @@ const ExpenseApproval: React.FC = () => {
                   </colgroup>
                   <TableBody>
                     <TableRow sx={{ bgcolor: EXPENSE_HEADER_BG }}>
-                      <TableCell colSpan={2} sx={{ color: EXPENSE_HEADER_FG, fontWeight: 600 }}>
+                      <TableCell sx={{ color: EXPENSE_HEADER_FG, fontWeight: 600 }}>
                         {t('expenseApproval.voucher.taxSubtotal')}
                       </TableCell>
+                      <TableCell />
                       <TableCell align="right" sx={{ ...expenseAmountCellSx, fontWeight: 600, color: EXPENSE_HEADER_FG }}>
                         {formatDecimal2(taxSummary.subtotal)}
                       </TableCell>
@@ -7342,9 +7347,10 @@ const ExpenseApproval: React.FC = () => {
                       </TableRow>
                     ) : null}
                     <TableRow className="expense-pdf-grand-row" sx={{ bgcolor: EXPENSE_TOTAL_BG }}>
-                      <TableCell className="expense-pdf-grand" colSpan={2} sx={{ fontWeight: 700, borderBottom: 'none', color: EXPENSE_TOTAL_FG }}>
+                      <TableCell className="expense-pdf-grand" sx={{ fontWeight: 700, borderBottom: 'none', color: EXPENSE_TOTAL_FG }}>
                         {t('expenseApproval.voucher.grandTotal')}
                       </TableCell>
+                      <TableCell sx={{ borderBottom: 'none' }} />
                       <TableCell
                         className="expense-pdf-grand"
                         align="right"
