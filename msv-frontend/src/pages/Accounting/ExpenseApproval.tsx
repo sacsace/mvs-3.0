@@ -1518,8 +1518,6 @@ const parseGstSummaryLineItems = (items: ExpenseItem[]): ExpenseItem[] => {
   return createGstSummaryLineItems();
 };
 
-const GST_SPLIT_RATE = 9;
-
 /** CGST/SGST 허용 세율(%) */
 const ALLOWED_CGST_SGST_RATES = [2.5, 6, 9, 20] as const;
 /** IGST 허용 세율(%) — 반쪽 세율의 2배 */
@@ -1596,26 +1594,6 @@ const gstStateCode = (value?: string | null) => {
   const gst = String(value || '').replace(/\s/g, '').toUpperCase();
   if (!/^\d{2}/.test(gst)) return '';
   return gst.slice(0, 2);
-};
-
-const normalizeGstState = (value?: string | null) => {
-  const fromGst = gstStateCode(value);
-  if (fromGst) return fromGst;
-  const digits = String(value || '').replace(/\D/g, '');
-  return digits.length >= 2 ? digits.slice(0, 2) : '';
-};
-
-const resolveGstRatesFromGstin = (
-  partnerGst: string,
-  companyGst: string,
-  companyStateFallback = ''
-) => {
-  const partnerState = gstStateCode(partnerGst);
-  const companyState = gstStateCode(companyGst) || normalizeGstState(companyStateFallback);
-  if (partnerState && companyState && partnerState !== companyState) {
-    return { igstRate: GST_SPLIT_RATE * 2, cgstRate: 0, sgstRate: 0 };
-  }
-  return { igstRate: 0, cgstRate: GST_SPLIT_RATE, sgstRate: GST_SPLIT_RATE };
 };
 
 const isSameUserId = (a?: number | string | null, b?: number | string | null) => {
@@ -1803,13 +1781,7 @@ const calcExpenseTax = (
   let sgstRate = sgstRateMeta;
   const legacyTds = Boolean(meta?.tdsEnabled ?? meta?.tds_enabled);
   const tdsRate = legacyTds ? readMetaNumber(meta, 'tdsRate', 'tds_rate') : 0;
-  const gstNumber = String(meta?.gstNumber || meta?.gst_number || '').trim();
-  if (igstRate === 0 && cgstRate === 0 && sgstRate === 0 && looksLikeGstin(gstNumber)) {
-    const resolved = resolveGstRatesFromGstin(gstNumber, companyGstNumber, companyGstState);
-    igstRate = resolved.igstRate;
-    cgstRate = resolved.cgstRate;
-    sgstRate = resolved.sgstRate;
-  }
+  // meta에 저장된 세율만 사용 — GSTIN 기준으로 자동 추론하지 않음
   const igstAmount = calcVoucherGstAmount(subtotal, igstRate);
   const cgstAmount = calcVoucherGstAmount(subtotal, cgstRate);
   const sgstAmount = calcVoucherGstAmount(subtotal, sgstRate);
@@ -2592,31 +2564,7 @@ const ExpenseApproval: React.FC = () => {
     }
   }, [user]);
 
-  useEffect(() => {
-    if (viewMode !== 'create' && viewMode !== 'edit') return;
-    if (!voucherData.gstNumber) return;
-    const nextRates = resolveGstRatesFromGstin(
-      voucherData.gstNumber,
-      companyGstNumber,
-      companyGstState
-    );
-    if (
-      Number(voucherData.igstRate || 0) === nextRates.igstRate &&
-      Number(voucherData.cgstRate || 0) === nextRates.cgstRate &&
-      Number(voucherData.sgstRate || 0) === nextRates.sgstRate
-    ) {
-      return;
-    }
-    setVoucherData((prev) => ({ ...prev, ...normalizeVoucherGstRates(nextRates) }));
-  }, [
-    viewMode,
-    voucherData.gstNumber,
-    voucherData.igstRate,
-    voucherData.cgstRate,
-    voucherData.sgstRate,
-    companyGstNumber,
-    companyGstState,
-  ]);
+  // GST 세율은 사용자가 직접 입력한 값만 사용 (파트너·GSTIN으로 자동 채우지 않음)
 
   useEffect(() => {
     const loadApprovers = async () => {
@@ -5060,7 +5008,6 @@ const ExpenseApproval: React.FC = () => {
                         accountNumber: value.account_number || '',
                         ifsc: value.bank_ifsc || '',
                       acHolder: value.account_holder || value.representative || value.company_name || '',
-                      ...resolveGstRatesFromGstin(gstNumber, companyGstNumber, companyGstState),
                       });
                     }}
                   renderOption={(props, option) => (
@@ -5099,11 +5046,9 @@ const ExpenseApproval: React.FC = () => {
                   label={t('expenseApproval.voucher.labelGstNumber')}
                     value={voucherData.gstNumber}
                   onChange={(e) => {
-                    const gstNumber = e.target.value;
                     setVoucherData({
                       ...voucherData,
-                      gstNumber,
-                      ...resolveGstRatesFromGstin(gstNumber, companyGstNumber, companyGstState),
+                      gstNumber: e.target.value,
                     });
                   }}
                     fullWidth
