@@ -767,9 +767,8 @@ const expenseAmountCellSx = {
   whiteSpace: 'nowrap',
   overflow: 'visible',
   textOverflow: 'clip',
-  // 오른쪽 외곽선에 맞춰 숫자 정렬 (compact 기본 8px보다 좁게)
-  paddingRight: '2px !important',
-  paddingLeft: '8px !important',
+  // compact 기본 padding 단축속성을 덮어 오른쪽 끝 여백 확보
+  padding: '0 20px 0 8px !important',
 } as const;
 
 const expenseItemsNumericGridSx = {
@@ -789,7 +788,8 @@ const expenseItemsNumericBlockCellSx = {
 
 const expenseItemsNumericHeaderCellSx = {
   textAlign: 'right',
-  px: 1,
+  pl: 1,
+  pr: 2.5,
   fontWeight: 600,
   fontSize: '0.75rem',
   whiteSpace: 'nowrap',
@@ -797,7 +797,8 @@ const expenseItemsNumericHeaderCellSx = {
 
 const expenseItemsNumericValueCellSx = {
   textAlign: 'right',
-  px: 1,
+  pl: 1,
+  pr: 2.5,
   fontVariantNumeric: 'tabular-nums',
   whiteSpace: 'nowrap',
 } as const;
@@ -832,7 +833,10 @@ const expenseTaxTableSx = {
     maxWidth: EXPENSE_TAX_RATE_COL_WIDTH_PX,
     textAlign: 'center',
   },
-  '& .MuiTableCell-root:last-child': expenseAmountCellSx,
+  '& .MuiTableCell-root:last-child': {
+    ...expenseAmountCellSx,
+    padding: '0 20px 0 8px !important',
+  },
 } as const;
 
 const expenseTaxTableContainerSx = {
@@ -876,6 +880,7 @@ const expenseTdsTaxTableSx = {
     ...expenseAmountCellSx,
     whiteSpace: 'nowrap',
     verticalAlign: 'middle',
+    padding: '14px 20px 14px 8px !important',
   },
 } as const;
 
@@ -4900,16 +4905,77 @@ const ExpenseApproval: React.FC = () => {
               </Typography>
               <Box sx={sectionBlockSx}>
               <TableContainer>
-                <Table size="small" sx={compactTableSx}>
+                <Table
+                  size="small"
+                  sx={{
+                    ...compactTableSx,
+                    tableLayout: 'fixed',
+                    width: '100%',
+                    '& .expense-request-meta-label': {
+                      textAlign: 'center !important',
+                      paddingLeft: '0 !important',
+                      paddingRight: '0 !important',
+                      backgroundColor: '#D8E2EC !important',
+                      color: `${EXPENSE_HEADER_FG} !important`,
+                      fontWeight: '600 !important',
+                    },
+                  }}
+                >
+                  <colgroup>
+                    <col style={{ width: 72 }} />
+                    <col style={{ width: '22%' }} />
+                    <col style={{ width: 88 }} />
+                    <col style={{ width: '34%' }} />
+                    <col style={{ width: 72 }} />
+                    <col style={{ width: '18%' }} />
+                  </colgroup>
                   <TableBody>
                     <TableRow>
-                      <TableCell className="expense-pdf-kv-label" sx={kvLabelCellSx}>{t('expenseApproval.columns.requester')}</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>{user?.username || '-'}</TableCell>
-                      <TableCell className="expense-pdf-kv-label" sx={kvLabelCellSx}>{t('expenseApproval.voucher.departmentRole')}</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>
+                      <TableCell
+                        className="expense-request-meta-label"
+                        sx={{
+                          ...kvLabelCellSx,
+                          width: 72,
+                          minWidth: 72,
+                          maxWidth: 72,
+                        }}
+                      >
+                        {t('expenseApproval.columns.requester')}
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {user?.username || '-'}
+                      </TableCell>
+                      <TableCell
+                        className="expense-request-meta-label"
+                        sx={{
+                          ...kvLabelCellSx,
+                          width: 88,
+                          minWidth: 88,
+                          maxWidth: 88,
+                        }}
+                      >
+                        {t('expenseApproval.voucher.departmentRole')}
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {[user?.department, user?.position]
                           .filter((v) => v && String(v).trim() && String(v).trim() !== '-')
                           .join(' / ') || '-'}
+                      </TableCell>
+                      <TableCell
+                        className="expense-request-meta-label"
+                        sx={{
+                          ...kvLabelCellSx,
+                          width: 72,
+                          minWidth: 72,
+                          maxWidth: 72,
+                        }}
+                      >
+                        {t('expenseApproval.voucher.labelDateCreated')}
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        {formData.dueDate
+                          ? new Date(`${formData.dueDate}T00:00:00`).toLocaleDateString(dateLocale)
+                          : new Date().toLocaleDateString(dateLocale)}
                       </TableCell>
                     </TableRow>
                   </TableBody>
@@ -4954,17 +5020,6 @@ const ExpenseApproval: React.FC = () => {
                         <MenuItem value="urgent">{t('expenseApproval.priority.urgent')}</MenuItem>
                       </Select>
                     </FormControl>
-                    <TextField
-                    label={t('expenseApproval.voucher.labelDateCreated')}
-                      type="date"
-                      value={formData.dueDate}
-                      onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                      InputLabelProps={{ shrink: true }}
-                      fullWidth
-                    size="small"
-                      inputProps={{ lang: formLangAttr }}
-                    sx={softFieldSx}
-                    />
                 </Box>
               </Box>
               </Box>
