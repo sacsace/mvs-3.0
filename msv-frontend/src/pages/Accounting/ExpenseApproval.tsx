@@ -7538,6 +7538,7 @@ const ExpenseApproval: React.FC = () => {
               sx={{
                 border: `1px solid ${EXPENSE_LINE}`,
                 borderRadius: '6px',
+                overflow: 'hidden',
                 display: 'grid',
                 gridTemplateColumns: `${EXPENSE_KV_LABEL_WIDTH_PX}px minmax(0, 1fr)`,
                 minHeight: COMPACT_ROW_HEIGHT,
@@ -7556,6 +7557,8 @@ const ExpenseApproval: React.FC = () => {
                   lineHeight: 1,
                   height: '100%',
                   borderRight: `1px solid ${EXPENSE_LINE}`,
+                  borderTopLeftRadius: '5px',
+                  borderBottomLeftRadius: '5px',
                 }}
               >
                 {t('expenseApproval.voucher.labelTitle')}

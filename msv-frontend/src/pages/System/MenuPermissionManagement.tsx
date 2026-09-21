@@ -49,6 +49,7 @@ import { api } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { showErrorPopup, showSuccessPopup } from '../../utils/errorHandler';
 import { useTranslation } from 'react-i18next';
+import { getUploadUrl } from '../../utils/uploadUrl';
 
 interface User {
   id: number;
@@ -58,6 +59,7 @@ interface User {
   company: string;
   company_id?: number;
   status?: string;
+  avatar_url?: string | null;
 }
 
 interface Company {
@@ -736,7 +738,8 @@ const MenuPermissionManagement: React.FC = () => {
               role: u.role,
               company: '',
               company_id: u.company_id,
-              status: u.status
+              status: u.status,
+              avatar_url: u.avatar_url || null,
             }));
         }
         
@@ -1669,7 +1672,9 @@ const MenuPermissionManagement: React.FC = () => {
                   </Typography>
                 ) : (
                   <List dense sx={{ flex: 1, overflow: 'auto', py: 0.5 }}>
-                    {filteredUsers.map((u) => (
+                    {filteredUsers.map((u) => {
+                      const avatarSrc = getUploadUrl(u.avatar_url) || undefined;
+                      return (
                       <ListItemButton
                         key={u.id}
                         selected={selectedUserId === u.id}
@@ -1685,18 +1690,22 @@ const MenuPermissionManagement: React.FC = () => {
                       >
                         <ListItemIcon sx={{ minWidth: 40 }}>
                           <Avatar
+                            src={avatarSrc}
+                            alt={u.name}
                             sx={{
                               width: 32,
                               height: 32,
                               fontSize: '0.8125rem',
                               fontWeight: 600,
-                              bgcolor:
-                                selectedUserId === u.id
+                              bgcolor: avatarSrc
+                                ? 'transparent'
+                                : selectedUserId === u.id
                                   ? alpha(theme.palette.primary.main, 0.22)
                                   : theme.palette.primary.main,
-                              color: selectedUserId === u.id ? 'primary.dark' : theme.palette.primary.contrastText }}
+                              color: selectedUserId === u.id ? 'primary.dark' : theme.palette.primary.contrastText,
+                            }}
                           >
-                            {u.name.charAt(0)}
+                            {u.name?.charAt(0)?.toUpperCase() || '?'}
                           </Avatar>
                         </ListItemIcon>
                         <ListItemText
@@ -1724,7 +1733,8 @@ const MenuPermissionManagement: React.FC = () => {
                           secondaryTypographyProps={{ component: 'div' }}
                         />
                       </ListItemButton>
-                    ))}
+                      );
+                    })}
                   </List>
                 )}
               </Box>

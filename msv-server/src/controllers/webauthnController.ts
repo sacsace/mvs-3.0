@@ -8,7 +8,7 @@ import {
   type AuthenticatorTransportFuture,
 } from '@simplewebauthn/server';
 import { AuthRequest } from '../types';
-import { User } from '../models';
+import { User, Company } from '../models';
 import WebAuthnCredential from '../models/WebAuthnCredential';
 import { invalidateAuthUser } from '../utils/authCache';
 import { referenceCacheGet, referenceCacheSet, referenceCacheDel } from '../utils/redisCache';
@@ -17,6 +17,17 @@ import { recordActivityLog } from '../services/activityLogService';
 const RP_NAME = process.env.WEBAUTHN_RP_NAME || 'MVS';
 const CHALLENGE_TTL_SEC = 300;
 const DEFAULT_SESSION_TIMEOUT_MINUTES = 30;
+const MIN_SESSION_TIMEOUT_MINUTES = 5;
+const MAX_SESSION_TIMEOUT_MINUTES = 24 * 60;
+
+const normalizeSessionTimeoutMinutes = (value: unknown): number => {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return DEFAULT_SESSION_TIMEOUT_MINUTES;
+  const rounded = Math.floor(num);
+  if (rounded < MIN_SESSION_TIMEOUT_MINUTES) return MIN_SESSION_TIMEOUT_MINUTES;
+  if (rounded > MAX_SESSION_TIMEOUT_MINUTES) return MAX_SESSION_TIMEOUT_MINUTES;
+  return rounded;
+};
 /** 사용자당 활성 생체 로그인 기기 최대 개수 */
 export const MAX_WEBAUTHN_CREDENTIALS_PER_USER = 4;
 
@@ -91,10 +102,15 @@ const issueLoginToken = async (user: any, req: Request, reason: string | null) =
 
   let sessionTimeoutMinutes = DEFAULT_SESSION_TIMEOUT_MINUTES;
   try {
-    const settings = (user.settings || {}) as any;
-    const raw = settings?.security?.sessionTimeoutMinutes ?? settings?.sessionTimeoutMinutes;
-    const num = Number(raw);
-    if (Number.isFinite(num) && num >= 5) sessionTimeoutMinutes = Math.min(Math.floor(num), 24 * 60);
+    if (user.company_id) {
+      const company = await (Company as any).findOne({
+        where: { id: user.company_id, tenant_id: user.tenant_id },
+        attributes: ['settings'],
+      });
+      if (company?.settings?.security?.sessionTimeout != null) {
+        sessionTimeoutMinutes = normalizeSessionTimeoutMinutes(company.settings.security.sessionTimeout);
+      }
+    }
   } catch {
     /* default */
   }
