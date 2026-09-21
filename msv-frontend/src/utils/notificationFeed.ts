@@ -79,6 +79,16 @@ export function hrefFromServerNotificationData(data: unknown): string | undefine
       : '/hr/employment-contracts';
   }
 
+  if (d.feature === 'project') {
+    const projectId = Number(d.project_id);
+    if (Number.isInteger(projectId) && projectId > 0) {
+      return `/work/project-management/${projectId}`;
+    }
+    return typeof d.href === 'string' && d.href.startsWith('/') && !d.href.startsWith('//')
+      ? d.href
+      : '/work/project-management';
+  }
+
   if (d.feature !== 'work_report') return undefined;
   const rawId = d.id;
   const reportId =

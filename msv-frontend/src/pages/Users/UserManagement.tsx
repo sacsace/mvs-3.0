@@ -1408,6 +1408,15 @@ const UserManagement: React.FC = () => {
         return;
       }
 
+      if (
+        submitData.role &&
+        !(editingUser && editingUser.role === submitData.role) &&
+        !canAssignRole(user?.role, String(submitData.role))
+      ) {
+        setError(t('userManagement.roleHigherDenied'));
+        return;
+      }
+
       if (salaryUnlocked) {
         if (!salaryPasswordForSubmit) {
           openSalaryUnlock('edit');
@@ -1534,6 +1543,19 @@ const UserManagement: React.FC = () => {
       default: return role;
     }
   };
+
+  const canAssignRole = (actorRole: string | undefined, targetRole: string) => {
+    const actor = String(actorRole || '').toLowerCase();
+    const target = String(targetRole || '').toLowerCase();
+    if (target === 'root' || target === 'audit') return actor === 'root';
+    const rank: Record<string, number> = { user: 1, admin: 2, audit: 3, root: 4 };
+    return (rank[actor] || 0) >= (rank[target] || 0);
+  };
+
+  const assignableRoles = useMemo(() => {
+    const all = ['user', 'admin', 'audit', 'root'] as const;
+    return all.filter((r) => canAssignRole(user?.role, r));
+  }, [user?.role]);
 
   const getStatusLabel = (status: string) => {
     switch (status) {
@@ -3659,17 +3681,15 @@ const UserManagement: React.FC = () => {
                       required
                       SelectProps={{ displayEmpty: true }}
                     >
-                      <MenuItem value="user">{t('userManagement.roleUser')}</MenuItem>
-                      <MenuItem value="admin">{t('userManagement.roleAdmin')}</MenuItem>
-                      {user?.role === 'root' ? (
-                        <MenuItem value="audit">{t('userManagement.roleAudit')}</MenuItem>
-                      ) : editingUser?.role === 'audit' ? (
-                        <MenuItem value="audit" disabled>
-                          {t('userManagement.roleAudit')}
+                      {assignableRoles.map((r) => (
+                        <MenuItem key={r} value={r}>
+                          {r === 'root' ? 'Root' : getRoleLabel(r)}
                         </MenuItem>
-                      ) : null}
-                      {user?.role === 'root' && (
-                        <MenuItem value="root">Root</MenuItem>
+                      ))}
+                      {editingUser && !canAssignRole(user?.role, editingUser.role) && (
+                        <MenuItem value={editingUser.role} disabled>
+                          {editingUser.role === 'root' ? 'Root' : getRoleLabel(editingUser.role)}
+                        </MenuItem>
                       )}
                     </TextField>
                     <TextField

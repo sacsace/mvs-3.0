@@ -800,18 +800,18 @@ const PayrollExcelGrid: React.FC<Props> = ({
           WebkitOverflowScrolling: 'touch',
         }}
       >
-        <DataGrid
+      <DataGrid
           apiRef={apiRef}
           key={`${i18n.language}-${prefs.order.join('|')}-${prefs.customColumns.map((c) => `${c.id}:${c.inputMode || 'amount'}:${c.formula || ''}`).join(',')}-${salaryRatios.parts.map((p) => `${p.id}:${p.label}`).join(',')}`}
-          rows={rows}
-          columns={columns}
-          loading={loading}
-          getRowId={(r) => r.id}
+        rows={rows}
+        columns={columns}
+        loading={loading}
+        getRowId={(r) => r.id}
           isCellEditable={(params) => isCellEditable({ field: params.field, row: params.row as PayrollGridRow })}
-          processRowUpdate={processRowUpdate}
-          editMode="cell"
+        processRowUpdate={processRowUpdate}
+        editMode="cell"
           onCellClick={handleCellClick}
-          disableRowSelectionOnClick
+        disableRowSelectionOnClick
           disableColumnMenu
           sortingOrder={['asc', 'desc', null]}
           showCellVerticalBorder
@@ -821,14 +821,14 @@ const PayrollExcelGrid: React.FC<Props> = ({
           paginationModel={{ page: 0, pageSize: Math.max(rows.length, 1) }}
           onPaginationModelChange={() => undefined}
           hideFooter
-          sx={{
+        sx={{
             ...(typeof payrollDataGridSx === 'function' ? payrollDataGridSx(theme) : payrollDataGridSx),
-            width: '100%',
+          width: '100%',
             minWidth: gridMinWidth,
             height: gridBodyHeight,
             minHeight: gridBodyHeight,
             maxHeight: gridBodyHeight,
-            border: 'none',
+          border: 'none',
           }}
         />
       </Box>
@@ -1258,8 +1258,8 @@ const PayrollExcelGrid: React.FC<Props> = ({
                 />
               }
               label={t('payrollManagement.dialog.allowConstantsCellEdit')}
-            />
-          </Box>
+      />
+    </Box>
         </DialogContent>
         <DialogActions sx={{ flexWrap: 'wrap', gap: 1, px: 2, pb: 2 }}>
           <Button

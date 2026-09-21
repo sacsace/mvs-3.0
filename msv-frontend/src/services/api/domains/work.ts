@@ -1,35 +1,154 @@
 import { api } from '../client';
 
 export const projectService = {
-  // ?�로?�트 목록 조회
-  getProjects: async (params?: { page?: number; limit?: number; status?: string; manager_id?: number }) => {
+  getProjects: async (params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    manager_id?: number | string;
+    company_id?: number | string;
+    q?: string;
+  }) => {
     const response = await api.get('/projects', { params });
     return response.data;
   },
 
-  // ?�로?�트 ?�세 조회
   getProject: async (id: number) => {
     const response = await api.get(`/projects/${id}`);
     return response.data;
   },
 
-  // ?�로?�트 ?�성
   createProject: async (data: any) => {
     const response = await api.post('/projects', data);
     return response.data;
   },
 
-  // ?�로?�트 ?�정
   updateProject: async (id: number, data: any) => {
     const response = await api.put(`/projects/${id}`, data);
     return response.data;
   },
 
-  // ?�로?�트 ??��
   deleteProject: async (id: number) => {
     const response = await api.delete(`/projects/${id}`);
     return response.data;
-  }
+  },
+
+  getMembers: async (projectId: number) => {
+    const response = await api.get(`/projects/${projectId}/members`);
+    return response.data;
+  },
+
+  addMembers: async (
+    projectId: number,
+    data: { user_ids: number[]; role?: string }
+  ) => {
+    const response = await api.post(`/projects/${projectId}/members`, data);
+    return response.data;
+  },
+
+  updateMember: async (projectId: number, memberId: number, data: { role: string }) => {
+    const response = await api.put(`/projects/${projectId}/members/${memberId}`, data);
+    return response.data;
+  },
+
+  removeMember: async (projectId: number, memberId: number) => {
+    const response = await api.delete(`/projects/${projectId}/members/${memberId}`);
+    return response.data;
+  },
+
+  getOverview: async (projectId: number) => {
+    const response = await api.get(`/projects/${projectId}/overview`);
+    return response.data;
+  },
+
+  getSchedules: async (projectId: number, params?: { from?: string; to?: string }) => {
+    const response = await api.get(`/projects/${projectId}/schedules`, { params });
+    return response.data;
+  },
+
+  createSchedule: async (projectId: number, data: Record<string, unknown>) => {
+    const response = await api.post(`/projects/${projectId}/schedules`, data);
+    return response.data;
+  },
+
+  updateSchedule: async (projectId: number, scheduleId: number, data: Record<string, unknown>) => {
+    const response = await api.put(`/projects/${projectId}/schedules/${scheduleId}`, data);
+    return response.data;
+  },
+
+  deleteSchedule: async (projectId: number, scheduleId: number) => {
+    const response = await api.delete(`/projects/${projectId}/schedules/${scheduleId}`);
+    return response.data;
+  },
+
+  getTasks: async (
+    projectId: number,
+    params?: { status?: string; priority?: string; assignee_id?: number }
+  ) => {
+    const response = await api.get(`/projects/${projectId}/tasks`, { params });
+    return response.data;
+  },
+
+  createTask: async (projectId: number, data: Record<string, unknown>) => {
+    const response = await api.post(`/projects/${projectId}/tasks`, data);
+    return response.data;
+  },
+
+  updateTask: async (projectId: number, taskId: number, data: Record<string, unknown>) => {
+    const response = await api.put(`/projects/${projectId}/tasks/${taskId}`, data);
+    return response.data;
+  },
+
+  moveTask: async (projectId: number, taskId: number, direction: 'up' | 'down') => {
+    const response = await api.post(`/projects/${projectId}/tasks/${taskId}/move`, { direction });
+    return response.data;
+  },
+
+  deleteTask: async (projectId: number, taskId: number) => {
+    const response = await api.delete(`/projects/${projectId}/tasks/${taskId}`);
+    return response.data;
+  },
+
+  getActivities: async (projectId: number, params?: { limit?: number }) => {
+    const response = await api.get(`/projects/${projectId}/activities`, { params });
+    return response.data;
+  },
+
+  getTask: async (projectId: number, taskId: number) => {
+    const response = await api.get(`/projects/${projectId}/tasks/${taskId}`);
+    return response.data;
+  },
+
+  getTaskComments: async (projectId: number, taskId: number) => {
+    const response = await api.get(`/projects/${projectId}/tasks/${taskId}/comments`);
+    return response.data;
+  },
+
+  createTaskComment: async (projectId: number, taskId: number, content: string) => {
+    const response = await api.post(`/projects/${projectId}/tasks/${taskId}/comments`, { content });
+    return response.data;
+  },
+
+  deleteTaskComment: async (projectId: number, taskId: number, commentId: number) => {
+    const response = await api.delete(`/projects/${projectId}/tasks/${taskId}/comments/${commentId}`);
+    return response.data;
+  },
+
+  uploadTaskAttachments: async (projectId: number, taskId: number, files: File[]) => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    const response = await api.post(`/projects/${projectId}/tasks/${taskId}/attachments`, formData, {
+      timeout: 120000,
+    });
+    return response.data;
+  },
+
+  deleteTaskAttachment: async (projectId: number, taskId: number, storedName: string) => {
+    const response = await api.delete(
+      `/projects/${projectId}/tasks/${taskId}/attachments/${encodeURIComponent(storedName)}`
+    );
+    return response.data;
+  },
 };
 
 /** ?�렐로형 ?�업 보드 (/api/work/boards) */

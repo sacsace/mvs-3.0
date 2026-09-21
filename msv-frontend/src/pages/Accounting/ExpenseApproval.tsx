@@ -227,6 +227,10 @@ interface ExpenseItem {
   igst?: number;
   cgst?: number;
   sgst?: number;
+  /** 일반 전표 — 항목별 GST 세율 */
+  igstRate?: number;
+  cgstRate?: number;
+  sgstRate?: number;
 }
 
 type GstSummaryRowKey = NonNullable<ExpenseItem['gstRowKey']>;
@@ -330,6 +334,7 @@ interface ExpenseApprovalItem {
   currentApproverId?: number;
   currentApproverName?: string;
   approvalFlow: ApprovalStep[];
+  ccUserIds: number[];
   submittedAt: string;
   dueDate: string;
   notes?: string;
@@ -598,6 +603,14 @@ const EXPENSE_HEADER_FG = '#1E293B';
 const EXPENSE_STAMP_LINE = '#94A3B8';
 const EXPENSE_STAMP_HEADER_BG = '#F1F5F9';
 const EXPENSE_STAMP_LABEL = '#0F172A';
+const EXPENSE_STAMP_RADIUS = '6px';
+const expenseStampHeaderSx = {
+  textAlign: 'center',
+  bgcolor: EXPENSE_STAMP_HEADER_BG,
+  borderBottom: `1px solid ${EXPENSE_STAMP_LINE}`,
+  borderTopLeftRadius: EXPENSE_STAMP_RADIUS,
+  borderTopRightRadius: EXPENSE_STAMP_RADIUS,
+} as const;
 const EXPENSE_VENDOR_BG = '#FFFFFF';
 /** 협력업체 섹션 외곽선 — 일반 테두리보다 뚜렷하게 (결재란 외곽선과 동일 톤) */
 const EXPENSE_VENDOR_LINE = '#64748B';
@@ -641,7 +654,7 @@ const gstSummaryNumFieldSx = {
   '& .MuiOutlinedInput-root': {
     width: '100%',
     height: 36,
-    borderRadius: '4px',
+    borderRadius: '6px',
     bgcolor: '#FFFFFF',
     '& fieldset': { borderColor: '#CBD5E1' },
     '&:hover fieldset': { borderColor: '#94A3B8' },
@@ -843,6 +856,7 @@ const expenseTaxTableSx = {
 
 const expenseTaxTableContainerSx = {
   border: `1px solid ${EXPENSE_LINE}`,
+  borderRadius: '6px',
   width: '100%',
   // MUI TableContainer 기본 overflowX:auto + overflowX만 hidden 시
   // CSS 규약상 overflowY가 auto로 바뀌어 불필요 스크롤이 생김
@@ -1081,8 +1095,9 @@ const ExpenseFlowStamp = ({
       maxWidth: wide ? 222 : relaxedLabel ? 'none' : fluidWidth ? 'none' : 140,
       flexShrink: 0,
       border: `1px solid ${EXPENSE_STAMP_LINE}`,
+      borderRadius: EXPENSE_STAMP_RADIUS,
       bgcolor: '#FFFFFF',
-      overflow: fluidWidth ? 'visible' : 'hidden',
+      overflow: 'hidden',
       opacity: muted ? 0.65 : 1,
       display: 'flex',
       flexDirection: 'column',
@@ -1091,11 +1106,9 @@ const ExpenseFlowStamp = ({
   >
     <Box
       sx={{
+        ...expenseStampHeaderSx,
         px: relaxedLabel ? 1.25 : 0.5,
         py: 0.35,
-        textAlign: 'center',
-        bgcolor: EXPENSE_STAMP_HEADER_BG,
-        borderBottom: `1px solid ${EXPENSE_STAMP_LINE}`,
       }}
     >
       <Typography
@@ -1274,6 +1287,7 @@ const ExpenseCompanyBlock = ({
 
 const sectionBlockSx = {
   border: `1px solid ${EXPENSE_LINE}`,
+  borderRadius: '6px',
   bgcolor: '#FFFFFF',
   overflow: 'hidden',
 } as const;
@@ -1413,9 +1427,11 @@ const hasVoucherGstRates = (data: {
   igstRate?: number;
   cgstRate?: number;
   sgstRate?: number;
+  perLineGst?: boolean;
 }) =>
   data.formType === 'general' &&
   hasExpenseGstNumber(data.gstNumber) &&
+  !data.perLineGst &&
   (Number(data.igstRate || 0) > 0 ||
     Number(data.cgstRate || 0) > 0 ||
     Number(data.sgstRate || 0) > 0);
@@ -1594,6 +1610,45 @@ const normalizeVoucherGstRates = (data: {
   }
   return { igstRate: 0, cgstRate, sgstRate };
 };
+
+const normalizeLineItemGstRates = (item: Pick<ExpenseItem, 'igstRate' | 'cgstRate' | 'sgstRate'>) =>
+  normalizeVoucherGstRates({
+    igstRate: Number(item.igstRate || 0),
+    cgstRate: Number(item.cgstRate || 0),
+    sgstRate: Number(item.sgstRate || 0),
+  });
+
+const calcLineItemGstAmounts = (
+  item: Pick<ExpenseItem, 'total' | 'amount' | 'igstRate' | 'cgstRate' | 'sgstRate'>
+) => {
+  const taxable = roundDecimal2(Number(item.total ?? item.amount ?? 0));
+  const rates = normalizeLineItemGstRates(item);
+  return {
+    taxable,
+    ...rates,
+    igstAmount: calcVoucherGstAmount(taxable, rates.igstRate),
+    cgstAmount: calcVoucherGstAmount(taxable, rates.cgstRate),
+    sgstAmount: calcVoucherGstAmount(taxable, rates.sgstRate),
+  };
+};
+
+const sumLineItemsGstAmounts = (items: ExpenseItem[]) =>
+  items.reduce(
+    (acc, item) => {
+      const row = calcLineItemGstAmounts(item);
+      acc.igstAmount = roundDecimal2(acc.igstAmount + row.igstAmount);
+      acc.cgstAmount = roundDecimal2(acc.cgstAmount + row.cgstAmount);
+      acc.sgstAmount = roundDecimal2(acc.sgstAmount + row.sgstAmount);
+      return acc;
+    },
+    { igstAmount: 0, cgstAmount: 0, sgstAmount: 0 }
+  );
+
+const hasLineItemGstRates = (items: ExpenseItem[]) =>
+  items.some((item) => {
+    const rates = normalizeLineItemGstRates(item);
+    return rates.igstRate > 0 || rates.cgstRate > 0 || rates.sgstRate > 0;
+  });
 
 const PRIORITY_SORT_ORDER: Record<string, number> = {
   urgent: 0,
@@ -1799,6 +1854,35 @@ const calcExpenseTax = (
       tdsInterestAmount: 0,
       discountAmount: split.discount,
       grandTotal: split.payable,
+      perLineGst: false,
+    };
+  }
+
+  const perLineGst = Boolean(meta?.perLineGst ?? meta?.per_line_gst);
+  if (formType === 'general' && perLineGst) {
+    const summed = sumLineItemsGstAmounts(rows as ExpenseItem[]);
+    const legacyTds = Boolean(meta?.tdsEnabled ?? meta?.tds_enabled);
+    const tdsRate = legacyTds ? readMetaNumber(meta, 'tdsRate', 'tds_rate') : 0;
+    const tdsAmount = legacyTds ? calcVoucherGstAmount(subtotal, tdsRate) : 0;
+    const split = splitAutoPaiseDiscount(
+      subtotal + summed.igstAmount + summed.cgstAmount + summed.sgstAmount - tdsAmount
+    );
+    return {
+      formType: 'general' as ExpenseFormType,
+      subtotal,
+      igstRate: 0,
+      cgstRate: 0,
+      sgstRate: 0,
+      tdsEnabled: legacyTds,
+      tdsRate,
+      igstAmount: summed.igstAmount,
+      cgstAmount: summed.cgstAmount,
+      sgstAmount: summed.sgstAmount,
+      tdsAmount,
+      tdsInterestAmount: 0,
+      discountAmount: split.discount,
+      grandTotal: split.payable,
+      perLineGst: true,
     };
   }
 
@@ -2011,7 +2095,9 @@ const ExpenseApproval: React.FC = () => {
     tdsRate: 0,
     gstRoundingAdjustment: 0,
     gstProfessionalTax: 0,
+    perLineGst: false,
   });
+  const [ccUserIds, setCcUserIds] = useState<number[]>([]);
   const [qrOpen, setQrOpen] = useState(false);
   const [qrToken, setQrToken] = useState('');
   const [qrLoading, setQrLoading] = useState(false);
@@ -2091,6 +2177,15 @@ const ExpenseApproval: React.FC = () => {
     currentApproverId: expense.current_approver_id,
     currentApproverName: expense.current_approver_name,
     approvalFlow: parseApprovalFlow(expense.approval_flow),
+    ccUserIds: Array.isArray(expense.cc_user_ids)
+      ? Array.from(
+          new Set(
+            expense.cc_user_ids
+              .map((x: any) => Number(x))
+              .filter((n: number) => Number.isInteger(n) && n > 0)
+          )
+        )
+      : [],
     submittedAt: expense.submitted_at || '',
     dueDate: expense.due_date || '',
     notes: expense.notes || '',
@@ -2141,27 +2236,27 @@ const ExpenseApproval: React.FC = () => {
     }
     return roundDecimal2(lineItems.reduce((sum, item) => sum + Number(item.total || 0), 0));
   }, [lineItems, voucherData.formType]);
-  const igstAmount = useMemo(
-    () =>
-      hasVoucherGstRates(voucherData)
-        ? calcVoucherGstAmount(subtotalAmount, voucherData.igstRate)
-        : 0,
-    [subtotalAmount, voucherData]
-  );
-  const cgstAmount = useMemo(
-    () =>
-      hasVoucherGstRates(voucherData)
-        ? calcVoucherGstAmount(subtotalAmount, voucherData.cgstRate)
-        : 0,
-    [subtotalAmount, voucherData]
-  );
-  const sgstAmount = useMemo(
-    () =>
-      hasVoucherGstRates(voucherData)
-        ? calcVoucherGstAmount(subtotalAmount, voucherData.sgstRate)
-        : 0,
-    [subtotalAmount, voucherData]
-  );
+  const igstAmount = useMemo(() => {
+    if (voucherData.formType !== 'general') return 0;
+    if (voucherData.perLineGst) return sumLineItemsGstAmounts(lineItems).igstAmount;
+    return hasVoucherGstRates(voucherData)
+      ? calcVoucherGstAmount(subtotalAmount, voucherData.igstRate)
+      : 0;
+  }, [subtotalAmount, voucherData, lineItems]);
+  const cgstAmount = useMemo(() => {
+    if (voucherData.formType !== 'general') return 0;
+    if (voucherData.perLineGst) return sumLineItemsGstAmounts(lineItems).cgstAmount;
+    return hasVoucherGstRates(voucherData)
+      ? calcVoucherGstAmount(subtotalAmount, voucherData.cgstRate)
+      : 0;
+  }, [subtotalAmount, voucherData, lineItems]);
+  const sgstAmount = useMemo(() => {
+    if (voucherData.formType !== 'general') return 0;
+    if (voucherData.perLineGst) return sumLineItemsGstAmounts(lineItems).sgstAmount;
+    return hasVoucherGstRates(voucherData)
+      ? calcVoucherGstAmount(subtotalAmount, voucherData.sgstRate)
+      : 0;
+  }, [subtotalAmount, voucherData, lineItems]);
   /** 회사·협력업체 GSTIN 앞 2자리(주 코드) 비교 → 주내 CGST/SGST, 주간 IGST */
   const partnerGstStateCode = useMemo(
     () => gstStateCode(voucherData.gstNumber),
@@ -2185,6 +2280,13 @@ const ExpenseApproval: React.FC = () => {
       setVoucherData((prev) =>
         Number(prev.igstRate || 0) === 0 ? prev : { ...prev, igstRate: 0 }
       );
+      if (voucherData.perLineGst) {
+        setLineItems((prev) =>
+          prev.map((item) =>
+            Number(item.igstRate || 0) === 0 ? item : { ...item, igstRate: 0 }
+          )
+        );
+      }
       return;
     }
     if (isInterStateGst) {
@@ -2193,14 +2295,34 @@ const ExpenseApproval: React.FC = () => {
           ? prev
           : { ...prev, cgstRate: 0, sgstRate: 0 }
       );
+      if (voucherData.perLineGst) {
+        setLineItems((prev) =>
+          prev.map((item) =>
+            Number(item.cgstRate || 0) === 0 && Number(item.sgstRate || 0) === 0
+              ? item
+              : { ...item, cgstRate: 0, sgstRate: 0 }
+          )
+        );
+      }
     }
   }, [
     voucherData.formType,
     voucherData.gstNumber,
+    voucherData.perLineGst,
     canCompareGstStates,
     isIntraStateGst,
     isInterStateGst,
   ]);
+
+  useEffect(() => {
+    if (voucherData.formType !== 'general') return;
+    if (hasExpenseGstNumber(voucherData.gstNumber)) return;
+    if (!voucherData.perLineGst) return;
+    setVoucherData((prev) => ({ ...prev, perLineGst: false }));
+    setLineItems((prev) =>
+      prev.map((item) => ({ ...item, igstRate: 0, cgstRate: 0, sgstRate: 0 }))
+    );
+  }, [voucherData.formType, voucherData.gstNumber, voucherData.perLineGst]);
 
   const tdsAmount = useMemo(() => {
     if (voucherData.formType === 'tds') {
@@ -2241,6 +2363,7 @@ const ExpenseApproval: React.FC = () => {
     if (
       voucherData.formType === 'general' &&
       !hasVoucherGstRates(voucherData) &&
+      !(voucherData.perLineGst && hasLineItemGstRates(lineItems)) &&
       !voucherData.tdsEnabled
     ) {
       return splitAutoPaiseDiscount(subtotalAmount).payable;
@@ -2262,6 +2385,7 @@ const ExpenseApproval: React.FC = () => {
     if (voucherData.formType !== 'general') return 0;
     if (
       !hasVoucherGstRates(voucherData) &&
+      !(voucherData.perLineGst && hasLineItemGstRates(lineItems)) &&
       !voucherData.tdsEnabled
     ) {
       return splitAutoPaiseDiscount(subtotalAmount).discount;
@@ -2271,6 +2395,7 @@ const ExpenseApproval: React.FC = () => {
     ).discount;
   }, [
     voucherData,
+    lineItems,
     subtotalAmount,
     igstAmount,
     cgstAmount,
@@ -2349,6 +2474,13 @@ const ExpenseApproval: React.FC = () => {
       requester_department: user?.department || '',
       requester_position: user?.position || '',
       current_approver_id: voucherData.approvedById ? Number(voucherData.approvedById) : null,
+      cc_user_ids: ccUserIds.filter((id) => {
+        const n = Number(id);
+        if (!Number.isInteger(n) || n <= 0) return false;
+        if (user?.id != null && Number(user.id) === n) return false;
+        if (voucherData.approvedById && Number(voucherData.approvedById) === n) return false;
+        return true;
+      }),
       priority: formData.priority,
       due_date: formData.dueDate || null,
       notes: formData.notes || '',
@@ -2395,7 +2527,8 @@ const ExpenseApproval: React.FC = () => {
         meta: {
           ...voucherData,
           checkedById: voucherData.approvedById || '',
-          ...(voucherData.formType === 'general' && !hasExpenseGstNumber(voucherData.gstNumber)
+          ...(voucherData.formType === 'general' &&
+          (voucherData.perLineGst || !hasExpenseGstNumber(voucherData.gstNumber))
             ? { igstRate: 0, cgstRate: 0, sgstRate: 0 }
             : {}),
         },
@@ -2406,7 +2539,9 @@ const ExpenseApproval: React.FC = () => {
       formData,
       lineItems,
       voucherData,
+      ccUserIds,
       totalAmount,
+      user?.id,
       user?.username,
       user?.department,
       user?.position,
@@ -2555,6 +2690,7 @@ const ExpenseApproval: React.FC = () => {
         if (expense.currentApproverId === user.id) return true;
         if (expense.itemMeta?.checkedById && Number(expense.itemMeta.checkedById) === user.id) return true;
         if (expense.itemMeta?.approvedById && Number(expense.itemMeta.approvedById) === user.id) return true;
+        if ((expense.ccUserIds || []).includes(Number(user.id))) return true;
         return expense.approvalFlow?.some(step => step.approverId === user.id);
       });
     }
@@ -3111,12 +3247,16 @@ const ExpenseApproval: React.FC = () => {
       savedItems.length > 0
         ? resolvedFormType === 'gst'
           ? parseGstSummaryLineItems(savedItems)
-          : savedItems
+          : savedItems.map((item) => ({
+              ...item,
+              ...normalizeLineItemGstRates(item),
+            }))
         : resolvedFormType === 'gst'
           ? createGstSummaryLineItems()
           : [createEmptyLineItem(resolvedFormType)]
     );
     setCurrentAttachments(expense.attachments || []);
+    setCcUserIds(Array.isArray(expense.ccUserIds) ? [...expense.ccUserIds] : []);
     setVoucherData({
       formType: resolveExpenseFormType(meta),
       department: meta.department || linkedPartner?.company_name || '',
@@ -3152,6 +3292,7 @@ const ExpenseApproval: React.FC = () => {
       tdsRate: Number(meta.tdsRate || meta.tds_rate || 0),
       gstRoundingAdjustment: Number(meta.gstRoundingAdjustment ?? meta.gst_rounding_adjustment ?? 0),
       gstProfessionalTax: Number(meta.gstProfessionalTax ?? meta.gst_professional_tax ?? 0),
+      perLineGst: Boolean(meta.perLineGst ?? meta.per_line_gst),
     });
     setPartnerInputValue(
       String(meta.department || '').trim() ||
@@ -3177,6 +3318,7 @@ const ExpenseApproval: React.FC = () => {
     });
     setLineItems([createEmptyLineItem('general')]);
     setCurrentAttachments([]);
+    setCcUserIds([]);
     setPartnerInputValue('');
     setVoucherData({
       formType: 'general',
@@ -3207,6 +3349,7 @@ const ExpenseApproval: React.FC = () => {
       tdsRate: 0,
       gstRoundingAdjustment: 0,
       gstProfessionalTax: 0,
+      perLineGst: false,
     });
     setDraftId(null);
     setHeaderStatusBanner('');
@@ -3308,6 +3451,9 @@ const ExpenseApproval: React.FC = () => {
       qty: 1,
       unitPrice: 0,
       total: 0,
+      igstRate: 0,
+      cgstRate: 0,
+      sgstRate: 0,
     };
   };
 
@@ -3321,6 +3467,7 @@ const ExpenseApproval: React.FC = () => {
       sgstRate: next === 'general' ? prev.sgstRate : 0,
       tdsEnabled: next === 'general' ? prev.tdsEnabled : false,
       tdsRate: next === 'general' ? prev.tdsRate : 0,
+      perLineGst: next === 'general' ? prev.perLineGst : false,
       gstRoundingAdjustment: next === 'gst' ? prev.gstRoundingAdjustment : 0,
       gstProfessionalTax: next === 'gst' ? prev.gstProfessionalTax : 0,
     }));
@@ -3356,6 +3503,9 @@ const ExpenseApproval: React.FC = () => {
       if (!hasExpenseGstNumber(prev.gstNumber)) {
         return { ...prev, igstRate: 0, cgstRate: 0, sgstRate: 0 };
       }
+      if (prev.perLineGst) {
+        return prev;
+      }
       const partnerState = gstStateCode(prev.gstNumber);
       const companyState = companyGstState || gstStateCode(companyGstNumber);
       const canCompare = Boolean(partnerState && companyState);
@@ -3386,6 +3536,39 @@ const ExpenseApproval: React.FC = () => {
 
       return next;
     });
+  };
+
+  const patchLineItemGstRate = (id: string, kind: 'igst' | 'cgst', value: number) => {
+    setLineItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        if (!hasExpenseGstNumber(voucherData.gstNumber)) {
+          return { ...item, igstRate: 0, cgstRate: 0, sgstRate: 0 };
+        }
+        if (kind === 'igst') {
+          if (!isInterStateGst) return { ...item, igstRate: 0 };
+          const igst = normalizeAllowedIgstRate(Number(value || 0));
+          return { ...item, igstRate: igst, cgstRate: 0, sgstRate: 0 };
+        }
+        if (!isIntraStateGst) return { ...item, cgstRate: 0, sgstRate: 0 };
+        const cgst = normalizeAllowedHalfGstRate(Number(value || 0));
+        return { ...item, cgstRate: cgst, sgstRate: cgst, igstRate: 0 };
+      })
+    );
+  };
+
+  const togglePerLineGst = (checked: boolean) => {
+    if (!hasExpenseGstNumber(voucherData.gstNumber)) return;
+    setVoucherData((prev) => ({
+      ...prev,
+      perLineGst: checked,
+      ...(checked ? { igstRate: 0, cgstRate: 0, sgstRate: 0 } : {}),
+    }));
+    if (!checked) {
+      setLineItems((prev) =>
+        prev.map((item) => ({ ...item, igstRate: 0, cgstRate: 0, sgstRate: 0 }))
+      );
+    }
   };
 
   const handleAddLineItem = () => {
@@ -4367,6 +4550,17 @@ const ExpenseApproval: React.FC = () => {
     });
   }, [approvers, user?.id, viewMode, selectedExpense?.requesterId]);
 
+  const selectableCcUsers = useMemo(() => {
+    const requesterId = viewMode === 'create' ? user?.id : selectedExpense?.requesterId ?? user?.id;
+    const approvedId = voucherData.approvedById ? Number(voucherData.approvedById) : null;
+    return approvers.filter((item) => {
+      if (isSameUserId(item.id, user?.id)) return false;
+      if (requesterId != null && isSameUserId(item.id, requesterId)) return false;
+      if (approvedId != null && isSameUserId(item.id, approvedId)) return false;
+      return true;
+    });
+  }, [approvers, user?.id, viewMode, selectedExpense?.requesterId, voucherData.approvedById]);
+
   const handleChangeApprover = async (next: { id: number; name: string } | null) => {
     if (!selectedExpense || !next?.id || !canChangeExpenseApprover(selectedExpense)) return;
     if (isSameUserId(next.id, user?.id)) {
@@ -4623,7 +4817,7 @@ const ExpenseApproval: React.FC = () => {
       ...mvsSearchFieldSx,
       ...mvsFilterFieldHeightSx,
       '& .MuiOutlinedInput-root': {
-        borderRadius: '4px',
+        borderRadius: '6px',
         bgcolor: '#FFFFFF',
         '& fieldset': { borderColor: '#CBD5E1' },
         '&:hover fieldset': { borderColor: '#94A3B8' },
@@ -4636,7 +4830,7 @@ const ExpenseApproval: React.FC = () => {
     ...softFieldSx,
     '& .MuiOutlinedInput-root': {
       height: 30,
-      borderRadius: '4px',
+      borderRadius: '6px',
       bgcolor: '#FFFFFF',
       '& fieldset': { borderColor: '#CBD5E1' },
       '&:hover fieldset': { borderColor: '#94A3B8' },
@@ -4905,14 +5099,12 @@ const ExpenseApproval: React.FC = () => {
                     flexShrink: 0,
                   }}
                 >
-                  <Box sx={{ width: 147, border: `1px solid ${EXPENSE_STAMP_LINE}`, bgcolor: '#FFFFFF', overflow: 'hidden' }}>
+                  <Box sx={{ width: 147, border: `1px solid ${EXPENSE_STAMP_LINE}`, borderRadius: EXPENSE_STAMP_RADIUS, bgcolor: '#FFFFFF', overflow: 'hidden' }}>
                     <Box
                       sx={{
+                        ...expenseStampHeaderSx,
                         px: 0.5,
                         py: 0.35,
-                        textAlign: 'center',
-                        bgcolor: EXPENSE_STAMP_HEADER_BG,
-                        borderBottom: `1px solid ${EXPENSE_STAMP_LINE}`,
                       }}
                     >
                       <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.75rem', color: EXPENSE_STAMP_LABEL }}>
@@ -4943,17 +5135,16 @@ const ExpenseApproval: React.FC = () => {
                       width: 'max-content',
                       maxWidth: 'min(480px, 100%)',
                       border: `1px solid ${EXPENSE_STAMP_LINE}`,
+                      borderRadius: EXPENSE_STAMP_RADIUS,
                       bgcolor: '#FFFFFF',
-                      overflow: 'visible',
+                      overflow: 'hidden',
                     }}
                   >
                     <Box
                       sx={{
+                        ...expenseStampHeaderSx,
                         px: 0.5,
                         py: 0.35,
-                        textAlign: 'center',
-                        bgcolor: EXPENSE_STAMP_HEADER_BG,
-                        borderBottom: `1px solid ${EXPENSE_STAMP_LINE}`,
                       }}
                     >
                       <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.75rem', color: EXPENSE_STAMP_LABEL }}>
@@ -4988,7 +5179,11 @@ const ExpenseApproval: React.FC = () => {
                             setError(t('expenseApproval.errors.cannotSelectSelf'));
                             return;
                           }
-                          setVoucherData({ ...voucherData, approvedById: value ? String(value.id) : '' });
+                          const nextApproverId = value ? String(value.id) : '';
+                          setVoucherData({ ...voucherData, approvedById: nextApproverId });
+                          if (value?.id) {
+                            setCcUserIds((prev) => prev.filter((id) => !isSameUserId(id, value.id)));
+                          }
                         }}
                         sx={expenseApproverAutocompleteSx}
                         slotProps={expenseApproverAutocompleteSlotProps}
@@ -5023,6 +5218,87 @@ const ExpenseApproval: React.FC = () => {
                     </Box>
                   </Box>
                 </Box>
+              </Box>
+            </Box>
+
+            <Box
+              sx={{
+                mx: { xs: 1.5, sm: 2 },
+                mb: 0,
+                mt: 1,
+                border: `1px solid ${EXPENSE_STAMP_LINE}`,
+                borderRadius: EXPENSE_STAMP_RADIUS,
+                bgcolor: '#FFFFFF',
+                overflow: 'hidden',
+              }}
+            >
+              <Box
+                sx={{
+                  px: 1,
+                  py: 0.5,
+                  ...expenseStampHeaderSx,
+                  textAlign: 'left',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 1,
+                }}
+              >
+                <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155' }}>
+                  {t('expenseApproval.cc.label')}
+                </Typography>
+                <Typography sx={{ fontSize: '0.6875rem', color: '#64748B' }}>
+                  {t('expenseApproval.cc.hint')}
+                </Typography>
+              </Box>
+              <Box sx={{ px: 1, py: 0.75 }}>
+                <Autocomplete
+                  multiple
+                  size="small"
+                  options={selectableCcUsers}
+                  getOptionLabel={(option) => option.name}
+                  isOptionEqualToValue={(a, b) => Number(a.id) === Number(b.id)}
+                  value={ccUserIds
+                    .map((id) => {
+                      const found =
+                        selectableCcUsers.find((u) => Number(u.id) === Number(id)) ||
+                        approvers.find((u) => Number(u.id) === Number(id));
+                      return found || { id, name: getUserNameById(id) || `#${id}` };
+                    })
+                    .filter(Boolean)}
+                  onChange={(_, value) => {
+                    setCcUserIds((value || []).map((v) => Number(v.id)).filter((id) => id > 0));
+                  }}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip
+                        size="small"
+                        label={option.name}
+                        {...getTagProps({ index })}
+                        key={option.id}
+                        sx={{
+                          border: 'none',
+                          borderRadius: '4px',
+                          height: 24,
+                          bgcolor: '#EEF2F7',
+                          color: '#334155',
+                          '& .MuiChip-deleteIcon': { color: '#64748B' },
+                        }}
+                      />
+                    ))
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      placeholder={t('expenseApproval.cc.placeholder')}
+                      variant="standard"
+                      InputProps={{
+                        ...params.InputProps,
+                        disableUnderline: true,
+                      }}
+                    />
+                  )}
+                />
               </Box>
             </Box>
 
@@ -5072,7 +5348,7 @@ const ExpenseApproval: React.FC = () => {
                   minWidth: { sm: 140 },
                   flexShrink: 0,
                   '& .MuiOutlinedInput-root': {
-                    borderRadius: '4px',
+                    borderRadius: '6px',
                     bgcolor: EXPENSE_TOTAL_BG,
                     '& fieldset': { borderColor: EXPENSE_TOTAL_LINE },
                     '&:hover fieldset': { borderColor: '#FCA5A5' },
@@ -5228,6 +5504,7 @@ const ExpenseApproval: React.FC = () => {
               sx={{
                 ...sectionBlockSx,
                 border: `1px solid ${EXPENSE_VENDOR_LINE}`,
+                borderRadius: '6px',
                 bgcolor: EXPENSE_VENDOR_BG,
               }}
             >
@@ -5457,14 +5734,44 @@ const ExpenseApproval: React.FC = () => {
             </Box>
 
             <Box sx={sectionShellSx}>
-              <Typography variant="subtitle2" sx={sectionTitleSx}>
-                {t('expenseApproval.voucher.sectionItems')}
-              </Typography>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 1,
+                  flexWrap: 'wrap',
+                  mb: 0.5,
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ ...sectionTitleSx, mb: 0 }}>
+                  {t('expenseApproval.voucher.sectionItems')}
+                </Typography>
+                {voucherData.formType === 'general' && (
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={Boolean(voucherData.perLineGst)}
+                        disabled={!hasExpenseGstNumber(voucherData.gstNumber)}
+                        onChange={(e) => togglePerLineGst(e.target.checked)}
+                        sx={{ py: 0 }}
+                      />
+                    }
+                    label={
+                      <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, color: '#334155' }}>
+                        {t('expenseApproval.voucher.perItemGst')}
+                      </Typography>
+                    }
+                    sx={{ mr: 0, ml: 0 }}
+                  />
+                )}
+              </Box>
               {voucherData.formType === 'gst' ? (
                 <TableContainer
                   sx={{
                     mb: 1,
-                    borderRadius: '4px',
+                    borderRadius: '6px',
                     border: `1px solid ${EXPENSE_LINE}`,
                     overflowX: 'auto',
                   }}
@@ -5589,7 +5896,7 @@ const ExpenseApproval: React.FC = () => {
                   <TableContainer
                     sx={{
                       mb: 1,
-                      borderRadius: '4px',
+                      borderRadius: '6px',
                       border: `1px solid ${EXPENSE_LINE}`,
                       overflowX: 'auto',
                     }}
@@ -5857,9 +6164,9 @@ const ExpenseApproval: React.FC = () => {
               <TableContainer
                 sx={{
                   mb: 1,
-                  borderRadius: '4px',
+                  borderRadius: '6px',
                   border: `1px solid ${EXPENSE_LINE}`,
-                  overflow: 'hidden',
+                  overflowX: 'auto',
                 }}
               >
               <Table size="small">
@@ -5886,6 +6193,22 @@ const ExpenseApproval: React.FC = () => {
                     <TableCell align="right" sx={{ width: 72 }}>{t('expenseApproval.voucher.tableQty')}</TableCell>
                     <TableCell align="right" sx={{ width: 120 }}>{t('expenseApproval.voucher.tableUnitPrice')}</TableCell>
                     <TableCell align="right" sx={{ width: 110 }}>{t('expenseApproval.voucher.tableTotal')}</TableCell>
+                    {voucherData.perLineGst && (
+                      <>
+                        <TableCell align="center" sx={{ width: 88 }}>
+                          {t('expenseApproval.voucher.tableIgstRate')}
+                        </TableCell>
+                        <TableCell align="center" sx={{ width: 88 }}>
+                          {t('expenseApproval.voucher.tableCgstRate')}
+                        </TableCell>
+                        <TableCell align="center" sx={{ width: 88 }}>
+                          {t('expenseApproval.voucher.tableSgstRate')}
+                        </TableCell>
+                        <TableCell align="right" sx={{ width: 100 }}>
+                          {t('expenseApproval.voucher.tableGstAmount')}
+                        </TableCell>
+                      </>
+                    )}
                     <TableCell sx={{ width: 40 }} />
                   </TableRow>
                 </TableHead>
@@ -5923,7 +6246,7 @@ const ExpenseApproval: React.FC = () => {
                             '& .MuiOutlinedInput-root': {
                               height: 'auto',
                               minHeight: 30,
-                              borderRadius: '4px',
+                              borderRadius: '6px',
                               bgcolor: '#FFFFFF',
                               alignItems: 'flex-start',
                               '& fieldset': { borderColor: '#CBD5E1' },
@@ -5969,6 +6292,94 @@ const ExpenseApproval: React.FC = () => {
                         />
                       </TableCell>
                       <TableCell align="right" sx={lineItemCellSx}>{formatDecimal2(item.total)}</TableCell>
+                      {voucherData.perLineGst && (() => {
+                        const lineGst = calcLineItemGstAmounts(item);
+                        const hasGst = hasExpenseGstNumber(voucherData.gstNumber);
+                        const igstEnabled = hasGst && isInterStateGst;
+                        const cgstEnabled = hasGst && isIntraStateGst;
+                        const taxAmt = roundDecimal2(
+                          lineGst.igstAmount + lineGst.cgstAmount + lineGst.sgstAmount
+                        );
+                        const renderRateSelect = (
+                          kind: 'igst' | 'cgst' | 'sgst',
+                          rateValue: number,
+                          allowedRates: readonly number[],
+                          enabled: boolean,
+                          readOnly: boolean
+                        ) => (
+                          <TableCell align="center" sx={{ ...lineItemCellSx, width: 88 }}>
+                            <FormControl size="small" fullWidth>
+                              <Select
+                                value={
+                                  allowedRates.some((rate) => Math.abs(rate - rateValue) < 0.001)
+                                    ? String(rateValue)
+                                    : ''
+                                }
+                                displayEmpty
+                                disabled={!enabled || readOnly}
+                                onChange={(e) => {
+                                  if (kind === 'igst' || kind === 'cgst') {
+                                    patchLineItemGstRate(item.id, kind, Number(e.target.value || 0));
+                                  }
+                                }}
+                                sx={{
+                                  height: 30,
+                                  borderRadius: '6px',
+                                  bgcolor: enabled && !readOnly ? '#FFFFFF' : '#F8FAFC',
+                                  fontSize: '0.8125rem',
+                                  opacity: enabled ? 1 : 0.55,
+                                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#CBD5E1' },
+                                  '& .MuiSelect-select': { py: 0.25, pr: '28px !important' },
+                                }}
+                                renderValue={(selected) => {
+                                  if (!selected) return '-';
+                                  return `${formatGstRateOption(Number(selected))}%`;
+                                }}
+                              >
+                                <MenuItem value="">
+                                  <em>-</em>
+                                </MenuItem>
+                                {allowedRates.map((rate) => (
+                                  <MenuItem key={rate} value={String(rate)}>
+                                    {formatGstRateOption(rate)}%
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </TableCell>
+                        );
+                        return (
+                          <>
+                            {renderRateSelect(
+                              'igst',
+                              Number(item.igstRate || 0),
+                              ALLOWED_IGST_RATES,
+                              igstEnabled,
+                              false
+                            )}
+                            {renderRateSelect(
+                              'cgst',
+                              Number(item.cgstRate || 0),
+                              ALLOWED_CGST_SGST_RATES,
+                              cgstEnabled,
+                              false
+                            )}
+                            {renderRateSelect(
+                              'sgst',
+                              Number(item.sgstRate || 0),
+                              ALLOWED_CGST_SGST_RATES,
+                              cgstEnabled,
+                              true
+                            )}
+                            <TableCell
+                              align="right"
+                              sx={{ ...lineItemCellSx, width: 100, fontVariantNumeric: 'tabular-nums' }}
+                            >
+                              {formatDecimal2(taxAmt)}
+                            </TableCell>
+                          </>
+                        );
+                      })()}
                       <TableCell align="right" sx={lineItemCellSx}>
                         <IconButton size="small" onClick={() => handleRemoveLineItem(item.id)} sx={{ p: 0.25 }}>
                           <DeleteIcon fontSize="small" />
@@ -5978,7 +6389,7 @@ const ExpenseApproval: React.FC = () => {
                   ))}
                   {lineItems.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} align="center">
+                      <TableCell colSpan={voucherData.perLineGst ? 11 : 7} align="center">
                         {t('expenseApproval.voucher.lineItemsEmpty')}
                       </TableCell>
                     </TableRow>
@@ -6004,7 +6415,7 @@ const ExpenseApproval: React.FC = () => {
                 sx={{
                   mb: 1,
                   ...expenseTdsTaxBoxSx,
-                  borderRadius: '4px',
+                  borderRadius: '6px',
                   p: { xs: 1, sm: 1.25 },
                   bgcolor: 'background.paper',
                   border: `1px solid ${EXPENSE_LINE}`,
@@ -6022,7 +6433,7 @@ const ExpenseApproval: React.FC = () => {
                     py: 1.25,
                     px: 1.25,
                     mb: 1,
-                    borderRadius: '4px',
+                    borderRadius: '6px',
                     bgcolor: EXPENSE_HEADER_BG,
                   }}
                 >
@@ -6050,7 +6461,7 @@ const ExpenseApproval: React.FC = () => {
                     pt: 1.25,
                     px: 1.25,
                     pb: 1.25,
-                    borderRadius: '4px',
+                    borderRadius: '6px',
                     bgcolor: EXPENSE_TOTAL_BG,
                     border: `1px solid ${EXPENSE_TOTAL_LINE}`,
                     display: 'flex',
@@ -6089,7 +6500,7 @@ const ExpenseApproval: React.FC = () => {
                 minWidth: { xs: '100%', sm: EXPENSE_TAX_BOX_WIDTH_PX },
                 maxWidth: '100%',
                 ml: { xs: 0, sm: 'auto' },
-                borderRadius: '4px',
+                borderRadius: '6px',
                 p: { xs: 1, sm: 1.25 },
                 bgcolor: 'background.paper',
                 border: `1px solid ${EXPENSE_LINE}`,
@@ -6108,7 +6519,7 @@ const ExpenseApproval: React.FC = () => {
                   py: 0.5,
                   px: 1,
                   mb: 0.75,
-                  borderRadius: '4px',
+                  borderRadius: '6px',
                   bgcolor: EXPENSE_HEADER_BG }}
               >
                 <Typography variant="body2" sx={{ color: EXPENSE_HEADER_FG, fontWeight: 600, fontSize: '0.8125rem' }}>
@@ -6205,13 +6616,13 @@ const ExpenseApproval: React.FC = () => {
                           : ''
                       }
                       displayEmpty
-                      disabled={row.readOnly || !row.enabled}
+                      disabled={row.readOnly || !row.enabled || Boolean(voucherData.perLineGst)}
                       onChange={(e) => row.onRateChange(Number(e.target.value || 0))}
                       sx={{
                         height: 32,
-                        borderRadius: '4px',
+                        borderRadius: '6px',
                         bgcolor:
-                          row.readOnly || !row.enabled
+                          row.readOnly || !row.enabled || voucherData.perLineGst
                             ? '#F8FAFC'
                             : '#FFFFFF',
                         fontSize: '0.8125rem',
@@ -6219,6 +6630,7 @@ const ExpenseApproval: React.FC = () => {
                         '& .MuiSelect-select': { py: 0.4, pr: '28px !important' },
                       }}
                       renderValue={(selected) => {
+                        if (voucherData.perLineGst) return t('expenseApproval.voucher.perItemGstRateHint');
                         if (!selected) return '-';
                         return `${formatGstRateOption(Number(selected))}%`;
                       }}
@@ -6343,7 +6755,7 @@ const ExpenseApproval: React.FC = () => {
                   pt: 0.6,
                   px: 1,
                   pb: 0.6,
-                  borderRadius: '4px',
+                  borderRadius: '6px',
                   bgcolor: EXPENSE_TOTAL_BG,
                   border: `1px solid ${EXPENSE_TOTAL_LINE}`,
                   display: 'flex',
@@ -7070,6 +7482,52 @@ const ExpenseApproval: React.FC = () => {
                     </Box>
                   ))}
                 </Box>
+                {(selectedExpense.ccUserIds || []).length > 0 && (
+                  <Box
+                    className="expense-pdf-hide"
+                    sx={{
+                      width: '100%',
+                      maxWidth: 320,
+                      border: `1px solid ${EXPENSE_STAMP_LINE}`,
+                      borderRadius: EXPENSE_STAMP_RADIUS,
+                      bgcolor: '#FFFFFF',
+                      alignSelf: 'flex-end',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        px: 1,
+                        py: 0.35,
+                        ...expenseStampHeaderSx,
+                        textAlign: 'left',
+                      }}
+                    >
+                      <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155' }}>
+                        {t('expenseApproval.cc.label')}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ px: 1, py: 0.75, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {(selectedExpense.ccUserIds || []).map((id) => (
+                        <Box
+                          key={id}
+                          sx={{
+                            px: 0.75,
+                            py: 0.25,
+                            border: 'none',
+                            borderRadius: '4px',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            color: '#334155',
+                            bgcolor: '#EEF2F7',
+                          }}
+                        >
+                          {getUserNameById(id) || `#${id}`}
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
               </Box>
             </Box>
           </Box>
@@ -7079,6 +7537,7 @@ const ExpenseApproval: React.FC = () => {
               className="expense-pdf-title-row"
               sx={{
                 border: `1px solid ${EXPENSE_LINE}`,
+                borderRadius: '6px',
                 display: 'grid',
                 gridTemplateColumns: `${EXPENSE_KV_LABEL_WIDTH_PX}px minmax(0, 1fr)`,
                 minHeight: COMPACT_ROW_HEIGHT,
@@ -7142,6 +7601,7 @@ const ExpenseApproval: React.FC = () => {
               <Box
                 sx={{
                   border: `1px solid ${EXPENSE_LINE}`,
+                  borderRadius: '6px',
                   bgcolor: '#FFFFFF',
                   overflow: 'hidden',
                 }}
@@ -7301,7 +7761,7 @@ const ExpenseApproval: React.FC = () => {
               <Typography className="expense-pdf-section-title" variant="subtitle2" sx={{ ...sectionTitleSx, fontWeight: 400 }}>
                   {t('expenseApproval.voucher.sectionVendor')}
               </Typography>
-              <TableContainer sx={{ border: `1px solid ${EXPENSE_VENDOR_LINE}`, bgcolor: '#FFFFFF', overflowX: 'hidden' }}>
+              <TableContainer sx={{ border: `1px solid ${EXPENSE_VENDOR_LINE}`, borderRadius: '6px', bgcolor: '#FFFFFF', overflowX: 'hidden' }}>
                 <Table size="small" sx={compactTableSx}>
                   <TableBody>
                     <TableRow>
@@ -7388,7 +7848,7 @@ const ExpenseApproval: React.FC = () => {
                   {t('expenseApproval.detail.items')}
               </Typography>
               {detailFormType === 'gst' ? (
-                <TableContainer sx={{ border: `1px solid ${EXPENSE_LINE}`, overflowX: 'auto' }}>
+                <TableContainer sx={{ border: `1px solid ${EXPENSE_LINE}`, borderRadius: '6px', overflowX: 'auto' }}>
                   <Table size="small" sx={gstSummaryTableSx}>
                     {gstSummaryColGroup}
                     <TableHead
@@ -7489,7 +7949,7 @@ const ExpenseApproval: React.FC = () => {
                   </Table>
                 </TableContainer>
               ) : detailFormType === 'tds' ? (
-                <TableContainer sx={{ border: `1px solid ${EXPENSE_LINE}`, overflowX: 'auto' }}>
+                <TableContainer sx={{ border: `1px solid ${EXPENSE_LINE}`, borderRadius: '6px', overflowX: 'auto' }}>
                   <Table size="small" sx={{ tableLayout: 'auto', minWidth: 1100 }}>
                     <TableHead
                       sx={{
@@ -7566,7 +8026,7 @@ const ExpenseApproval: React.FC = () => {
                   </Table>
                 </TableContainer>
               ) : (
-              <TableContainer sx={{ border: `1px solid ${EXPENSE_LINE}`, overflowX: 'hidden', overflowY: 'visible' }}>
+              <TableContainer sx={{ border: `1px solid ${EXPENSE_LINE}`, borderRadius: '6px', overflowX: 'hidden', overflowY: 'visible' }}>
                 <Table size="small" className="expense-pdf-items" sx={expenseItemsTableSx}>
                   <colgroup>
                     <col style={{ width: 128 }} />
@@ -7621,6 +8081,22 @@ const ExpenseApproval: React.FC = () => {
                             >
                               {item.description || '-'}
                             </ClampText>
+                            {Boolean(meta.perLineGst ?? meta.per_line_gst) && (() => {
+                              const g = calcLineItemGstAmounts(item);
+                              const rateLabel =
+                                g.igstRate > 0
+                                  ? `IGST ${formatGstRateOption(g.igstRate)}%`
+                                  : g.cgstRate > 0
+                                    ? `CGST/SGST ${formatGstRateOption(g.cgstRate)}%`
+                                    : null;
+                              const taxAmt = roundDecimal2(g.igstAmount + g.cgstAmount + g.sgstAmount);
+                              if (!rateLabel && taxAmt <= 0) return null;
+                              return (
+                                <Typography sx={{ fontSize: '0.75rem', color: '#64748B', mt: 0.25 }}>
+                                  {rateLabel || '-'} · {formatDecimal2(taxAmt)}
+                                </Typography>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell className="expense-pdf-items-numeric-block" sx={expenseItemsNumericBlockCellSx}>
                             <Box className="expense-pdf-items-numeric-grid" sx={expenseItemsNumericGridSx}>
@@ -7841,7 +8317,11 @@ const ExpenseApproval: React.FC = () => {
                     ] as const).map((row) => (
                       <TableRow key={row.label}>
                         <TableCell>{row.label}</TableCell>
-                        <TableCell align="center" sx={{ color: 'text.secondary' }}>{row.rate}%</TableCell>
+                        <TableCell align="center" sx={{ color: 'text.secondary' }}>
+                          {taxSummary.perLineGst
+                            ? t('expenseApproval.voucher.perItemGstRateHint')
+                            : `${row.rate}%`}
+                        </TableCell>
                         <TableCell align="right" sx={expenseAmountCellSx}>
                           {formatDecimal2(row.amount)}
                         </TableCell>
@@ -7946,7 +8426,7 @@ const ExpenseApproval: React.FC = () => {
             {(selectedExpense.notes || meta.remarks) && (
               <Box className="expense-pdf-plain">
                 <Typography variant="subtitle2" sx={sectionTitleSx}>{t('expenseApproval.detail.notes')}</Typography>
-                <Box sx={{ p: 1, border: `1px solid ${EXPENSE_LINE}`, bgcolor: EXPENSE_MUTED_BG }}>
+                <Box sx={{ p: 1, border: `1px solid ${EXPENSE_LINE}`, borderRadius: '6px', bgcolor: EXPENSE_MUTED_BG }}>
                   <Typography variant="body2">
                     {selectedExpense.notes || meta.remarks}
                   </Typography>
@@ -7961,7 +8441,7 @@ const ExpenseApproval: React.FC = () => {
                     ? t('expenseApproval.detail.revisionRejectComment')
                     : t('expenseApproval.detail.rejectedComment')}
                 </Typography>
-                <Box sx={{ p: 1, border: `1px solid ${EXPENSE_LINE}`, bgcolor: EXPENSE_MUTED_BG }}>
+                <Box sx={{ p: 1, border: `1px solid ${EXPENSE_LINE}`, borderRadius: '6px', bgcolor: EXPENSE_MUTED_BG }}>
                   <Typography variant="body2">
                     {meta.revisionRejectReason || meta.rejectedReason || meta.rejectedComment}
                   </Typography>
@@ -7975,7 +8455,7 @@ const ExpenseApproval: React.FC = () => {
               selectedExpense.paymentRejectedAt) && (
               <Box className="expense-pdf-plain">
                 <Typography variant="subtitle2" sx={sectionTitleSx}>{t('expenseApproval.detail.paymentProcessing')}</Typography>
-                <Box sx={{ p: 1, border: `1px solid ${EXPENSE_LINE}`, bgcolor: EXPENSE_MUTED_BG }}>
+                <Box sx={{ p: 1, border: `1px solid ${EXPENSE_LINE}`, borderRadius: '6px', bgcolor: EXPENSE_MUTED_BG }}>
                   {selectedExpense.paymentApprovedAt && (
                     <Typography variant="body2" sx={{ mb: 1 }}>
                       {t('expenseApproval.detail.paymentApprovedLine', {
@@ -9051,9 +9531,23 @@ const ExpenseApproval: React.FC = () => {
                     )}
                   </TableCell>
                   <TableCell sx={{ width: 148, minWidth: 148, maxWidth: 148 }}>
-                    {listTab === 'transfer'
-                      ? getTransferStatusChip(expense)
-                      : getStatusChip(resolveDisplayStatus(expense))}
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5 }}>
+                      {listTab === 'transfer'
+                        ? getTransferStatusChip(expense)
+                        : getStatusChip(resolveDisplayStatus(expense))}
+                      {listTab === 'received' &&
+                        user?.id != null &&
+                        (expense.ccUserIds || []).includes(Number(user.id)) &&
+                        !canUserApproveExpense(expense) &&
+                        !isDesignatedApprover(expense) && (
+                          <Chip
+                            label={t('expenseApproval.cc.badge')}
+                            size="small"
+                            variant="outlined"
+                            sx={{ borderRadius: 0, height: 22, fontWeight: 600 }}
+                          />
+                        )}
+                    </Box>
                   </TableCell>
                   <TableCell sx={{ width: 108, minWidth: 108, maxWidth: 108 }}>{getPriorityChip(expense.priority)}</TableCell>
                   <TableCell

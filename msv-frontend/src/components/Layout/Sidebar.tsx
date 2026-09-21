@@ -50,6 +50,7 @@ import {
   Payments,
   Campaign,
   Assignment,
+  FolderSpecial,
 } from '@mui/icons-material';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -499,6 +500,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       assignment: <Assignment />,
       category: <Category />,
       view_kanban: <ViewKanban />,
+      folder_special: <FolderSpecial />,
       move_to_inbox: <MoveToInbox />,
       post_add: <PostAdd />,
       qr_code_scanner: <QrCodeScanner />,
@@ -526,6 +528,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (normalized.includes('/hr/leave') || normalized.includes('/hr/vacation')) return <BeachAccess />;
     if (normalized.includes('/hr/employment-contracts')) return <Description />;
 
+    if (normalized.includes('/work/project-management')) return <FolderSpecial />;
     if (normalized.includes('/work/projects')) return <ViewKanban />;
     if (normalized.includes('/work/statistics')) return <Assessment />;
     if (normalized.includes('/work/approval')) return <Description />;

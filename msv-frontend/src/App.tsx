@@ -39,6 +39,8 @@ const AttendanceManagement = lazyPage(() => import('./pages/Attendance/Attendanc
 const WorkBoardsPage = lazyPage(() => import('./pages/Work/WorkBoardsPage'));
 const WorkBoardDetailPage = lazyPage(() => import('./pages/Work/WorkBoardDetailPage'));
 const WorkAssigneeListPage = lazyPage(() => import('./pages/Work/WorkAssigneeListPage'));
+const ProjectManagement = lazyPage(() => import('./pages/Projects/ProjectManagement'));
+const ProjectDetailPage = lazyPage(() => import('./pages/Projects/ProjectDetailPage'));
 const EInvoiceManagement = lazyPage(() => import('./pages/Invoice/EInvoiceManagement'));
 const ProformaInvoiceManagement = lazyPage(() => import('./pages/Invoice/ProformaInvoiceManagement'));
 const QuotationManagement = lazyPage(() => import('./pages/Quotation/QuotationManagement'));
@@ -279,6 +281,8 @@ function App() {
             <Route path="work/projects" element={<WorkBoardsPage />} />
             <Route path="work/projects/:boardId" element={<WorkBoardDetailPage />} />
             <Route path="work/assignee-list" element={<WorkAssigneeListPage />} />
+            <Route path="work/project-management" element={<ProjectManagement />} />
+            <Route path="work/project-management/:projectId" element={<ProjectDetailPage />} />
             <Route path="customers/contracts" element={<ContractManagement />} />
             <Route path="work/statistics" element={<WorkStatistics />} />
             <Route path="work/approval" element={<ElectronicApproval />} />

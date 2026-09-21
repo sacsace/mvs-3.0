@@ -44,6 +44,7 @@ interface ExpenseReportAttributes {
   bank_transfer_error?: string;
   bank_transfer_payload?: any;
   bank_transfer_logs?: any;
+  cc_user_ids?: number[] | null;
   is_active?: boolean;
   created_at?: Date;
   updated_at?: Date;
@@ -63,6 +64,7 @@ interface ExpenseReportCreationAttributes extends Optional<
   | 'attachments'
   | 'comments'
   | 'comment_reads'
+  | 'cc_user_ids'
   | 'is_active'
   | 'created_at'
   | 'updated_at'
@@ -111,6 +113,7 @@ class ExpenseReport extends Model<ExpenseReportAttributes, ExpenseReportCreation
   public bank_transfer_error?: string;
   public bank_transfer_payload?: any;
   public bank_transfer_logs?: any;
+  public cc_user_ids?: number[] | null;
   public is_active?: boolean;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
@@ -168,6 +171,7 @@ ExpenseReport.init(
     bank_transfer_error: { type: DataTypes.TEXT, allowNull: true },
     bank_transfer_payload: { type: DataTypes.JSONB, allowNull: true },
     bank_transfer_logs: { type: DataTypes.JSONB, allowNull: true, defaultValue: '[]' },
+    cc_user_ids: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     is_active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true }
   },
   {

@@ -2520,8 +2520,55 @@ const EXPENSE_CLIENT_UPDATE_BLOCKLIST = [
   'approval_id',
 ] as const;
 
+function normalizeExpenseCcUserIdsRaw(raw: unknown): number[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) {
+    return [...new Set(raw.map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0))];
+  }
+  if (typeof raw === 'string') {
+    try {
+      const v = JSON.parse(raw);
+      if (Array.isArray(v)) return normalizeExpenseCcUserIdsRaw(v);
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+async function validateExpenseCcUserIds(
+  raw: unknown,
+  tenantId: number | undefined,
+  companyId: number | undefined,
+  approverId: number | null | undefined,
+  authorId: number
+): Promise<{ ok: true; ids: number[] } | { ok: false; message: string }> {
+  let ids = normalizeExpenseCcUserIdsRaw(raw);
+  const exclude = new Set<number>([Number(authorId)]);
+  const approver = toPositiveInt(approverId);
+  if (approver) exclude.add(approver);
+  ids = ids.filter((id) => !exclude.has(id));
+  if (ids.length > 30) {
+    return { ok: false, message: '참조 인원은 최대 30명까지 지정할 수 있습니다.' };
+  }
+  if (tenantId == null || companyId == null || ids.length === 0) {
+    return { ok: true, ids };
+  }
+  for (const id of ids) {
+    const u = await (User as any).findOne({
+      where: { id, tenant_id: tenantId, company_id: companyId, status: 'active' },
+      attributes: ['id'],
+    });
+    if (!u) {
+      return { ok: false, message: '참조 인원은 같은 회사의 활성 사용자만 지정할 수 있습니다.' };
+    }
+  }
+  return { ok: true, ids };
+}
+
 const sanitizeExpenseForUser = (expense: any, user: any) => {
   const data = expense?.toJSON ? expense.toJSON() : { ...(expense || {}) };
+  data.cc_user_ids = normalizeExpenseCcUserIdsRaw(data.cc_user_ids);
   const logs = Array.isArray(data.bank_transfer_logs) ? data.bank_transfer_logs : [];
   data.remittance_history = logs
     .map((log: any) => {
@@ -2911,7 +2958,8 @@ export const createExpenseReport = async (req: RequestWithUser, res: Response) =
       submitted_at,
       due_date,
       notes,
-      attachments = []
+      attachments = [],
+      cc_user_ids = [],
     } = req.body;
 
     const safeTitle = typeof title === 'string' ? title : '';
@@ -2959,6 +3007,21 @@ export const createExpenseReport = async (req: RequestWithUser, res: Response) =
     );
     const resolvedRequesterDepartment = requesterOrg.department;
     const resolvedRequesterPosition = requesterOrg.position;
+
+    const previewApproverId =
+      toPositiveInt(current_approver_id) ||
+      toPositiveInt(previewItems?.meta?.approvedById);
+    const ccValidated = await validateExpenseCcUserIds(
+      cc_user_ids,
+      tenant_id,
+      company_id,
+      previewApproverId,
+      requester_id
+    );
+    if (ccValidated.ok === false) {
+      return res.status(400).json({ success: false, message: ccValidated.message });
+    }
+    const ccUserIdsFinal = ccValidated.ids;
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       try {
@@ -3046,6 +3109,7 @@ export const createExpenseReport = async (req: RequestWithUser, res: Response) =
               due_date,
               notes,
               attachments,
+              cc_user_ids: ccUserIdsFinal,
               is_active: true,
             },
             { transaction }
@@ -3194,6 +3258,24 @@ export const updateExpenseReport = async (req: RequestWithUser, res: Response) =
         nextBody.approval_flow = assigned.approval_flow;
         nextBody.items = assigned.items;
       }
+    }
+
+    {
+      const ccApproverId =
+        toPositiveInt(nextBody.current_approver_id) ||
+        incomingApproverId ||
+        existingApproverId;
+      const ccValidated = await validateExpenseCcUserIds(
+        req.body.cc_user_ids !== undefined ? req.body.cc_user_ids : expense.cc_user_ids,
+        tenant_id,
+        company_id,
+        ccApproverId,
+        user_id
+      );
+      if (ccValidated.ok === false) {
+        return res.status(400).json({ success: false, message: ccValidated.message });
+      }
+      nextBody.cc_user_ids = ccValidated.ids;
     }
 
     if (isRevisionResubmit) {
@@ -3828,23 +3910,39 @@ const notifyExpenseReportSubmitted = (req: RequestWithUser, expense: any) => {
       : expense.current_approver_id != null
         ? Number(expense.current_approver_id)
         : null;
-  if (!approverId || approverId === req.user.id) return;
-
   const requesterName = expense.requester_name || req.user.username || '작성자';
   const titleShort = String(expense.title || expense.expense_id || '지출결의서').slice(0, 80);
-  notifyUser(
-    req,
-    approverId,
-    '지출결의서 제출',
-    `${requesterName}님이 "${titleShort}" 지출결의서를 제출했습니다. 검토해 주세요.`,
-    'info',
-    {
-      feature: 'expense_report',
-      expense_id: expense.id,
-      expense_no: expense.expense_id,
-      href: '/accounting/expense'
-    }
+  const hrefData = {
+    feature: 'expense_report',
+    expense_id: expense.id,
+    expense_no: expense.expense_id,
+    href: '/accounting/expense',
+  };
+
+  if (approverId && approverId !== req.user.id) {
+    notifyUser(
+      req,
+      approverId,
+      '지출결의서 제출',
+      `${requesterName}님이 "${titleShort}" 지출결의서를 제출했습니다. 검토해 주세요.`,
+      'info',
+      hrefData
+    );
+  }
+
+  const ccIds = normalizeExpenseCcUserIdsRaw(expense.cc_user_ids).filter(
+    (id) => id !== req.user.id && id !== approverId
   );
+  for (const ccId of ccIds) {
+    notifyUser(
+      req,
+      ccId,
+      '지출결의서 참조',
+      `${requesterName}님이 "${titleShort}" 지출결의서에 참조로 지정했습니다. 진행 상황을 확인할 수 있습니다.`,
+      'info',
+      hrefData
+    );
+  }
 };
 
 const notifyPaymentOfficers = async (

@@ -26,6 +26,22 @@ import { parseExcelDateOnlyField } from '../utils/parseExcelDateOnly';
 
 let userListHrFieldsAvailable: boolean | null = null;
 
+/** user < admin < audit < root. audit/root 부여는 root만. */
+const ROLE_RANK: Record<string, number> = {
+  user: 1,
+  admin: 2,
+  audit: 3,
+  root: 4,
+};
+
+function canAssignRole(actorRole: string | undefined, targetRole: string | undefined): boolean {
+  if (!targetRole) return true;
+  const actor = String(actorRole || '').toLowerCase();
+  const target = String(targetRole).toLowerCase();
+  if (target === 'root' || target === 'audit') return actor === 'root';
+  return (ROLE_RANK[actor] || 0) >= (ROLE_RANK[target] || 0);
+}
+
 /** 사용자 Excel 내보내기 컬럼 순서 (json_to_sheet와 동일) */
 const USER_EXCEL_EXPORT_COLUMNS = [
   '사원번호',
@@ -1112,6 +1128,12 @@ router.post(
         message: 'audit 역할은 root 권한을 가진 사용자만 부여할 수 있습니다.'
       });
     }
+    if (role && !canAssignRole(currentUserRole, role)) {
+      return res.status(403).json({
+        success: false,
+        message: '본인보다 상위 역할은 부여할 수 없습니다.'
+      });
+    }
 
     // 중복 확인
     const existingUser = await (User as any).findOne({
@@ -1454,6 +1476,12 @@ router.put(
       return res.status(403).json({
         success: false,
         message: 'audit 역할은 root 권한을 가진 사용자만 부여할 수 있습니다.'
+      });
+    }
+    if (role !== undefined && role !== user.role && !canAssignRole(currentUserRole, role)) {
+      return res.status(403).json({
+        success: false,
+        message: '본인보다 상위 역할은 부여할 수 없습니다.'
       });
     }
 
@@ -2185,6 +2213,15 @@ router.post(
             row: i + 2,
             data: row,
             error: 'audit 역할은 root 권한을 가진 사용자만 부여할 수 있습니다.'
+          });
+          continue;
+        }
+
+        if (!canAssignRole(userRole, importRole)) {
+          results.failed.push({
+            row: i + 2,
+            data: row,
+            error: '본인보다 상위 역할은 부여할 수 없습니다.'
           });
           continue;
         }

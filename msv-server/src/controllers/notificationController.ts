@@ -89,11 +89,13 @@ export const getActionInbox = async (req: Request, res: Response) => {
       if (companyId) where.company_id = companyId;
     };
 
-    // 1) 지출결의서 결제 승인 대기 — 지정 승인자/결제담당자만
+    // 1) 지출결의서 결제 승인 대기 — 문서가 승인된 뒤 결제 요청된 건만
+    //    (문서 in_review 등인데 payment_request_status만 requested로 남은 불일치 건은 알림에서 제외)
     try {
       const expenseWhere: any = {
         is_active: true,
-        payment_request_status: 'requested'
+        payment_request_status: 'requested',
+        status: { [Op.in]: ['approved', 'paid'] },
       };
       baseCompany(expenseWhere);
 

@@ -38,6 +38,7 @@ import {
   Assignment,
   ListAlt,
   Policy,
+  FolderSpecial,
 } from '@mui/icons-material';
 import type { Menu } from '../../services/menuService';
 import { isRemovedNavMenuRoute } from '../../utils/isRemovedNavMenuRoute';
@@ -251,6 +252,7 @@ const ICON_BY_NAME: Record<string, React.ReactElement> = {
   list_alt: <ListAlt />,
   category: <Category />,
   view_kanban: <ViewKanban />,
+  folder_special: <FolderSpecial />,
   move_to_inbox: <MoveToInbox />,
   post_add: <PostAdd />,
   qr_code_scanner: <QrCodeScanner />,
@@ -276,6 +278,7 @@ const getIconByRoute = (route: string): React.ReactElement | null => {
   if (normalized.includes('/hr/leave') || normalized.includes('/hr/vacation')) return <BeachAccess />;
   if (normalized.includes('/hr/employment-contracts')) return <Description />;
 
+  if (normalized.includes('/work/project-management')) return <FolderSpecial />;
   if (normalized.includes('/work/projects')) return <ViewKanban />;
   if (normalized.includes('/work/assignee-list')) return <AssignmentInd />;
   if (normalized.includes('/work/statistics')) return <Assessment />;

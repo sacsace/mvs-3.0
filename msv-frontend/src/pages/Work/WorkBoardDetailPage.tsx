@@ -1147,13 +1147,13 @@ const DraggableCard = memo(function DraggableCard({
           />
         </Box>
         {showMeta ? (
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
               justifyContent: 'space-between',
               gap: 0.75,
-              flexShrink: 0,
+            flexShrink: 0,
               minHeight: 22,
             }}
           >
@@ -1187,10 +1187,10 @@ const DraggableCard = memo(function DraggableCard({
                 />
               ) : null}
               {card.due_date ? (
-                <Chip
-                  size="small"
+            <Chip
+              size="small"
                   label={formatDueDate(card.due_date)}
-                  sx={{
+              sx={{
                     ...kanbanMetaChipSx,
                     height: 20,
                     fontSize: '0.625rem',
@@ -1203,7 +1203,7 @@ const DraggableCard = memo(function DraggableCard({
             {faceAvatars.length > 0 ? (
               <AvatarGroup
                 max={4}
-                sx={{
+              sx={{
                   flexShrink: 0,
                   '& .MuiAvatar-root': {
                     width: 24,
@@ -1226,7 +1226,7 @@ const DraggableCard = memo(function DraggableCard({
                 ))}
               </AvatarGroup>
             ) : null}
-          </Box>
+        </Box>
         ) : null}
       </CardContent>
     </Card>
@@ -1367,11 +1367,11 @@ const ListColumn = memo(function ListColumn({
           mb: 1,
           px: 0.15,
           flexShrink: 0,
-          cursor: allowListReorder ? 'grab' : 'default',
-        }}
-        {...(allowListReorder ? listDragAttributes : {})}
-        {...(allowListReorder ? listDragListeners : {})}
-      >
+            cursor: allowListReorder ? 'grab' : 'default',
+          }}
+          {...(allowListReorder ? listDragAttributes : {})}
+          {...(allowListReorder ? listDragListeners : {})}
+        >
         {listTitleEditing && allowListTitleEdit ? (
           <TextField
             autoFocus
@@ -1389,11 +1389,11 @@ const ListColumn = memo(function ListColumn({
           />
         ) : (
           <>
-            <Typography
+          <Typography
               component="span"
-              sx={{
+            sx={{
                 fontWeight: 700,
-                fontSize: '0.875rem',
+              fontSize: '0.875rem',
                 color: '#172B4D',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -1402,9 +1402,9 @@ const ListColumn = memo(function ListColumn({
                 minWidth: 0,
               }}
               title={displayBoardListTitle(list.title, language)}
-            >
-              {displayBoardListTitle(list.title, language)}
-            </Typography>
+          >
+            {displayBoardListTitle(list.title, language)}
+          </Typography>
             <Typography
               component="span"
               sx={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6B778C', flexShrink: 0 }}
@@ -1424,14 +1424,14 @@ const ListColumn = memo(function ListColumn({
           </IconButton>
         ) : (allowListTitleEdit || allowListDelete) ? (
           <>
-            <IconButton
-              size="small"
+                <IconButton
+                  size="small"
               aria-label={txt('대분류 메뉴', 'List menu')}
               onClick={(e) => setListMenuAnchor(e.currentTarget)}
               sx={{ color: '#6B778C', borderRadius: KANBAN_CONTROL_RADIUS }}
-            >
+                >
               <MoreHorizIcon fontSize="small" />
-            </IconButton>
+                </IconButton>
             <Menu
               anchorEl={listMenuAnchor}
               open={Boolean(listMenuAnchor)}
@@ -1476,7 +1476,7 @@ const ListColumn = memo(function ListColumn({
             </Menu>
           </>
         ) : null}
-      </Box>
+            </Box>
       {!listTitleEditing && (list.assignee?.username || list.assignee_user_id) ? (
         <Typography
           sx={{
@@ -1795,8 +1795,8 @@ export default function WorkBoardDetailPage() {
         companyId: boardCompanyId,
         tenantId: boardTenantId,
         excludeUserId: user?.id != null ? Number(user.id) : undefined,
-      });
-      setCompanyUsers(list);
+        });
+        setCompanyUsers(list);
     } catch {
       /* ignore */
     }
@@ -1934,8 +1934,8 @@ export default function WorkBoardDetailPage() {
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const clearDragOverlay = () => {
-      setActiveCard(null);
-      setActiveList(null);
+    setActiveCard(null);
+    setActiveList(null);
     };
 
     if (!menuCanEdit) {
@@ -2288,47 +2288,47 @@ export default function WorkBoardDetailPage() {
 
   const openCardDetail = useCallback(
     (card: BoardCard, listTitle: string, listId: number) => {
-      const blockCommentsUntilDetailSave =
-        lastQuickCreatedCardIdRef.current != null &&
-        Number(card.id) === Number(lastQuickCreatedCardIdRef.current);
+    const blockCommentsUntilDetailSave =
+      lastQuickCreatedCardIdRef.current != null &&
+      Number(card.id) === Number(lastQuickCreatedCardIdRef.current);
       cardCommentPostedRef.current = false;
       commentSyncGenRef.current += 1;
       deepLinkCardHandledRef.current = Number(card.id);
-      setCardDetail({
-        cardId: card.id,
-        blockCommentsUntilDetailSave,
-        title: card.title || '',
-        description: normalizeRichTextHtml(card.description),
-        dueDate: formatDueDate(card.due_date),
-        color: card.color || '',
+    setCardDetail({
+      cardId: card.id,
+      blockCommentsUntilDetailSave,
+      title: card.title || '',
+      description: normalizeRichTextHtml(card.description),
+      dueDate: formatDueDate(card.due_date),
+      color: card.color || '',
         assigneeUserId:
           card.assignee?.id != null
             ? Number(card.assignee.id)
             : card.assignee_user_id != null
               ? Number(card.assignee_user_id)
               : null,
-        referenceUserIds: Array.isArray(card.reference_user_ids)
-          ? card.reference_user_ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
-          : [],
+      referenceUserIds: Array.isArray(card.reference_user_ids)
+        ? card.reference_user_ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
+        : [],
         createdBy: card.created_by != null ? Number(card.created_by) : null,
         createdAt: resolveBoardCardCreatedAt(card),
         boardId,
         originalBoardId: boardId,
-        listId,
-        originalListId: listId,
+      listId,
+      originalListId: listId,
         listTitle,
         attachments: normalizeBoardCardAttachments(card.attachments),
-      });
+    });
       setCardMoveLists([]);
-      setCardComments(sortBoardCardCommentsThreaded(card.comments || []));
+    setCardComments(sortBoardCardCommentsThreaded(card.comments || []));
       setAttachmentStatusMessage(null);
       setUploadingAttachmentNames([]);
-      setNewComment('');
-      setReplyParentId(null);
-      setMentionedUserIds([]);
-      setMentionOpen(false);
-      setMentionQuery('');
-      setMentionHighlightIndex(0);
+    setNewComment('');
+    setReplyParentId(null);
+    setMentionedUserIds([]);
+    setMentionOpen(false);
+    setMentionQuery('');
+    setMentionHighlightIndex(0);
       syncCardQueryParam(Number(card.id));
     },
     [boardId, syncCardQueryParam]
@@ -2569,11 +2569,11 @@ export default function WorkBoardDetailPage() {
         }
       } catch (e: any) {
         if (syncGen === commentSyncGenRef.current) {
-          showErrorPopup(e, '카드 댓글');
+        showErrorPopup(e, '카드 댓글');
         }
       } finally {
         if (syncGen === commentSyncGenRef.current) {
-          setCommentLoading(false);
+        setCommentLoading(false);
         }
       }
     },
@@ -3001,16 +3001,16 @@ export default function WorkBoardDetailPage() {
           title: txt('업무 완료', 'Done'),
         });
         if (!createRes.success || !createRes.data?.id) {
-          showErrorPopup(
+      showErrorPopup(
             createRes.message ||
               txt(
                 '업무 완료 목록을 만들 수 없습니다. 보드에 「업무 완료」 목록을 추가해 주세요.',
                 'Could not create a Done list. Please add a “Done” list to the board.'
               ),
             txt('업무 완료', 'Complete task')
-          );
-          return;
-        }
+      );
+      return;
+    }
         targetCompletedListId = Number(createRes.data.id);
         await loadBoard();
       } catch (error: any) {
@@ -3109,7 +3109,7 @@ export default function WorkBoardDetailPage() {
         if (entry.status === 'fulfilled') {
           if (entry.value?.success) {
             successCount += 1;
-          } else {
+      } else {
             failedMessages.push(String(entry.value?.message || txt('초대 실패', 'Invite failed')));
           }
           return;
@@ -3229,22 +3229,22 @@ export default function WorkBoardDetailPage() {
       : t('workBoards.deleteConfirm.messageFallback');
 
     const runDelete = () => {
-      void (async () => {
-        try {
-          const res = await workBoardService.deleteBoard(boardId);
-          if (res.success) {
+        void (async () => {
+          try {
+            const res = await workBoardService.deleteBoard(boardId);
+            if (res.success) {
             showSuccessPopup(t('workBoards.deleteConfirm.success'));
-            navigate('/work/projects');
-          } else {
+              navigate('/work/projects');
+            } else {
             showErrorPopup(
               res.message || t('workBoards.deleteConfirm.failed'),
               t('workBoards.title')
             );
-          }
-        } catch (e: any) {
+            }
+          } catch (e: any) {
           showErrorPopup(e, t('workBoards.title'));
-        }
-      })();
+          }
+        })();
     };
 
     // 1차: 보드 삭제 → 2차: 카드 전체 삭제 재확인
@@ -3564,12 +3564,12 @@ export default function WorkBoardDetailPage() {
     const filtered = !keyword
       ? [...memberOptions]
       : memberOptions.filter((member) => {
-          const normalizedName = member.label.replace(/\s+/g, '').toLowerCase();
-          return (
-            member.userid.toLowerCase().includes(keyword) ||
-            member.label.toLowerCase().includes(keyword) ||
-            normalizedName.includes(keyword)
-          );
+        const normalizedName = member.label.replace(/\s+/g, '').toLowerCase();
+        return (
+          member.userid.toLowerCase().includes(keyword) ||
+          member.label.toLowerCase().includes(keyword) ||
+          normalizedName.includes(keyword)
+        );
         });
     // 카드 담당자를 목록 상단에 고정 (이전에 상위 6명만 보여 담당자가 빠지던 문제)
     if (assigneeId == null) return filtered;
@@ -3826,15 +3826,15 @@ export default function WorkBoardDetailPage() {
             {txt('보드 멤버', 'Board Members')} · {members.length}{txt('명', '')}
           </Typography>
           <Box
-            sx={{
-              display: 'flex',
+                sx={{
+                  display: 'flex',
               alignItems: 'center',
               gap: 1,
               flexWrap: 'wrap',
-              minWidth: 0,
+                  minWidth: 0,
               ml: { xs: 0, sm: 'auto' },
               mr: { xs: 0, sm: 1 },
-              width: { xs: '100%', sm: 'auto' },
+                  width: { xs: '100%', sm: 'auto' },
               justifyContent: { xs: 'flex-start', sm: 'flex-end' },
             }}
           >
@@ -3847,12 +3847,12 @@ export default function WorkBoardDetailPage() {
                 />
               }
               label={txt('내 업무만', 'My work only')}
-              sx={{
+                    sx={{
                 mr: 0.5,
                 ml: 0,
                 '& .MuiFormControlLabel-label': {
                   fontSize: '0.8125rem',
-                  fontWeight: 600,
+                      fontWeight: 600,
                   color: '#42526E',
                   whiteSpace: 'nowrap',
                 },
@@ -3917,16 +3917,16 @@ export default function WorkBoardDetailPage() {
               }}
             />
             {cardSearchActive ? (
-              <Typography
+                  <Typography
                 variant="body2"
                 sx={{ fontSize: '0.75rem', flexShrink: 0, color: '#475569', fontWeight: 600 }}
-              >
+                  >
                 {cardSearchMatchCount > 0
                   ? txt(`${cardSearchMatchCount}건`, `${cardSearchMatchCount} match(es)`)
                   : txt('검색 결과 없음', 'No matches')}
-              </Typography>
+                  </Typography>
             ) : null}
-          </Box>
+                </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flexShrink: 0 }}>
             {members.slice(0, BOARD_MEMBER_AVATAR_MAX).map((m: any, index: number) => {
               const name = m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`;
@@ -3943,13 +3943,13 @@ export default function WorkBoardDetailPage() {
                   key={m.id ?? m.user_id}
                   title={
                     <Box sx={{ textAlign: 'center', color: '#F8FAFC' }}>
-                      <Typography
+                <Typography
                         variant="caption"
                         display="block"
                         sx={{ fontWeight: 700, color: '#F8FAFC', lineHeight: 1.35 }}
                       >
                         {name}
-                      </Typography>
+                </Typography>
                       <Typography
                         variant="caption"
                         display="block"
@@ -3991,7 +3991,7 @@ export default function WorkBoardDetailPage() {
                       border: menuOpenForThis
                         ? `2px solid ${theme.palette.primary.main}`
                         : '2px solid #FFFFFF',
-                      boxSizing: 'border-box',
+                        boxSizing: 'border-box',
                       ml: index === 0 ? 0 : `-${BOARD_MEMBER_AVATAR_OVERLAP_PX}px`,
                       zIndex: menuOpenForThis ? BOARD_MEMBER_AVATAR_MAX + 3 : index + 1,
                       cursor: 'pointer',
@@ -4031,13 +4031,13 @@ export default function WorkBoardDetailPage() {
                 placement="top"
               >
                 <Avatar
-                  sx={{
+                    sx={{
                     width: BOARD_MEMBER_AVATAR_SIZE,
                     height: BOARD_MEMBER_AVATAR_SIZE,
                     fontSize: '0.7rem',
                     fontWeight: 700,
                     border: '2px solid #FFFFFF',
-                    boxSizing: 'border-box',
+                      boxSizing: 'border-box',
                     ml: `-${BOARD_MEMBER_AVATAR_OVERLAP_PX}px`,
                     zIndex: BOARD_MEMBER_AVATAR_MAX + 1,
                     bgcolor: '#DFE1E6',
@@ -4048,9 +4048,9 @@ export default function WorkBoardDetailPage() {
                 </Avatar>
               </Tooltip>
             ) : null}
-          </Box>
+                </Box>
+              </Box>
         </Box>
-      </Box>
 
       <Menu
         anchorEl={memberMenuAnchor}
@@ -4307,7 +4307,7 @@ export default function WorkBoardDetailPage() {
                   </Typography>
                   <Typography sx={{ fontSize: '0.8125rem', color: '#6B778C' }}>
                     {(activeList.cards || []).length}
-                  </Typography>
+                </Typography>
                 </Box>
               </Paper>
             ) : null}
@@ -4342,12 +4342,12 @@ export default function WorkBoardDetailPage() {
         >
         <Box
           sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
             borderBottom: '1px solid #E2E8F0',
             bgcolor: '#FFFFFF',
-            py: 1,
+              py: 1,
             px: 1.5,
           }}
         >
@@ -4398,12 +4398,12 @@ export default function WorkBoardDetailPage() {
                 }}
               >
                 {txt('업무 보드 변경', 'Change work board')} :
-              </Typography>
+            </Typography>
               <TextField
                 select
                 variant="standard"
                 hiddenLabel
-                size="small"
+              size="small"
                 value={cardDetail?.boardId || ''}
                 disabled={!menuCanEdit || cardMoveListsLoading}
                 onChange={(e) => {
@@ -4480,7 +4480,7 @@ export default function WorkBoardDetailPage() {
                 select
                 variant="standard"
                 hiddenLabel
-                size="small"
+            size="small"
                 value={cardDetail?.listId || ''}
                 disabled={!menuCanEdit || cardMoveListsLoading}
                 onChange={(e) => handleCardDetailListChange(Number(e.target.value))}
@@ -4566,7 +4566,7 @@ export default function WorkBoardDetailPage() {
               )
             }
             disabled={!menuCanEdit}
-            placeholder={txt('카드 제목', 'Card Title')}
+              placeholder={txt('카드 제목', 'Card Title')}
             sx={cardDetailOutlinedWhiteSx}
           />
           </Box>
@@ -4584,25 +4584,25 @@ export default function WorkBoardDetailPage() {
                 gap: 1.58
             }}
           >
-            <TextField
-              select
-              fullWidth
-              size="small"
+              <TextField
+                select
+                fullWidth
+                size="small"
               label={txt('담당자', 'Assignee')}
               {...CARD_DETAIL_OUTLINED}
-              variant="outlined"
-              value={cardDetail?.assigneeUserId ?? ''}
-              disabled={!menuCanEdit}
-              onChange={(e) =>
-                setCardDetail((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        assigneeUserId: e.target.value === '' ? null : Number(e.target.value)
-                      }
-                    : prev
-                )
-              }
+                variant="outlined"
+                value={cardDetail?.assigneeUserId ?? ''}
+                disabled={!menuCanEdit}
+                onChange={(e) =>
+                  setCardDetail((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          assigneeUserId: e.target.value === '' ? null : Number(e.target.value)
+                        }
+                      : prev
+                  )
+                }
               SelectProps={{
                 displayEmpty: true,
                 renderValue: (selected) => {
@@ -4612,31 +4612,31 @@ export default function WorkBoardDetailPage() {
                 },
               }}
               sx={cardDetailOutlinedWhiteSx}
-            >
-              <MenuItem value="">{txt('미지정', 'Unassigned')}</MenuItem>
-              {members.map((m: any) => (
-                <MenuItem key={m.user_id} value={m.user_id}>
-                  {m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              type="date"
-              fullWidth
-              size="small"
+              >
+                <MenuItem value="">{txt('미지정', 'Unassigned')}</MenuItem>
+                {members.map((m: any) => (
+                  <MenuItem key={m.user_id} value={m.user_id}>
+                    {m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                type="date"
+                fullWidth
+                size="small"
               label={txt('만료일', 'Due Date')}
               {...CARD_DETAIL_OUTLINED}
-              variant="outlined"
-              value={cardDetail?.dueDate || ''}
-              disabled={!menuCanEdit}
-              onChange={(e) =>
-                setCardDetail((prev) =>
-                  prev ? { ...prev, dueDate: e.target.value } : prev
-                )
-              }
+                variant="outlined"
+                value={cardDetail?.dueDate || ''}
+                disabled={!menuCanEdit}
+                onChange={(e) =>
+                  setCardDetail((prev) =>
+                    prev ? { ...prev, dueDate: e.target.value } : prev
+                  )
+                }
               sx={cardDetailOutlinedWhiteSx}
-            />
-          </Box>
+              />
+            </Box>
           </Box>
 
           <Box
@@ -4723,8 +4723,8 @@ export default function WorkBoardDetailPage() {
               variant="caption"
               sx={{ ...cardDetailFieldLabelSx, mb: 0.5 }}
             >
-              {txt('카드 색상', 'Card Color')}
-            </Typography>
+            {txt('카드 색상', 'Card Color')}
+          </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75 }}>
             <TextField
               type="color"
@@ -4796,7 +4796,7 @@ export default function WorkBoardDetailPage() {
                 }}
               />
             ))}
-            </Box>
+          </Box>
           </Box>
           </Box>
 
@@ -4815,8 +4815,8 @@ export default function WorkBoardDetailPage() {
               variant="caption"
               sx={{ ...cardDetailFieldLabelSx, mb: 0.5, ml: 0.25 }}
             >
-              {txt('설명', 'Description')}
-            </Typography>
+            {txt('설명', 'Description')}
+          </Typography>
             <RichTextEditor
               readOnly={!menuCanEdit}
               value={cardDetail?.description || ''}
@@ -4906,7 +4906,7 @@ export default function WorkBoardDetailPage() {
                   mt: 1,
                   border: '1px solid #E2E8F0',
                   borderRadius: KANBAN_CONTROL_RADIUS,
-                  overflow: 'hidden',
+              overflow: 'hidden',
                   bgcolor: '#FFFFFF',
                 }}
               >
@@ -5000,7 +5000,7 @@ export default function WorkBoardDetailPage() {
           <Box
             sx={{
               display: 'flex',
-              alignItems: 'center',
+                alignItems: 'center',
               justifyContent: 'space-between',
               gap: 1,
               flexWrap: 'wrap',
@@ -5103,7 +5103,7 @@ export default function WorkBoardDetailPage() {
                   </Button>
                 </span>
               </Tooltip>
-            </Box>
+          </Box>
             <Button
               size="small"
               variant="contained"
@@ -5244,18 +5244,18 @@ export default function WorkBoardDetailPage() {
                 ) : null
               )}
               <InputBase
-                fullWidth
+              fullWidth
                 multiline
                 minRows={1}
                 maxRows={6}
-                inputRef={commentInputRef}
+              inputRef={commentInputRef}
                 placeholder={
                   composerMentionParts.length === 0
                     ? txt('댓글을 입력하세요 (Alt+Enter 줄바꿈)', 'Write a comment (Alt+Enter for new line)')
                     : undefined
                 }
                 value={composerTail}
-                disabled={!isCommentEnabled}
+              disabled={!isCommentEnabled}
                 onChange={(e) =>
                   handleCommentInputChange(joinComposerComment(composerMentionParts, e.target.value))
                 }
@@ -5276,8 +5276,8 @@ export default function WorkBoardDetailPage() {
                   '&.Mui-disabled': {
                     WebkitTextFillColor: '#94A3B8',
                   },
-                }}
-                onKeyDown={(e) => {
+              }}
+              onKeyDown={(e) => {
                   if (
                     e.key === 'Backspace' &&
                     !composerTail &&
@@ -5295,42 +5295,42 @@ export default function WorkBoardDetailPage() {
                     }
                     return;
                   }
-                  if (mentionOpen && mentionCandidates.length > 0) {
-                    if (e.key === 'ArrowDown') {
-                      e.preventDefault();
-                      setMentionHighlightIndex((prev) => (prev + 1) % mentionCandidates.length);
-                      return;
-                    }
-                    if (e.key === 'ArrowUp') {
-                      e.preventDefault();
+                if (mentionOpen && mentionCandidates.length > 0) {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setMentionHighlightIndex((prev) => (prev + 1) % mentionCandidates.length);
+                    return;
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault();
                       setMentionHighlightIndex(
                         (prev) => (prev - 1 + mentionCandidates.length) % mentionCandidates.length
                       );
-                      return;
-                    }
-                    if (e.key === 'Enter' && !e.altKey && !e.shiftKey) {
-                      e.preventDefault();
-                      const candidate = mentionCandidates[mentionHighlightIndex] || mentionCandidates[0];
-                      if (candidate) {
-                        insertMention(candidate);
-                      }
-                      return;
-                    }
-                    if (e.key === 'Escape') {
-                      setMentionOpen(false);
-                      return;
-                    }
+                    return;
                   }
+                    if (e.key === 'Enter' && !e.altKey && !e.shiftKey) {
+                    e.preventDefault();
+                    const candidate = mentionCandidates[mentionHighlightIndex] || mentionCandidates[0];
+                    if (candidate) {
+                      insertMention(candidate);
+                    }
+                    return;
+                  }
+                  if (e.key === 'Escape') {
+                    setMentionOpen(false);
+                    return;
+                  }
+                }
                   // Alt+Enter / Shift+Enter → 줄바꿈 (기본 동작 유지)
                   if (e.key === 'Enter' && (e.altKey || e.shiftKey)) {
                     return;
                   }
                   if (e.key === 'Enter') {
-                    e.preventDefault();
-                    void submitComment();
-                  }
-                }}
-              />
+                  e.preventDefault();
+                  void submitComment();
+                }
+              }}
+            />
             </Box>
             <Popper
               open={mentionOpen && mentionCandidates.length > 0}
@@ -5484,15 +5484,15 @@ export default function WorkBoardDetailPage() {
                           >
                             {comment.user?.username || txt('알 수 없는 사용자', 'Unknown user')}
                           </Typography>
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            component="span"
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          component="span"
                             sx={{ flexShrink: 0, lineHeight: 1.35, whiteSpace: 'nowrap' }}
-                          >
+                        >
                             {formatDateTime(resolveCommentCreatedAt(comment), language) ||
                               txt('시간 정보 없음', 'No timestamp')}
-                          </Typography>
+                        </Typography>
                         </Box>
                         <Typography
                           variant="body2"

@@ -21,6 +21,12 @@ import ProductCategory from './ProductCategory';
 import ProductUnit from './ProductUnit';
 import InventoryLocation from './InventoryLocation';
 import Project from './Project';
+import ProjectMember from './ProjectMember';
+import ProjectSchedule from './ProjectSchedule';
+import ProjectTask from './ProjectTask';
+import ProjectTaskAssignee from './ProjectTaskAssignee';
+import ProjectActivity from './ProjectActivity';
+import ProjectTaskComment from './ProjectTaskComment';
 import Payroll from './Payroll';
 import PayrollPeriodLock from './PayrollPeriodLock';
 import PayslipDelivery from './PayslipDelivery';
@@ -224,6 +230,35 @@ UserPermission.belongsTo(Menu, { foreignKey: 'menu_id', as: 'menu' });
 
 (User as any).hasMany(Project, { foreignKey: 'created_by', as: 'createdProjects' });
 (Project as any).belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+
+(Project as any).hasMany(ProjectMember, { foreignKey: 'project_id', as: 'members' });
+(ProjectMember as any).belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+(User as any).hasMany(ProjectMember, { foreignKey: 'user_id', as: 'projectMemberships' });
+(ProjectMember as any).belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+(ProjectMember as any).belongsTo(User, { foreignKey: 'invited_by', as: 'inviter' });
+
+(Project as any).hasMany(ProjectSchedule, { foreignKey: 'project_id', as: 'schedules' });
+(ProjectSchedule as any).belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+(ProjectSchedule as any).belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+
+(Project as any).hasMany(ProjectTask, { foreignKey: 'project_id', as: 'tasks' });
+(ProjectTask as any).belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+(ProjectTask as any).belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+(ProjectTask as any).belongsTo(User, { foreignKey: 'completed_by', as: 'completer' });
+(ProjectTask as any).hasMany(ProjectTaskAssignee, { foreignKey: 'task_id', as: 'assignees' });
+(ProjectTaskAssignee as any).belongsTo(ProjectTask, { foreignKey: 'task_id', as: 'task' });
+(ProjectTaskAssignee as any).belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+(User as any).hasMany(ProjectTaskAssignee, { foreignKey: 'user_id', as: 'projectTaskAssignments' });
+
+(ProjectTask as any).hasMany(ProjectTaskComment, { foreignKey: 'task_id', as: 'comments' });
+(ProjectTaskComment as any).belongsTo(ProjectTask, { foreignKey: 'task_id', as: 'task' });
+(ProjectTaskComment as any).belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+(User as any).hasMany(ProjectTaskComment, { foreignKey: 'user_id', as: 'projectTaskComments' });
+
+(Project as any).hasMany(ProjectActivity, { foreignKey: 'project_id', as: 'activities' });
+(ProjectActivity as any).belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+(ProjectActivity as any).belongsTo(User, { foreignKey: 'actor_id', as: 'actor' });
+(ProjectActivity as any).belongsTo(ProjectTask, { foreignKey: 'task_id', as: 'task' });
 
 // 급여 관계
 (Tenant as any).hasMany(Payroll, { foreignKey: 'tenant_id', as: 'payrolls' });
@@ -661,6 +696,12 @@ export {
   ProductUnit,
   InventoryLocation,
   Project,
+  ProjectMember,
+  ProjectSchedule,
+  ProjectTask,
+  ProjectTaskAssignee,
+  ProjectActivity,
+  ProjectTaskComment,
   Payroll,
   PayrollPeriodLock,
   PayslipDelivery,

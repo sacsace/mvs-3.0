@@ -1,131 +1,211 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Autocomplete,
   Box,
-  Typography,
+  Button,
   Card,
-  CardContent,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  IconButton,
+  InputAdornment,
+  InputLabel,
+  MenuItem,
+  Select,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
-  Button,
-  Chip,
   TextField,
-  FormControl,
-  Select,
-  MenuItem,
-  Autocomplete,
-  IconButton,
-  LinearProgress,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  CircularProgress,
-  InputAdornment
+  Tooltip,
+  Typography,
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
+  DeleteOutline as DeleteIcon,
+  EditOutlined as EditIcon,
+  Refresh as RefreshIcon,
   Search as SearchIcon,
-  FilterList as FilterIcon
 } from '@mui/icons-material';
-import { api } from '../../services/api';
-import { projectService } from '../../services/api';
-import { useReferenceDataStore } from '../../store/referenceDataStore';
-import { useStore } from '../../store';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import { useTheme } from '@mui/material/styles';
+import { api, projectService } from '../../services/api';
+import { useReferenceDataStore, filterActiveCompanyUsers } from '../../store/referenceDataStore';
+import { useMenuStore, useStore } from '../../store';
 import { showErrorPopup, showSuccessPopup } from '../../utils/errorHandler';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+import {
+  getMvsDialogActionsSx,
+  getMvsDialogPaperSx,
+  getMvsDialogTitleRowSx,
+} from '../../components/Common/mvsDialogShell';
+import {
+  mvsBodyCardSx,
+  mvsBodyListTableSx,
+  mvsBodyListZoneSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodySectionHeaderSx,
+  mvsFilterFieldHeightSx,
+  mvsOutlinedLabelProps,
+  mvsPageRootSx,
+  mvsSearchFieldSx,
+  mvsTableBodyRowSx,
+  mvsTableHeadHighlightSx,
+  mvsTableScrollSx,
+} from '../../theme/mvsLayout';
 
-interface User {
+const MENU_ROUTE = '/work/project-management';
+const STATUS_KEYS = ['planning', 'in_progress', 'on_hold', 'completed', 'cancelled'] as const;
+
+function normalizeStatus(status: string): string {
+  if (status === 'active') return 'in_progress';
+  return status || 'planning';
+}
+
+type ProjectRow = {
   id: number;
-  userid: string;
-  username: string;
-  email: string;
-  role: string;
-  department?: string;
-  position?: string;
-  status?: string;
+  project_code: string;
+  name: string;
+  description: string;
+  manager: string;
+  manager_id: number | null;
+  status: string;
+  priority: string;
+  startDate: string;
+  endDate: string;
+  progress: number;
+  budget: number;
+};
+
+type FormState = {
+  name: string;
+  description: string;
+  manager_id: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  priority: string;
+  budget: number;
+  inviteUserIds: number[];
+};
+
+const emptyForm = (): FormState => ({
+  name: '',
+  description: '',
+  manager_id: '',
+  status: 'planning',
+  startDate: '',
+  endDate: '',
+  priority: 'medium',
+  budget: 0,
+  inviteUserIds: [],
+});
+
+function daysBetween(start: string, end: string): number | null {
+  if (!start || !end) return null;
+  const s = new Date(`${start}T00:00:00`);
+  const e = new Date(`${end}T00:00:00`);
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return null;
+  return Math.round((e.getTime() - s.getTime()) / 86400000) + 1;
+}
+
+function remainingDays(end: string): number | null {
+  if (!end) return null;
+  const e = new Date(`${end}T00:00:00`);
+  if (Number.isNaN(e.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((e.getTime() - today.getTime()) / 86400000);
 }
 
 const ProjectManagement: React.FC = () => {
+  const { t } = useTranslation();
+  const theme = useTheme();
+  const navigate = useNavigate();
   const { user } = useStore();
+  const { loading: menusLoading } = useMenuStore();
+  const menuFlags = useMenuRoutePermissionFlags([MENU_ROUTE]);
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
-  const [projects, setProjects] = useState<any[]>([]);
-  const [filteredProjects, setFilteredProjects] = useState<any[]>([]);
+
+  const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [companies, setCompanies] = useState<any[]>([]);
   const [openDialog, setOpenDialog] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [selectedProject, setSelectedProject] = useState<ProjectRow | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [managerFilter, setManagerFilter] = useState('all');
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>('');
-  const [teamMembers, setTeamMembers] = useState<User[]>([]);
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    manager: '',
-    manager_id: '',
-    team: '',
-    status: 'planning',
-    startDate: '',
-    endDate: '',
-    priority: 'medium',
-    project_code: '',
-    budget: 0,
-    progress: 0
-  });
+  const [formData, setFormData] = useState<FormState>(emptyForm);
+  const [saving, setSaving] = useState(false);
+
+  const isRootOrAudit = user?.role === 'root' || user?.role === 'audit';
+
+  const statusLabel = useCallback(
+    (status: string) => {
+      const key = normalizeStatus(status);
+      return t(`projectManagement.status.${key}`, { defaultValue: key });
+    },
+    [t]
+  );
+
+  const priorityLabel = useCallback(
+    (priority: string) => t(`projectManagement.priority.${priority}`, { defaultValue: priority }),
+    [t]
+  );
 
   const loadProjects = useCallback(async () => {
+    if (!menuFlags.canRead) {
+      setProjects([]);
+      return;
+    }
     setLoading(true);
     try {
-      const params: any = { page: 1, limit: 1000 };
-      if ((user?.role === 'root' || user?.role === 'audit') && selectedCompanyId) {
+      const params: Record<string, string | number> = { page: 1, limit: 1000 };
+      if (isRootOrAudit && selectedCompanyId) {
         params.company_id = selectedCompanyId;
       }
-      if (statusFilter !== 'all') {
-        params.status = statusFilter;
-      }
-      if (managerFilter !== 'all') {
-        params.manager_id = managerFilter;
-      }
-      
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (managerFilter !== 'all') params.manager_id = managerFilter;
+
       const response = await projectService.getProjects(params);
       if (response.success) {
-        const projectsData = (response.data || []).map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          description: p.description || '',
-          manager: p.manager?.username || '알 수 없음',
-          manager_id: p.project_manager,
-          team: [], // 팀 정보는 별도로 관리 필요
-          status: p.status || 'planning',
-          progress: p.progress || 0,
-          startDate: p.start_date || '',
-          endDate: p.end_date || '',
-          priority: p.priority || 'medium',
-          project_code: p.project_code || '',
-          budget: parseFloat(p.budget || 0)
-        }));
-        setProjects(projectsData);
+        setProjects(
+          (response.data || []).map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            description: p.description || '',
+            manager: p.manager?.username || '-',
+            manager_id: p.project_manager ?? null,
+            status: normalizeStatus(p.status),
+            progress: Number(p.progress) || 0,
+            startDate: p.start_date || '',
+            endDate: p.end_date || '',
+            priority: p.priority || 'medium',
+            project_code: p.project_code || '',
+            budget: parseFloat(String(p.budget || 0)) || 0,
+          }))
+        );
       } else {
-        showErrorPopup(response.message || '프로젝트 목록을 불러올 수 없습니다.', '프로젝트 목록 조회 오류');
+        showErrorPopup(response.message || t('projectManagement.errors.loadList'), t('projectManagement.errors.loadListTitle'));
       }
     } catch (error: any) {
-      showErrorPopup(error, '프로젝트 목록 조회 오류');
+      showErrorPopup(error, t('projectManagement.errors.loadListTitle'));
     } finally {
       setLoading(false);
     }
-  }, [managerFilter, selectedCompanyId, statusFilter, user?.role]);
+  }, [isRootOrAudit, managerFilter, menuFlags.canRead, selectedCompanyId, statusFilter, t]);
 
   const loadCompanies = useCallback(async () => {
     try {
@@ -138,152 +218,63 @@ const ProjectManagement: React.FC = () => {
     }
   }, []);
 
-  const filterProjects = useCallback(() => {
-    let filtered = projects;
-
-    // 검색어 필터링
-    if (searchTerm) {
-      filtered = filtered.filter(project =>
-        project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        project.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        project.project_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        project.manager.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // 상태 필터링
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(project => project.status === statusFilter);
-    }
-
-    // 담당자 필터링
-    if (managerFilter !== 'all') {
-      filtered = filtered.filter(project => project.manager_id?.toString() === managerFilter);
-    }
-
-    setFilteredProjects(filtered);
-  }, [projects, searchTerm, statusFilter, managerFilter]);
-
   const loadUsers = useCallback(async () => {
     try {
       const params: { company_id?: number } = {};
-      if (user?.company_id) {
-        params.company_id = user.company_id;
-      }
+      if (user?.company_id) params.company_id = user.company_id;
       const usersData = await useReferenceDataStore.getState().fetchUsers(params);
-      setUsers(usersData);
+      setUsers(
+        filterActiveCompanyUsers(usersData, {
+          companyId: user?.company_id,
+          tenantId: user?.tenant_id,
+        })
+      );
     } catch {
       /* ignore */
     }
   }, [user?.company_id]);
 
   useEffect(() => {
-    loadUsers();
-    loadProjects();
-    if (user?.role === 'root' || user?.role === 'audit') {
-      loadCompanies();
-    }
-  }, [loadCompanies, loadProjects, loadUsers, user?.role]);
+    void loadUsers();
+    if (isRootOrAudit) void loadCompanies();
+  }, [isRootOrAudit, loadCompanies, loadUsers]);
 
   useEffect(() => {
-    filterProjects();
-  }, [filterProjects]);
+    void loadProjects();
+  }, [loadProjects]);
 
-  useEffect(() => {
-    if (!openDialog) return;
-    if (!formData.team || users.length === 0) {
-      setTeamMembers([]);
-      return;
-    }
-    const teamNames = formData.team
-      .split(',')
-      .map((name) => name.trim())
-      .filter(Boolean);
-    const matched = users.filter((userItem) => teamNames.includes(userItem.username));
-    setTeamMembers(matched);
-  }, [formData.team, openDialog, users]);
+  const filteredProjects = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return projects;
+    return projects.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q) ||
+        p.project_code.toLowerCase().includes(q) ||
+        p.manager.toLowerCase().includes(q)
+    );
+  }, [projects, searchTerm]);
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'planning': return '기획';
-      case 'in_progress': return '진행중';
-      case 'completed': return '완료';
-      case 'on_hold': return '보류';
-      case 'cancelled': return '취소';
-      default: return status;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'planning': return 'info';
-      case 'in_progress': return 'primary';
-      case 'completed': return 'success';
-      case 'on_hold': return 'warning';
-      case 'cancelled': return 'error';
-      default: return 'default';
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return 'error';
-      case 'medium': return 'warning';
-      case 'low': return 'success';
-      default: return 'default';
-    }
-  };
-
-  // 시간 기반 진행율 자동 계산
-  const calculateProgressByTime = (startDate: string, endDate: string): number => {
-    if (!startDate || !endDate) return 0;
-    
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const today = new Date();
-    
-    if (today < start) return 0;
-    if (today > end) return 100;
-    
-    const totalDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-    const elapsedDays = (today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-    
-    return Math.min(100, Math.max(0, Math.round((elapsedDays / totalDays) * 100)));
-  };
-
-  const handleOpenDialog = (project?: any) => {
+  const handleOpenDialog = (project?: ProjectRow, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     if (project) {
       setSelectedProject(project);
       setFormData({
         name: project.name,
         description: project.description,
-        manager: project.manager || '',
-        manager_id: project.manager_id || '',
-        team: project.team.join(', '),
-        status: project.status,
+        manager_id: project.manager_id != null ? String(project.manager_id) : '',
+        status: normalizeStatus(project.status),
         startDate: project.startDate,
         endDate: project.endDate,
-        priority: project.priority,
-        project_code: project.project_code || '',
-        budget: project.budget || 0,
-        progress: project.progress || 0
+        priority: project.priority === 'normal' ? 'medium' : project.priority,
+        budget: project.budget,
+        inviteUserIds: [],
       });
     } else {
       setSelectedProject(null);
-      setFormData({
-        name: '',
-        description: '',
-        manager: '',
-        manager_id: '',
-        team: '',
-        status: 'planning',
-        startDate: '',
-        endDate: '',
-        priority: 'medium',
-        project_code: '',
-        budget: 0,
-        progress: 0
-      });
+      const form = emptyForm();
+      if (user?.id) form.manager_id = String(user.id);
+      setFormData(form);
     }
     setOpenDialog(true);
   };
@@ -294,505 +285,514 @@ const ProjectManagement: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (!formData.name.trim()) {
+      showErrorPopup(t('projectManagement.errors.nameRequired'), t('projectManagement.errors.saveTitle'));
+      return;
+    }
+    if (!formData.startDate) {
+      showErrorPopup(t('projectManagement.errors.startRequired'), t('projectManagement.errors.saveTitle'));
+      return;
+    }
+    if (!formData.manager_id) {
+      showErrorPopup(t('projectManagement.errors.managerRequired'), t('projectManagement.errors.saveTitle'));
+      return;
+    }
+    if (formData.endDate && formData.endDate < formData.startDate) {
+      showErrorPopup(t('projectManagement.errors.endBeforeStart'), t('projectManagement.errors.saveTitle'));
+      return;
+    }
+
+    setSaving(true);
     try {
-      const projectData = {
-        name: formData.name,
-        description: formData.description,
-        project_manager: formData.manager_id ? parseInt(formData.manager_id) : null,
+      const projectData: Record<string, unknown> = {
+        name: formData.name.trim(),
+        description: formData.description.trim() || undefined,
+        project_manager: parseInt(formData.manager_id, 10),
         status: formData.status,
         start_date: formData.startDate,
-        end_date: formData.endDate || null,
+        end_date: formData.endDate || undefined,
         priority: formData.priority,
-        project_code: formData.project_code || `PROJ-${Date.now()}`,
         budget: formData.budget || 0,
-        progress: formData.progress || 0
       };
 
       if (selectedProject) {
-        // 수정
+        if (!menuFlags.canEdit) return;
         const response = await projectService.updateProject(selectedProject.id, projectData);
         if (response.success) {
-          showSuccessPopup('프로젝트가 수정되었습니다.');
+          showSuccessPopup(t('projectManagement.messages.updated'));
           handleCloseDialog();
-          loadProjects();
+          void loadProjects();
         } else {
-          showErrorPopup(response.message || '프로젝트 수정에 실패했습니다.', '프로젝트 수정 오류');
+          showErrorPopup(response.message || t('projectManagement.errors.updateFailed'), t('projectManagement.errors.saveTitle'));
         }
       } else {
-        // 생성
+        if (!menuFlags.canCreate) return;
+        projectData.member_user_ids = formData.inviteUserIds;
         const response = await projectService.createProject(projectData);
         if (response.success) {
-          showSuccessPopup('프로젝트가 생성되었습니다.');
+          showSuccessPopup(t('projectManagement.messages.created'));
           handleCloseDialog();
-          loadProjects();
+          void loadProjects();
+          const newId = Number(response.data?.id);
+          if (Number.isInteger(newId) && newId > 0) {
+            navigate(`/work/project-management/${newId}`);
+          }
         } else {
-          showErrorPopup(response.message || '프로젝트 생성에 실패했습니다.', '프로젝트 생성 오류');
+          showErrorPopup(response.message || t('projectManagement.errors.createFailed'), t('projectManagement.errors.saveTitle'));
         }
       }
     } catch (error: any) {
-      showErrorPopup(error, '프로젝트 저장 오류');
+      showErrorPopup(error, t('projectManagement.errors.saveTitle'));
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = (id: number, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!menuFlags.canDelete) return;
     showConfirm(
-      '정말로 이 프로젝트를 삭제하시겠습니까?',
+      t('projectManagement.confirm.deleteMessage'),
       async () => {
         try {
           const response = await projectService.deleteProject(id);
           if (response.success) {
-            showSuccessPopup('프로젝트가 삭제되었습니다.');
-            loadProjects();
+            showSuccessPopup(t('projectManagement.messages.deleted'));
+            void loadProjects();
           } else {
-            showErrorPopup(response.message || '프로젝트 삭제에 실패했습니다.', '프로젝트 삭제 오류');
+            showErrorPopup(response.message || t('projectManagement.errors.deleteFailed'), t('projectManagement.errors.deleteTitle'));
           }
         } catch (error: any) {
-          showErrorPopup(error, '프로젝트 삭제 오류');
+          showErrorPopup(error, t('projectManagement.errors.deleteTitle'));
         }
       },
-      { confirmColor: 'error' }
+      { confirmColor: 'error', title: t('projectManagement.confirm.deleteTitle') }
     );
+  };
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setManagerFilter('all');
+    setSelectedCompanyId('');
   };
 
   return (
     <Box sx={{ ...mvsPageRootSx }}>
       <MvsPageHeader
-        title="프로젝트 관리"
-        description="프로젝트를 관리하고 조회하는 페이지입니다."
-      />
-
-      <Box>
-        {/* 검색 및 필터 */}
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Box sx={{ 
-              display: 'grid', 
-              gridTemplateColumns: { xs: '1fr', sm: (user?.role === 'root' || user?.role === 'audit') ? '2fr 1fr 1fr 1fr 1fr' : '2fr 1fr 1fr 1fr' },
-              gap: 2, 
-              alignItems: 'flex-end' 
-            }}>
-              <TextField
-                fullWidth
-                label="검색"
-                placeholder="프로젝트명, 설명, 코드, 담당자로 검색..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ) }}
-              />
-              {(user?.role === 'root' || user?.role === 'audit') && (
-                <TextField
-                  fullWidth
-                  select
-                  label="회사"
-                  value={selectedCompanyId}
-                  onChange={(e) => {
-                    const value = String(e.target.value);
-                    if (value === '') {
-                      setSelectedCompanyId('');
-                    } else {
-                      const num = Number(value);
-                      setSelectedCompanyId(isNaN(num) ? '' : num);
-                    }
-                    setTimeout(() => loadProjects(), 100);
-                  }}
-                  InputLabelProps={{ shrink: true }}
-                  SelectProps={{ displayEmpty: true }}
-                  sx={{ height: '40px' }}
-                >
-                  <MenuItem value="">전체 회사</MenuItem>
-                  {companies.map((company) => (
-                    <MenuItem key={company.id} value={company.id}>
-                      {company.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              )}
-              <TextField
-                fullWidth
-                select
-                label="상태"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                SelectProps={{ displayEmpty: true }}
-                sx={{ height: '40px' }}
-              >
-                <MenuItem value="all">전체 상태</MenuItem>
-                <MenuItem value="planning">기획</MenuItem>
-                <MenuItem value="in_progress">진행중</MenuItem>
-                <MenuItem value="completed">완료</MenuItem>
-                <MenuItem value="on_hold">보류</MenuItem>
-                <MenuItem value="cancelled">취소</MenuItem>
-              </TextField>
-              <TextField
-                fullWidth
-                select
-                label="담당자"
-                value={managerFilter}
-                onChange={(e) => setManagerFilter(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                SelectProps={{ displayEmpty: true }}
-                sx={{ height: '40px' }}
-              >
-                <MenuItem value="all">전체 담당자</MenuItem>
-                {users
-                  .filter(u => !u.status || u.status === 'active')
-                  .map((user) => (
-                    <MenuItem key={user.id} value={user.id.toString()}>
-                      {user.username}
-                    </MenuItem>
-                  ))}
-              </TextField>
-              <Button
-                variant="outlined"
-                startIcon={<FilterIcon />}
-                onClick={() => {
-                  setSearchTerm('');
-                  setStatusFilter('all');
-                  setManagerFilter('all');
-                  setSelectedCompanyId('');
-                  setTimeout(() => loadProjects(), 100);
-                }}
-                sx={{ height: '40px' }}
-              >
-                초기화
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
-
-        <Box>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6">프로젝트 목록 ({filteredProjects.length}건)</Typography>
+        title={t('projectManagement.title')}
+        description={t('projectManagement.description')}
+        iconPath={MENU_ROUTE}
+        actions={
+          <>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon sx={{ fontSize: 18 }} />}
+              onClick={() => void loadProjects()}
+              disabled={loading || menusLoading || !menuFlags.canRead}
+              sx={mvsBodyOutlinedBtnSx}
+            >
+              {t('projectManagement.actions.refresh')}
+            </Button>
+            <Tooltip title={!menuFlags.canCreate && !menusLoading ? t('projectManagement.noCreatePermission') : ''}>
+              <span>
                 <Button
                   variant="contained"
-                  startIcon={<AddIcon />}
+                  disableElevation
+                  startIcon={<AddIcon sx={{ fontSize: 20 }} />}
                   onClick={() => handleOpenDialog()}
-                  size="small"
+                  disabled={menusLoading || !menuFlags.canCreate}
+                  sx={mvsBodyPrimaryBtnSx}
                 >
-                  새 프로젝트
+                  {t('projectManagement.actions.create')}
                 </Button>
-              </Box>
+              </span>
+            </Tooltip>
+          </>
+        }
+      />
 
-              {loading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
-                  <CircularProgress />
-                </Box>
-              ) : filteredProjects.length === 0 ? (
-                <Box sx={{ textAlign: 'center', py: 4 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    {projects.length === 0 ? '프로젝트가 없습니다.' : '검색 결과가 없습니다.'}
-                  </Typography>
-                </Box>
-              ) : (
-                <TableContainer component={Paper}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>프로젝트명</TableCell>
-                        <TableCell>담당자</TableCell>
-                        <TableCell>팀원</TableCell>
-                        <TableCell>진행률</TableCell>
-                        <TableCell>상태</TableCell>
-                        <TableCell>우선순위</TableCell>
-                        <TableCell>기간</TableCell>
-                        <TableCell>작업</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {filteredProjects.map((project) => (
-                      <TableRow key={project.id}>
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 0 }}>
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            bgcolor: '#FFFFFF',
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              md: isRootOrAudit ? 'minmax(200px, 2fr) repeat(3, minmax(120px, 1fr)) auto' : 'minmax(200px, 2fr) repeat(2, minmax(120px, 1fr)) auto',
+            },
+            gap: 2,
+            alignItems: 'flex-end',
+          }}
+        >
+          <TextField
+            fullWidth
+            size="small"
+            label={t('common.search')}
+            placeholder={t('projectManagement.filters.searchPlaceholder')}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            {...mvsOutlinedLabelProps}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx }}
+          />
+          {isRootOrAudit && (
+            <FormControl fullWidth size="small" sx={{ ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx }}>
+              <InputLabel shrink>{t('projectManagement.filters.company')}</InputLabel>
+              <Select
+                value={selectedCompanyId === '' ? '' : String(selectedCompanyId)}
+                label={t('projectManagement.filters.company')}
+                displayEmpty
+                onChange={(e) => {
+                  const value = String(e.target.value);
+                  setSelectedCompanyId(value === '' ? '' : Number(value));
+                }}
+              >
+                <MenuItem value="">{t('projectManagement.filters.allCompanies')}</MenuItem>
+                {companies.map((company) => (
+                  <MenuItem key={company.id} value={String(company.id)}>
+                    {company.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+          <FormControl fullWidth size="small" sx={{ ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx }}>
+            <InputLabel shrink>{t('projectManagement.filters.status')}</InputLabel>
+            <Select
+              value={statusFilter}
+              label={t('projectManagement.filters.status')}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <MenuItem value="all">{t('projectManagement.filters.allStatuses')}</MenuItem>
+              {STATUS_KEYS.map((s) => (
+                <MenuItem key={s} value={s}>
+                  {statusLabel(s)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth size="small" sx={{ ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx }}>
+            <InputLabel shrink>{t('projectManagement.filters.manager')}</InputLabel>
+            <Select
+              value={managerFilter}
+              label={t('projectManagement.filters.manager')}
+              onChange={(e) => setManagerFilter(e.target.value)}
+            >
+              <MenuItem value="all">{t('projectManagement.filters.allManagers')}</MenuItem>
+              {users.map((u) => (
+                <MenuItem key={u.id} value={String(u.id)}>
+                  {u.username}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button variant="outlined" onClick={resetFilters} sx={mvsBodyOutlinedBtnSx}>
+            {t('projectManagement.actions.reset')}
+          </Button>
+        </Box>
+      </Card>
+
+      <Box sx={mvsBodyListZoneSx}>
+        <Box sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+          <Box sx={mvsBodySectionHeaderSx}>
+            <Typography sx={{ fontSize: '0.9375rem', fontWeight: 600, color: '#0F172A' }}>
+              {t('projectManagement.listTitle', { count: filteredProjects.length })}
+            </Typography>
+          </Box>
+
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+              <CircularProgress size={28} />
+            </Box>
+          ) : filteredProjects.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 6 }}>
+              <Typography variant="body2" color="text.secondary">
+                {projects.length === 0 ? t('projectManagement.empty') : t('projectManagement.noResults')}
+              </Typography>
+            </Box>
+          ) : (
+            <TableContainer>
+              <Table
+                size="small"
+                sx={{
+                  borderCollapse: 'collapse',
+                  bgcolor: 'transparent',
+                  '& .MuiTableCell-root': {
+                    borderLeft: 'none',
+                    borderRight: 'none',
+                    borderTop: 'none',
+                  },
+                }}
+              >
+                <TableHead sx={mvsTableHeadHighlightSx}>
+                  <TableRow>
+                    <TableCell>{t('projectManagement.columns.code')}</TableCell>
+                    <TableCell>{t('projectManagement.columns.name')}</TableCell>
+                    <TableCell>{t('projectManagement.columns.manager')}</TableCell>
+                    <TableCell>{t('projectManagement.columns.startDate')}</TableCell>
+                    <TableCell>{t('projectManagement.columns.endDate')}</TableCell>
+                    <TableCell>{t('projectManagement.columns.duration')}</TableCell>
+                    <TableCell>{t('projectManagement.columns.remaining')}</TableCell>
+                    <TableCell>{t('projectManagement.columns.status')}</TableCell>
+                    <TableCell>{t('projectManagement.columns.priority')}</TableCell>
+                    <TableCell>{t('projectManagement.columns.progress')}</TableCell>
+                    <TableCell sx={{ textAlign: 'center' }}>{t('projectManagement.columns.actions')}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody sx={mvsTableBodyRowSx}>
+                  {filteredProjects.map((project) => {
+                    const duration = daysBetween(project.startDate, project.endDate);
+                    const remain = remainingDays(project.endDate);
+                    const overdue =
+                      remain != null &&
+                      remain < 0 &&
+                      project.status !== 'completed' &&
+                      project.status !== 'cancelled';
+                    return (
+                      <TableRow
+                        key={project.id}
+                        hover
+                        onClick={() => navigate(`/work/project-management/${project.id}`)}
+                        sx={{ cursor: 'pointer' }}
+                      >
+                        <TableCell>{project.project_code}</TableCell>
                         <TableCell>
-                          <Box>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                              {project.name}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {project.description}
-                            </Typography>
-                          </Box>
+                          <Typography
+                            component="span"
+                            sx={{
+                              fontSize: '0.875rem',
+                              fontWeight: 600,
+                              color: '#0F172A',
+                              display: 'block',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              maxWidth: 220,
+                            }}
+                            title={project.name}
+                          >
+                            {project.name}
+                          </Typography>
                         </TableCell>
                         <TableCell>{project.manager}</TableCell>
+                        <TableCell>{project.startDate || '-'}</TableCell>
+                        <TableCell>{project.endDate || '-'}</TableCell>
                         <TableCell>
-                          <Typography variant="caption">
-                            {project.team.join(', ')}
-                          </Typography>
+                          {duration != null ? t('projectManagement.days', { count: duration }) : '-'}
                         </TableCell>
-                        <TableCell>
-                          <Box sx={{ width: '100px' }}>
-                            <LinearProgress 
-                              variant="determinate" 
-                              value={project.progress} 
-                              sx={{ mb: 0.5 }}
-                            />
-                            <Typography variant="caption">
-                              {project.progress}%
-                            </Typography>
-                          </Box>
+                        <TableCell
+                          sx={{
+                            color: overdue ? '#DC2626' : 'inherit',
+                            fontWeight: overdue ? 600 : 400,
+                          }}
+                        >
+                          {remain == null
+                            ? '-'
+                            : remain < 0
+                              ? t('projectManagement.daysOverdue', { count: Math.abs(remain) })
+                              : t('projectManagement.daysLeft', { count: remain })}
                         </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={getStatusLabel(project.status)}
-                            color={getStatusColor(project.status) as any}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={project.priority.toUpperCase()}
-                            color={getPriorityColor(project.priority) as any}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption">
-                            {project.startDate} ~ {project.endDate}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleOpenDialog(project)}
-                          >
-                            <EditIcon />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDelete(project.id)}
-                            color="error"
-                          >
-                            <DeleteIcon />
-                          </IconButton>
+                        <TableCell>{statusLabel(project.status)}</TableCell>
+                        <TableCell>{priorityLabel(project.priority)}</TableCell>
+                        <TableCell>{project.progress}%</TableCell>
+                        <TableCell sx={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          <Tooltip title={!menuFlags.canEdit ? t('projectManagement.noEditPermission') : ''}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={(e) => handleOpenDialog(project, e)}
+                                disabled={!menuFlags.canEdit}
+                              >
+                                <EditIcon sx={{ fontSize: 18 }} />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title={!menuFlags.canDelete ? t('projectManagement.noDeletePermission') : ''}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={(e) => handleDelete(project.id, e)}
+                                disabled={!menuFlags.canDelete}
+                              >
+                                <DeleteIcon sx={{ fontSize: 18 }} />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
                         </TableCell>
                       </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-            </CardContent>
-          </Card>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </Box>
       </Box>
 
-      {/* 프로젝트 편집 다이얼로그 */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {selectedProject ? '프로젝트 수정' : '새 프로젝트 등록'}
+      <Dialog
+        open={openDialog}
+        onClose={handleCloseDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: getMvsDialogPaperSx(theme) }}
+      >
+        <DialogTitle sx={getMvsDialogTitleRowSx(theme)}>
+          {selectedProject ? t('projectManagement.dialog.editTitle') : t('projectManagement.dialog.createTitle')}
         </DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2, mt: 1 }}>
-            <Box>
-              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                프로젝트명
-              </Typography>
+        <DialogContent sx={{ px: 2.5, pt: 2.5, pb: 1 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mt: 0.5 }}>
+            <Box sx={{ gridColumn: '1 / -1' }}>
               <TextField
                 fullWidth
-                value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
                 size="small"
-                placeholder="프로젝트명을 입력하세요"
+                label={`${t('projectManagement.fields.name')} *`}
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                {...mvsOutlinedLabelProps}
+                sx={mvsSearchFieldSx}
               />
             </Box>
-            <Box>
-              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                담당자
-              </Typography>
-              <FormControl fullWidth size="small">
-                <Select
-                  value={formData.manager_id}
-                  onChange={(e) => {
-                    const selectedUser = users.find(u => u.id.toString() === e.target.value);
+            <FormControl fullWidth size="small" sx={mvsSearchFieldSx}>
+              <InputLabel shrink>{`${t('projectManagement.fields.manager')} *`}</InputLabel>
+              <Select
+                value={formData.manager_id}
+                displayEmpty
+                label={`${t('projectManagement.fields.manager')} *`}
+                onChange={(e) => setFormData({ ...formData, manager_id: String(e.target.value) })}
+              >
+                <MenuItem value="">{t('projectManagement.fields.selectManager')}</MenuItem>
+                {users.map((u) => (
+                  <MenuItem key={u.id} value={String(u.id)}>
+                    {u.username}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth size="small" sx={mvsSearchFieldSx}>
+              <InputLabel shrink>{t('projectManagement.fields.priority')}</InputLabel>
+              <Select
+                value={formData.priority}
+                label={t('projectManagement.fields.priority')}
+                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+              >
+                {['urgent', 'high', 'medium', 'low'].map((p) => (
+                  <MenuItem key={p} value={p}>
+                    {priorityLabel(p)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Box sx={{ gridColumn: '1 / -1' }}>
+              <TextField
+                fullWidth
+                size="small"
+                multiline
+                minRows={2}
+                label={t('projectManagement.fields.description')}
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                {...mvsOutlinedLabelProps}
+                sx={mvsSearchFieldSx}
+              />
+            </Box>
+            <TextField
+              fullWidth
+              size="small"
+              type="date"
+              label={`${t('projectManagement.fields.startDate')} *`}
+              value={formData.startDate}
+              onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+              {...mvsOutlinedLabelProps}
+              sx={mvsSearchFieldSx}
+            />
+            <TextField
+              fullWidth
+              size="small"
+              type="date"
+              label={t('projectManagement.fields.endDate')}
+              value={formData.endDate}
+              onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+              {...mvsOutlinedLabelProps}
+              sx={mvsSearchFieldSx}
+            />
+            <FormControl fullWidth size="small" sx={mvsSearchFieldSx}>
+              <InputLabel shrink>{t('projectManagement.fields.status')}</InputLabel>
+              <Select
+                value={normalizeStatus(formData.status)}
+                label={t('projectManagement.fields.status')}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              >
+                {STATUS_KEYS.map((s) => (
+                  <MenuItem key={s} value={s}>
+                    {statusLabel(s)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              fullWidth
+              size="small"
+              type="number"
+              label={t('projectManagement.fields.budget')}
+              value={formData.budget}
+              onChange={(e) => setFormData({ ...formData, budget: parseFloat(e.target.value) || 0 })}
+              inputProps={{ min: 0 }}
+              {...mvsOutlinedLabelProps}
+              sx={mvsSearchFieldSx}
+            />
+            {!selectedProject && (
+              <Box sx={{ gridColumn: '1 / -1' }}>
+                <Autocomplete
+                  multiple
+                  options={users.filter((u) => String(u.id) !== formData.manager_id)}
+                  value={users.filter((u) => formData.inviteUserIds.includes(Number(u.id)))}
+                  onChange={(_, selected) =>
                     setFormData({
                       ...formData,
-                      manager_id: e.target.value,
-                      manager: selectedUser ? selectedUser.username : ''
-                    });
-                  }}
-                  displayEmpty
-                >
-                  <MenuItem value="">담당자 없음</MenuItem>
-                  {users
-                    .filter(u => !u.status || u.status === 'active')
-                    .map((user) => (
-                      <MenuItem key={user.id} value={user.id.toString()}>
-                        {user.username} {user.department ? `(${user.department})` : ''}
-                      </MenuItem>
-                    ))}
-                </Select>
-              </FormControl>
-            </Box>
-            <Box sx={{ gridColumn: '1 / -1' }}>
-              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                프로젝트 설명
-              </Typography>
-              <TextField
-                fullWidth
-                value={formData.description}
-                onChange={(e) => setFormData({...formData, description: e.target.value})}
-                multiline
-                rows={3}
-                size="small"
-                placeholder="프로젝트 설명을 입력하세요"
-              />
-            </Box>
-            <Box sx={{ gridColumn: '1 / -1' }}>
-              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                팀원
-              </Typography>
-              <Autocomplete
-                multiple
-                options={users.filter(u => !u.status || u.status === 'active')}
-                value={teamMembers}
-                onChange={(_, newValue) => {
-                  setTeamMembers(newValue);
-                  const teamNames = newValue.map((member) => member.username).join(', ');
-                  setFormData(prev => ({ ...prev, team: teamNames }));
-                }}
-                getOptionLabel={(option) => `${option.username}${option.department ? ` (${option.department})` : ''}`}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    size="small"
-                    placeholder="팀원을 검색해서 선택하세요"
-                  />
-                )}
-              />
-            </Box>
-            <Box>
-              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                상태
-              </Typography>
-              <FormControl fullWidth size="small">
-                <Select
-                  value={formData.status}
-                  onChange={(e) => setFormData({...formData, status: e.target.value})}
-                >
-                  <MenuItem value="planning">기획</MenuItem>
-                  <MenuItem value="in_progress">진행중</MenuItem>
-                  <MenuItem value="completed">완료</MenuItem>
-                  <MenuItem value="on_hold">보류</MenuItem>
-                  <MenuItem value="cancelled">취소</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-            <Box>
-              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                우선순위
-              </Typography>
-              <FormControl fullWidth size="small">
-                <Select
-                  value={formData.priority}
-                  onChange={(e) => setFormData({...formData, priority: e.target.value})}
-                >
-                  <MenuItem value="high">높음</MenuItem>
-                  <MenuItem value="medium">보통</MenuItem>
-                  <MenuItem value="low">낮음</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-            <Box>
-              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                시작일
-              </Typography>
-              <TextField
-                fullWidth
-                type="date"
-                value={formData.startDate}
-                onChange={(e) => {
-                  const newStartDate = e.target.value;
-                  setFormData({...formData, startDate: newStartDate});
-                  if (newStartDate && formData.endDate) {
-                    const autoProgress = calculateProgressByTime(newStartDate, formData.endDate);
-                    setFormData(prev => ({...prev, startDate: newStartDate, progress: autoProgress}));
+                      inviteUserIds: selected.map((u) => Number(u.id)),
+                    })
                   }
-                }}
-                size="small"
-              />
-            </Box>
-            <Box>
-              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                종료일
-              </Typography>
-              <TextField
-                fullWidth
-                type="date"
-                value={formData.endDate}
-                onChange={(e) => {
-                  const newEndDate = e.target.value;
-                  setFormData({...formData, endDate: newEndDate});
-                  if (formData.startDate && newEndDate) {
-                    const autoProgress = calculateProgressByTime(formData.startDate, newEndDate);
-                    setFormData(prev => ({...prev, endDate: newEndDate, progress: autoProgress}));
-                  }
-                }}
-                size="small"
-              />
-            </Box>
-            <Box sx={{ gridColumn: '1 / -1' }}>
-              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                진행률 (%)
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                <TextField
-                  fullWidth
-                  type="number"
-                  value={formData.progress}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value) || 0;
-                    setFormData({...formData, progress: Math.min(100, Math.max(0, value))});
-                  }}
-                  size="small"
-                  InputProps={{
-                    inputProps: { min: 0, max: 100 }
-                  }}
-                  helperText="0~100 사이의 값을 입력하세요"
+                  getOptionLabel={(o) => o.username || String(o.id)}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      size="small"
+                      label={t('projectManagement.fields.inviteMembers')}
+                      {...mvsOutlinedLabelProps}
+                      sx={mvsSearchFieldSx}
+                    />
+                  )}
                 />
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={() => {
-                    if (formData.startDate && formData.endDate) {
-                      const autoProgress = calculateProgressByTime(formData.startDate, formData.endDate);
-                      setFormData({...formData, progress: autoProgress});
-                    }
-                  }}
-                  disabled={!formData.startDate || !formData.endDate}
-                  sx={{ height: '40px', whiteSpace: 'nowrap' }}
-                >
-                  시간 기반<br/>자동 계산
-                </Button>
               </Box>
-              {formData.startDate && formData.endDate && (
-                <Box sx={{ mt: 1 }}>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={formData.progress} 
-                    sx={{ height: 8, borderRadius: 1 }}
-                  />
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                    현재 진행률: {formData.progress}%
-                  </Typography>
-                </Box>
-              )}
-            </Box>
+            )}
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog}>취소</Button>
-          <Button onClick={handleSave} variant="contained">저장</Button>
+        <DialogActions sx={getMvsDialogActionsSx(theme)}>
+          <Button onClick={handleCloseDialog} sx={mvsBodyOutlinedBtnSx}>
+            {t('projectManagement.actions.cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            disableElevation
+            onClick={() => void handleSave()}
+            disabled={saving}
+            sx={mvsBodyPrimaryBtnSx}
+          >
+            {t('projectManagement.actions.save')}
+          </Button>
         </DialogActions>
       </Dialog>
 
-      {/* 확인 다이얼로그 */}
       <ConfirmDialog
         open={dialogState.open}
         title={dialogState.title}

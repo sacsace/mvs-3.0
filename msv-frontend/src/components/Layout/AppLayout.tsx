@@ -46,6 +46,7 @@ const isLegalPublicRoute = (pathname: string): boolean =>
 const isFullBleedBodyRoute = (pathname: string): boolean => {
   if (pathname === '/work/projects' || pathname.startsWith('/work/projects/')) return true;
   if (pathname === '/work/assignee-list' || pathname.startsWith('/work/assignee-list/')) return true;
+  if (/^\/work\/project-management\/[^/]+/.test(pathname)) return true;
   if (pathname === '/basic-info/login-info' || pathname.startsWith('/basic-info/login-info/')) return true;
   if (pathname === '/hr/payroll' || pathname.startsWith('/hr/payroll/')) return true;
   if (pathname === '/hr/payslip-send' || pathname.startsWith('/hr/payslip-send/')) return true;

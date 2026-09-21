@@ -32,6 +32,7 @@ import {
   ViewKanban,
   AssignmentInd,
   Policy,
+  FolderSpecial,
 } from '@mui/icons-material';
 import type { Menu } from '../services/menuService';
 
@@ -60,6 +61,8 @@ const MENU_ICON_MAP: Record<string, React.ReactElement> = {
   assignment: <Assignment />,
   category: <Category />,
   view_kanban: <ViewKanban />,
+  folder_special: <FolderSpecial />,
+  assignment_ind: <AssignmentInd />,
   move_to_inbox: <MoveToInbox />,
   post_add: <PostAdd />,
   qr_code_scanner: <QrCodeScanner />,
@@ -97,6 +100,7 @@ export function getPageIconByRoute(route: string): React.ReactElement | null {
   if (normalized.includes('/hr/employment-contracts')) return <Description />;
   if (normalized.includes('/hr')) return <People />;
 
+  if (normalized.includes('/work/project-management')) return <FolderSpecial />;
   if (normalized.includes('/work/projects')) return <ViewKanban />;
   if (normalized.includes('/work/assignee-list')) return <AssignmentInd />;
   if (normalized.includes('/work/statistics')) return <Assessment />;
