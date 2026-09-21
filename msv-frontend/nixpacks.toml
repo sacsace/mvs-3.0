@@ -7,8 +7,8 @@
 nixPkgs = ["nodejs"]
 
 [phases.install]
-# 의존성 설치 (빌드를 위해 모든 의존성 필요)
-cmds = ["npm ci"]
+# NODE_ENV=production 이어도 빌드용(dev) 의존성 포함 설치
+cmds = ["npm ci --include=dev"]
 
 [phases.build]
 # React 앱 빌드 (CI=false로 설정하여 경고를 오류로 처리하지 않음)
