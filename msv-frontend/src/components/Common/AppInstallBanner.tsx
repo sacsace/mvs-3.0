@@ -7,21 +7,12 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  Slide,
   Typography,
 } from '@mui/material';
-import { Close as CloseIcon, GetApp as GetAppIcon, IosShare as IosShareIcon } from '@mui/icons-material';
-import { TransitionProps } from '@mui/material/transitions';
+import { Close as CloseIcon } from '@mui/icons-material';
 import { useMenuStore } from '../../store';
 import { useAppInstallPrompt } from '../../hooks/useAppInstallPrompt';
 import { useIsMobileOrTablet, isIOSDevice } from '../../utils/isMobileOrTablet';
-
-const SlideUp = React.forwardRef(function SlideUp(
-  props: TransitionProps & { children: React.ReactElement },
-  ref: React.Ref<unknown>
-) {
-  return <Slide direction="up" ref={ref} {...props} />;
-});
 
 const AppInstallBanner: React.FC = () => {
   const { language } = useMenuStore();
@@ -40,22 +31,29 @@ const AppInstallBanner: React.FC = () => {
 
   if (!shouldShow) return null;
 
-  const title = isEn ? 'Install the MVS app' : 'MVS 앱 설치';
+  const title = isEn ? 'Install MVS' : 'MVS 설치';
   const description = isEn
-    ? 'Install the app for faster access and a better mobile experience.'
-    : '앱을 설치하면 더 빠르고 편리하게 이용할 수 있습니다.';
-  const installLabel = isEn ? 'Install app' : '앱 설치';
-  const iosGuideTitle = isEn ? 'Add to Home Screen' : '홈 화면에 추가';
+    ? 'Open MVS without going through the browser.'
+    : '브라우저 없이 MVS를 바로 열 수 있습니다.';
+  const actionLabel =
+    canPromptInstall || !isIos
+      ? isEn
+        ? 'Install'
+        : '설치'
+      : isEn
+        ? 'Steps'
+        : '방법';
+  const iosGuideTitle = isEn ? 'Install MVS' : 'MVS 설치';
   const iosSteps = isEn
     ? [
-        'Tap the Share button at the bottom of Safari.',
-        'Select "Add to Home Screen".',
-        'Tap "Add" to install the MVS app.',
+        'Tap Share in Safari.',
+        'Choose Add to Home Screen.',
+        'Tap Add.',
       ]
     : [
-        'Safari 하단의 공유(↑) 버튼을 누르세요.',
-        '"홈 화면에 추가"를 선택하세요.',
-        '"추가"를 눌러 MVS 앱을 설치하세요.',
+        'Safari에서 공유를 누릅니다.',
+        '홈 화면에 추가를 선택합니다.',
+        '추가를 누릅니다.',
       ];
 
   return (
@@ -65,78 +63,118 @@ const AppInstallBanner: React.FC = () => {
         aria-label={title}
         sx={{
           position: 'fixed',
-          left: { xs: 12, sm: 16 },
-          right: { xs: 12, sm: 16 },
-          bottom: { xs: 12, sm: 16 },
+          left: 0,
+          right: 0,
+          bottom: 0,
           zIndex: (theme) => theme.zIndex.snackbar + 2,
           display: 'flex',
           alignItems: 'center',
-          gap: 1.25,
+          gap: 1,
           px: 1.5,
-          py: 1.25,
-          borderRadius: '8px',
-          bgcolor: 'background.paper',
-          border: '1px solid',
-          borderColor: 'divider',
-          boxShadow: '0 8px 28px rgba(15, 23, 42, 0.14)',
+          py: 1,
+          bgcolor: '#F8FAFC',
+          borderTop: '1px solid #CBD5E1',
         }}
       >
-        <Box
-          sx={{
-            width: 40,
-            height: 40,
-            borderRadius: '10px',
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            bgcolor: 'primary.main',
-            color: 'primary.contrastText',
-          }}
-        >
-          <GetAppIcon fontSize="small" />
-        </Box>
-
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.3 }}>
+          <Typography
+            sx={{
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              lineHeight: 1.3,
+              color: '#0F172A',
+            }}
+          >
             {title}
           </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.45 }}>
+          <Typography
+            sx={{
+              fontSize: '0.75rem',
+              lineHeight: 1.35,
+              color: '#64748B',
+            }}
+          >
             {description}
           </Typography>
         </Box>
 
         <Button
-          variant="contained"
           size="small"
+          variant="outlined"
           disableElevation
           onClick={() => void install()}
-          sx={{ flexShrink: 0, textTransform: 'none', fontWeight: 600, borderRadius: '8px', px: 1.5 }}
+          sx={{
+            flexShrink: 0,
+            textTransform: 'none',
+            fontWeight: 600,
+            fontSize: '0.8125rem',
+            borderRadius: '4px',
+            borderColor: '#94A3B8',
+            color: '#0F172A',
+            px: 1.25,
+            minWidth: 0,
+            bgcolor: '#FFFFFF',
+            '&:hover': {
+              borderColor: '#64748B',
+              bgcolor: '#FFFFFF',
+            },
+          }}
         >
-          {canPromptInstall || !isIos ? installLabel : (isEn ? 'How to install' : '설치 방법')}
+          {actionLabel}
         </Button>
 
-        <IconButton size="small" aria-label={isEn ? 'Close' : '닫기'} onClick={dismiss} sx={{ flexShrink: 0 }}>
+        <IconButton
+          size="small"
+          aria-label={isEn ? 'Close' : '닫기'}
+          onClick={dismiss}
+          sx={{ flexShrink: 0, color: '#64748B', p: 0.5 }}
+        >
           <CloseIcon fontSize="small" />
         </IconButton>
       </Box>
 
-      <Dialog open={iosGuideOpen} onClose={closeIosGuide} maxWidth="xs" fullWidth TransitionComponent={SlideUp}>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pb: 1 }}>
-          <IosShareIcon color="primary" fontSize="small" />
+      <Dialog open={iosGuideOpen} onClose={closeIosGuide} maxWidth="xs" fullWidth>
+        <DialogTitle
+          sx={{
+            fontSize: '0.9375rem',
+            fontWeight: 700,
+            pb: 0.75,
+            borderBottom: '1px solid #E2E8F0',
+          }}
+        >
           {iosGuideTitle}
         </DialogTitle>
-        <DialogContent>
-          <Box component="ol" sx={{ m: 0, pl: 2.25, color: 'text.secondary', fontSize: '0.875rem', lineHeight: 1.7 }}>
+        <DialogContent sx={{ pt: 1.5 }}>
+          <Box
+            component="ol"
+            sx={{
+              m: 0,
+              pl: 2.25,
+              color: '#334155',
+              fontSize: '0.875rem',
+              lineHeight: 1.6,
+            }}
+          >
             {iosSteps.map((step) => (
-              <Box component="li" key={step} sx={{ mb: 0.75 }}>
+              <Box component="li" key={step} sx={{ mb: 0.5 }}>
                 {step}
               </Box>
             ))}
           </Box>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={closeIosGuide} variant="contained" disableElevation sx={{ textTransform: 'none' }}>
+        <DialogActions sx={{ px: 2, pb: 1.5, borderTop: '1px solid #E2E8F0' }}>
+          <Button
+            onClick={closeIosGuide}
+            variant="outlined"
+            size="small"
+            disableElevation
+            sx={{
+              textTransform: 'none',
+              borderRadius: '4px',
+              borderColor: '#94A3B8',
+              color: '#0F172A',
+            }}
+          >
             {isEn ? 'OK' : '확인'}
           </Button>
         </DialogActions>
