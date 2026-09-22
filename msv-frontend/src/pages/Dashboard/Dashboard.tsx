@@ -64,7 +64,9 @@ import {
   Login as CheckInIcon,
   Logout as CheckOutIcon,
   StarBorder as StarBorderIcon,
-  Security as SecurityIcon
+  Security as SecurityIcon,
+  ReceiptLong as ReceiptLongIcon,
+  AccountBalanceWallet as AccountBalanceWalletIcon,
 } from '@mui/icons-material';
 import { Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useNavigate } from 'react-router-dom';
@@ -77,7 +79,8 @@ import {
   projectService,
   userUiPreferencesService,
   departmentService,
-  companyCalendarScheduleService
+  companyCalendarScheduleService,
+  accountingService,
 } from '../../services/api';
 import type {
   CompanyCalendarScheduleItem,
@@ -165,7 +168,9 @@ const DASHBOARD_CARD_DEFAULT_IDS = [
   'recentTransactions',
   'calendar',
   'vacationCalendar',
-  'notice'
+  'notice',
+  'expenseReceived',
+  'expenseTransfer',
 ] as const;
 
 /** 일반 직원(user): 재고·거래·전자결재 등 비관련 카드 제외 */
@@ -176,32 +181,143 @@ const GENERAL_USER_DEFAULT_CARD_IDS = [
   'calendar',
   'vacationCalendar',
   'notice',
+  'expenseReceived',
 ] as const;
+
+type DashboardCardAccessOpts = {
+  isPaymentOfficer?: boolean;
+};
 
 const isGeneralEmployeeRole = (role?: string | null) => role === 'user';
 
-const getAllowedDashboardCardIds = (role?: string | null): string[] => {
-  if (isGeneralEmployeeRole(role)) {
-    return DASHBOARD_CARD_DEFAULT_IDS.filter(
-      (id) => !(GENERAL_USER_HIDDEN_CARD_IDS as readonly string[]).includes(id)
-    );
+const hasExpenseTransferCardAccess = (
+  role?: string | null,
+  opts?: DashboardCardAccessOpts
+) => Boolean(opts?.isPaymentOfficer) || role === 'root';
+
+const getAllowedDashboardCardIds = (
+  role?: string | null,
+  opts?: DashboardCardAccessOpts
+): string[] => {
+  let ids: string[] = isGeneralEmployeeRole(role)
+    ? DASHBOARD_CARD_DEFAULT_IDS.filter(
+        (id) => !(GENERAL_USER_HIDDEN_CARD_IDS as readonly string[]).includes(id)
+      )
+    : [...DASHBOARD_CARD_DEFAULT_IDS];
+  if (!hasExpenseTransferCardAccess(role, opts)) {
+    ids = ids.filter((id) => id !== 'expenseTransfer');
   }
-  return [...DASHBOARD_CARD_DEFAULT_IDS];
+  return ids;
 };
 
-const getDefaultDashboardCardIds = (role?: string | null): string[] => {
-  if (isGeneralEmployeeRole(role)) return [...GENERAL_USER_DEFAULT_CARD_IDS];
-  return [...DASHBOARD_CARD_DEFAULT_IDS];
+const getDefaultDashboardCardIds = (
+  role?: string | null,
+  opts?: DashboardCardAccessOpts
+): string[] => {
+  const allowed = new Set(getAllowedDashboardCardIds(role, opts));
+  if (isGeneralEmployeeRole(role)) {
+    return GENERAL_USER_DEFAULT_CARD_IDS.filter((id) => allowed.has(id));
+  }
+  return DASHBOARD_CARD_DEFAULT_IDS.filter((id) => allowed.has(id));
 };
 
-const sanitizeDashboardCardIds = (ids: unknown, role?: string | null): string[] => {
-  const allowed = new Set(getAllowedDashboardCardIds(role));
-  const defaults = getDefaultDashboardCardIds(role);
+const sanitizeDashboardCardIds = (
+  ids: unknown,
+  role?: string | null,
+  opts?: DashboardCardAccessOpts
+): string[] => {
+  const allowed = new Set(getAllowedDashboardCardIds(role, opts));
+  const defaults = getDefaultDashboardCardIds(role, opts);
   if (!Array.isArray(ids) || ids.length === 0) return defaults;
   const sanitized = ids
     .filter((id): id is string => typeof id === 'string')
     .filter((id) => allowed.has(id));
   return sanitized.length > 0 ? sanitized : defaults;
+};
+
+const floorDashboardMoney = (value: number): number => Math.floor(Number(value) || 0);
+
+const expenseAttachmentHasTaxInvoice = (attachments: unknown): boolean => {
+  if (!Array.isArray(attachments)) return false;
+  return attachments.some((item) => {
+    if (typeof item === 'string') return true;
+    if (!item || typeof item !== 'object') return false;
+    const row = item as { invoiceType?: string; invoice_type?: string };
+    const type = String(row.invoiceType ?? row.invoice_type ?? 'tax').toLowerCase();
+    return type === 'tax';
+  });
+};
+
+const expenseIsAwaitingTaxInvoiceRaw = (expense: any): boolean => {
+  const total = Number(expense.total_amount ?? expense.totalAmount ?? 0);
+  const paid = Number(expense.paid_amount ?? expense.paidAmount ?? 0);
+  const remaining = Math.max(0, total - paid);
+  if (remaining > 0 || paid <= 0) return false;
+  if (String(expense.payment_request_status || expense.paymentRequestStatus || '').toLowerCase() === 'paid') {
+    return false;
+  }
+  if (expense.status === 'paid') return false;
+  return !expenseAttachmentHasTaxInvoice(expense.attachments);
+};
+
+const getExpenseTransferFilterKey = (expense: any): string => {
+  const total = floorDashboardMoney(Number(expense.total_amount ?? expense.totalAmount ?? 0));
+  const paid = floorDashboardMoney(Number(expense.paid_amount ?? expense.paidAmount ?? 0));
+  const remaining = Math.max(0, total - paid);
+  if (String(expense.bank_transfer_status || expense.bankTransferStatus || '').toLowerCase() === 'failed') {
+    return 'transfer_failed';
+  }
+  if (expenseIsAwaitingTaxInvoiceRaw(expense)) return 'awaiting_tax';
+  if (
+    remaining <= 0 ||
+    String(expense.payment_request_status || expense.paymentRequestStatus || '').toLowerCase() === 'paid' ||
+    expense.status === 'paid'
+  ) {
+    return 'transfer_completed';
+  }
+  if (paid > 0) return 'transfer_partial';
+  return 'transfer_pending';
+};
+
+const isExpensePaidForDashboard = (expense: any): boolean => {
+  if (expenseIsAwaitingTaxInvoiceRaw(expense)) return false;
+  const total = floorDashboardMoney(Number(expense.total_amount ?? expense.totalAmount ?? 0));
+  const paid = floorDashboardMoney(Number(expense.paid_amount ?? expense.paidAmount ?? 0));
+  const remaining = Math.max(0, total - paid);
+  const paymentPaid =
+    String(expense.payment_request_status || expense.paymentRequestStatus || '').toLowerCase() === 'paid';
+  return (
+    paymentPaid ||
+    expense.status === 'paid' ||
+    (paid > 0 && remaining <= 0 && ['approved', 'paid'].includes(String(expense.status || '')))
+  );
+};
+
+const isExpenseReceivedForUser = (expense: any, userId: number): boolean => {
+  if (expense.status === 'draft') return false;
+  if (Number(expense.current_approver_id ?? expense.currentApproverId) === userId) return true;
+  const meta = expense.itemMeta || (() => {
+    try {
+      const items = typeof expense.items === 'string' ? JSON.parse(expense.items) : expense.items;
+      return items && typeof items === 'object' && !Array.isArray(items) ? items.meta : null;
+    } catch {
+      return null;
+    }
+  })();
+  if (meta?.checkedById && Number(meta.checkedById) === userId) return true;
+  if (meta?.approvedById && Number(meta.approvedById) === userId) return true;
+  const ccIds = Array.isArray(expense.cc_user_ids)
+    ? expense.cc_user_ids
+    : Array.isArray(expense.ccUserIds)
+      ? expense.ccUserIds
+      : [];
+  if (ccIds.some((id: any) => Number(id) === userId)) return true;
+  const flow = Array.isArray(expense.approval_flow)
+    ? expense.approval_flow
+    : Array.isArray(expense.approvalFlow)
+      ? expense.approvalFlow
+      : [];
+  return flow.some((step: any) => Number(step.approverId ?? step.approver_id) === userId);
 };
 
 const DASHBOARD_CARD_PAD = 2.5;
@@ -292,6 +408,8 @@ const Dashboard: React.FC = () => {
   const [myReceivedApprovals, setMyReceivedApprovals] = useState<any[]>([]);
   const [myRequestedApprovals, setMyRequestedApprovals] = useState<any[]>([]);
   const [myTasks, setMyTasks] = useState<any[]>([]);
+  const [receivedExpenses, setReceivedExpenses] = useState<any[]>([]);
+  const [transferExpenses, setTransferExpenses] = useState<any[]>([]);
   const [noticeDialogOpen, setNoticeDialogOpen] = useState(false);
   const [selectedNotice, setSelectedNotice] = useState<any | null>(null);
   const [noticeDetailLoading, setNoticeDetailLoading] = useState(false);
@@ -311,6 +429,11 @@ const Dashboard: React.FC = () => {
   const [selectedQuickActionRoutes, setSelectedQuickActionRoutes] = useState<string[]>([]);
   const [quickActionSearchTerm, setQuickActionSearchTerm] = useState('');
   const [dashboardCardDialogOpen, setDashboardCardDialogOpen] = useState(false);
+  const dashboardCardAccessOpts = useMemo<DashboardCardAccessOpts>(
+    () => ({ isPaymentOfficer: Boolean(user?.is_payment_officer) }),
+    [user?.is_payment_officer]
+  );
+
   const [selectedDashboardCards, setSelectedDashboardCards] = useState<string[]>(() =>
     getDefaultDashboardCardIds(undefined)
   );
@@ -502,14 +625,22 @@ const Dashboard: React.FC = () => {
       { id: 'calendar', label: language === 'en' ? 'Weekly Schedule' : '주간 스케줄' },
       { id: 'vacationCalendar', label: language === 'en' ? 'Leave calendar' : '휴가 달력' },
       { id: 'notice', label: language === 'en' ? 'Notices' : '공지사항' },
+      {
+        id: 'expenseReceived',
+        label: language === 'en' ? 'Received Expense Approvals' : '지출결의서 받은거',
+      },
+      {
+        id: 'expenseTransfer',
+        label: language === 'en' ? 'Remittance List' : '송금할 리스트',
+      },
     ];
-    const allowed = new Set(getAllowedDashboardCardIds(user?.role));
+    const allowed = new Set(getAllowedDashboardCardIds(user?.role, dashboardCardAccessOpts));
     return all.filter((card) => allowed.has(card.id));
-  }, [language, user?.role]);
+  }, [language, user?.role, dashboardCardAccessOpts]);
 
   const visibleDashboardCards = useMemo(
-    () => sanitizeDashboardCardIds(selectedDashboardCards, user?.role),
-    [selectedDashboardCards, user?.role]
+    () => sanitizeDashboardCardIds(selectedDashboardCards, user?.role, dashboardCardAccessOpts),
+    [selectedDashboardCards, user?.role, dashboardCardAccessOpts]
   );
 
   const dashboardLeaveMapped = useMemo(() => {
@@ -606,7 +737,7 @@ const Dashboard: React.FC = () => {
     if (!user?.id) {
       setUiPrefsReady(false);
       setCustomCalendarSchedules({});
-      setSelectedDashboardCards(getDefaultDashboardCardIds(user?.role));
+      setSelectedDashboardCards(getDefaultDashboardCardIds(user?.role, dashboardCardAccessOpts));
       setSelectedQuickActionRoutes([]);
       return;
     }
@@ -620,7 +751,9 @@ const Dashboard: React.FC = () => {
         const data = await userUiPreferencesService.get();
         if (cancelled) return;
 
-        setSelectedDashboardCards(sanitizeDashboardCardIds(data.dashboardCards, user?.role));
+        setSelectedDashboardCards(
+          sanitizeDashboardCardIds(data.dashboardCards, user?.role, dashboardCardAccessOpts)
+        );
 
         const rawCal = data.calendarSchedules || {};
         const sanitizedCal: Record<string, CalendarScheduleItem[]> = {};
@@ -666,7 +799,7 @@ const Dashboard: React.FC = () => {
         });
       } catch {
         if (!cancelled) {
-          setSelectedDashboardCards(getDefaultDashboardCardIds(user?.role));
+          setSelectedDashboardCards(getDefaultDashboardCardIds(user?.role, dashboardCardAccessOpts));
           setCustomCalendarSchedules({});
           requestAnimationFrame(() => {
             setUiPrefsReady(true);
@@ -681,7 +814,7 @@ const Dashboard: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, user?.role, quickActionCandidates]);
+  }, [user?.id, user?.role, quickActionCandidates, dashboardCardAccessOpts]);
 
   /** 메뉴 권한 로딩 후 빠른 액션 경로 보정 */
   useEffect(() => {
@@ -710,11 +843,17 @@ const Dashboard: React.FC = () => {
     if (!uiPrefsReady || !user?.id || skipUiPrefsPersistRef.current) return;
     const t = window.setTimeout(() => {
       userUiPreferencesService
-        .patch({ dashboardCards: sanitizeDashboardCardIds(selectedDashboardCards, user?.role) })
+        .patch({
+          dashboardCards: sanitizeDashboardCardIds(
+            selectedDashboardCards,
+            user?.role,
+            dashboardCardAccessOpts
+          ),
+        })
         .catch(() => {});
     }, 500);
     return () => window.clearTimeout(t);
-  }, [selectedDashboardCards, uiPrefsReady, user?.id, user?.role]);
+  }, [selectedDashboardCards, uiPrefsReady, user?.id, user?.role, dashboardCardAccessOpts]);
 
   useEffect(() => {
     if (!uiPrefsReady || !user?.id || skipUiPrefsPersistRef.current) return;
@@ -964,10 +1103,10 @@ const Dashboard: React.FC = () => {
   };
 
   const toggleDashboardCard = (cardId: string) => {
-    const allowed = new Set(getAllowedDashboardCardIds(user?.role));
+    const allowed = new Set(getAllowedDashboardCardIds(user?.role, dashboardCardAccessOpts));
     if (!allowed.has(cardId)) return;
     setSelectedDashboardCards((prev) => {
-      const current = sanitizeDashboardCardIds(prev, user?.role);
+      const current = sanitizeDashboardCardIds(prev, user?.role, dashboardCardAccessOpts);
       if (current.includes(cardId)) {
         if (current.length === 1) return current;
         return current.filter((id) => id !== cardId);
@@ -981,13 +1120,13 @@ const Dashboard: React.FC = () => {
   };
 
   const handleResetDashboardCards = () => {
-    setSelectedDashboardCards(getDefaultDashboardCardIds(user?.role));
+    setSelectedDashboardCards(getDefaultDashboardCardIds(user?.role, dashboardCardAccessOpts));
   };
 
   const handleReorderDashboardCards = (sourceCardId: string, targetCardId: string) => {
     if (!sourceCardId || !targetCardId || sourceCardId === targetCardId) return;
     setSelectedDashboardCards((prev) => {
-      const current = sanitizeDashboardCardIds(prev, user?.role);
+      const current = sanitizeDashboardCardIds(prev, user?.role, dashboardCardAccessOpts);
       const sourceIndex = current.indexOf(sourceCardId);
       const targetIndex = current.indexOf(targetCardId);
       if (sourceIndex < 0 || targetIndex < 0) return current;
@@ -1299,6 +1438,10 @@ const Dashboard: React.FC = () => {
       const isAdminLeave = user?.role === 'admin' || user?.role === 'root';
       const isGeneralUser = isGeneralEmployeeRole(user?.role);
 
+      const canLoadTransferExpenses = hasExpenseTransferCardAccess(user?.role, {
+        isPaymentOfficer: Boolean(user?.is_payment_officer),
+      });
+
       const [
         statsResponse,
         revenueResponse,
@@ -1312,6 +1455,7 @@ const Dashboard: React.FC = () => {
         myTasksResult,
         receivedRes,
         myApprovals,
+        expensesResult,
       ] = await Promise.all([
         api.get('/dashboard/stats').catch(() => null),
         isGeneralUser ? Promise.resolve(null) : api.get('/dashboard/revenue-trend').catch(() => null),
@@ -1337,6 +1481,9 @@ const Dashboard: React.FC = () => {
           : Promise.resolve(null),
         uid && !isGeneralUser
           ? approvalService.getApprovals({ requester_id: uid }).catch(() => null)
+          : Promise.resolve(null),
+        uid
+          ? accountingService.getExpenseReports().catch(() => null)
           : Promise.resolve(null),
       ]);
 
@@ -1417,6 +1564,27 @@ const Dashboard: React.FC = () => {
         const raw = Array.isArray(myApprovals.data) ? myApprovals.data : [];
         const approvals = raw.filter((a: any) => Number(a.requester_id) === uid);
         setMyRequestedApprovals(approvals.slice(0, 5));
+      }
+
+      if (uid && expensesResult?.success) {
+        const list = Array.isArray(expensesResult.data) ? expensesResult.data : [];
+        const received = list
+          .filter((expense: any) => isExpenseReceivedForUser(expense, uid))
+          .filter((expense: any) => !isExpensePaidForDashboard(expense));
+        setReceivedExpenses(received.slice(0, 5));
+
+        if (canLoadTransferExpenses) {
+          const transfer = list.filter((expense: any) => {
+            if (expense.status !== 'approved' && expense.status !== 'paid') return false;
+            return getExpenseTransferFilterKey(expense) !== 'transfer_completed';
+          });
+          setTransferExpenses(transfer.slice(0, 5));
+        } else {
+          setTransferExpenses([]);
+        }
+      } else {
+        setReceivedExpenses([]);
+        setTransferExpenses([]);
       }
     } catch {
       setError(t('errors.serverError'));
@@ -3398,6 +3566,199 @@ const Dashboard: React.FC = () => {
               >
                 <Typography variant="body2">
                   {language === 'en' ? 'No notices.' : '등록된 공지가 없습니다.'}
+                </Typography>
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+        )}
+
+        {visibleDashboardCards.includes('expenseReceived') && (
+        <Card
+          elevation={0}
+          onClick={() => navigate('/accounting/expense?tab=received')}
+          sx={dashboardWidgetCardSx(visibleDashboardCards.indexOf('expenseReceived'), {
+            cursor: 'pointer',
+          })}
+        >
+          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1 }}>
+              <Box sx={dashboardCardTitleBar('primary')}>
+                <ReceiptLongIcon color="primary" fontSize="small" />
+                <Typography component="div" variant="subtitle1" sx={DASHBOARD_CARD_TITLE_TYPO}>
+                  {language === 'en' ? 'Received Expense Approvals' : '지출결의서 받은거'}
+                </Typography>
+              </Box>
+              <Button
+                size="small"
+                variant="text"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  navigate('/accounting/expense?tab=received');
+                }}
+              >
+                {language === 'en' ? 'View all' : '모두 보기'}
+              </Button>
+            </Box>
+            {receivedExpenses.length > 0 ? (
+              <Box sx={{ flex: 1, overflow: 'auto' }}>
+                <List sx={{ p: 0 }}>
+                  {receivedExpenses.slice(0, 5).map((expense: any) => (
+                    <ListItem
+                      key={expense.id}
+                      sx={{
+                        px: 0,
+                        py: 0.8,
+                        cursor: 'pointer',
+                        '&:hover': { bgcolor: 'action.hover' },
+                      }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        navigate(`/accounting/expense?tab=received&id=${expense.id}`);
+                      }}
+                    >
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                              {expense.title || expense.expense_id || '—'}
+                            </Typography>
+                            <Chip size="small" label={expense.status || '—'} />
+                          </Box>
+                        }
+                        secondary={
+                          <Typography variant="caption" color="text.secondary">
+                            {expense.requester_name || expense.requesterName || '—'}
+                            {' · '}
+                            {floorDashboardMoney(
+                              Number(expense.total_amount ?? expense.totalAmount ?? 0)
+                            ).toLocaleString()}
+                          </Typography>
+                        }
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'text.secondary',
+                  minHeight: 72,
+                }}
+              >
+                <Typography variant="body2">
+                  {language === 'en' ? 'No received expense approvals.' : '받은 지출결의서가 없습니다.'}
+                </Typography>
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+        )}
+
+        {visibleDashboardCards.includes('expenseTransfer') && (
+        <Card
+          elevation={0}
+          onClick={() => navigate('/accounting/expense?tab=transfer')}
+          sx={dashboardWidgetCardSx(visibleDashboardCards.indexOf('expenseTransfer'), {
+            cursor: 'pointer',
+          })}
+        >
+          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1 }}>
+              <Box sx={dashboardCardTitleBar('primary')}>
+                <AccountBalanceWalletIcon color="primary" fontSize="small" />
+                <Typography component="div" variant="subtitle1" sx={DASHBOARD_CARD_TITLE_TYPO}>
+                  {language === 'en' ? 'Remittance List' : '송금할 리스트'}
+                </Typography>
+              </Box>
+              <Button
+                size="small"
+                variant="text"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  navigate('/accounting/expense?tab=transfer');
+                }}
+              >
+                {language === 'en' ? 'View all' : '모두 보기'}
+              </Button>
+            </Box>
+            {transferExpenses.length > 0 ? (
+              <Box sx={{ flex: 1, overflow: 'auto' }}>
+                <List sx={{ p: 0 }}>
+                  {transferExpenses.slice(0, 5).map((expense: any) => {
+                    const total = floorDashboardMoney(
+                      Number(expense.total_amount ?? expense.totalAmount ?? 0)
+                    );
+                    const paid = floorDashboardMoney(
+                      Number(expense.paid_amount ?? expense.paidAmount ?? 0)
+                    );
+                    const remaining = Math.max(0, total - paid);
+                    return (
+                      <ListItem
+                        key={expense.id}
+                        sx={{
+                          px: 0,
+                          py: 0.8,
+                          cursor: 'pointer',
+                          '&:hover': { bgcolor: 'action.hover' },
+                        }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          navigate(`/accounting/expense?tab=transfer&id=${expense.id}`);
+                        }}
+                      >
+                        <ListItemText
+                          primary={
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                                {expense.title || expense.expense_id || '—'}
+                              </Typography>
+                              <Chip
+                                size="small"
+                                color={remaining > 0 && paid > 0 ? 'warning' : 'default'}
+                                label={
+                                  remaining > 0 && paid > 0
+                                    ? language === 'en'
+                                      ? 'Partial'
+                                      : '부분지급'
+                                    : language === 'en'
+                                      ? 'Pending'
+                                      : '송금대기'
+                                }
+                              />
+                            </Box>
+                          }
+                          secondary={
+                            <Typography variant="caption" color="text.secondary">
+                              {expense.requester_name || expense.requesterName || '—'}
+                              {' · '}
+                              {language === 'en' ? 'Remain' : '잔액'} {remaining.toLocaleString()}
+                            </Typography>
+                          }
+                        />
+                      </ListItem>
+                    );
+                  })}
+                </List>
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'text.secondary',
+                  minHeight: 72,
+                }}
+              >
+                <Typography variant="body2">
+                  {language === 'en' ? 'No remittance items.' : '송금할 항목이 없습니다.'}
                 </Typography>
               </Box>
             )}

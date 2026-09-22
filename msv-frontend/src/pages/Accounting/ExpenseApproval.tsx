@@ -80,7 +80,7 @@ import {
   ChatBubbleOutline as ChatBubbleOutlineIcon,
   Reply as ReplyIcon } from '@mui/icons-material';
 import { useStore } from '../../store';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { accountingService, companyService, workAssigneeListService } from '../../services/api';
 import { resolveHeaderCompanyInfo, useReferenceDataStore } from '../../store/referenceDataStore';
 import { resolveRegisteredStateCodeFromCompanyLike } from '../HR/payroll/indianProfessionalTax';
@@ -2011,6 +2011,7 @@ const ExpenseApproval: React.FC = () => {
   const theme = useTheme();
   const { user } = useStore();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const menuFlags = usePageMenuPermission(EXPENSE_APPROVAL_MENU_ROUTES);
   const createGuard = useMenuActionGuard('create', EXPENSE_APPROVAL_MENU_ROUTES);
   const editGuard = useMenuActionGuard('edit', EXPENSE_APPROVAL_MENU_ROUTES);
@@ -3016,6 +3017,29 @@ const ExpenseApproval: React.FC = () => {
       setListTab('written');
     }
   }, [hasTransferAccess, listTab]);
+
+  useEffect(() => {
+    const tab = String(searchParams.get('tab') || '').trim().toLowerCase();
+    if (tab === 'received' || tab === 'written' || tab === 'transfer') {
+      if (tab === 'transfer' && !hasTransferAccess) return;
+      setListTab(tab);
+    }
+  }, [searchParams, hasTransferAccess]);
+
+  const openedExpenseQueryRef = useRef<string | null>(null);
+  useEffect(() => {
+    const rawId = searchParams.get('id');
+    if (!rawId || expenses.length === 0) return;
+    const queryKey = `${String(searchParams.get('tab') || '')}:${rawId}`;
+    if (openedExpenseQueryRef.current === queryKey) return;
+    const expenseId = Number(rawId);
+    if (!Number.isFinite(expenseId) || expenseId <= 0) return;
+    const target = expenses.find((row) => Number(row.id) === expenseId);
+    if (!target) return;
+    openedExpenseQueryRef.current = queryKey;
+    setSelectedExpense({ ...target, hasUnreadComments: false });
+    setViewMode('view');
+  }, [searchParams, expenses]);
 
   const qrUrl = useMemo(() => {
     if (!qrToken) return '';

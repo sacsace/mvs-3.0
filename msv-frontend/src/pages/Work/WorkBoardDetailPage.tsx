@@ -1488,10 +1488,18 @@ const ListColumn = memo(function ListColumn({
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
           }}
-          title={list.assignee?.username || String(list.assignee_user_id)}
+          title={
+            list.assignee?.username ||
+            members.find((m: any) => Number(m.user_id) === Number(list.assignee_user_id))?.user
+              ?.username ||
+            String(list.assignee_user_id)
+          }
         >
           {txt('대분류 담당', 'List owner')}:{' '}
-          {list.assignee?.username || `${txt('사용자', 'User')} ${list.assignee_user_id}`}
+          {list.assignee?.username ||
+            members.find((m: any) => Number(m.user_id) === Number(list.assignee_user_id))?.user
+              ?.username ||
+            `${txt('사용자', 'User')} ${list.assignee_user_id}`}
         </Typography>
       ) : null}
       <Box
@@ -3520,14 +3528,35 @@ export default function WorkBoardDetailPage() {
     });
     return list;
   }, [board?.members, board?.created_by]);
+
+  const resolveMemberDisplayName = useCallback(
+    (userId: unknown, memberRow?: any) => {
+      const uid = userId != null && userId !== '' ? Number(userId as string | number) : NaN;
+      if (!Number.isFinite(uid)) return '';
+      const fromMember =
+        String(memberRow?.user?.username || memberRow?.user?.userid || '').trim() ||
+        String(
+          members.find((m: any) => Number(m.user_id) === uid)?.user?.username ||
+            members.find((m: any) => Number(m.user_id) === uid)?.user?.userid ||
+            ''
+        ).trim();
+      if (fromMember) return fromMember;
+      const fromCompany = companyUsers.find((u: any) => Number(u.id) === uid);
+      const companyName = String(fromCompany?.username || fromCompany?.userid || '').trim();
+      if (companyName) return companyName;
+      return txt(`사용자 ${uid}`, `User ${uid}`);
+    },
+    [members, companyUsers, txt]
+  );
+
   const memberOptions = useMemo<MemberOption[]>(
     () =>
       members.map((m: any) => ({
         id: Number(m.user_id),
-        label: m.user?.username || `사용자 ${m.user_id}`,
+        label: resolveMemberDisplayName(m.user_id, m),
         userid: m.user?.userid || `user${m.user_id}`
       })),
-    [members]
+    [members, resolveMemberDisplayName]
   );
   /** 이미 보드 멤버인 사용자는 초대 검색에서 제외 */
   const inviteUserOptions = useMemo(() => {
@@ -3929,7 +3958,7 @@ export default function WorkBoardDetailPage() {
                 </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flexShrink: 0 }}>
             {members.slice(0, BOARD_MEMBER_AVATAR_MAX).map((m: any, index: number) => {
-              const name = m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`;
+              const name = resolveMemberDisplayName(m.user_id, m);
               const initial = name.trim().charAt(0).toUpperCase() || '?';
               const avatarSrc = resolveUserAvatarSrc(m.user?.avatar_url);
               const isOwnerMember = m.role === 'owner';
@@ -4025,7 +4054,7 @@ export default function WorkBoardDetailPage() {
               <Tooltip
                 title={members
                   .slice(BOARD_MEMBER_AVATAR_MAX)
-                  .map((m: any) => m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`)
+                  .map((m: any) => resolveMemberDisplayName(m.user_id, m))
                   .join(', ')}
                 arrow
                 placement="top"
@@ -4077,7 +4106,7 @@ export default function WorkBoardDetailPage() {
       >
         {memberMenuTarget ? (() => {
           const m = memberMenuTarget;
-          const name = m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`;
+          const name = resolveMemberDisplayName(m.user_id, m);
           const avatarSrc = resolveUserAvatarSrc(m.user?.avatar_url);
           const isOwnerMember = m.role === 'owner';
           const ownerCount = members.filter((x: any) => x.role === 'owner').length;
@@ -4605,18 +4634,17 @@ export default function WorkBoardDetailPage() {
                 }
               SelectProps={{
                 displayEmpty: true,
-                renderValue: (selected) => {
+                renderValue: (selected: unknown) => {
                   if (selected === '' || selected == null) return txt('미지정', 'Unassigned');
-                  const m = members.find((mem: any) => mem.user_id === Number(selected));
-                  return m?.user?.username || `${txt('사용자', 'User')} ${selected}`;
+                  return resolveMemberDisplayName(selected);
                 },
               }}
               sx={cardDetailOutlinedWhiteSx}
               >
                 <MenuItem value="">{txt('미지정', 'Unassigned')}</MenuItem>
                 {members.map((m: any) => (
-                  <MenuItem key={m.user_id} value={m.user_id}>
-                    {m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`}
+                  <MenuItem key={m.user_id} value={Number(m.user_id)}>
+                    {resolveMemberDisplayName(m.user_id, m)}
                   </MenuItem>
                 ))}
               </TextField>
@@ -5607,12 +5635,11 @@ export default function WorkBoardDetailPage() {
             }
             SelectProps={{
               displayEmpty: true,
-              renderValue: (selected) => {
+              renderValue: (selected: unknown) => {
                 if (selected === '' || selected == null) {
                   return txt('대분류 담당자 (선택)', 'List owner (optional)');
                 }
-                const m = members.find((mem: any) => mem.user_id === Number(selected));
-                return m?.user?.username || `${txt('사용자', 'User')} ${selected}`;
+                return resolveMemberDisplayName(selected);
               },
             }}
             sx={{
@@ -5624,8 +5651,8 @@ export default function WorkBoardDetailPage() {
           >
             <MenuItem value="">{txt('미지정', 'Unassigned')}</MenuItem>
             {members.map((m: any) => (
-              <MenuItem key={m.user_id} value={m.user_id}>
-                {m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`}
+              <MenuItem key={m.user_id} value={Number(m.user_id)}>
+                {resolveMemberDisplayName(m.user_id, m)}
               </MenuItem>
             ))}
           </TextField>
@@ -5693,12 +5720,11 @@ export default function WorkBoardDetailPage() {
             }
             SelectProps={{
               displayEmpty: true,
-              renderValue: (selected) => {
+              renderValue: (selected: unknown) => {
                 if (selected === '' || selected == null) {
                   return txt('대분류 담당자 (선택)', 'List owner (optional)');
                 }
-                const m = members.find((mem: any) => mem.user_id === Number(selected));
-                return m?.user?.username || `${txt('사용자', 'User')} ${selected}`;
+                return resolveMemberDisplayName(selected);
               },
             }}
             sx={{
@@ -5710,8 +5736,8 @@ export default function WorkBoardDetailPage() {
           >
             <MenuItem value="">{txt('미지정', 'Unassigned')}</MenuItem>
             {members.map((m: any) => (
-              <MenuItem key={m.user_id} value={m.user_id}>
-                {m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`}
+              <MenuItem key={m.user_id} value={Number(m.user_id)}>
+                {resolveMemberDisplayName(m.user_id, m)}
               </MenuItem>
             ))}
           </TextField>

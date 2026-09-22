@@ -4796,7 +4796,7 @@ export default {
       unknown: '알 수 없음',
       tabs: {
         written: '내가 작성한 지출 결의서',
-        received: '내가 받은·참조한 지출결의서',
+        received: '내가 받은(참조) 지출 결의서',
         transfer: '송금할 리스트'
       },
       cc: {

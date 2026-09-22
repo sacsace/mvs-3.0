@@ -4745,7 +4745,7 @@ export default {
       unknown: 'Unknown',
       tabs: {
         written: 'My requests',
-        received: 'Received / CC',
+        received: 'Received (CC) expense reports',
         transfer: 'Remittance list'
       },
       cc: {
