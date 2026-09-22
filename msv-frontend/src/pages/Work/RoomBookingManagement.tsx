@@ -67,12 +67,14 @@ import { useStore } from '../../store';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 import {
   accountingService,
+  api,
   roomBookingService,
   roomTypeRoomService,
   roomTypeService,
   userUiPreferencesService
 } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
+import { normalizePartnerCompanyName } from '../../utils/partnerCompanyName';
 import AuthMedia from '../../components/Common/AuthMedia';
 import { generateRoomBookingId } from '../../utils/bookingId';
 import {
@@ -129,6 +131,14 @@ interface Booking {
   updatedAt: string;
   createdBy: string;
 }
+
+type PartnerCompanyOption = {
+  id: string;
+  companyName: string;
+  email: string;
+  phone: string;
+  representative: string;
+};
 
 interface RoomTypeMaster {
   id: number;
@@ -549,6 +559,78 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     airportArrivalTime: '',
     flightNumber: ''
   });
+  const [partnerCompanyOptions, setPartnerCompanyOptions] = useState<PartnerCompanyOption[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadPartnerCompanies = async () => {
+      try {
+        const [partnersData, customerResponse] = await Promise.all([
+          useReferenceDataStore.getState().fetchPartners(),
+          api.get('/customers').catch(() => ({ data: [] })),
+        ]);
+        const customersRaw = Array.isArray((customerResponse as any)?.data?.data)
+          ? (customerResponse as any).data.data
+          : Array.isArray((customerResponse as any)?.data)
+            ? (customerResponse as any).data
+            : Array.isArray(customerResponse)
+              ? customerResponse
+              : [];
+
+        const rows: PartnerCompanyOption[] = [];
+        const pushRow = (row: PartnerCompanyOption, prefer = false) => {
+          const key = normalizePartnerCompanyName(row.companyName).toLowerCase();
+          if (!key) return;
+          const existingIdx = rows.findIndex(
+            (r) => normalizePartnerCompanyName(r.companyName).toLowerCase() === key
+          );
+          if (existingIdx < 0) {
+            rows.push(row);
+            return;
+          }
+          if (prefer) rows[existingIdx] = row;
+        };
+
+        (Array.isArray(partnersData) ? partnersData : []).forEach((p: any) => {
+          const companyName = normalizePartnerCompanyName(p.company_name || p.companyName || '');
+          if (!companyName) return;
+          pushRow(
+            {
+              id: `partner-${p.id}`,
+              companyName,
+              email: String(p.email || '').trim(),
+              phone: String(p.phone || '').trim(),
+              representative: String(p.representative || '').trim(),
+            },
+            true
+          );
+        });
+
+        customersRaw.forEach((c: any) => {
+          const companyName = normalizePartnerCompanyName(c.company_name || c.companyName || c.name || '');
+          if (!companyName) return;
+          pushRow({
+            id: `customer-${c.id}`,
+            companyName,
+            email: String(c.email || '').trim(),
+            phone: String(c.phone || '').trim(),
+            representative: String(c.ceo_name || c.representative || '').trim(),
+          });
+        });
+
+        rows.sort((a, b) =>
+          a.companyName.localeCompare(b.companyName, undefined, { sensitivity: 'base' })
+        );
+        if (!cancelled) setPartnerCompanyOptions(rows);
+      } catch {
+        if (!cancelled) setPartnerCompanyOptions([]);
+      }
+    };
+    void loadPartnerCompanies();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!user?.id) {
@@ -1807,12 +1889,97 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
               <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5 }}>
                 {t('roomBookingManagement.fields.companyName')}
               </Typography>
-              <TextField
-                value={formState.companyName}
-                onChange={(e) => setFormState((prev) => ({ ...prev, companyName: e.target.value }))}
-                fullWidth
-                size="small"
-                placeholder={t('roomBookingManagement.placeholders.companyName')}
+              <Autocomplete
+                freeSolo
+                options={partnerCompanyOptions}
+                getOptionLabel={(option) =>
+                  typeof option === 'string' ? option : option.companyName
+                }
+                isOptionEqualToValue={(a, b) => {
+                  const aName = typeof a === 'string' ? a : a.companyName;
+                  const bName = typeof b === 'string' ? b : b.companyName;
+                  return (
+                    normalizePartnerCompanyName(aName).toLowerCase() ===
+                    normalizePartnerCompanyName(bName).toLowerCase()
+                  );
+                }}
+                filterOptions={(options, state) => {
+                  const q = normalizePartnerCompanyName(state.inputValue).toLowerCase();
+                  if (!q) return options;
+                  return options.filter((opt) =>
+                    normalizePartnerCompanyName(opt.companyName).toLowerCase().includes(q)
+                  );
+                }}
+                value={
+                  partnerCompanyOptions.find(
+                    (p) =>
+                      normalizePartnerCompanyName(p.companyName).toLowerCase() ===
+                      normalizePartnerCompanyName(formState.companyName).toLowerCase()
+                  ) || formState.companyName
+                }
+                onChange={(_, value) => {
+                  if (typeof value === 'string') {
+                    setFormState((prev) => ({
+                      ...prev,
+                      companyName: normalizePartnerCompanyName(value) || value,
+                    }));
+                    return;
+                  }
+                  if (!value) {
+                    setFormState((prev) => ({ ...prev, companyName: '' }));
+                    return;
+                  }
+                  setFormState((prev) => ({
+                    ...prev,
+                    companyName: value.companyName,
+                    guestEmail: prev.guestEmail.trim() ? prev.guestEmail : value.email || '',
+                    guestPhone: prev.guestPhone.trim() ? prev.guestPhone : value.phone || '',
+                    guestName: prev.guestName.trim()
+                      ? prev.guestName
+                      : value.representative || prev.guestName,
+                  }));
+                }}
+                onInputChange={(_, value, reason) => {
+                  if (reason === 'reset') return;
+                  setFormState((prev) => ({ ...prev, companyName: value }));
+                }}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id}>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, lineHeight: 1.3 }}>
+                        {option.companyName}
+                      </Typography>
+                      {(option.representative || option.email || option.phone) && (
+                        <Typography
+                          sx={{
+                            fontSize: '0.75rem',
+                            color: 'text.secondary',
+                            lineHeight: 1.3,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {[option.representative, option.email, option.phone]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </Typography>
+                      )}
+                    </Box>
+                  </li>
+                )}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    fullWidth
+                    size="small"
+                    placeholder={t('roomBookingManagement.placeholders.companyName')}
+                    inputProps={{
+                      ...params.inputProps,
+                      autoComplete: 'off',
+                    }}
+                  />
+                )}
               />
             </Box>
           </Grid>
