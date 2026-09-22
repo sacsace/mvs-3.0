@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Autocomplete,
+  Avatar,
   Box,
   Button,
   Chip,
@@ -17,18 +18,23 @@ import {
   Select,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import {
   Add as AddIcon,
   ArrowBack as ArrowBackIcon,
   AttachFile as AttachFileIcon,
-  CheckBoxOutlineBlank as CheckIcon,
+  Block as BlockIcon,
+  CancelOutlined as CancelOutlinedIcon,
+  CheckCircleOutline as CheckCircleOutlineIcon,
+  CircleOutlined as CircleOutlinedIcon,
   DeleteOutline as DeleteIcon,
   KeyboardArrowDown as ArrowDownIcon,
   KeyboardArrowUp as ArrowUpIcon,
-  PersonAddAlt1 as PersonAddIcon,
+  PersonAddOutlined as PersonAddIcon,
   Refresh as RefreshIcon,
+  Timelapse as TimelapseIcon,
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -103,6 +109,32 @@ function taskStatusHighlight(status: string) {
   return TASK_STATUS_HIGHLIGHT[status] || TASK_STATUS_HIGHLIGHT.todo;
 }
 
+function TaskStatusIcon({
+  status,
+  fontSize = 16,
+  sx,
+}: {
+  status: string;
+  fontSize?: number;
+  sx?: object;
+}) {
+  const hl = taskStatusHighlight(status);
+  const iconSx = { fontSize, color: hl.fg, flexShrink: 0, ...sx };
+  switch (status) {
+    case 'in_progress':
+      return <TimelapseIcon sx={iconSx} />;
+    case 'blocked':
+      return <BlockIcon sx={iconSx} />;
+    case 'completed':
+      return <CheckCircleOutlineIcon sx={iconSx} />;
+    case 'cancelled':
+      return <CancelOutlinedIcon sx={iconSx} />;
+    case 'todo':
+    default:
+      return <CircleOutlinedIcon sx={iconSx} />;
+  }
+}
+
 function barColors(hex?: string | null): { bg: string; border: string } {
   if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return DEFAULT_BAR;
   return { bg: hex.toUpperCase(), border: hex.toUpperCase() };
@@ -119,7 +151,7 @@ type MemberRow = {
   id: number;
   user_id: number;
   role: string;
-  user?: { id: number; username?: string; email?: string };
+  user?: { id: number; username?: string; email?: string; avatar_url?: string | null };
 };
 
 type TaskRow = {
@@ -801,25 +833,85 @@ const ProjectDetailPage: React.FC = () => {
               {project.start_date || '-'} → {project.end_date || '-'}
               {project.manager?.username ? ` · ${project.manager.username}` : ''}
             </Typography>
-            <Typography
+            <Box
               sx={{
                 mt: 0.75,
-                fontSize: '0.75rem',
-                color: '#64748B',
-                lineHeight: 1.45,
-                wordBreak: 'break-word',
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 0.75,
+                rowGap: 0.5,
+                minWidth: 0,
               }}
             >
-              {t('projectManagement.detail.membersTitle', { count: members.length })}
-              {members.length > 0
-                ? `: ${members
-                    .map((m) => m.user?.username || `#${m.user_id}`)
-                    .filter(Boolean)
-                    .join(', ')}`
-                : ` — ${t('projectManagement.detail.noMembersShort', {
+              <Typography
+                sx={{
+                  fontSize: '0.75rem',
+                  color: '#64748B',
+                  lineHeight: 1.2,
+                  flexShrink: 0,
+                }}
+              >
+                {t('projectManagement.detail.membersTitle', { count: members.length })}
+              </Typography>
+              {members.length === 0 ? (
+                <Typography sx={{ fontSize: '0.75rem', color: '#94A3B8', lineHeight: 1.2 }}>
+                  {t('projectManagement.detail.noMembersShort', {
                     defaultValue: t('projectManagement.detail.noMembers'),
-                  })}`}
-            </Typography>
+                  })}
+                </Typography>
+              ) : (
+                members.map((m) => {
+                  const name = m.user?.username || `#${m.user_id}`;
+                  const roleLabel = t(`projectManagement.roles.${m.role}`, {
+                    defaultValue: m.role,
+                  });
+                  const avatarSrc = getUploadUrl(m.user?.avatar_url) || undefined;
+                  return (
+                    <Tooltip key={m.id} title={roleLabel} placement="top" enterDelay={400}>
+                      <Box
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 0.5,
+                          minWidth: 0,
+                          maxWidth: '100%',
+                        }}
+                      >
+                        <Avatar
+                          src={avatarSrc}
+                          alt={name}
+                          sx={{
+                            width: 22,
+                            height: 22,
+                            fontSize: '0.6875rem',
+                            fontWeight: 600,
+                            bgcolor: avatarSrc ? 'transparent' : '#E2E8F0',
+                            color: '#475569',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {name.charAt(0).toUpperCase()}
+                        </Avatar>
+                        <Typography
+                          sx={{
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            color: '#0F172A',
+                            lineHeight: 1.2,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {name}
+                        </Typography>
+                      </Box>
+                    </Tooltip>
+                  );
+                })
+              )}
+            </Box>
           </Box>
           <Box sx={{ minWidth: 160, flex: '0 1 200px' }}>
             <Typography sx={{ fontSize: '0.75rem', color: '#64748B', mb: 0.5 }}>
@@ -991,7 +1083,12 @@ const ProjectDetailPage: React.FC = () => {
                         flexShrink: 0,
                       }}
                     />
-                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Box sx={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                      <Tooltip title={statusLabel(task.status)} placement="top" enterDelay={400}>
+                        <Box sx={{ display: 'inline-flex', flexShrink: 0, lineHeight: 0 }}>
+                          <TaskStatusIcon status={task.status} fontSize={18} />
+                        </Box>
+                      </Tooltip>
                       <Typography
                         sx={{
                           fontSize: '0.8125rem',
@@ -1001,12 +1098,10 @@ const ProjectDetailPage: React.FC = () => {
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           lineHeight: 1.2,
+                          minWidth: 0,
                         }}
                       >
                         {task.title}
-                      </Typography>
-                      <Typography sx={{ fontSize: '0.6875rem', color: '#64748B', lineHeight: 1.2 }}>
-                        {statusLabel(task.status)}
                       </Typography>
                     </Box>
                   </Box>
@@ -1170,7 +1265,11 @@ const ProjectDetailPage: React.FC = () => {
                               }}
                             />
                           )}
-                          <CheckIcon sx={{ fontSize: 13, opacity: task.status === 'completed' ? 1 : 0.7 }} />
+                          <TaskStatusIcon
+                            status={task.status}
+                            fontSize={14}
+                            sx={{ opacity: task.status === 'completed' ? 1 : 0.9 }}
+                          />
                           <Typography
                             sx={{
                               fontSize: '0.75rem',

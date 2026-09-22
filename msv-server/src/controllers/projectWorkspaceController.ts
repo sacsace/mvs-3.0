@@ -29,7 +29,7 @@ import { pushNotification } from './notificationController';
 import { ensureUploadRoot } from '../utils/uploadPath';
 import { DataTypes } from 'sequelize';
 
-const userAttrs = ['id', 'username', 'email', 'department', 'position'];
+const userAttrs = ['id', 'username', 'email', 'department', 'position', 'avatar_url'];
 const MAX_TASK_ATTACHMENTS = 10;
 
 let projectTaskSchemaEnsured = false;

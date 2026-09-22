@@ -18,7 +18,7 @@ import {
 } from '../services/projectMembershipService';
 import { pushNotification } from './notificationController';
 
-const memberUserAttrs = ['id', 'username', 'email', 'department', 'position'];
+const memberUserAttrs = ['id', 'username', 'email', 'department', 'position', 'avatar_url'];
 
 function companyScopeWhere(user: any, companyIdQuery?: unknown) {
   const where: any = { is_active: true };
@@ -79,7 +79,7 @@ export const getProjects = async (req: RequestWithUser, res: Response) => {
           where: { is_active: true, status: 'active' },
           required: false,
           attributes: ['id', 'user_id', 'role', 'status'],
-          include: [{ model: User, as: 'user', attributes: ['id', 'username'] }],
+          include: [{ model: User, as: 'user', attributes: memberUserAttrs }],
         },
       ],
       limit: Number(limit),
@@ -298,7 +298,7 @@ export const createProject = async (req: RequestWithUser, res: Response) => {
           as: 'members',
           where: { is_active: true, status: 'active' },
           required: false,
-          include: [{ model: User, as: 'user', attributes: ['id', 'username'] }],
+          include: [{ model: User, as: 'user', attributes: memberUserAttrs }],
         },
       ],
     });
