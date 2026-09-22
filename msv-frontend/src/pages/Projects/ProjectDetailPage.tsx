@@ -790,16 +790,37 @@ const ProjectDetailPage: React.FC = () => {
             py: 1.5,
             display: 'flex',
             flexWrap: 'wrap',
-            alignItems: 'center',
+            alignItems: 'flex-start',
             justifyContent: 'space-between',
             gap: 1.5,
             borderBottom: '1px solid #E2E8F0',
           }}
         >
-          <Typography sx={{ fontSize: '0.8125rem', color: '#334155' }}>
-            {project.start_date || '-'} → {project.end_date || '-'}
-            {project.manager?.username ? ` · ${project.manager.username}` : ''}
-          </Typography>
+          <Box sx={{ flex: '1 1 220px', minWidth: 0 }}>
+            <Typography sx={{ fontSize: '0.8125rem', color: '#334155' }}>
+              {project.start_date || '-'} → {project.end_date || '-'}
+              {project.manager?.username ? ` · ${project.manager.username}` : ''}
+            </Typography>
+            <Typography
+              sx={{
+                mt: 0.75,
+                fontSize: '0.75rem',
+                color: '#64748B',
+                lineHeight: 1.45,
+                wordBreak: 'break-word',
+              }}
+            >
+              {t('projectManagement.detail.membersTitle', { count: members.length })}
+              {members.length > 0
+                ? `: ${members
+                    .map((m) => m.user?.username || `#${m.user_id}`)
+                    .filter(Boolean)
+                    .join(', ')}`
+                : ` — ${t('projectManagement.detail.noMembersShort', {
+                    defaultValue: t('projectManagement.detail.noMembers'),
+                  })}`}
+            </Typography>
+          </Box>
           <Box sx={{ minWidth: 160, flex: '0 1 200px' }}>
             <Typography sx={{ fontSize: '0.75rem', color: '#64748B', mb: 0.5 }}>
               {t('projectManagement.columns.progress')} {progress}%

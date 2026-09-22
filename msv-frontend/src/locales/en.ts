@@ -2145,6 +2145,7 @@ export default {
         searchUsers: 'Search employees',
         membersTitle: 'Members ({{count}})',
         noMembers: 'No members yet. Invite teammates to collaborate.',
+        noMembersShort: 'None',
         overviewHint: 'Review progress, schedules, tasks, and members.',
         comingSoon: 'This tab will be available in a later phase.',
         timelineHint: 'Drag bar edges to adjust dates. Click a bar or day for progress notes, comments, and files. Double-click a day to extend the range.',

@@ -2198,6 +2198,7 @@ export default {
         searchUsers: '직원 검색',
         membersTitle: '참여자 ({{count}})',
         noMembers: '참여자가 없습니다. 팀원을 초대해 주세요.',
+        noMembersShort: '없음',
         overviewHint: '진행률·일정·Task 현황과 참여자를 확인합니다.',
         comingSoon: '이 탭은 다음 단계에서 구현됩니다.',
         timelineHint: '막대 양끝 드래그로 기간을 조정하고, 막대·날짜를 클릭하면 진행 설명·댓글·첨부를 확인할 수 있습니다. 날짜 더블클릭으로 기간을 확장합니다.',
