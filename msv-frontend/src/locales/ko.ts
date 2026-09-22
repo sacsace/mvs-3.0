@@ -2196,6 +2196,7 @@ export default {
         addMember: '멤버 추가',
         invite: '추가',
         searchUsers: '직원 검색',
+        managerLabel: '책임자',
         membersTitle: '참여자 ({{count}})',
         noMembers: '참여자가 없습니다. 팀원을 초대해 주세요.',
         noMembersShort: '없음',

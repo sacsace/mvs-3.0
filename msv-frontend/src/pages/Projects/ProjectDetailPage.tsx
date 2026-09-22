@@ -829,10 +829,78 @@ const ProjectDetailPage: React.FC = () => {
           }}
         >
           <Box sx={{ flex: '1 1 220px', minWidth: 0 }}>
-            <Typography sx={{ fontSize: '0.8125rem', color: '#334155' }}>
-              {project.start_date || '-'} → {project.end_date || '-'}
-              {project.manager?.username ? ` · ${project.manager.username}` : ''}
-            </Typography>
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 0.75,
+                rowGap: 0.5,
+                minWidth: 0,
+              }}
+            >
+              <Typography sx={{ fontSize: '0.8125rem', color: '#334155', lineHeight: 1.2 }}>
+                {project.start_date || '-'} → {project.end_date || '-'}
+              </Typography>
+              {project.manager?.username ? (
+                <Box
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    minWidth: 0,
+                    maxWidth: '100%',
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: '0.75rem',
+                      color: '#64748B',
+                      lineHeight: 1.2,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {t('projectManagement.detail.managerLabel')}
+                  </Typography>
+                  {(() => {
+                    const managerName = project.manager.username;
+                    const managerAvatarSrc = getUploadUrl(project.manager.avatar_url) || undefined;
+                    return (
+                      <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                        <Avatar
+                          src={managerAvatarSrc}
+                          alt={managerName}
+                          sx={{
+                            width: 22,
+                            height: 22,
+                            fontSize: '0.6875rem',
+                            fontWeight: 600,
+                            bgcolor: managerAvatarSrc ? 'transparent' : '#E2E8F0',
+                            color: '#475569',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {managerName.charAt(0).toUpperCase()}
+                        </Avatar>
+                        <Typography
+                          sx={{
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            color: '#0F172A',
+                            lineHeight: 1.2,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {managerName}
+                        </Typography>
+                      </Box>
+                    );
+                  })()}
+                </Box>
+              ) : null}
+            </Box>
             <Box
               sx={{
                 mt: 0.75,

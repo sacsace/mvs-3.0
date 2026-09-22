@@ -2143,6 +2143,7 @@ export default {
         addMember: 'Add member',
         invite: 'Add',
         searchUsers: 'Search employees',
+        managerLabel: 'Owner',
         membersTitle: 'Members ({{count}})',
         noMembers: 'No members yet. Invite teammates to collaborate.',
         noMembersShort: 'None',

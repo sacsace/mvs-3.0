@@ -5251,7 +5251,7 @@ const ExpenseApproval: React.FC = () => {
                   {t('expenseApproval.cc.hint')}
                 </Typography>
               </Box>
-              <Box sx={{ px: 1, py: 0.75 }}>
+              <Box sx={{ px: 1, py: 1.25, minHeight: 52 }}>
                 <Autocomplete
                   multiple
                   size="small"
@@ -5269,6 +5269,13 @@ const ExpenseApproval: React.FC = () => {
                   onChange={(_, value) => {
                     setCcUserIds((value || []).map((v) => Number(v.id)).filter((id) => id > 0));
                   }}
+                  sx={{
+                    '& .MuiAutocomplete-inputRoot': {
+                      minHeight: 36,
+                      alignItems: 'center',
+                      py: 0.25,
+                    },
+                  }}
                   renderTags={(value, getTagProps) =>
                     value.map((option, index) => (
                       <Chip
@@ -5279,7 +5286,7 @@ const ExpenseApproval: React.FC = () => {
                         sx={{
                           border: 'none',
                           borderRadius: '4px',
-                          height: 24,
+                          height: 26,
                           bgcolor: '#EEF2F7',
                           color: '#334155',
                           '& .MuiChip-deleteIcon': { color: '#64748B' },
@@ -5381,7 +5388,12 @@ const ExpenseApproval: React.FC = () => {
               <Typography variant="subtitle2" sx={sectionTitleSx}>
                   {t('expenseApproval.voucher.sectionRequest')}
               </Typography>
-              <Box sx={sectionBlockSx}>
+              <Box
+                sx={{
+                  ...sectionBlockSx,
+                  border: `1px solid ${EXPENSE_VENDOR_LINE}`,
+                }}
+              >
               <TableContainer>
                 <Table
                   size="small"
@@ -7603,7 +7615,7 @@ const ExpenseApproval: React.FC = () => {
               </Typography>
               <Box
                 sx={{
-                  border: `1px solid ${EXPENSE_LINE}`,
+                  border: `1px solid ${EXPENSE_VENDOR_LINE}`,
                   borderRadius: '6px',
                   bgcolor: '#FFFFFF',
                   overflow: 'hidden',
