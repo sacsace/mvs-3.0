@@ -649,9 +649,23 @@ const ProjectManagement: React.FC = () => {
         <DialogTitle sx={getMvsDialogTitleRowSx(theme)}>
           {selectedProject ? t('projectManagement.dialog.editTitle') : t('projectManagement.dialog.createTitle')}
         </DialogTitle>
-        <DialogContent sx={{ px: 2.5, pt: 2.5, pb: 1 }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mt: 0.5 }}>
-            <Box sx={{ gridColumn: '1 / -1' }}>
+        <DialogContent
+          sx={{
+            px: 2.5,
+            // MUI는 DialogTitle 다음에 pt를 0으로 덮어써서 아웃라인 라벨이 제목에 붙음
+            pt: '28px !important',
+            pb: 1.5,
+          }}
+        >
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+              gap: 2.5,
+              mt: 0.5,
+            }}
+          >
+            <Box sx={{ gridColumn: '1 / -1', pt: 0.5 }}>
               <TextField
                 fullWidth
                 size="small"
@@ -692,7 +706,7 @@ const ProjectManagement: React.FC = () => {
                 ))}
               </Select>
             </FormControl>
-            <Box sx={{ gridColumn: '1 / -1' }}>
+            <Box sx={{ gridColumn: '1 / -1', pt: 0.25 }}>
               <TextField
                 fullWidth
                 size="small"

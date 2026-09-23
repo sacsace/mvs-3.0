@@ -44,24 +44,31 @@ export async function generateProjectCode(
   companyId: number,
   transaction?: Transaction
 ): Promise<string> {
+  // 트랜잭션 단위 회사별 채번 잠금 (빈 테이블에서도 동시 생성 충돌 방지)
+  const lockKey = (Math.abs(tenantId * 1_000_003 + companyId) % 2147483647) || 1;
+  await sequelize.query(`SELECT pg_advisory_xact_lock(:lockKey)`, {
+    replacements: { lockKey },
+    transaction,
+  });
+
   const [rows] = await sequelize.query(
     `
-    SELECT project_code
+    SELECT COALESCE(
+      MAX(CAST(SUBSTRING(project_code FROM 6) AS INTEGER)),
+      0
+    ) AS max_num
     FROM projects
     WHERE tenant_id = :tenantId
       AND company_id = :companyId
       AND project_code ~ '^PROJ-[0-9]+$'
-    ORDER BY CAST(SUBSTRING(project_code FROM 6) AS INTEGER) DESC
-    LIMIT 1
     `,
     {
       replacements: { tenantId, companyId },
       transaction,
     }
   );
-  const last = Array.isArray(rows) && rows[0] ? String((rows[0] as any).project_code || '') : '';
-  const match = last.match(/^PROJ-(\d+)$/i);
-  const next = match ? Number(match[1]) + 1 : 1;
+  const maxNum = Array.isArray(rows) && rows[0] ? Number((rows[0] as any).max_num || 0) : 0;
+  const next = Number.isFinite(maxNum) ? maxNum + 1 : 1;
   return `PROJ-${String(next).padStart(6, '0')}`;
 }
 

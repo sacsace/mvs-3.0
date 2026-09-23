@@ -81,7 +81,6 @@ Project.init(
     project_code: {
       type: DataTypes.STRING(50),
       allowNull: false,
-      unique: true,
     },
     name: {
       type: DataTypes.STRING(200),
@@ -161,6 +160,17 @@ Project.init(
     tableName: 'projects',
     timestamps: true,
     underscored: true,
+    indexes: [
+      {
+        name: 'projects_tenant_company_code_uk',
+        unique: true,
+        fields: ['tenant_id', 'company_id', 'project_code'],
+      },
+      {
+        name: 'projects_project_code_idx',
+        fields: ['project_code'],
+      },
+    ],
   }
 );
 
