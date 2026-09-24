@@ -1456,15 +1456,26 @@ const ProjectDetailPage: React.FC = () => {
         <DialogTitle sx={getMvsDialogTitleRowSx(theme)}>
           {t('projectManagement.detail.addTask')}
         </DialogTitle>
-        <DialogContent sx={{ px: 2.5, pt: 2.5, pb: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        <DialogContent
+          sx={{
+            px: 2.5,
+            // MUI는 DialogTitle 다음에 pt를 0으로 덮어써서 아웃라인 라벨이 잘림
+            pt: '28px !important',
+            pb: 1.5,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+          }}
+        >
           <TextField
             size="small"
             label={t('projectManagement.fields.name')}
             value={createForm.title}
             onChange={(e) => setCreateForm((f) => ({ ...f, title: e.target.value }))}
-            sx={mvsSearchFieldSx}
+            InputLabelProps={{ shrink: true }}
+            sx={{ ...mvsSearchFieldSx, mt: 0.5 }}
           />
-          <Stack direction="row" spacing={1.5}>
+          <Stack direction="row" spacing={1.5} sx={{ mt: 0.25 }}>
             <TextField
               size="small"
               type="date"
@@ -1484,7 +1495,7 @@ const ProjectDetailPage: React.FC = () => {
               sx={{ ...mvsSearchFieldSx, flex: 1 }}
             />
           </Stack>
-          <Box>
+          <Box sx={{ pt: 0.25 }}>
             <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, mb: 0.75 }}>
               {t('projectManagement.detail.taskColor')}
             </Typography>

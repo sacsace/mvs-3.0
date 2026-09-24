@@ -1483,7 +1483,13 @@ const Dashboard: React.FC = () => {
           ? approvalService.getApprovals({ requester_id: uid }).catch(() => null)
           : Promise.resolve(null),
         uid
-          ? accountingService.getExpenseReports().catch(() => null)
+          ? accountingService
+              .getExpenseReports(
+                user?.company_id
+                  ? { company_id: Number(user.company_id) }
+                  : undefined
+              )
+              .catch(() => null)
           : Promise.resolve(null),
       ]);
 
@@ -1568,13 +1574,23 @@ const Dashboard: React.FC = () => {
 
       if (uid && expensesResult?.success) {
         const list = Array.isArray(expensesResult.data) ? expensesResult.data : [];
-        const received = list
+        const companyId = user?.company_id != null ? Number(user.company_id) : null;
+        const companyScoped = Number.isFinite(companyId) && (companyId as number) > 0
+          ? list.filter((expense: any) => {
+              const expenseCompanyId = Number(
+                expense.company_id ?? expense.companyId ?? expense.company?.id ?? 0
+              );
+              return Number.isFinite(expenseCompanyId) && expenseCompanyId === companyId;
+            })
+          : list;
+
+        const received = companyScoped
           .filter((expense: any) => isExpenseReceivedForUser(expense, uid))
           .filter((expense: any) => !isExpensePaidForDashboard(expense));
         setReceivedExpenses(received.slice(0, 5));
 
         if (canLoadTransferExpenses) {
-          const transfer = list.filter((expense: any) => {
+          const transfer = companyScoped.filter((expense: any) => {
             if (expense.status !== 'approved' && expense.status !== 'paid') return false;
             return getExpenseTransferFilterKey(expense) !== 'transfer_completed';
           });

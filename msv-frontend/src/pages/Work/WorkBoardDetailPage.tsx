@@ -1479,7 +1479,7 @@ const ListColumn = memo(function ListColumn({
             </Box>
       {!listTitleEditing && (list.assignee?.username || list.assignee_user_id) ? (
         <Typography
-          sx={{
+        sx={{
             px: 1,
             pb: 0.75,
             fontSize: '0.75rem',

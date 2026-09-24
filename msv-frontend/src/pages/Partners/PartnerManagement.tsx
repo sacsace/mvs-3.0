@@ -256,6 +256,24 @@ const formatPartnerGstDisplay = (gstNumbers: string[] | undefined) => {
   return list.join(', ');
 };
 
+/** 인도 GSTIN(15자)의 3~12자리 = PAN (예: 37AAGCK5972Q6ZG → AAGCK5972Q) */
+const extractPanFromGstin = (gstin: string): string => {
+  const g = String(gstin || '')
+    .replace(/[\s-]/g, '')
+    .toUpperCase();
+  if (g.length < 12) return '';
+  const pan = g.slice(2, 12);
+  return /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan) ? pan : '';
+};
+
+const resolvePanFromGstList = (gstNumbers: string[]): string => {
+  for (const gst of gstNumbers) {
+    const pan = extractPanFromGstin(gst);
+    if (pan) return pan;
+  }
+  return '';
+};
+
 interface Partner {
   id: number;
   companyName: string;
@@ -670,9 +688,17 @@ const PartnerManagement: React.FC = () => {
   };
 
   const handleGstNumberChange = (index: number, value: string) => {
+    const cleaned = String(value || '')
+      .replace(/[\s-]/g, '')
+      .toUpperCase();
     const newGstNumbers = [...formData.gstNumbers];
-    newGstNumbers[index] = value;
-    setFormData({ ...formData, gstNumbers: newGstNumbers });
+    newGstNumbers[index] = cleaned;
+    const panFromGst = resolvePanFromGstList(newGstNumbers);
+    setFormData({
+      ...formData,
+      gstNumbers: newGstNumbers,
+      ...(panFromGst ? { panNumber: panFromGst } : {}),
+    });
   };
 
   const handleAddGstNumber = () => {
