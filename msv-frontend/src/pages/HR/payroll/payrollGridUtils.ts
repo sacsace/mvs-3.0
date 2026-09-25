@@ -221,11 +221,36 @@ export function isOtEligible(
   return false;
 }
 
+/** 인사정보 PT 적용 여부 (기본: 적용). 회사 GST 주 기준으로 자동 계산 */
+export function isPtEligible(
+  extra?: Record<string, unknown> | null,
+  employee?: Record<string, unknown> | null
+): boolean {
+  const parse = (value: unknown): boolean | null => {
+    if (value === true || value === 'true' || value === 1 || value === '1') return true;
+    if (value === false || value === 'false' || value === 0 || value === '0') return false;
+    return null;
+  };
+  const fromEmployee = employee ? parse(employee.pt_eligible) : null;
+  if (fromEmployee !== null) return fromEmployee;
+  const fromExtra = extra ? parse(extra.pt_eligible) : null;
+  if (fromExtra !== null) return fromExtra;
+  return true;
+}
+
+/** extra_fields 수동 입력 플래그 */
+export function isManualOverrideFlag(
+  extra: Record<string, unknown> | null | undefined,
+  key: string
+): boolean {
+  if (!extra) return false;
+  const v = extra[key];
+  return v === true || v === 'true' || v === 1 || v === '1';
+}
+
 /** 수동 OT 입력 플래그 (extra_fields.ot_manual) */
 export function isOtManualOverride(extra?: Record<string, unknown> | null): boolean {
-  if (!extra) return false;
-  const v = extra.ot_manual;
-  return v === true || v === 'true' || v === 1 || v === '1';
+  return isManualOverrideFlag(extra, 'ot_manual');
 }
 
 /** OT 적용: 대상이거나, 미대상이어도 수동 입력이 있으면 true */
@@ -439,10 +464,10 @@ function resolvePfModeFromExtra(x: Record<string, unknown>): PfMode {
  * - Sum Total = (근무일 × Total Salary / 월총일) + OT + Extra Allowance
  * - OT Rate = Basic Salary ÷ 26 ÷ 8 × 2
  * - OT = 주간 OT시간 × OT Rate
- * - PF(직원·사업주) = ROUND(MIN(Basic Salary × 12%, 1,800), 0) — 인사정보에서 상한 해제 시 12%만 적용
+ * - PF(직원·사업주) = ROUND(MIN(Basic Salary × 12%, 1,800), 0) — 인사정보에서 상한 해제 시 12%만 적용 (pf_manual 시 유지)
  * - ESIC(직원) = IF(지급합계>21,000, 0, 지급합계×0.75%)
- * - TDS = 신규 세제 LET 수식(지급합계×12, 표준공제 75,000, 87A 리베이트·한계완화, 4% cess) / 12
- * - PT = 지급합계 > 25,000 일 때만 주별 슬랩(또는 200) 적용, 이하이면 0
+ * - TDS = 신규 세제 LET 수식… / 12 (tds_manual 시 유지)
+ * - PT = 지급합계 > 25,000 일 때만 주별 슬랩(또는 200) 적용, 이하이면 0 (pt_manual 시 유지)
  * - Net = Sum Total − PF(직원) − ESIC(직원) − TDS − PT − 선지급
  */
 function slabTax(taxable: number, cap: number, floor: number, rate: number): number {
@@ -661,22 +686,40 @@ export function recalculatePayrollRow(
   const sum_total = roundInr(proratedPackage + overtime + transport + customSum);
 
   const pfCalcMode = row.pf_calc_mode ?? 'cap_1800';
-  const pf = computePfContributions(basic, pfCalcMode, totalSalary);
-  const pfEmployeeStr = String(pf.pf_employee);
-  const pfEmployerStr = String(pf.pf_employer);
+  const pfManual = Boolean(row.pf_manual);
+  let pfEmployeeStr: string;
+  let pfEmployerStr: string;
+  if (pfManual) {
+    const pfEmployee = Math.max(0, Math.floor(num(row.pf_employee)));
+    pfEmployeeStr = String(pfEmployee);
+    // 사측 PF는 직원 PF와 동일 매칭 (수동 입력 시에도 동일 규칙)
+    pfEmployerStr = String(pfEmployee);
+  } else {
+    const pf = computePfContributions(basic, pfCalcMode, totalSalary);
+    pfEmployeeStr = String(pf.pf_employee);
+    pfEmployerStr = String(pf.pf_employer);
+  }
 
   const esic = computeEsicContributions(sum_total);
   const esicEmployeeStr = String(esic.esic_employee);
   const esicEmployerStr = String(esic.esic_employer);
 
   const esicE = num(esicEmployeeStr);
-  const tds = computeMonthlyTdsFromSumTotal(sum_total);
-  const ptAmount = computeProfessionalTaxByState({
-    grossMonthly: sum_total,
-    stateCode: ctx.companyStateCode,
-    payrollMonth: ctx.payrollMonth ?? row.working_month
-  });
-  const pt = ptAmount;
+  const tdsManual = Boolean(row.tds_manual);
+  const tds = tdsManual
+    ? Math.max(0, Math.floor(num(row.tds)))
+    : computeMonthlyTdsFromSumTotal(sum_total);
+  const ptEligible = row.pt_eligible !== false;
+  const ptManual = Boolean(row.pt_manual);
+  const pt = ptManual
+    ? Math.max(0, Math.floor(num(row.pt)))
+    : ptEligible
+      ? computeProfessionalTaxByState({
+          grossMonthly: sum_total,
+          stateCode: ctx.companyStateCode,
+          payrollMonth: ctx.payrollMonth ?? row.working_month,
+        })
+      : 0;
   const other = Math.max(0, num(row.deduct_this_month));
   const net_salary_payable = roundInr(sum_total - num(pfEmployeeStr) - esicE - tds - pt - other);
 
@@ -700,12 +743,16 @@ export function recalculatePayrollRow(
     transport_allowance: 0,
     sum_total,
     pf_calc_mode: pfCalcMode,
+    pf_manual: pfManual,
     pf_employee: pfEmployeeStr,
     pf_employer: pfEmployerStr,
     esic_employee: esicEmployeeStr,
     esic_employer: esicEmployerStr,
+    tds_manual: tdsManual,
     tds,
+    pt_manual: ptManual,
     pt: String(pt),
+    pt_eligible: ptEligible,
     deduct_this_month: other,
     net_salary_payable
   };
@@ -889,6 +936,10 @@ export function payrollRecordToGridRow(
 
   const otEligible = isOtEligible(x, emp);
   const otManual = isOtManualOverride(x);
+  const ptEligible = isPtEligible(x, emp);
+  const pfManual = isManualOverrideFlag(x, 'pf_manual');
+  const tdsManual = isManualOverrideFlag(x, 'tds_manual');
+  const ptManual = isManualOverrideFlag(x, 'pt_manual');
   const pfCalcMode = resolvePfCalcMode(x, emp);
   const { ot_rate: otRateInitial, day_ot_hour: dayOtHour } = resolveOtInputsFromExtra(
     x,
@@ -946,13 +997,17 @@ export function payrollRecordToGridRow(
     night_ot_hour: 0,
     ot_eligible: otEligible,
     ot_manual: otManual && dayOtHour > 0,
+    pt_eligible: ptEligible,
+    pf_manual: pfManual,
+    tds_manual: tdsManual,
+    pt_manual: ptManual,
     transport_allowance: transport,
     overtime: 0,
     sum_total: num(p.gross_salary),
     indian_pf_mode: indianPfMode,
     pf_calc_mode: pfCalcMode,
-    pf_employee: '',
-    pf_employer: '',
+    pf_employee: ex(x, 'pf_employee'),
+    pf_employer: ex(x, 'pf_employer'),
     esic_employee: '',
     esic_employer: '',
     tds: num(p.tax_amount),
@@ -1002,6 +1057,10 @@ export function gridRowToPayload(
     night_ot_hour: 0,
     ot_eligible: recalculated.ot_eligible === true,
     ot_manual: Boolean(recalculated.ot_manual),
+    pt_eligible: recalculated.pt_eligible !== false,
+    pf_manual: Boolean(recalculated.pf_manual),
+    tds_manual: Boolean(recalculated.tds_manual),
+    pt_manual: Boolean(recalculated.pt_manual),
     pf_calc_mode: recalculated.pf_calc_mode ?? 'cap_1800',
     day_ot: otPay.day_ot_pay,
     night_ot: 0,

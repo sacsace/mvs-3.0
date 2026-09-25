@@ -285,7 +285,7 @@ const SELF_PROFILE_ATTRIBUTES = [
   'employee_number', 'birth_date', 'gender', 'phone', 'address',
   'emergency_contact', 'emergency_phone', 'avatar_url', 'company_id', 'session_version',
   'hire_date', 'employment_type', 'salary', 'bank_name', 'bank_account', 'bank_ifsc',
-  'ot_eligible', 'pf_calc_mode', 'is_payment_officer', 'career_history', 'education_history', 'certificate_history', 'created_at', 'tenant_id',
+  'ot_eligible', 'pt_eligible', 'pf_calc_mode', 'is_payment_officer', 'career_history', 'education_history', 'certificate_history', 'created_at', 'tenant_id',
 ];
 
 const maskSalaryInUserPayload = (raw: any) => {
@@ -747,7 +747,7 @@ router.get('/', async (req, res) => {
       ...baseAttributes,
       'employee_number', 'birth_date', 'gender', 'phone', 'address',
       'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
-      'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'pf_calc_mode', 'career_history', 'education_history', 'certificate_history'
+      'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'pt_eligible', 'pf_calc_mode', 'career_history', 'education_history', 'certificate_history'
     ];
 
     let users: any[];
@@ -1021,7 +1021,7 @@ router.get('/:id', async (req, res) => {
             ...baseAttributes,
             'employee_number', 'birth_date', 'gender', 'phone', 'address', 
             'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
-            'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'pf_calc_mode', 'career_history', 'education_history', 'certificate_history'
+            'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'pt_eligible', 'pf_calc_mode', 'career_history', 'education_history', 'certificate_history'
           ]
         });
         if (userWithHrFields) {
@@ -1088,6 +1088,7 @@ router.post(
     status: { type: 'string', maxLength: 50 },
     is_payment_officer: { type: 'boolean' },
     ot_eligible: { type: 'boolean' },
+    pt_eligible: { type: 'boolean' },
     pf_calc_mode: { type: 'string', maxLength: 32 }
   }),
   async (req, res) => {
@@ -1099,6 +1100,7 @@ router.post(
       bank_name, bank_account, bank_ifsc,
       is_payment_officer,
       ot_eligible,
+      pt_eligible,
       pf_calc_mode,
       pf_cap_1800,
       career_history,
@@ -1316,6 +1318,7 @@ router.post(
       userData.is_payment_officer = Boolean(is_payment_officer);
     }
     userData.ot_eligible = ot_eligible !== undefined ? Boolean(ot_eligible) : false;
+    userData.pt_eligible = pt_eligible !== undefined ? Boolean(pt_eligible) : true;
     userData.pf_calc_mode = normalizePfCalcMode(
       pf_calc_mode !== undefined ? pf_calc_mode : pf_cap_1800
     );
@@ -1374,6 +1377,7 @@ router.put(
     status: { type: 'string', maxLength: 50 },
     is_payment_officer: { type: 'boolean' },
     ot_eligible: { type: 'boolean' },
+    pt_eligible: { type: 'boolean' },
     pf_calc_mode: { type: 'string', maxLength: 32 }
   }),
   async (req, res) => {
@@ -1389,6 +1393,7 @@ router.put(
       bank_name, bank_account, bank_ifsc,
       is_payment_officer,
       ot_eligible,
+      pt_eligible,
       pf_calc_mode,
       pf_cap_1800,
       career_history,
@@ -1426,7 +1431,7 @@ router.put(
               ...baseAttributes,
               'employee_number', 'birth_date', 'gender', 'phone', 'address', 
               'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
-              'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'pf_calc_mode', 'career_history', 'education_history', 'certificate_history'
+              'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'pt_eligible', 'pf_calc_mode', 'career_history', 'education_history', 'certificate_history'
             ]
           });
           if (userWithHrFields) {
@@ -1650,6 +1655,9 @@ router.put(
     if (ot_eligible !== undefined) {
       updateData.ot_eligible = Boolean(ot_eligible);
     }
+    if (pt_eligible !== undefined) {
+      updateData.pt_eligible = Boolean(pt_eligible);
+    }
     if (pf_calc_mode !== undefined || pf_cap_1800 !== undefined) {
       updateData.pf_calc_mode = normalizePfCalcMode(
         pf_calc_mode !== undefined ? pf_calc_mode : pf_cap_1800
@@ -1716,7 +1724,7 @@ router.put(
             ...responseBaseAttributes,
             'employee_number', 'birth_date', 'gender', 'phone', 'address', 
             'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
-            'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'pf_calc_mode', 'career_history', 'education_history', 'certificate_history'
+            'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'pt_eligible', 'pf_calc_mode', 'career_history', 'education_history', 'certificate_history'
           ]
         });
         if (userWithHrFields) {

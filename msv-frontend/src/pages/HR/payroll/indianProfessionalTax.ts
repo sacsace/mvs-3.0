@@ -150,6 +150,32 @@ export function stateCodeFromAddress(address: unknown): string | null {
   return null;
 }
 
+const GST_STATE_NAMES: Record<string, string> = {
+  '27': 'Maharashtra',
+  '29': 'Karnataka',
+  '19': 'West Bengal',
+  '33': 'Tamil Nadu',
+  '24': 'Gujarat',
+  '36': 'Telangana',
+  '37': 'Andhra Pradesh',
+  '23': 'Madhya Pradesh',
+  '21': 'Odisha',
+  '18': 'Assam',
+  '20': 'Jharkhand',
+  '22': 'Chhattisgarh',
+  '32': 'Kerala',
+  '17': 'Meghalaya',
+  '16': 'Tripura',
+  '11': 'Sikkim',
+  '10': 'Bihar',
+};
+
+export function indianStateLabel(stateCode: string | null | undefined): string {
+  const code = normalizeIndianStateCode(stateCode);
+  if (!code) return '';
+  return GST_STATE_NAMES[code] || `State ${code}`;
+}
+
 export function resolveRegisteredStateCodeFromCompanyLike(company: {
   settings?: Record<string, unknown> | null;
   address?: string | null;
@@ -211,14 +237,17 @@ export type ComputeProfessionalTaxInput = {
 
 export function computeProfessionalTaxByState(input: ComputeProfessionalTaxInput): number {
   const gross = Math.max(0, Number(input.grossMonthly) || 0);
-  // 지급합계(Sum Total)가 25,000 이하이면 PT 차감 없음
-  if (gross <= 25000) return 0;
+  if (gross <= 0) return 0;
 
   const code = normalizeIndianStateCode(input.stateCode);
-  if (!code || PT_EXEMPT_STATE_CODES.has(code)) return 0;
+  // 회사 GST 주 미확인 시에도 고액 급여는 기본 PT(₹200) 적용 — 서버와 동일
+  if (!code) {
+    return gross > 25000 ? 200 : 0;
+  }
+  if (PT_EXEMPT_STATE_CODES.has(code)) return 0;
 
   const slabs = STATE_PT_SLABS[code];
-  if (!slabs) return 200;
+  if (!slabs) return gross > 25000 ? 200 : 0;
 
   let amount = lookupSlabAmount(gross, slabs);
   const monthNum = /^(\d{4})-(\d{2})/.exec(String(input.payrollMonth ?? '').trim())?.[2];

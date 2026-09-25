@@ -447,16 +447,16 @@ export function buildPayrollGridColumns({
       field: 'pf_employee',
       headerName: t('payrollManagement.gridColumns.pfEmployee'),
       minWidth: 56,
-      editable: false,
+      editable: allowCellEdit,
       headerClassName: 'payroll-col-employee',
       cellClassName: 'payroll-col-employee payroll-col-center',
-      valueFormatter: (value: unknown) => formatMaybeNumericString(value)
+      ...numberEditProps
     }),
     colDef({
       field: 'tds',
       headerName: t('payrollManagement.gridColumns.tds'),
       minWidth: 56,
-      editable: false,
+      editable: allowCellEdit,
       headerClassName: 'payroll-col-employee',
       cellClassName: 'payroll-col-employee payroll-col-center',
       ...numberEditProps
@@ -465,10 +465,10 @@ export function buildPayrollGridColumns({
       field: 'pt',
       headerName: t('payrollManagement.gridColumns.pt'),
       minWidth: 48,
-      editable: false,
+      editable: allowCellEdit,
       headerClassName: 'payroll-col-employee',
       cellClassName: 'payroll-col-employee payroll-col-center',
-      valueFormatter: (value: unknown) => formatMaybeNumericString(value)
+      ...numberEditProps
     }),
     colDef({
       field: 'net_salary_payable',

@@ -566,6 +566,13 @@ export default {
       otEligible: 'Eligible for OT',
       otEligibleYes: 'Yes',
       otEligibleNo: 'No',
+      ptEligible: 'Eligible for PT',
+      ptEligibleYes: 'Yes',
+      ptEligibleNo: 'No',
+      ptEligibleHint:
+        'PT is calculated automatically from the company GST registered state.',
+      ptEligibleHintWithState:
+        'Company GST state: {{state}} ({{code}}) — PT is calculated from this state on payroll.',
       pfCap: 'PF ceiling',
       pfCap1800: 'Cap at 1,800',
       pfCap12pct: '12% of basic',

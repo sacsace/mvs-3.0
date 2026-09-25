@@ -81,6 +81,11 @@ import { useStore, useMenuStore } from '../../store';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 import { buildEmployeePersonalRecordSections } from './buildEmployeePersonalRecordSections';
 import { api, departmentService, positionService, userService } from '../../services/api';
+import { companyService } from '../../services/api/domains/company';
+import {
+  indianStateLabel,
+  resolveRegisteredStateCodeFromCompanyLike,
+} from '../HR/payroll/indianProfessionalTax';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
@@ -238,6 +243,7 @@ interface User {
   salary?: number;
   has_salary?: boolean;
   ot_eligible?: boolean;
+  pt_eligible?: boolean;
   pf_calc_mode?: 'cap_1800' | 'basic_12pct' | 'total_12pct' | 'none';
   /** @deprecated pf_calc_mode 사용 */
   pf_cap_1800?: boolean;
@@ -604,6 +610,7 @@ const UserManagement: React.FC = () => {
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [users, setUsers] = useState<User[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [companyPtStateCode, setCompanyPtStateCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'create' | 'edit' | 'view'>('list');
   const [openViewDialog, setOpenViewDialog] = useState(false);
@@ -668,6 +675,7 @@ const UserManagement: React.FC = () => {
     employment_type: 'fulltime',
     salary: '',
     ot_eligible: false,
+    pt_eligible: true,
     pf_calc_mode: 'cap_1800' as 'cap_1800' | 'basic_12pct' | 'total_12pct' | 'none',
     bank_name: '',
     bank_account: '',
@@ -700,6 +708,7 @@ const UserManagement: React.FC = () => {
     employment_type: string;
     salary: string;
     ot_eligible: boolean;
+    pt_eligible: boolean;
     pf_calc_mode: 'cap_1800' | 'basic_12pct' | 'total_12pct' | 'none';
     bank_name: string;
     bank_account: string;
@@ -773,6 +782,53 @@ const UserManagement: React.FC = () => {
     const id = user?.company_id;
     return id != null && id > 0 ? id : undefined;
   }, [user?.company_id]);
+
+  // 인사정보 PT: 회사 GST 등록 주(州) 표시용
+  useEffect(() => {
+    const companyId = Number(
+      formData.company_id || editingUser?.company_id || user?.company_id || 0
+    );
+    if (!Number.isFinite(companyId) || companyId <= 0) {
+      setCompanyPtStateCode(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await companyService.getCompany(companyId);
+        if (!response?.success || !response.data) {
+          if (!cancelled) setCompanyPtStateCode(null);
+          return;
+        }
+        const data = response.data;
+        let gstNumbers = data.gst_numbers ?? data.gstNumbers ?? [];
+        try {
+          const gstRes = await companyService.getCompanyGstNumbers(companyId);
+          if (
+            gstRes?.success &&
+            Array.isArray(gstRes.data?.gst_numbers) &&
+            gstRes.data.gst_numbers.length > 0
+          ) {
+            gstNumbers = gstRes.data.gst_numbers;
+          }
+        } catch {
+          /* ignore */
+        }
+        const code = resolveRegisteredStateCodeFromCompanyLike({
+          settings: data.settings,
+          address: data.address,
+          business_number: data.business_number || data.businessNumber,
+          gst_numbers: gstNumbers,
+        });
+        if (!cancelled) setCompanyPtStateCode(code);
+      } catch {
+        if (!cancelled) setCompanyPtStateCode(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [formData.company_id, editingUser?.company_id, user?.company_id]);
 
   // root: 사용자 정보가 늦게 로드돼도 소속 회사를 한 번만 기본 선택
   useEffect(() => {
@@ -986,6 +1042,7 @@ const UserManagement: React.FC = () => {
       employment_type: 'fulltime',
       salary: '',
       ot_eligible: false,
+      pt_eligible: true,
       pf_calc_mode: 'cap_1800',
       bank_name: '',
       bank_account: '',
@@ -1075,6 +1132,7 @@ const UserManagement: React.FC = () => {
       employment_type: 'fulltime',
       salary: '',
       ot_eligible: false,
+      pt_eligible: true,
       pf_calc_mode: 'cap_1800',
       bank_name: '',
       bank_account: '',
@@ -1120,6 +1178,7 @@ const UserManagement: React.FC = () => {
       employment_type: (user as any).employment_type || 'fulltime',
       salary: '',
       ot_eligible: (user as any).ot_eligible === true,
+      pt_eligible: (user as any).pt_eligible !== false,
       pf_calc_mode: (() => {
         const m = String((user as any).pf_calc_mode ?? '').trim();
         if (m === 'basic_12pct' || m === 'total_12pct' || m === 'cap_1800' || m === 'none') return m;
@@ -3121,6 +3180,28 @@ const UserManagement: React.FC = () => {
                       }
                       label={t('userManagement.otEligible')}
                     />
+                    <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / -1' } }}>
+                      <FormControlLabel
+                        sx={{ m: 0 }}
+                        control={
+                          <Checkbox
+                            checked={formData.pt_eligible !== false}
+                            onChange={(e) =>
+                              setFormData({ ...formData, pt_eligible: e.target.checked })
+                            }
+                          />
+                        }
+                        label={t('userManagement.ptEligible')}
+                      />
+                      <Typography color="text.secondary" sx={hrHintSx}>
+                        {companyPtStateCode
+                          ? t('userManagement.ptEligibleHintWithState', {
+                              state: indianStateLabel(companyPtStateCode),
+                              code: companyPtStateCode,
+                            })
+                          : t('userManagement.ptEligibleHint')}
+                      </Typography>
+                    </Box>
                   </Box>
                 </AccordionDetails>
               </Accordion>
@@ -3996,6 +4077,16 @@ const UserManagement: React.FC = () => {
                         {su.ot_eligible === true
                           ? t('userManagement.otEligibleYes')
                           : t('userManagement.otEligibleNo')}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.ptEligible')}
+                      </Typography>
+                      <Typography variant="body1" sx={userDetailValueSx}>
+                        {su.pt_eligible === false
+                          ? t('userManagement.ptEligibleNo')
+                          : t('userManagement.ptEligibleYes')}
                       </Typography>
                     </Box>
                   </Box>

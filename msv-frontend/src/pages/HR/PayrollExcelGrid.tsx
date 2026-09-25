@@ -241,6 +241,18 @@ const PayrollExcelGrid: React.FC<Props> = ({
       if (prevOt !== nextOt) {
         next.ot_manual = nextOt > 0;
       }
+      if (Math.floor(Number(prev.pf_employee) || 0) !== Math.floor(Number(next.pf_employee) || 0)) {
+        next.pf_manual = true;
+        next.pf_employee = String(Math.max(0, Math.floor(Number(next.pf_employee) || 0)));
+      }
+      if (Math.floor(Number(prev.tds) || 0) !== Math.floor(Number(next.tds) || 0)) {
+        next.tds_manual = true;
+        next.tds = Math.max(0, Math.floor(Number(next.tds) || 0));
+      }
+      if (Math.floor(Number(prev.pt) || 0) !== Math.floor(Number(next.pt) || 0)) {
+        next.pt_manual = true;
+        next.pt = String(Math.max(0, Math.floor(Number(next.pt) || 0)));
+      }
       const row = recalculatePayrollRow(next, recalcCtx, {
         preferTotalSplit: shouldPreferTotalSplit(prev, next),
         salaryRatios,

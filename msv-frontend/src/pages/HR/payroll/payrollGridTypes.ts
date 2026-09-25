@@ -39,8 +39,16 @@ export type PayrollGridRow = {
   night_ot_hour: number;
   /** 인사정보 OT 적용 대상 (기본 false — 체크한 직원만 자동 OT 반영) */
   ot_eligible?: boolean;
+  /** 인사정보 PT 적용 (기본 true — 회사 GST 주 기준 자동 계산) */
+  pt_eligible?: boolean;
   /** 그리드에서 OT 시간을 수동 입력한 경우 — 미적용 직원이어도 OT 계산 허용 */
   ot_manual?: boolean;
+  /** 그리드에서 PF(직원) 금액을 수동 입력한 경우 — 자동 재계산 덮어쓰기 방지 */
+  pf_manual?: boolean;
+  /** 그리드에서 TDS 금액을 수동 입력한 경우 */
+  tds_manual?: boolean;
+  /** 그리드에서 PT 금액을 수동 입력한 경우 */
+  pt_manual?: boolean;
   /** true면 PF 상한 1,800 (기본), false면 기본급×12% — deprecated, pf_calc_mode 사용 */
   pf_cap_1800?: boolean;
   /** 인사정보 PF 계산: cap_1800 | basic_12pct | total_12pct | none */

@@ -35,7 +35,9 @@ interface UserAttributes {
   bank_ifsc?: string;
   is_payment_officer?: boolean;
   ot_eligible?: boolean;
-  /** PF 계산: cap_1800 | basic_12pct | total_12pct */
+  /** PT(Professional Tax) 적용 — 회사 GST 주 기준으로 급여 자동 계산 */
+  pt_eligible?: boolean;
+  /** PF 계산: cap_1800 | basic_12pct | total_12pct | none */
   pf_calc_mode?: 'cap_1800' | 'basic_12pct' | 'total_12pct' | 'none';
   /** 이전 직장 경력 [{ company_name, position, start_date, end_date, description }] */
   career_history?: any[] | null;
@@ -83,6 +85,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   public bank_ifsc?: string;
   public is_payment_officer?: boolean;
   public ot_eligible?: boolean;
+  public pt_eligible?: boolean;
   public pf_calc_mode?: 'cap_1800' | 'basic_12pct' | 'total_12pct' | 'none';
   public career_history?: any[] | null;
   public education_history?: any[] | null;
@@ -229,6 +232,11 @@ User.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false
+    },
+    pt_eligible: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true
     },
     pf_calc_mode: {
       type: DataTypes.STRING(32),

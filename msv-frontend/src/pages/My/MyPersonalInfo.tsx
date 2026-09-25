@@ -84,6 +84,7 @@ type ProfileDetail = {
   bank_account?: string | null;
   bank_ifsc?: string | null;
   ot_eligible?: boolean | null;
+  pt_eligible?: boolean | null;
   pf_calc_mode?: 'cap_1800' | 'basic_12pct' | 'total_12pct' | 'none' | null;
   pf_cap_1800?: boolean | null;
   is_payment_officer?: boolean | null;
@@ -840,6 +841,11 @@ const MyPersonalInfo: React.FC = () => {
                       {profile.ot_eligible === true
                         ? t('userManagement.otEligibleYes')
                         : t('userManagement.otEligibleNo')}
+                    </ReadField>
+                    <ReadField label={t('userManagement.ptEligible')}>
+                      {profile.pt_eligible === false
+                        ? t('userManagement.ptEligibleNo')
+                        : t('userManagement.ptEligibleYes')}
                     </ReadField>
                     <ReadField label={t('userManagement.pfCap')}>
                       {(() => {

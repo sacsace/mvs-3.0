@@ -40,6 +40,8 @@ export type IndianStatutoryOptions = {
   registeredStateCode?: string | null;
   /** YYYY-MM — Maharashtra 2월 PT 특례 */
   payrollMonth?: string | null;
+  /** PT 적용 여부 (인사정보). false면 PT 0 */
+  ptEligible?: boolean;
   /** TDS 자동 추정 사용 여부 (false면 0) */
   estimateTds?: boolean;
   /** 월 기본급(L) — ESI 면제(L>21000) 판단. 생략 시 Gross로 간주 */
@@ -296,13 +298,15 @@ export function computeIndianStatutoryPayroll(
     }
     esic_employee = computeEsiEmployee(gross, o.esiBasicCeiling);
     esic_employer = computeEsiEmployer(gross, o.esiBasicCeiling);
-    pt = computeProfessionalTaxByState({
-      grossMonthly: gross,
-      stateCode: o.registeredStateCode,
-      payrollMonth: o.payrollMonth
-    });
-    if (pt === 0 && !o.registeredStateCode) {
-      pt = computePt(gross, o.ptGrossThreshold, o.ptAmount);
+    if (o.ptEligible !== false) {
+      pt = computeProfessionalTaxByState({
+        grossMonthly: gross,
+        stateCode: o.registeredStateCode,
+        payrollMonth: o.payrollMonth
+      });
+      if (pt === 0 && !o.registeredStateCode) {
+        pt = computePt(gross, o.ptGrossThreshold, o.ptAmount);
+      }
     }
     tds = o.estimateTds ? computeMonthlyTdsFromSumTotal(gross) : 0;
   }

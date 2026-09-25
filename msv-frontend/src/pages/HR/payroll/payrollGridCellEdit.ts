@@ -17,6 +17,9 @@ const NUMERIC_FIELDS = new Set([
   'basic_salary',
   'house_rent_allowance',
   'other_allowance',
+  'pf_employee',
+  'tds',
+  'pt',
 ]);
 
 export function isPayrollGridCellEditable(
@@ -35,11 +38,9 @@ export function isPayrollGridCellEditable(
     field === 'days_worked' ||
     field === 'sum_total' ||
     field === 'net_salary_payable' ||
-    field === 'pt' ||
     field === 'ot_rate' ||
     field === 'esic_employee' ||
     field === 'esic_employer' ||
-    field === 'pf_employee' ||
     field === 'emp_id' ||
     field === 'employee_email' ||
     field === 'working_month' ||
@@ -125,6 +126,27 @@ export function patchPayrollRowField(
     const n = roundOtHour(Number(value) || 0);
     next.day_ot_hour = n;
     if (n > 0) next.ot_manual = true;
+    return next;
+  }
+
+  if (field === 'pf_employee') {
+    const n = Math.max(0, Math.floor(typeof value === 'number' ? value : Number(value) || 0));
+    next.pf_employee = String(n);
+    next.pf_manual = true;
+    return next;
+  }
+
+  if (field === 'tds') {
+    const n = Math.max(0, Math.floor(typeof value === 'number' ? value : Number(value) || 0));
+    next.tds = n;
+    next.tds_manual = true;
+    return next;
+  }
+
+  if (field === 'pt') {
+    const n = Math.max(0, Math.floor(typeof value === 'number' ? value : Number(value) || 0));
+    next.pt = String(n);
+    next.pt_manual = true;
     return next;
   }
 

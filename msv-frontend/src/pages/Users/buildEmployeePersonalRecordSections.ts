@@ -140,6 +140,13 @@ export function buildEmployeePersonalRecordSections(params: {
         ? t('userManagement.otEligibleYes')
         : t('userManagement.otEligibleNo'),
   });
+  hrFields.push({
+    label: t('userManagement.ptEligible'),
+    value:
+      su.pt_eligible === false
+        ? t('userManagement.ptEligibleNo')
+        : t('userManagement.ptEligibleYes'),
+  });
   {
     const m = String(su.pf_calc_mode ?? '').trim();
     const pfLabel =

@@ -564,6 +564,13 @@ export default {
       otEligible: 'OT 적용 대상',
       otEligibleYes: '적용',
       otEligibleNo: '미적용',
+      ptEligible: 'PT 적용 대상',
+      ptEligibleYes: '적용',
+      ptEligibleNo: '미적용',
+      ptEligibleHint:
+        '회사 GST 등록 주(州) 기준으로 급여 지급 시 PT가 자동 계산됩니다.',
+      ptEligibleHintWithState:
+        '회사 GST 등록 주: {{state}} ({{code}}) — 급여 지급 시 해당 주 기준으로 PT가 자동 계산됩니다.',
       pfCap: 'PF 상한',
       pfCap1800: '상한 1,800',
       pfCap12pct: '기본급 12%',

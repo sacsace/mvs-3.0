@@ -200,6 +200,7 @@ export const getPayrolls = async (req: RequestWithUser, res: Response) => {
             'birth_date',
             'hire_date',
             'ot_eligible',
+            'pt_eligible',
             'pf_calc_mode'
           ]
         }
@@ -255,6 +256,7 @@ export const getPayroll = async (req: RequestWithUser, res: Response) => {
             'birth_date',
             'hire_date',
             'ot_eligible',
+            'pt_eligible',
             'pf_calc_mode'
           ]
         }
@@ -369,6 +371,7 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
           'employment_type',
           'employee_number',
           'ot_eligible',
+          'pt_eligible',
           'pf_calc_mode'
         ],
         transaction
@@ -400,6 +403,12 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
           rawOtEligible === 1 ||
           rawOtEligible === '1' ||
           rawOtEligible === 'true';
+        const rawPtEligible = (emp as any).pt_eligible ?? (emp as any).get?.('pt_eligible');
+        const ptEligible =
+          rawPtEligible !== false &&
+          rawPtEligible !== 0 &&
+          rawPtEligible !== '0' &&
+          rawPtEligible !== 'false';
         const dayOtHours = otEligible ? att.dayOtHours : 0;
         const nightOtHours = otEligible ? att.nightOtHours : 0;
         const overtimeHoursForPay = otEligible ? att.overtimeHours : 0;
@@ -465,7 +474,8 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
           basicSalary: packageForPf,
           totalSalary: packageForPf,
           registeredStateCode,
-          payrollMonth: payroll_period
+          payrollMonth: payroll_period,
+          ptEligible,
         });
         const statExtra = breakdownToExtraFields(stat);
 
@@ -511,6 +521,7 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
           day_ot_hour: String(dayOtHours),
           night_ot_hour: String(nightOtHours),
           ot_eligible: String(otEligible),
+          pt_eligible: String(ptEligible),
           pf_calc_mode: pfCalcMode,
           indian_pf_mode: statutoryApplicable ? pfMode : '',
           indian_statutory_version: 'sheet_ref_6pct_prorate_v2'
