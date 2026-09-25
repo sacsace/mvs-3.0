@@ -238,7 +238,7 @@ interface User {
   salary?: number;
   has_salary?: boolean;
   ot_eligible?: boolean;
-  pf_calc_mode?: 'cap_1800' | 'basic_12pct' | 'total_12pct';
+  pf_calc_mode?: 'cap_1800' | 'basic_12pct' | 'total_12pct' | 'none';
   /** @deprecated pf_calc_mode 사용 */
   pf_cap_1800?: boolean;
   bank_name?: string;
@@ -668,7 +668,7 @@ const UserManagement: React.FC = () => {
     employment_type: 'fulltime',
     salary: '',
     ot_eligible: false,
-    pf_calc_mode: 'cap_1800' as 'cap_1800' | 'basic_12pct' | 'total_12pct',
+    pf_calc_mode: 'cap_1800' as 'cap_1800' | 'basic_12pct' | 'total_12pct' | 'none',
     bank_name: '',
     bank_account: '',
     bank_ifsc: '',
@@ -700,7 +700,7 @@ const UserManagement: React.FC = () => {
     employment_type: string;
     salary: string;
     ot_eligible: boolean;
-    pf_calc_mode: 'cap_1800' | 'basic_12pct' | 'total_12pct';
+    pf_calc_mode: 'cap_1800' | 'basic_12pct' | 'total_12pct' | 'none';
     bank_name: string;
     bank_account: string;
     bank_ifsc: string;
@@ -1122,7 +1122,7 @@ const UserManagement: React.FC = () => {
       ot_eligible: (user as any).ot_eligible === true,
       pf_calc_mode: (() => {
         const m = String((user as any).pf_calc_mode ?? '').trim();
-        if (m === 'basic_12pct' || m === 'total_12pct' || m === 'cap_1800') return m;
+        if (m === 'basic_12pct' || m === 'total_12pct' || m === 'cap_1800' || m === 'none') return m;
         if ((user as any).pf_cap_1800 === false) return 'basic_12pct';
         return 'cap_1800';
       })(),
@@ -3097,13 +3097,18 @@ const UserManagement: React.FC = () => {
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          pf_calc_mode: e.target.value as 'cap_1800' | 'basic_12pct' | 'total_12pct',
+                          pf_calc_mode: e.target.value as
+                            | 'cap_1800'
+                            | 'basic_12pct'
+                            | 'total_12pct'
+                            | 'none',
                         })
                       }
                     >
                       <MenuItem value="cap_1800">{t('userManagement.pfCap1800')}</MenuItem>
                       <MenuItem value="basic_12pct">{t('userManagement.pfCap12pct')}</MenuItem>
                       <MenuItem value="total_12pct">{t('userManagement.pfCapTotal12pct')}</MenuItem>
+                      <MenuItem value="none">{t('userManagement.pfCapNone')}</MenuItem>
                     </TextField>
 
                     <FormControlLabel
@@ -3975,6 +3980,7 @@ const UserManagement: React.FC = () => {
                       <Typography variant="body1" sx={userDetailValueSx}>
                         {(() => {
                           const m = String(su.pf_calc_mode ?? '').trim();
+                          if (m === 'none') return t('userManagement.pfCapNone');
                           if (m === 'total_12pct') return t('userManagement.pfCapTotal12pct');
                           if (m === 'basic_12pct' || su.pf_cap_1800 === false)
                             return t('userManagement.pfCap12pct');

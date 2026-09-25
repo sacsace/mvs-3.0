@@ -845,7 +845,7 @@ export const payrollService = {
       /** 기본 gross_6pct(참고 ?�트). epf_12pct_half = ?�전 50%×12% EPF??*/
       pf_mode?: 'gross_6pct' | 'epf_12pct_half';
       pf_cap_1800?: boolean;
-      pf_calc_mode?: 'cap_1800' | 'basic_12pct' | 'total_12pct';
+      pf_calc_mode?: 'cap_1800' | 'basic_12pct' | 'total_12pct' | 'none';
       estimate_tds?: boolean;
     }
   ) => {

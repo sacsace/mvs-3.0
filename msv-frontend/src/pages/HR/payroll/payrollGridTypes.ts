@@ -43,8 +43,8 @@ export type PayrollGridRow = {
   ot_manual?: boolean;
   /** true면 PF 상한 1,800 (기본), false면 기본급×12% — deprecated, pf_calc_mode 사용 */
   pf_cap_1800?: boolean;
-  /** 인사정보 PF 계산: cap_1800 | basic_12pct | total_12pct */
-  pf_calc_mode?: 'cap_1800' | 'basic_12pct' | 'total_12pct';
+  /** 인사정보 PF 계산: cap_1800 | basic_12pct | total_12pct | none */
+  pf_calc_mode?: 'cap_1800' | 'basic_12pct' | 'total_12pct' | 'none';
   transport_allowance: number;
   overtime: number;
   sum_total: number;

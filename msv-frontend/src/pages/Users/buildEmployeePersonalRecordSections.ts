@@ -143,7 +143,9 @@ export function buildEmployeePersonalRecordSections(params: {
   {
     const m = String(su.pf_calc_mode ?? '').trim();
     const pfLabel =
-      m === 'total_12pct'
+      m === 'none'
+        ? t('userManagement.pfCapNone')
+        : m === 'total_12pct'
         ? t('userManagement.pfCapTotal12pct')
         : m === 'basic_12pct' || su.pf_cap_1800 === false
           ? t('userManagement.pfCap12pct')

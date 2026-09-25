@@ -570,6 +570,7 @@ export default {
       pfCap1800: 'Cap at 1,800',
       pfCap12pct: '12% of basic',
       pfCapTotal12pct: '12% of total (50/50 split)',
+      pfCapNone: 'No PF',
       careerHint: 'Add previous work experience. Only rows with a company name are saved.',
       careerCompany: 'Company',
       careerPosition: 'Position',

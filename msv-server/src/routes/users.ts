@@ -304,11 +304,11 @@ const parseSalaryInput = (salary: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** PF 계산 방식: cap_1800 | basic_12pct | total_12pct (레거시 pf_cap_1800 boolean 호환) */
-const normalizePfCalcMode = (raw: unknown): 'cap_1800' | 'basic_12pct' | 'total_12pct' => {
+/** PF 계산 방식: cap_1800 | basic_12pct | total_12pct | none (레거시 pf_cap_1800 boolean 호환) */
+const normalizePfCalcMode = (raw: unknown): 'cap_1800' | 'basic_12pct' | 'total_12pct' | 'none' => {
   if (raw === false || raw === 0 || raw === '0' || raw === 'false') return 'basic_12pct';
   const s = String(raw ?? '').trim();
-  if (s === 'basic_12pct' || s === 'total_12pct' || s === 'cap_1800') return s;
+  if (s === 'basic_12pct' || s === 'total_12pct' || s === 'cap_1800' || s === 'none') return s;
   return 'cap_1800';
 };
 

@@ -6,6 +6,7 @@ import {
   otHourEditProps,
   roundOtHour,
 } from './payrollGridUtils';
+import { toProperCaseInput } from '../../utils/textCase';
 
 export type PayrollCellAnchor = { rowId: number | string; field: string };
 
@@ -89,6 +90,24 @@ export function parsePayrollFieldInput(
 
   if (field.startsWith('const__') || NUMERIC_FIELDS.has(field)) {
     return numberEditProps.valueParser(trimmed);
+  }
+
+  // 텍스트 셀: 단어별 첫 글자 대문자·나머지 소문자 (IFSC 등 코드 제외)
+  if (
+    field === 'ifsc' ||
+    field === 'emp_id' ||
+    field === 'employee_email' ||
+    field === 'bank_account'
+  ) {
+    return trimmed;
+  }
+  if (
+    field === 'bank_name' ||
+    field === 'department' ||
+    field === 'employee_name' ||
+    field === 'position'
+  ) {
+    return toProperCaseInput(trimmed);
   }
 
   return trimmed;

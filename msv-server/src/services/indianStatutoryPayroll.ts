@@ -17,7 +17,7 @@ import { computeProfessionalTaxByState } from '../utils/indianProfessionalTax';
 
 export type PfMode = 'basic_12pct' | 'gross_6pct' | 'epf_12pct_half';
 
-export type UserPfCalcMode = 'cap_1800' | 'basic_12pct' | 'total_12pct';
+export type UserPfCalcMode = 'cap_1800' | 'basic_12pct' | 'total_12pct' | 'none';
 
 export type IndianStatutoryOptions = {
   /** AD="A" 에 해당: PF/ESI/PT 적용 (false면 모두 0) */
@@ -131,16 +131,19 @@ export function computePfFromBasicSalary(
 export function normalizeUserPfCalcMode(raw: unknown): UserPfCalcMode {
   if (raw === false || raw === 0 || raw === '0' || raw === 'false') return 'basic_12pct';
   const s = String(raw ?? '').trim();
-  if (s === 'basic_12pct' || s === 'total_12pct' || s === 'cap_1800') return s;
+  if (s === 'basic_12pct' || s === 'total_12pct' || s === 'cap_1800' || s === 'none') return s;
   return 'cap_1800';
 }
 
-/** 인사정보 PF 계산: 상한 1800 / 기본급 12% / 총급여 12%(직원·사업주 각 50%) */
+/** 인사정보 PF 계산: 상한 1800 / 기본급 12% / 총급여 12%(직원·사업주 각 50%) / 없음 */
 export function computePfFromCalcMode(
   basicSalary: number,
   totalSalary: number,
   mode: UserPfCalcMode = 'cap_1800'
 ): { pf_employee: number; pf_employer: number } {
+  if (mode === 'none') {
+    return { pf_employee: 0, pf_employer: 0 };
+  }
   if (mode === 'total_12pct') {
     // 총급여×12% 를 직원·사업주가 반반 (각 6%)
     const totalPf = Math.round(Math.max(0, totalSalary) * 0.12);

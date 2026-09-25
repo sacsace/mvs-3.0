@@ -1,5 +1,6 @@
 import type { PayrollGridRow } from './payrollGridTypes';
 import { computeProfessionalTaxByState } from './indianProfessionalTax';
+import { toProperCaseInput } from '../../utils/textCase';
 import {
   evaluatePayrollColumnFormula,
 } from './payrollColumnFormula';
@@ -362,7 +363,7 @@ function resolveOtInputsFromExtra(
 export type PfMode = 'basic_12pct' | 'gross_6pct' | 'epf_12pct_half';
 
 /** PF 계산 방식 (인사정보). 기본 cap_1800 */
-export type UserPfCalcMode = 'cap_1800' | 'basic_12pct' | 'total_12pct';
+export type UserPfCalcMode = 'cap_1800' | 'basic_12pct' | 'total_12pct' | 'none';
 
 /** PF 직원·사업주 — 모드별 산정 */
 export function computePfContributions(
@@ -377,7 +378,12 @@ export function computePfContributions(
         ? 'basic_12pct'
         : mode === 'total_12pct'
           ? 'total_12pct'
-          : 'cap_1800';
+          : mode === 'none'
+            ? 'none'
+            : 'cap_1800';
+  if (resolved === 'none') {
+    return { pf_employee: 0, pf_employer: 0 };
+  }
   if (resolved === 'total_12pct') {
     // 총급여×12% 를 직원·사업주가 반반 (각 6%)
     const totalPf = Math.round(Math.max(0, num(totalSalary)) * PF_BASIC_RATE);
@@ -400,7 +406,7 @@ export function resolvePfCalcMode(
     if (value === false || value === 'false' || value === 0 || value === '0') return 'basic_12pct';
     if (value === true || value === 'true' || value === 1 || value === '1') return 'cap_1800';
     const s = String(value ?? '').trim();
-    if (s === 'cap_1800' || s === 'basic_12pct' || s === 'total_12pct') return s;
+    if (s === 'cap_1800' || s === 'basic_12pct' || s === 'total_12pct' || s === 'none') return s;
     return null;
   };
   const fromEmployee = employee
@@ -916,11 +922,11 @@ export function payrollRecordToGridRow(
     emp_id: ex(x, 'emp_id') || str(emp.employee_number),
     bank_account: ex(x, 'bank_account'),
     ifsc: ex(x, 'ifsc'),
-    bank_name: ex(x, 'bank_name'),
+    bank_name: toProperCaseInput(ex(x, 'bank_name')),
     employee_email: str(emp.email),
-    department: ex(x, 'department') || str(emp.department),
-    employee_name: ex(x, 'employee_name') || str(emp.username),
-    position: ex(x, 'position') || str(emp.position),
+    department: toProperCaseInput(ex(x, 'department') || str(emp.department)),
+    employee_name: toProperCaseInput(ex(x, 'employee_name') || str(emp.username)),
+    position: toProperCaseInput(ex(x, 'position') || str(emp.position)),
     birth_date: ex(x, 'birth_date') || (emp.birth_date ? String(emp.birth_date).split('T')[0] : ''),
     joining_date: joining,
     working_month: workingMonth,

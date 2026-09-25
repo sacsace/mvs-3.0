@@ -21,6 +21,7 @@ import ErrorDialog from './components/Common/ErrorDialog';
 import NotificationSnackbar from './components/Common/NotificationSnackbar';
 import ErrorBoundary from './components/Common/ErrorBoundary';
 import AppInstallBanner from './components/Common/AppInstallBanner';
+import InputProperCaseListener from './components/Common/InputProperCaseListener';
 import UnderDevelopment from './components/Common/UnderDevelopment';
 import ComingSoon from './components/Common/ComingSoon';
 import { lazyPage } from './components/Common/LazyPage';
@@ -185,6 +186,7 @@ function App() {
   return (
     <ThemeProvider theme={currentTheme}>
       <CssBaseline />
+      <InputProperCaseListener />
       <PhotoPreviewProvider>
       <ErrorBoundary>
         <ErrorDialog />
