@@ -6,7 +6,7 @@ import {
   otHourEditProps,
   roundOtHour,
 } from './payrollGridUtils';
-import { toProperCaseInput } from '../../utils/textCase';
+import { toProperCaseInput } from '../../../utils/textCase';
 
 export type PayrollCellAnchor = { rowId: number | string; field: string };
 

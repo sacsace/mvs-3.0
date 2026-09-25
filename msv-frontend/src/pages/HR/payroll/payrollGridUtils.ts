@@ -1,6 +1,6 @@
 import type { PayrollGridRow } from './payrollGridTypes';
 import { computeProfessionalTaxByState } from './indianProfessionalTax';
-import { toProperCaseInput } from '../../utils/textCase';
+import { toProperCaseInput } from '../../../utils/textCase';
 import {
   evaluatePayrollColumnFormula,
 } from './payrollColumnFormula';
