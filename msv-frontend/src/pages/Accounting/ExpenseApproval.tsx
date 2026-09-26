@@ -6887,15 +6887,9 @@ const ExpenseApproval: React.FC = () => {
                     <RadioGroup
                       row
                       value={receiptInvoiceType}
-                      onChange={(e) => {
-                        const next = e.target.value as ExpenseInvoiceType;
-                        setReceiptInvoiceType(next);
-                        if (next !== 'proforma') {
-                          setVoucherData((prev) =>
-                            prev.isPrepaid ? { ...prev, isPrepaid: false } : prev
-                          );
-                        }
-                      }}
+                      onChange={(e) =>
+                        setReceiptInvoiceType(e.target.value as ExpenseInvoiceType)
+                      }
                       sx={{ mr: 1 }}
                     >
                       <FormControlLabel
@@ -6914,7 +6908,6 @@ const ExpenseApproval: React.FC = () => {
                         <Checkbox
                           size="small"
                           checked={Boolean(voucherData.isPrepaid)}
-                          disabled={receiptInvoiceType !== 'proforma'}
                           onChange={(e) =>
                             setVoucherData({ ...voucherData, isPrepaid: e.target.checked })
                           }
@@ -6924,7 +6917,7 @@ const ExpenseApproval: React.FC = () => {
                       sx={{ ml: 0 }}
                     />
                   </Box>
-                  {receiptInvoiceType === 'proforma' && voucherData.isPrepaid ? (
+                  {voucherData.isPrepaid ? (
                     <Typography
                       variant="caption"
                       color="text.secondary"

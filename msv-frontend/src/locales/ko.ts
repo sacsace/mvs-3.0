@@ -5020,7 +5020,7 @@ export default {
         invoiceTypeTax: 'Tax Invoice',
         invoiceTypeProforma: 'Proforma Invoice',
         prepaid: '선지출',
-        prepaidHint: '이미 선지출한 건입니다. 확인 후 승인하면 송금 없이 지급 완료 처리됩니다.',
+        prepaidHint: '이미 지출된 금액입니다. 승인하면 송금 없이 바로 지급 완료(종료)됩니다.',
         uploadTaxInvoice: 'Tax Invoice 첨부',
         vendorGroupDoc: '업체·전표',
         vendorGroupPayout: '입금 계좌',

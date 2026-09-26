@@ -4971,7 +4971,7 @@ export default {
         invoiceTypeProforma: 'Proforma invoice',
         prepaid: 'Prepaid',
         prepaidHint:
-          'Already paid in advance. After review and approval, it is marked paid without remittance.',
+          'This amount is already spent. Approval closes it as paid without remittance.',
         uploadTaxInvoice: 'Upload tax invoice',
         vendorGroupDoc: 'Vendor & voucher',
         vendorGroupPayout: 'Payout account',
