@@ -4969,6 +4969,9 @@ export default {
           'Select tax invoice or proforma invoice before uploading. Proforma allows remittance, but tax invoice is required to close.',
         invoiceTypeTax: 'Tax invoice',
         invoiceTypeProforma: 'Proforma invoice',
+        prepaid: 'Prepaid',
+        prepaidHint:
+          'Already paid in advance. After review and approval, it is marked paid without remittance.',
         uploadTaxInvoice: 'Upload tax invoice',
         vendorGroupDoc: 'Vendor & voucher',
         vendorGroupPayout: 'Payout account',

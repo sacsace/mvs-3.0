@@ -2379,6 +2379,12 @@ const normalizeExpenseAttachments = (value: unknown): ExpenseAttachmentRecord[] 
 const expenseHasTaxInvoice = (attachments: unknown) =>
   normalizeExpenseAttachments(attachments).some((row) => row.invoiceType === 'tax');
 
+const isExpensePrepaidMeta = (itemsValue: any) => {
+  const meta = mergeExpenseItemsMeta(itemsValue, {}).meta || {};
+  const v = meta.isPrepaid ?? meta.is_prepaid;
+  return v === true || v === 'true' || v === 1 || v === '1';
+};
+
 const tryFinalizeExpenseIfReady = async (expense: any, actorUserId?: number) => {
   const remaining = getExpenseRemainingAmount(expense);
   if (remaining > 0) return false;
@@ -3494,6 +3500,32 @@ export const updateExpenseReportStatus = async (req: RequestWithUser, res: Respo
         { id: user_id, username: req.user.username },
         typeof reason === 'string' ? reason.trim() : undefined
       );
+      // 선지출: 승인 즉시 지급 완료 — 송금 탭으로 보내지 않음
+      if (isExpensePrepaidMeta(expense.items)) {
+        const total = roundMoney(Number(expense.total_amount || 0));
+        const transferLogs = Array.isArray(expense.bank_transfer_logs)
+          ? [...expense.bank_transfer_logs]
+          : [];
+        transferLogs.unshift({
+          timestamp: new Date().toISOString(),
+          action: 'prepaid_skip',
+          status: 'success',
+          provider: 'prepaid',
+          amount: total,
+          payload: { amount: total, reason: 'prepaid' },
+          response: null,
+          error: null,
+          completed_by: user_id,
+        });
+        patch.status = 'paid';
+        patch.paid_amount = total;
+        patch.payment_request_status = 'paid';
+        patch.payment_completed_at = new Date();
+        patch.payment_completed_by = user_id;
+        patch.bank_transfer_provider = 'prepaid';
+        patch.bank_transfer_status = 'success';
+        patch.bank_transfer_logs = transferLogs;
+      }
     }
     await expense.update(patch);
     await expense.reload();

@@ -248,7 +248,24 @@ const expenseAttachmentHasTaxInvoice = (attachments: unknown): boolean => {
   });
 };
 
+const expenseIsPrepaidRaw = (expense: any): boolean => {
+  const meta =
+    expense?.itemMeta ||
+    (() => {
+      try {
+        const items = typeof expense?.items === 'string' ? JSON.parse(expense.items) : expense?.items;
+        return items && typeof items === 'object' && !Array.isArray(items) ? items.meta : null;
+      } catch {
+        return null;
+      }
+    })();
+  if (!meta || typeof meta !== 'object') return false;
+  const v = (meta as any).isPrepaid ?? (meta as any).is_prepaid;
+  return v === true || v === 'true' || v === 1 || v === '1';
+};
+
 const expenseIsAwaitingTaxInvoiceRaw = (expense: any): boolean => {
+  if (expenseIsPrepaidRaw(expense)) return false;
   const total = Number(expense.total_amount ?? expense.totalAmount ?? 0);
   const paid = Number(expense.paid_amount ?? expense.paidAmount ?? 0);
   const remaining = Math.max(0, total - paid);
@@ -261,6 +278,7 @@ const expenseIsAwaitingTaxInvoiceRaw = (expense: any): boolean => {
 };
 
 const getExpenseTransferFilterKey = (expense: any): string => {
+  if (expenseIsPrepaidRaw(expense)) return 'transfer_completed';
   const total = floorDashboardMoney(Number(expense.total_amount ?? expense.totalAmount ?? 0));
   const paid = floorDashboardMoney(Number(expense.paid_amount ?? expense.paidAmount ?? 0));
   const remaining = Math.max(0, total - paid);

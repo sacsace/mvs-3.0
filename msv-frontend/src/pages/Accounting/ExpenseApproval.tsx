@@ -191,7 +191,9 @@ const expenseIsAwaitingTaxInvoice = (expense: {
   paidAmount?: number;
   status?: string;
   paymentRequestStatus?: string;
+  itemMeta?: Record<string, any>;
 }) => {
+  if (expenseIsPrepaid(expense)) return false;
   const total = Number(expense.totalAmount || 0);
   const paid = Number(expense.paidAmount || 0);
   const remaining = Math.max(0, total - paid);
@@ -200,6 +202,13 @@ const expenseIsAwaitingTaxInvoice = (expense: {
   if (String(expense.paymentRequestStatus || '').toLowerCase() === 'paid') return false;
   if (expense.status === 'paid') return false;
   return !expenseHasTaxInvoice(expense.attachments);
+};
+
+/** Proforma + 선지출 — 승인 시 송금 없이 지급 완료 처리 */
+const expenseIsPrepaid = (expense: { itemMeta?: Record<string, any> } | null | undefined) => {
+  if (!expense?.itemMeta) return false;
+  const v = expense.itemMeta.isPrepaid ?? expense.itemMeta.is_prepaid;
+  return v === true || v === 'true' || v === 1 || v === '1';
 };
 
 interface ExpenseItem {
@@ -2097,6 +2106,8 @@ const ExpenseApproval: React.FC = () => {
     gstRoundingAdjustment: 0,
     gstProfessionalTax: 0,
     perLineGst: false,
+    /** Proforma 선지출 — 승인 시 송금 탭 생략 */
+    isPrepaid: false,
   });
   const [ccUserIds, setCcUserIds] = useState<number[]>([]);
   const [qrOpen, setQrOpen] = useState(false);
@@ -2431,6 +2442,9 @@ const ExpenseApproval: React.FC = () => {
   }, [t, isRootUser, companyFilterId]);
 
   const getTransferFilterKey = useCallback((expense: ExpenseApprovalItem) => {
+    if (expenseIsPrepaid(expense)) {
+      return 'transfer_completed';
+    }
     const total = floorMoney(Number(expense.totalAmount || 0));
     const paid = floorMoney(Number(expense.paidAmount || 0));
     const remaining = Math.max(0, total - paid);
@@ -3322,6 +3336,7 @@ const ExpenseApproval: React.FC = () => {
       gstRoundingAdjustment: Number(meta.gstRoundingAdjustment ?? meta.gst_rounding_adjustment ?? 0),
       gstProfessionalTax: Number(meta.gstProfessionalTax ?? meta.gst_professional_tax ?? 0),
       perLineGst: Boolean(meta.perLineGst ?? meta.per_line_gst),
+      isPrepaid: Boolean(meta.isPrepaid ?? meta.is_prepaid),
     });
     setPartnerInputValue(
       String(meta.department || '').trim() ||
@@ -3379,6 +3394,7 @@ const ExpenseApproval: React.FC = () => {
       gstRoundingAdjustment: 0,
       gstProfessionalTax: 0,
       perLineGst: false,
+      isPrepaid: false,
     });
     setDraftId(null);
     setHeaderStatusBanner('');
@@ -3499,6 +3515,7 @@ const ExpenseApproval: React.FC = () => {
       perLineGst: next === 'general' ? prev.perLineGst : false,
       gstRoundingAdjustment: next === 'gst' ? prev.gstRoundingAdjustment : 0,
       gstProfessionalTax: next === 'gst' ? prev.gstProfessionalTax : 0,
+      isPrepaid: next === 'gst' || next === 'tds' ? false : prev.isPrepaid,
     }));
     setLineItems(next === 'gst' ? createGstSummaryLineItems() : [createEmptyLineItem(next)]);
     if (next === 'gst' || next === 'tds') {
@@ -6858,23 +6875,64 @@ const ExpenseApproval: React.FC = () => {
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                     {t('expenseApproval.voucher.invoiceTypeHint')}
                   </Typography>
-                  <RadioGroup
-                    row
-                    value={receiptInvoiceType}
-                    onChange={(e) => setReceiptInvoiceType(e.target.value as ExpenseInvoiceType)}
-                    sx={{ mb: 1 }}
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 0.5,
+                      mb: 1,
+                    }}
                   >
+                    <RadioGroup
+                      row
+                      value={receiptInvoiceType}
+                      onChange={(e) => {
+                        const next = e.target.value as ExpenseInvoiceType;
+                        setReceiptInvoiceType(next);
+                        if (next !== 'proforma') {
+                          setVoucherData((prev) =>
+                            prev.isPrepaid ? { ...prev, isPrepaid: false } : prev
+                          );
+                        }
+                      }}
+                      sx={{ mr: 1 }}
+                    >
+                      <FormControlLabel
+                        value="tax"
+                        control={<Radio size="small" />}
+                        label={t('expenseApproval.voucher.invoiceTypeTax')}
+                      />
+                      <FormControlLabel
+                        value="proforma"
+                        control={<Radio size="small" />}
+                        label={t('expenseApproval.voucher.invoiceTypeProforma')}
+                      />
+                    </RadioGroup>
                     <FormControlLabel
-                      value="tax"
-                      control={<Radio size="small" />}
-                      label={t('expenseApproval.voucher.invoiceTypeTax')}
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={Boolean(voucherData.isPrepaid)}
+                          disabled={receiptInvoiceType !== 'proforma'}
+                          onChange={(e) =>
+                            setVoucherData({ ...voucherData, isPrepaid: e.target.checked })
+                          }
+                        />
+                      }
+                      label={t('expenseApproval.voucher.prepaid')}
+                      sx={{ ml: 0 }}
                     />
-                    <FormControlLabel
-                      value="proforma"
-                      control={<Radio size="small" />}
-                      label={t('expenseApproval.voucher.invoiceTypeProforma')}
-                    />
-                  </RadioGroup>
+                  </Box>
+                  {receiptInvoiceType === 'proforma' && voucherData.isPrepaid ? (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', mb: 1 }}
+                    >
+                      {t('expenseApproval.voucher.prepaidHint')}
+                    </Typography>
+                  ) : null}
                 </>
               )}
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
@@ -7632,6 +7690,15 @@ const ExpenseApproval: React.FC = () => {
                 </Typography>
                 <Box className="expense-pdf-hide" sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                   {getStatusChip(resolveDisplayStatus(selectedExpense))}
+                  {expenseIsPrepaid(selectedExpense) ? (
+                    <Chip
+                      label={t('expenseApproval.voucher.prepaid')}
+                      size="small"
+                      color="info"
+                      variant="outlined"
+                      sx={{ ml: 0.5 }}
+                    />
+                  ) : null}
                   {getPriorityChip(selectedExpense.priority)}
                 </Box>
               </Box>

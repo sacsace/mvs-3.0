@@ -5019,6 +5019,8 @@ export default {
         invoiceTypeHint: '첨부 전 Tax Invoice / Proforma Invoice를 선택하세요. Proforma로도 송금할 수 있지만, Tax Invoice가 있어야 종료(지급 완료)됩니다.',
         invoiceTypeTax: 'Tax Invoice',
         invoiceTypeProforma: 'Proforma Invoice',
+        prepaid: '선지출',
+        prepaidHint: '이미 선지출한 건입니다. 확인 후 승인하면 송금 없이 지급 완료 처리됩니다.',
         uploadTaxInvoice: 'Tax Invoice 첨부',
         vendorGroupDoc: '업체·전표',
         vendorGroupPayout: '입금 계좌',
