@@ -867,8 +867,15 @@ export const payrollService = {
   },
 
   /** 급여 명세??PDF(base64)�?직원 ?�메?�로 발송 */
-  sendPayrollPayslip: async (id: number, pdf_base64: string) => {
-    const response = await api.post(`/hr/payrolls/${id}/send-payslip`, { pdf_base64 });
+  sendPayrollPayslip: async (
+    id: number,
+    pdf_base64: string,
+    opts?: { company_id?: number }
+  ) => {
+    const response = await api.post(`/hr/payrolls/${id}/send-payslip`, {
+      pdf_base64,
+      ...(opts?.company_id != null ? { company_id: opts.company_id } : {}),
+    });
     return response.data;
   },
 

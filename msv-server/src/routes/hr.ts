@@ -179,7 +179,8 @@ router.post(
   '/payrolls/:id/send-payslip',
   restrictAuditToReadOnly,
   validateBody({
-    pdf_base64: { required: true, type: 'string', minLength: 20 }
+    pdf_base64: { required: true, type: 'string', minLength: 20 },
+    company_id: { type: 'number' } // root 회사 선택
   }),
   sendPayrollPayslip
 );

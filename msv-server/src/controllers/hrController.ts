@@ -103,7 +103,7 @@ function pickPayrollBody(body: Record<string, unknown>): Record<string, unknown>
   return o;
 }
 
-/** 급여 조회 스코프 — 기본은 로그인 회사, root/audit만 query/body company_id로 전환 */
+/** 급여 조회 스코프 — 기본은 로그인 회사, root만 query/body company_id로 전환 */
 function resolvePayrollScope(req: RequestWithUser) {
   const tenantId = req.user?.tenant_id;
   const companyId = req.user?.company_id;
@@ -115,9 +115,13 @@ function resolvePayrollScope(req: RequestWithUser) {
     ? parseInt(String((req.body as Record<string, unknown>).company_id), 10)
     : undefined;
 
+  // 일반·admin·audit: 항상 로그인 회사. root만 선택 회사로 전환.
   let effectiveCompanyId = companyId;
-  if ((userRole === 'root' || userRole === 'audit') && (queryCompanyId || bodyCompanyId)) {
-    effectiveCompanyId = queryCompanyId || bodyCompanyId;
+  if (userRole === 'root') {
+    const requested = queryCompanyId || bodyCompanyId;
+    if (requested != null && Number.isFinite(requested) && requested > 0) {
+      effectiveCompanyId = requested;
+    }
   }
 
   return { tenantId, companyId: effectiveCompanyId, userRole };
@@ -138,7 +142,7 @@ function requirePayrollCompanyScope(
     res.status(400).json({
       success: false,
       message:
-        userRole === 'root' || userRole === 'audit'
+        userRole === 'root'
           ? '급여를 처리할 회사를 선택해 주세요.'
           : '회사 정보가 없습니다.'
     });
@@ -196,13 +200,17 @@ export const getPayrolls = async (req: RequestWithUser, res: Response) => {
     const { tenantId, companyId: effectiveCompanyId, userRole } = resolvePayrollScope(req);
     const { page = 1, limit = 10, employee_id = '', period = '' } = req.query;
 
-    if (effectiveCompanyId == null && userRole !== 'root') {
-      return res.status(400).json({ success: false, message: '회사 정보가 없습니다.' });
+    if (effectiveCompanyId == null) {
+      return res.status(400).json({
+        success: false,
+        message:
+          userRole === 'root' ? '급여를 조회할 회사를 선택해 주세요.' : '회사 정보가 없습니다.'
+      });
     }
 
     const whereClause: any = { is_active: true };
     if (tenantId != null) whereClause.tenant_id = tenantId;
-    if (effectiveCompanyId != null) whereClause.company_id = effectiveCompanyId;
+    whereClause.company_id = effectiveCompanyId;
     
     if (employee_id) {
       whereClause.employee_id = employee_id;
@@ -260,13 +268,17 @@ export const getPayroll = async (req: RequestWithUser, res: Response) => {
     const { id } = req.params;
     const { tenantId, companyId: effectiveCompanyId, userRole } = resolvePayrollScope(req);
 
-    if (effectiveCompanyId == null && userRole !== 'root') {
-      return res.status(400).json({ success: false, message: '회사 정보가 없습니다.' });
+    if (effectiveCompanyId == null) {
+      return res.status(400).json({
+        success: false,
+        message:
+          userRole === 'root' ? '급여를 조회할 회사를 선택해 주세요.' : '회사 정보가 없습니다.'
+      });
     }
 
     const whereClause: any = { id, is_active: true };
     if (tenantId != null) whereClause.tenant_id = tenantId;
-    if (effectiveCompanyId != null) whereClause.company_id = effectiveCompanyId;
+    whereClause.company_id = effectiveCompanyId;
 
     const payroll = await (Payroll as any).findOne({
       where: whereClause,
@@ -893,18 +905,27 @@ export const sendPayrollPayslip = async (req: RequestWithUser, res: Response) =>
   try {
     const { id } = req.params;
     const pdf_base64 = String(req.body?.pdf_base64 || '');
-    const { tenant_id, company_id, id: senderId } = req.user;
+    const scope = requirePayrollCompanyScope(req, res);
+    if (!scope) return;
+    const { tenant_id, company_id, user_id: senderId, userRole } = scope;
 
     if (!pdf_base64 || pdf_base64.length < 20) {
       return res.status(400).json({ success: false, message: 'PDF 데이터가 없습니다.' });
     }
 
+    const companyWhere: any = { id: company_id };
+    if (userRole !== 'root') {
+      companyWhere.tenant_id = tenant_id;
+    }
     const companyRow = await Company.findOne({
-      where: { id: company_id, tenant_id }
+      where: companyWhere
     });
 
     const senderRow = await User.findOne({
-      where: { id: senderId, tenant_id, company_id },
+      where:
+        userRole === 'root'
+          ? { id: senderId }
+          : { id: senderId, tenant_id, company_id: req.user?.company_id },
       attributes: ['id', 'settings']
     });
 

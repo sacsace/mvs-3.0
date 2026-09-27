@@ -147,15 +147,20 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const tenantId = (req as any).user.tenant_id;
     const userRole = (req as any).user.role;
-    
-        
-    // root나 audit 권한이면 모든 회사 조회 가능, 아니면 자신의 테넌트 회사만
+    const userCompanyId = (req as any).user.company_id;
+
+    // root만 전체 회사 조회. 그 외는 로그인한 회사만.
     const whereClause: any = {};
-    if (userRole !== 'root' && userRole !== 'audit') {
+    if (userRole === 'root') {
+      // no filter
+    } else {
       whereClause.tenant_id = tenantId;
+      if (userCompanyId != null) {
+        whereClause.id = userCompanyId;
+      }
     }
 
-    const cacheKey = buildReferenceCacheKey(['ref', 'companies', tenantId, userRole]);
+    const cacheKey = buildReferenceCacheKey(['ref', 'companies', tenantId, userRole, userCompanyId ?? '']);
     const cached = await referenceCacheGet(cacheKey);
     if (cached) {
       return res.json(JSON.parse(cached));
@@ -283,8 +288,16 @@ router.get('/:id/gst-numbers', authenticateToken, async (req, res) => {
       });
     }
 
+    const userCompanyId = (req as any).user.company_id;
+    if (userRole !== 'root' && Number(userCompanyId) !== id) {
+      return res.status(403).json({
+        success: false,
+        message: '자신이 속한 회사 정보만 조회할 수 있습니다.'
+      });
+    }
+
     const whereClause: any = { id };
-    if (userRole !== 'root' && userRole !== 'audit') {
+    if (userRole !== 'root') {
       whereClause.tenant_id = tenantId;
     }
 
@@ -350,10 +363,18 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const tenantId = (req as any).user.tenant_id;
     const userRole = (req as any).user.role;
-    
-    // root나 audit 권한이면 모든 회사 조회 가능, 아니면 자신의 회사만
+    const userCompanyId = (req as any).user.company_id;
+
+    // root만 다른 회사 조회 가능. 그 외는 로그인 회사만.
+    if (userRole !== 'root' && Number(userCompanyId) !== Number(id)) {
+      return res.status(403).json({
+        success: false,
+        message: '자신이 속한 회사 정보만 조회할 수 있습니다.'
+      });
+    }
+
     const whereClause: any = { id: id };
-    if (userRole !== 'root' && userRole !== 'audit') {
+    if (userRole !== 'root') {
       whereClause.tenant_id = tenantId;
     }
 

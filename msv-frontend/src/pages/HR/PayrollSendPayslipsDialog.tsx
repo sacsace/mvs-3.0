@@ -30,6 +30,8 @@ type Props = {
   /** 급여 확정 직후에는 이메일이 등록된 직원 전체에 즉시 발송 */
   autoSend?: boolean;
   headerLayout?: PayslipHeaderLayout;
+  /** root 회사 선택 시 해당 회사 정보로 명세서·발송 (미지정 시 로그인 회사) */
+  companyId?: number | null;
   onClose: () => void;
   onSent: (message: string) => void;
   onError: (message: string) => void;
@@ -40,6 +42,7 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({
   rows,
   autoSend = false,
   headerLayout = 'standard',
+  companyId = null,
   onClose,
   onSent,
   onError
@@ -53,6 +56,12 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({
   const [companyInfoLoaded, setCompanyInfoLoaded] = useState(false);
   const autoSendStarted = useRef(false);
 
+  const resolvedCompanyId = useMemo(() => {
+    if (companyId != null && Number(companyId) > 0) return Number(companyId);
+    const loginId = Number(user?.company_id);
+    return Number.isFinite(loginId) && loginId > 0 ? loginId : null;
+  }, [companyId, user?.company_id]);
+
   useEffect(() => {
     if (open && rows.length) {
       setSelected(new Set(rows.map((r) => r.id)));
@@ -63,13 +72,13 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({
     let mounted = true;
     const loadCompanyInfo = async () => {
       setCompanyInfoLoaded(false);
-      if (!open || !user?.company_id) {
+      if (!open || resolvedCompanyId == null) {
         if (mounted) setCompanyInfo(null);
         if (mounted) setCompanyInfoLoaded(true);
         return;
       }
       try {
-        const company = await useReferenceDataStore.getState().fetchCompanyById(Number(user.company_id));
+        const company = await useReferenceDataStore.getState().fetchCompanyById(resolvedCompanyId);
         if (!mounted) return;
         setCompanyInfo(toPayslipCompanyInfo(company));
       } catch {
@@ -82,7 +91,7 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({
     return () => {
       mounted = false;
     };
-  }, [open, user?.company_id]);
+  }, [open, resolvedCompanyId]);
 
   const rowsWithEmail = useMemo(
     () =>
@@ -132,10 +141,14 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({
           const blob = await generatePayslipPdfBlob(row, companyInfo, {
             locale: 'en',
             headerLayout,
-            companyId: user?.company_id ?? null
+            companyId: resolvedCompanyId
           });
           const b64 = await payslipBlobToBase64(blob);
-          const res = await payrollService.sendPayrollPayslip(row.id, b64);
+          const res = await payrollService.sendPayrollPayslip(
+            row.id,
+            b64,
+            resolvedCompanyId != null ? { company_id: resolvedCompanyId } : undefined
+          );
           if (res.success) ok += 1;
           else fail += 1;
         } catch {
@@ -156,10 +169,10 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({
     onClose,
     onError,
     onSent,
+    resolvedCompanyId,
     rowsWithEmail,
     selected,
-    t,
-    user?.company_id
+    t
   ]);
 
   useEffect(() => {

@@ -1082,6 +1082,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
           setPayslipRow(null);
         }}
         headerLayout={payslipHeaderLayout}
+        companyIdOverride={effectiveCompanyId}
       />
 
       <PayrollSendPayslipsDialog
@@ -1089,6 +1090,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
         rows={gridRowsForPayslipSend}
         autoSend={sendAutomatically}
         headerLayout={payslipHeaderLayout}
+        companyId={effectiveCompanyId}
         onClose={() => {
           setSendDialogOpen(false);
           setSendAutomatically(false);
