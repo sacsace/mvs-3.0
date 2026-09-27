@@ -1116,6 +1116,15 @@ router.post(
       });
     }
 
+    // 사용자 ID는 소문자로만 저장
+    const normalizedUserid = String(userid).trim().toLowerCase();
+    if (!normalizedUserid) {
+      return res.status(400).json({
+        success: false,
+        message: '사용자 ID를 입력해주세요.'
+      });
+    }
+
     // root 역할 부여 권한 체크 (root만 root 역할을 부여할 수 있음)
     const currentUserRole = (req as any).user.role;
     if (role === 'root' && currentUserRole !== 'root') {
@@ -1139,7 +1148,7 @@ router.post(
 
     // 중복 확인
     const existingUser = await (User as any).findOne({
-      where: { userid }
+      where: { userid: normalizedUserid }
     });
 
     if (existingUser) {
@@ -1255,7 +1264,7 @@ router.post(
     const userData: any = {
       tenant_id: targetTenantId,
       company_id: targetCompanyId,
-      userid,
+      userid: normalizedUserid,
       username,
       email,
       password_hash,
@@ -1516,7 +1525,7 @@ router.put(
           message: '사용자 ID 변경은 root 권한만 가능합니다.'
         });
       }
-      const trimmedUserid = String(userid).trim();
+      const trimmedUserid = String(userid).trim().toLowerCase();
       if (!trimmedUserid) {
         return res.status(400).json({
           success: false,
@@ -1569,7 +1578,7 @@ router.put(
     if (username !== undefined) updateData.username = username;
     if (email !== undefined) updateData.email = email;
     if (userid !== undefined && currentUserRole === 'root') {
-      updateData.userid = String(userid).trim();
+      updateData.userid = String(userid).trim().toLowerCase();
     }
     if (role !== undefined) updateData.role = role;
     if (status !== undefined) updateData.status = status;
@@ -2104,7 +2113,7 @@ router.post(
           continue;
         }
 
-        const userid = row['사용자ID'].toString().trim();
+        const userid = row['사용자ID'].toString().trim().toLowerCase();
         const email = row['이메일'].toString().trim();
 
         const existingByUserid = await (User as any).findOne({ where: { userid } });

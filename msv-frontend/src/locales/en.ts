@@ -623,6 +623,7 @@ export default {
       companySelect: 'Company',
       companySelectRootHint: 'As root, you must select the correct company carefully.',
       userId: 'User ID',
+      userIdLowercaseOnly: 'Only lowercase letters are allowed.',
       password: 'Password',
       passwordPlaceholderEdit: 'Only when changing password',
       passwordPlaceholderNew: 'Enter password',
@@ -1550,6 +1551,9 @@ export default {
     },
     payrollManagement: {
       title: 'Payroll Management',
+      company: 'Company',
+      selectCompany: 'Select company',
+      selectCompanyRequired: 'Select a company to manage payroll.',
       description: 'Manage monthly payroll generation, finalization, payslip delivery, and payroll data.',
       payslipSendSystem: {
         title: 'Payslip Delivery',

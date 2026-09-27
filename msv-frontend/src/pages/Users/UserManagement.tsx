@@ -1433,6 +1433,7 @@ const UserManagement: React.FC = () => {
       // 비밀번호가 없으면 기본값 설정 (신규 등록 시)
       const submitData: any = {
         ...formData,
+        userid: String(formData.userid || '').trim().toLowerCase(),
         password: formData.password || (editingUser ? undefined : 'default123')
       };
 
@@ -2875,7 +2876,7 @@ const UserManagement: React.FC = () => {
                         setFormData({
                           ...formData,
                           email,
-                          ...(!editingUser ? { userid: email } : {})
+                          ...(!editingUser ? { userid: email.toLowerCase() } : {})
                         });
                       }}
                       required
@@ -3741,9 +3742,16 @@ const UserManagement: React.FC = () => {
                       label={t('userManagement.userId')}
                       {...OUTLINED_FIELD}
                       value={formData.userid}
-                      onChange={(e) => setFormData({ ...formData, userid: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, userid: e.target.value.toLowerCase() })
+                      }
                       required
                       disabled={!!editingUser && user?.role !== 'root'}
+                      helperText={t('userManagement.userIdLowercaseOnly')}
+                      inputProps={{ autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false }}
+                      sx={{
+                        '& .MuiInputBase-input': { textTransform: 'lowercase' },
+                      }}
                     />
                     <TextField
                       fullWidth

@@ -205,7 +205,12 @@ const PayrollExcelGrid: React.FC<Props> = ({
           void (async () => {
             try {
               onError(null);
-              const res = await payrollService.deletePayroll(id);
+              const scopeCompanyId =
+                companyId != null && Number(companyId) > 0 ? Number(companyId) : undefined;
+              const res = await payrollService.deletePayroll(
+                id,
+                scopeCompanyId != null ? { company_id: scopeCompanyId } : undefined
+              );
               if (res.success) {
                 onSuccess(t('payrollManagement.success.deleted'));
                 await onReload();
@@ -225,7 +230,7 @@ const PayrollExcelGrid: React.FC<Props> = ({
         }
       );
     },
-    [onError, onReload, onSuccess, showConfirm, t]
+    [companyId, onError, onReload, onSuccess, showConfirm, t]
   );
 
   const commitPayrollRowUpdate = useCallback(
@@ -259,7 +264,13 @@ const PayrollExcelGrid: React.FC<Props> = ({
       });
       onError(null);
       const payload = gridRowToPayload(row, recalcCtx);
-      const res = await payrollService.updatePayroll(row.id, payload);
+      const scopeCompanyId =
+        companyId != null && Number(companyId) > 0 ? Number(companyId) : undefined;
+      const res = await payrollService.updatePayroll(
+        row.id,
+        payload,
+        scopeCompanyId != null ? { company_id: scopeCompanyId } : undefined
+      );
       if (!res.success) {
         throw new Error((res as any).message || t('payrollManagement.errors.saveFailed'));
       }
@@ -271,7 +282,7 @@ const PayrollExcelGrid: React.FC<Props> = ({
       }
       return row;
     },
-    [onError, onReload, onSuccess, recalcCtx, salaryRatios, t]
+    [companyId, onError, onReload, onSuccess, recalcCtx, salaryRatios, t]
   );
 
   const processRowUpdate = useCallback(
@@ -701,7 +712,13 @@ const PayrollExcelGrid: React.FC<Props> = ({
         const updated = applySalaryRatiosToRow(row, next, applyCtx);
         try {
           const payload = gridRowToPayload(updated, applyCtx);
-          const res = await payrollService.updatePayroll(updated.id, payload);
+          const scopeCompanyId =
+            companyId != null && Number(companyId) > 0 ? Number(companyId) : undefined;
+          const res = await payrollService.updatePayroll(
+            updated.id,
+            payload,
+            scopeCompanyId != null ? { company_id: scopeCompanyId } : undefined
+          );
           if (res.success) ok += 1;
           else fail += 1;
         } catch {

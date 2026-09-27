@@ -621,6 +621,7 @@ export default {
       companySelect: '회사 선택',
       companySelectRootHint: 'root는 소속 회사를 정확히 선택해야 합니다. 잘못된 회사 선택에 주의하세요.',
       userId: '사용자 ID',
+      userIdLowercaseOnly: '소문자만 입력할 수 있습니다.',
       password: '비밀번호',
       passwordPlaceholderEdit: '변경 시에만 입력',
       passwordPlaceholderNew: '비밀번호를 입력하세요',
@@ -1602,6 +1603,9 @@ export default {
     },
     payrollManagement: {
       title: '급여 관리',
+      company: '회사',
+      selectCompany: '회사 선택',
+      selectCompanyRequired: '급여를 처리할 회사를 선택해 주세요.',
       description: '급여월별 급여 생성·확정, 명세서 발송 및 급여 데이터를 관리합니다.',
       payslipSendSystem: {
         title: '급여 명세서 발송',

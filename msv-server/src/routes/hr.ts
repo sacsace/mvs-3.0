@@ -148,7 +148,8 @@ router.post(
   '/payroll-periods/complete',
   restrictAuditToReadOnly,
   validateBody({
-    payroll_period: { required: true, type: 'string', minLength: 7, maxLength: 20 }
+    payroll_period: { required: true, type: 'string', minLength: 7, maxLength: 20 },
+    company_id: { type: 'number' } // root 회사 선택
   }),
   completePayrollPeriod
 );
@@ -159,7 +160,8 @@ router.post(
   '/payrolls/bulk-generate/preview',
   restrictAuditToReadOnly,
   validateBody({
-    payroll_period: { required: true, type: 'string', minLength: 1, maxLength: 20 }
+    payroll_period: { required: true, type: 'string', minLength: 1, maxLength: 20 },
+    company_id: { type: 'number' } // root 회사 선택
   }),
   previewBulkPayrollGeneration
 );
@@ -167,7 +169,8 @@ router.post(
   '/payrolls/bulk-generate',
   restrictAuditToReadOnly,
   validateBody({
-    payroll_period: { required: true, type: 'string', minLength: 1, maxLength: 20 }
+    payroll_period: { required: true, type: 'string', minLength: 1, maxLength: 20 },
+    company_id: { type: 'number' } // root 회사 선택
   }),
   bulkGeneratePayrolls
 );
@@ -231,7 +234,8 @@ router.put(
     net_salary: { type: 'number' },
     tax_amount: { type: 'number' },
     status: { type: 'string', maxLength: 20 },
-    payment_date: { type: 'string', pattern: datePattern }
+    payment_date: { type: 'string', pattern: datePattern },
+    company_id: { type: 'number' } // root 회사 선택
   }),
   updatePayroll
 );

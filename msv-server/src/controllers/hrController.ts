@@ -123,6 +123,34 @@ function resolvePayrollScope(req: RequestWithUser) {
   return { tenantId, companyId: effectiveCompanyId, userRole };
 }
 
+/** 급여 생성·확정 등 회사 필수 작업용. 실패 시 응답을 보내고 null 반환 */
+function requirePayrollCompanyScope(
+  req: RequestWithUser,
+  res: Response
+): { tenant_id: number; company_id: number; user_id: number; userRole: string | undefined } | null {
+  const { tenantId, companyId, userRole } = resolvePayrollScope(req);
+  const user_id = req.user?.id;
+  if (tenantId == null) {
+    res.status(400).json({ success: false, message: '테넌트 정보가 없습니다.' });
+    return null;
+  }
+  if (companyId == null) {
+    res.status(400).json({
+      success: false,
+      message:
+        userRole === 'root' || userRole === 'audit'
+          ? '급여를 처리할 회사를 선택해 주세요.'
+          : '회사 정보가 없습니다.'
+    });
+    return null;
+  }
+  if (user_id == null) {
+    res.status(401).json({ success: false, message: '인증이 필요합니다.' });
+    return null;
+  }
+  return { tenant_id: tenantId, company_id: companyId, user_id, userRole };
+}
+
 async function isPayrollPeriodLocked(
   tenantId: number,
   companyId: number,
@@ -277,7 +305,9 @@ export const getPayroll = async (req: RequestWithUser, res: Response) => {
 // 급여 생성
 export const createPayroll = async (req: RequestWithUser, res: Response) => {
   try {
-    const { tenant_id, company_id, id: user_id } = req.user;
+    const scope = requirePayrollCompanyScope(req, res);
+    if (!scope) return;
+    const { tenant_id, company_id, user_id } = scope;
     const picked = pickPayrollBody(req.body as Record<string, unknown>);
     const period = String((picked as any).payroll_period ?? '').trim();
     if (!period) {
@@ -309,7 +339,9 @@ export const createPayroll = async (req: RequestWithUser, res: Response) => {
  *  전자근로계약(해당 월 유효·서명/활성)의 기본급·상여 유형을 우선 반영하고, 근태(해당 월)로 근무일·연장시간을 채웁니다. */
 export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) => {
   try {
-    const { tenant_id, company_id, id: user_id } = req.user;
+    const scope = requirePayrollCompanyScope(req, res);
+    if (!scope) return;
+    const { tenant_id, company_id, user_id } = scope;
     const payroll_period = normalizePayrollPeriodInput(String(req.body?.payroll_period || '').trim());
     if (!payroll_period) {
       return res.status(400).json({
@@ -571,7 +603,9 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
 /** 일괄 생성 전: 확정·중복 여부와 직원별 해당 월 출퇴근 건수 요약 */
 export const previewBulkPayrollGeneration = async (req: RequestWithUser, res: Response) => {
   try {
-    const { tenant_id, company_id } = req.user;
+    const scope = requirePayrollCompanyScope(req, res);
+    if (!scope) return;
+    const { tenant_id, company_id } = scope;
     const payroll_period = normalizePayrollPeriodInput(String(req.body?.payroll_period || '').trim());
     if (!payroll_period) {
       return res.status(400).json({
@@ -664,7 +698,9 @@ export const previewBulkPayrollGeneration = async (req: RequestWithUser, res: Re
 export const updatePayroll = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id } = req.user;
+    const scope = requirePayrollCompanyScope(req, res);
+    if (!scope) return;
+    const { tenant_id, company_id } = scope;
 
     const payroll = await (Payroll as any).findOne({
       where: { id, tenant_id, company_id, is_active: true }
@@ -707,7 +743,9 @@ export const updatePayroll = async (req: RequestWithUser, res: Response) => {
 export const deletePayroll = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id } = req.user;
+    const scope = requirePayrollCompanyScope(req, res);
+    if (!scope) return;
+    const { tenant_id, company_id } = scope;
 
     const payroll = await (Payroll as any).findOne({
       where: { id, tenant_id, company_id }
@@ -734,7 +772,9 @@ export const deletePayroll = async (req: RequestWithUser, res: Response) => {
 export const approvePayroll = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id } = req.user;
+    const scope = requirePayrollCompanyScope(req, res);
+    if (!scope) return;
+    const { tenant_id, company_id } = scope;
 
     const payroll = await (Payroll as any).findOne({
       where: { id, tenant_id, company_id }
@@ -760,7 +800,9 @@ export const approvePayroll = async (req: RequestWithUser, res: Response) => {
 export const payPayroll = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id } = req.user;
+    const scope = requirePayrollCompanyScope(req, res);
+    if (!scope) return;
+    const { tenant_id, company_id } = scope;
 
     const payroll = await (Payroll as any).findOne({
       where: { id, tenant_id, company_id }
@@ -788,7 +830,9 @@ export const payPayroll = async (req: RequestWithUser, res: Response) => {
 /** 회사별 확정(잠금)된 급여 근무월 목록 */
 export const getPayrollPeriodLocks = async (req: RequestWithUser, res: Response) => {
   try {
-    const { tenant_id, company_id } = req.user;
+    const scope = requirePayrollCompanyScope(req, res);
+    if (!scope) return;
+    const { tenant_id, company_id } = scope;
     const rows = await (PayrollPeriodLock as any).findAll({
       where: { tenant_id, company_id },
       attributes: ['payroll_period', 'locked_at'],
@@ -820,7 +864,9 @@ export const completePayrollPeriod = async (req: RequestWithUser, res: Response)
         message: '아직 도래하지 않은 급여 월은 확정할 수 없습니다.'
       });
     }
-    const { tenant_id, company_id, id: user_id } = req.user;
+    const scope = requirePayrollCompanyScope(req, res);
+    if (!scope) return;
+    const { tenant_id, company_id, user_id } = scope;
     const [row, created] = await (PayrollPeriodLock as any).findOrCreate({
       where: { tenant_id, company_id, payroll_period },
       defaults: { locked_at: new Date(), locked_by: user_id }

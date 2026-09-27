@@ -147,11 +147,64 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
   const [companyRegisteredStateCode, setCompanyRegisteredStateCode] = useState<string | null>(null);
   /** 서버 급여 그리드 설정 동기화 후 행 재계산 트리거 */
   const [gridSettingsTick, setGridSettingsTick] = useState(0);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>(() =>
+    user?.company_id != null && Number(user.company_id) > 0 ? Number(user.company_id) : ''
+  );
+  const [companyOptions, setCompanyOptions] = useState<Array<{ id: number; name: string }>>([]);
+
+  const effectiveCompanyId = useMemo(() => {
+    if (isRoot) {
+      return typeof selectedCompanyId === 'number' && selectedCompanyId > 0 ? selectedCompanyId : null;
+    }
+    const loginId = Number(user?.company_id);
+    return Number.isFinite(loginId) && loginId > 0 ? loginId : null;
+  }, [isRoot, selectedCompanyId, user?.company_id]);
+
+  const companyScopeOpts = useMemo(
+    () => (effectiveCompanyId != null ? { company_id: effectiveCompanyId } : undefined),
+    [effectiveCompanyId]
+  );
+
+  useEffect(() => {
+    if (!isRoot) {
+      setCompanyOptions([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await companyService.getCompanies();
+        const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+        if (cancelled) return;
+        const list: Array<{ id: number; name: string }> = rows
+          .map((c: any) => ({
+            id: Number(c.id),
+            name: String(c.name || c.company_name || '').trim(),
+          }))
+          .filter((c: { id: number; name: string }) => Number.isFinite(c.id) && c.id > 0 && c.name)
+          .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name));
+        setCompanyOptions(list);
+        setSelectedCompanyId((prev) => {
+          if (typeof prev === 'number' && list.some((c) => c.id === prev)) return prev;
+          const loginId = Number(user?.company_id);
+          if (Number.isFinite(loginId) && loginId > 0 && list.some((c) => c.id === loginId)) {
+            return loginId;
+          }
+          return list[0]?.id ?? '';
+        });
+      } catch {
+        if (!cancelled) setCompanyOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isRoot, user?.company_id]);
 
   useEffect(() => {
     let cancelled = false;
     const loadCompanyState = async () => {
-      const companyId = user?.company_id;
+      const companyId = effectiveCompanyId;
       if (!companyId) {
         if (!cancelled) setCompanyRegisteredStateCode(null);
         return;
@@ -187,34 +240,34 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     return () => {
       cancelled = true;
     };
-  }, [user?.company_id]);
+  }, [effectiveCompanyId]);
 
   useEffect(() => {
     let cancelled = false;
-    void syncPayrollGridSettingsFromServer(user?.company_id ?? null).then(() => {
+    void syncPayrollGridSettingsFromServer(effectiveCompanyId ?? null).then(() => {
       if (!cancelled) setGridSettingsTick((n) => n + 1);
     });
     return () => {
       cancelled = true;
     };
-  }, [user?.company_id]);
+  }, [effectiveCompanyId]);
 
   const payrollRecalcContext = useMemo(
     () => ({
       companyStateCode: companyRegisteredStateCode,
       payrollMonth: normalizePayMonth(payrollPeriod.trim()) || payrollPeriod.trim(),
-      companyId: user?.company_id ?? null,
+      companyId: effectiveCompanyId ?? null,
     }),
-    [companyRegisteredStateCode, payrollPeriod, user?.company_id]
+    [companyRegisteredStateCode, payrollPeriod, effectiveCompanyId]
   );
 
   const loadLocks = useCallback(async () => {
-    if (menuFlags.menusLoading || !menuFlags.canRead) {
+    if (menuFlags.menusLoading || !menuFlags.canRead || effectiveCompanyId == null) {
       setLockedPeriods(new Set());
       return;
     }
     try {
-      const res = await payrollService.getPayrollPeriodLocks();
+      const res = await payrollService.getPayrollPeriodLocks({ company_id: effectiveCompanyId });
       if (res.success && Array.isArray((res as any).data?.locked_periods)) {
         const keys = ((res as any).data.locked_periods as string[])
           .map((p) => normalizePayMonth(p) || String(p).trim())
@@ -224,10 +277,10 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     } catch {
       /* ignore */
     }
-  }, [menuFlags.menusLoading, menuFlags.canRead]);
+  }, [menuFlags.menusLoading, menuFlags.canRead, effectiveCompanyId]);
 
   const loadPayrollData = useCallback(async () => {
-    if (menuFlags.menusLoading || !menuFlags.canRead) {
+    if (menuFlags.menusLoading || !menuFlags.canRead || effectiveCompanyId == null) {
       setPayrollRecords([]);
       setLoading(false);
       return;
@@ -238,7 +291,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
       const response = await payrollService.getPayrolls({
         page: 1,
         limit: 10000,
-        ...(user?.company_id ? { company_id: user.company_id } : {}),
+        company_id: effectiveCompanyId,
       });
       if (response.success) {
         setPayrollRecords(response.data || []);
@@ -250,7 +303,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     } finally {
       setLoading(false);
     }
-  }, [t, menuFlags.menusLoading, menuFlags.canRead, user?.company_id]);
+  }, [t, menuFlags.menusLoading, menuFlags.canRead, effectiveCompanyId]);
 
   useEffect(() => {
     void loadPayrollData();
@@ -347,7 +400,14 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     setPreviewAttendanceLoading(true);
     setError('');
     try {
-      const res = await payrollService.previewBulkPayrollGeneration(payrollPeriod.trim());
+      if (effectiveCompanyId == null) {
+        setError(t('payrollManagement.selectCompanyRequired'));
+        return;
+      }
+      const res = await payrollService.previewBulkPayrollGeneration(
+        payrollPeriod.trim(),
+        companyScopeOpts
+      );
       if (!res.success) {
         setError((res as any).message || t('payrollManagement.errors.bulkCreateFailed'));
         return;
@@ -394,7 +454,11 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     setCreating(true);
     setError('');
     try {
-      const res = await payrollService.bulkGeneratePayrolls(period);
+      if (effectiveCompanyId == null) {
+        setError(t('payrollManagement.selectCompanyRequired'));
+        return;
+      }
+      const res = await payrollService.bulkGeneratePayrolls(period, companyScopeOpts);
       if (res.success) {
         setSuccess((res as any).message || t('payrollManagement.success.bulkCreated'));
         setOpenDialog(false);
@@ -434,7 +498,11 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     setCompleting(true);
     setError('');
     try {
-      const res = await payrollService.completePayrollPeriod(period);
+      if (effectiveCompanyId == null) {
+        setError(t('payrollManagement.selectCompanyRequired'));
+        return;
+      }
+      const res = await payrollService.completePayrollPeriod(period, companyScopeOpts);
       if (res.success) {
         setSuccess((res as any).message || t('payrollManagement.success.periodCompleted'));
         setCompleteDialogOpen(false);
@@ -464,13 +532,13 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     if (menuFlags.menusLoading || !menuFlags.canRead || !gridRows.length) return;
     void (async () => {
       try {
-        await exportPayrollGridToExcel(gridRows, t, user?.company_id ?? null);
+        await exportPayrollGridToExcel(gridRows, t, effectiveCompanyId ?? null);
         setSuccess(t('payrollManagement.success.exportedExcel'));
       } catch {
         setError(t('payrollManagement.errors.exportFailed'));
       }
     })();
-  }, [gridRows, menuFlags.canRead, menuFlags.menusLoading, t, user?.company_id]);
+  }, [gridRows, menuFlags.canRead, menuFlags.menusLoading, t, effectiveCompanyId]);
 
   /** 급여 생성 완료(잠금)된 월 — 명세서 발송 허용·「급여 생성 완료」재실행 비활성 */
   const selectedPeriodPayrollComplete = !!periodKey && lockedPeriods.has(periodKey);
@@ -501,7 +569,8 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     menuFlags.menusLoading ||
     !menuFlags.canCreate ||
     creating ||
-    bulkCreateBlockedByLock;
+    bulkCreateBlockedByLock ||
+    effectiveCompanyId == null;
   /** 대화상자「생성」: 확정·미래 월 비활성(미생성 과거·당월은 미리보기로 판별) */
   const bulkCreateDisabled =
     bulkCreateOpenDisabled ||
@@ -512,6 +581,8 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
       ? ''
       : !menuFlags.canCreate
         ? t('common.menuNoCreate')
+        : effectiveCompanyId == null
+          ? t('payrollManagement.selectCompanyRequired')
         : isFuturePayMonth
           ? t('payrollManagement.errors.futurePayMonthNotAllowed')
           : periodKey && lockedPeriods.has(periodKey)
@@ -523,6 +594,8 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
       ? ''
       : !menuFlags.canCreate
         ? t('common.menuNoCreate')
+        : effectiveCompanyId == null
+          ? t('payrollManagement.selectCompanyRequired')
         : bulkCreateBlockedByLock
           ? t('payrollManagement.errors.periodLocked')
           : ''
@@ -606,6 +679,42 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
             ? 'payrollManagement.payslipSendSystem.description'
             : 'payrollManagement.description'
         )}
+        actions={
+          isRoot ? (
+            <TextField
+              select
+              size="small"
+              label={t('payrollManagement.company')}
+              {...PAYROLL_FILTER_OUTLINED}
+              value={selectedCompanyId === '' ? '' : String(selectedCompanyId)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSelectedCompanyId(v === '' ? '' : Number(v));
+              }}
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
+              sx={{ ...payrollFilterFieldSx, minWidth: { xs: '100%', sm: 260 }, maxWidth: { sm: 360 } }}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) => {
+                  if (selected === '' || selected == null) {
+                    return t('payrollManagement.selectCompany');
+                  }
+                  const found = companyOptions.find((c) => String(c.id) === String(selected));
+                  return found?.name || String(selected);
+                },
+              }}
+            >
+              <MenuItem value="">
+                <em>{t('payrollManagement.selectCompany')}</em>
+              </MenuItem>
+              {companyOptions.map((c) => (
+                <MenuItem key={c.id} value={String(c.id)}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          ) : null
+        }
       />
 
       {!menuFlags.menusLoading && !menuFlags.canRead && (
@@ -955,7 +1064,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
                 allowCellEdit={!payslipSendOnly && !menuFlags.menusLoading && menuFlags.canMutate}
                 allowDelete={!payslipSendOnly && !menuFlags.menusLoading && menuFlags.canDelete}
                 allowOpenPayslip={!menuFlags.menusLoading && menuFlags.canRead}
-                companyId={user?.company_id}
+                companyId={effectiveCompanyId}
                 settingsRevision={gridSettingsTick}
                 companyStateCode={companyRegisteredStateCode}
                 payrollMonth={payrollRecalcContext.payrollMonth}

@@ -805,14 +805,17 @@ export const payrollService = {
   },
 
   /** ?�정??급여 근무??YYYY-MM) 목록 */
-  getPayrollPeriodLocks: async () => {
-    const response = await api.get('/hr/payroll-period-locks');
+  getPayrollPeriodLocks: async (params?: { company_id?: number }) => {
+    const response = await api.get('/hr/payroll-period-locks', { params });
     return response.data;
   },
 
   /** ?�택??근무??급여 ?�정(?�금) ???�반 ?�용?�는 ?�후 ?�당 ???�정 불�? */
-  completePayrollPeriod: async (payroll_period: string) => {
-    const response = await api.post('/hr/payroll-periods/complete', { payroll_period });
+  completePayrollPeriod: async (payroll_period: string, opts?: { company_id?: number }) => {
+    const response = await api.post('/hr/payroll-periods/complete', {
+      payroll_period,
+      ...(opts?.company_id != null ? { company_id: opts.company_id } : {}),
+    });
     return response.data;
   },
 
@@ -833,14 +836,21 @@ export const payrollService = {
 
   /** ?�재 ?�사 ?�성 ?�용??기�? 급여 ?�괄 ?�성 (?�도 PF/ESI/PT/TDS ?�션 ?�택 가?? */
   /** ?�괄 ?�성 ?? ?�정·중복·직원�??�당 ??출퇴�?건수 ?�약 */
-  previewBulkPayrollGeneration: async (payroll_period: string) => {
-    const response = await api.post('/hr/payrolls/bulk-generate/preview', { payroll_period });
+  previewBulkPayrollGeneration: async (
+    payroll_period: string,
+    opts?: { company_id?: number }
+  ) => {
+    const response = await api.post('/hr/payrolls/bulk-generate/preview', {
+      payroll_period,
+      ...(opts?.company_id != null ? { company_id: opts.company_id } : {}),
+    });
     return response.data;
   },
 
   bulkGeneratePayrolls: async (
     payroll_period: string,
     opts?: {
+      company_id?: number;
       statutory_india?: boolean;
       /** 기본 gross_6pct(참고 ?�트). epf_12pct_half = ?�전 50%×12% EPF??*/
       pf_mode?: 'gross_6pct' | 'epf_12pct_half';
@@ -933,14 +943,19 @@ export const payrollService = {
   },
 
   // 급여 ?�정
-  updatePayroll: async (id: number, data: any) => {
-    const response = await api.put(`/hr/payrolls/${id}`, data);
+  updatePayroll: async (id: number, data: any, opts?: { company_id?: number }) => {
+    const response = await api.put(`/hr/payrolls/${id}`, {
+      ...data,
+      ...(opts?.company_id != null ? { company_id: opts.company_id } : {}),
+    });
     return response.data;
   },
 
   // 급여 ??��
-  deletePayroll: async (id: number) => {
-    const response = await api.delete(`/hr/payrolls/${id}`);
+  deletePayroll: async (id: number, opts?: { company_id?: number }) => {
+    const response = await api.delete(`/hr/payrolls/${id}`, {
+      params: opts?.company_id != null ? { company_id: opts.company_id } : undefined,
+    });
     return response.data;
   },
 
