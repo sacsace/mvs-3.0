@@ -3171,7 +3171,7 @@ const UserManagement: React.FC = () => {
                     </TextField>
 
                     <FormControlLabel
-                      sx={{ gridColumn: { xs: '1 / -1', sm: '1 / -1' }, m: 0 }}
+                      sx={{ m: 0, alignSelf: 'center' }}
                       control={
                         <Checkbox
                           checked={Boolean(formData.ot_eligible)}
@@ -3180,7 +3180,7 @@ const UserManagement: React.FC = () => {
                       }
                       label={t('userManagement.otEligible')}
                     />
-                    <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / -1' } }}>
+                    <Box sx={{ minWidth: 0 }}>
                       <FormControlLabel
                         sx={{ m: 0 }}
                         control={
