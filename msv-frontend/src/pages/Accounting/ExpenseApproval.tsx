@@ -2153,6 +2153,8 @@ const ExpenseApproval: React.FC = () => {
   const lastSavedPayloadRef = useRef<string>('');
   /** 초안 생성 중복 방지 (의존성 루프/StrictMode 대비) */
   const draftInitInFlightRef = useRef(false);
+  /** 제출 중에는 자동저장이 덮어쓰거나 오류 토스트를 띄우지 않음 */
+  const submitInFlightRef = useRef(false);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
   const [uploadingReceipts, setUploadingReceipts] = useState(false);
@@ -2658,7 +2660,7 @@ const ExpenseApproval: React.FC = () => {
     const activeExpenseId = viewMode === 'edit' ? selectedExpense?.id : draftId;
     if (!activeExpenseId) return;
     if (viewMode !== 'create' && viewMode !== 'edit') return;
-    if (isInitializingDraft) return;
+    if (isInitializingDraft || saving || submitInFlightRef.current) return;
     if (
       viewMode === 'edit' &&
       selectedExpense &&
@@ -2667,17 +2669,19 @@ const ExpenseApproval: React.FC = () => {
       return;
     }
 
-        const payload = buildExpensePayload('draft');
-        const payloadString = JSON.stringify(payload);
+    const payload = buildExpensePayload('draft');
+    const payloadString = JSON.stringify(payload);
     if (payloadString === lastSavedPayloadRef.current) return;
 
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(async () => {
+      if (submitInFlightRef.current || saving) return;
       try {
         const latest = buildExpensePayload('draft');
         const latestString = JSON.stringify(latest);
         if (latestString === lastSavedPayloadRef.current) return;
         const response = await accountingService.updateExpenseReport(activeExpenseId, latest);
+        if (submitInFlightRef.current) return;
         if (response?.success) {
           setCurrentAttachments(normalizeExpenseAttachments(response.data?.attachments));
           const assignedNo = parseExpenseItems(response.data?.items).meta?.voucherNo || '';
@@ -2690,13 +2694,17 @@ const ExpenseApproval: React.FC = () => {
           setHeaderStatusBanner('autoSaved');
           setError('');
         } else {
-          setHeaderStatusBanner('autoSaveFailed');
           const msg = String(response?.message || '').trim();
+          // 이미 제출된 문서에 대한 자동저장 충돌은 무시 (제출 직후 레이스)
+          if (/검토 중이거나 처리된/.test(msg)) return;
+          setHeaderStatusBanner('autoSaveFailed');
           if (msg) setError(`${t('expenseApproval.voucher.autoSaveFailed')}: ${msg}`);
         }
       } catch (err: any) {
-        setHeaderStatusBanner('autoSaveFailed');
+        if (submitInFlightRef.current) return;
         const msg = String(err?.response?.data?.message || '').trim();
+        if (/검토 중이거나 처리된/.test(msg)) return;
+        setHeaderStatusBanner('autoSaveFailed');
         if (msg) setError(`${t('expenseApproval.voucher.autoSaveFailed')}: ${msg}`);
       }
     }, 800);
@@ -2712,6 +2720,7 @@ const ExpenseApproval: React.FC = () => {
     selectedExpense,
     viewMode,
     isInitializingDraft,
+    saving,
     buildExpensePayload,
     t,
   ]);
@@ -3436,6 +3445,7 @@ const ExpenseApproval: React.FC = () => {
     setHeaderStatusBanner('');
     lastSavedPayloadRef.current = '';
     draftInitInFlightRef.current = false;
+    submitInFlightRef.current = false;
     setViewMode('create');
   };
 
@@ -3478,6 +3488,11 @@ const ExpenseApproval: React.FC = () => {
       return;
     }
     setSaving(true);
+    submitInFlightRef.current = true;
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
     try {
       const payload = {
         ...buildExpensePayload('submitted'),
@@ -3497,6 +3512,7 @@ const ExpenseApproval: React.FC = () => {
       setSelectedExpense(null);
       setDraftId(null);
     } catch (saveError: any) {
+      submitInFlightRef.current = false;
       const serverMsg = String(saveError?.response?.data?.message || saveError?.message || '').trim();
       setError(serverMsg || t('expenseApproval.errors.submitFailed'));
     } finally {
