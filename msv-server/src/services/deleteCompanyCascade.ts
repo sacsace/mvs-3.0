@@ -26,7 +26,17 @@ async function runDelete(
   replacements: Record<string, unknown>,
   transaction: Transaction
 ): Promise<void> {
-  await sequelize.query(sql, { replacements, transaction });
+  try {
+    await sequelize.query(sql, { replacements, transaction });
+  } catch (error: any) {
+    // 운영 DB에 아직 없는 테이블(예: chat_messages)은 건너뛴다
+    const code = error?.parent?.code || error?.original?.code || error?.code;
+    const msg = String(error?.parent?.message || error?.original?.message || error?.message || '');
+    if (code === '42P01' || /does not exist|존재하지 않습니다/i.test(msg)) {
+      return;
+    }
+    throw error;
+  }
 }
 
 async function deleteByCompanyId(

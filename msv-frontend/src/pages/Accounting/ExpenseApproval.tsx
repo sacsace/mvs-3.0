@@ -1330,6 +1330,24 @@ const stripCorporateSuffixFromFilename = (value: string) =>
     .replace(/\s+\./g, '.')
     .trim();
 
+/** 송금 확인증 파일명에서 제외할 단어 (대소문자 무시) */
+const REMITTANCE_PROOF_SKIP_WORDS = new Set(['expenses', 'payment', 'voucher']);
+
+/** 제목 → 파일명용: 괄호 제거, expenses/payment/voucher 제외 */
+const sanitizeRemittanceTitleForFileName = (title: string) => {
+  const withoutParens = String(title || '')
+    .replace(/[()（）\[\]【】]/g, ' ')
+    .replace(/[\\/:*?"<>|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const words = withoutParens.split(/\s+/).filter(Boolean);
+  const kept = words.filter((word) => {
+    const normalized = word.toLowerCase().replace(/[^a-z0-9]/gi, '');
+    return normalized && !REMITTANCE_PROOF_SKIP_WORDS.has(normalized);
+  });
+  return stripCorporateSuffixFromFilename(kept.join(' '));
+};
+
 const takeFileNameSnippet = (value: string, maxChars: number) => {
   const cleaned = stripCorporateSuffixFromFilename(
     String(value || '')
@@ -1341,17 +1359,18 @@ const takeFileNameSnippet = (value: string, maxChars: number) => {
   return Array.from(cleaned).slice(0, maxChars).join('');
 };
 
-const buildRemittanceProofFileName = (file: File, partnerName?: string, description?: string) => {
+/** 송금 확인증 기본 파일명: YYYYMMDD_RT + 지출결의서 제목 */
+const buildRemittanceProofFileName = (file: File, expenseTitle?: string) => {
   const ymd = formatLocalYmd(new Date()).replace(/-/g, '');
-  const partner = takeFileNameSnippet(partnerName || '', 24) || 'Partner';
-  const desc = takeFileNameSnippet(description || '', 9) || 'item';
+  const titlePart =
+    takeFileNameSnippet(sanitizeRemittanceTitleForFileName(expenseTitle || ''), 80) || 'Remittance';
   const fromName = String(file.name || '').split('.').pop() || '';
   const fromType = (file.type.split('/')[1] || 'png').replace(/^jpeg$/i, 'jpg');
   const ext = ((fromName.length <= 4 ? fromName : fromType)
     .replace(/[^a-z0-9]/gi, '')
     .slice(0, 4)
     .toLowerCase() || 'png').replace(/^jpeg$/, 'jpg');
-  return `${ymd}_RT (${partner}) (${desc}).${ext}`;
+  return `${ymd}_RT ${titlePart}.${ext}`;
 };
 
 const getFileExtension = (fileName: string) => {
@@ -4325,20 +4344,14 @@ const ExpenseApproval: React.FC = () => {
       setProofNameDraft('');
       return;
     }
-    const meta = selectedExpense?.itemMeta || {};
-    const linkedPartner = partners.find((p) => String(p.id) === String(meta.partnerId || ''));
     const named = new File(
       [file],
-      buildRemittanceProofFileName(
-        file,
-        meta.department || linkedPartner?.company_name || '',
-        selectedExpense?.title || selectedExpense?.purpose || selectedExpense?.items?.[0]?.description || ''
-      ),
+      buildRemittanceProofFileName(file, selectedExpense?.title || ''),
       { type: file.type, lastModified: file.lastModified }
     );
     setPaymentProofFile(named);
     setProofNameDraft(stripFileExtensionForDisplay(named.name));
-  }, [partners, selectedExpense]);
+  }, [selectedExpense?.title]);
 
   const applyProofFileName = useCallback((nextName: string) => {
     setPaymentProofFile((prev) => {
