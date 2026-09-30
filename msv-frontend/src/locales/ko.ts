@@ -2289,6 +2289,7 @@ export default {
       filters: {
         searchPlaceholder: '프로젝트명, 코드, 담당자 검색',
         company: '회사',
+        searchCompany: '회사명 검색',
         allCompanies: '전체 회사',
         status: '상태',
         allStatuses: '전체 상태',

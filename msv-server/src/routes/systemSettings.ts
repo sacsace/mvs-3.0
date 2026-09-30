@@ -7,7 +7,7 @@ import { buildNodemailerTransportOptions, getSystemMailTransportOptions, normali
 
 const router = express.Router();
 
-const DEFAULT_SESSION_TIMEOUT_MINUTES = 30;
+const DEFAULT_SESSION_TIMEOUT_MINUTES = 600;
 const MIN_SESSION_TIMEOUT_MINUTES = 5;
 const MAX_SESSION_TIMEOUT_MINUTES = 24 * 60;
 
@@ -51,8 +51,8 @@ const buildDefaultSettings = (company: Company) => ({
   },
   security: {
     passwordMinLength: 8,
-    requireSpecialChars: true,
-    sessionTimeout: 30,
+    requireSpecialChars: false,
+    sessionTimeout: 600,
     twoFactorAuth: false,
     ipWhitelist: false
   },

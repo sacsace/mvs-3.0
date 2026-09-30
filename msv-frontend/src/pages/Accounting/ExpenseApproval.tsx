@@ -7239,6 +7239,7 @@ const ExpenseApproval: React.FC = () => {
                 )
               }
               disabled={expenseCommentSubmitting}
+              inputProps={{ 'data-skip-proper-case': '1', 'data-comment-input': '1' }}
             />
             <Box sx={{ display: 'flex', gap: 0.75, flexShrink: 0 }}>
               <Button
@@ -8751,6 +8752,7 @@ const ExpenseApproval: React.FC = () => {
                                   )
                                 }
                                 disabled={expenseCommentSubmitting}
+                                inputProps={{ 'data-skip-proper-case': '1', 'data-comment-input': '1' }}
                               />
                               <Box sx={{ display: 'flex', gap: 0.75, flexShrink: 0 }}>
                                 <Button
@@ -8838,6 +8840,7 @@ const ExpenseApproval: React.FC = () => {
                       )
                     }
                     disabled={expenseCommentSubmitting}
+                    inputProps={{ 'data-skip-proper-case': '1', 'data-comment-input': '1' }}
                   />
                   <Button
                     variant="contained"

@@ -7,7 +7,7 @@ import {
 
 /**
  * 모든 text/textarea 입력 blur 시 단어별 첫 글자 대문자·나머지 소문자로 정규화.
- * (email/password/숫자/코드성 필드 제외)
+ * (email/password/숫자/코드성 필드·댓글 입력 제외)
  */
 export default function InputProperCaseListener() {
   useEffect(() => {

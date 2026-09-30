@@ -50,7 +50,7 @@ const getClientIp = (req: Request): string | null => {
   return req.ip || req.socket?.remoteAddress || null;
 };
 
-const DEFAULT_SESSION_TIMEOUT_MINUTES = 30;
+const DEFAULT_SESSION_TIMEOUT_MINUTES = 600;
 const MIN_SESSION_TIMEOUT_MINUTES = 5;
 const MAX_SESSION_TIMEOUT_MINUTES = 24 * 60;
 

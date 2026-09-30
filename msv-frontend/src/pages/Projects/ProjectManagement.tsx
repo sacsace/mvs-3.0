@@ -146,7 +146,18 @@ const ProjectManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [managerFilter, setManagerFilter] = useState('all');
-  const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>('');
+  /** root/audit: 로그인 소속 회사를 기본 선택 */
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>(() => {
+    const u = useStore.getState().user;
+    if (
+      (u?.role === 'root' || u?.role === 'audit') &&
+      u.company_id != null &&
+      Number(u.company_id) > 0
+    ) {
+      return Number(u.company_id);
+    }
+    return '';
+  });
   const [formData, setFormData] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
 
@@ -211,12 +222,42 @@ const ProjectManagement: React.FC = () => {
     try {
       const response = await api.get('/companies');
       if (response.data.success) {
-        setCompanies(response.data.data || []);
+        const list = Array.isArray(response.data.data) ? response.data.data : [];
+        setCompanies(list);
+        setSelectedCompanyId((prev) => {
+          const ids = list
+            .map((c: any) => Number(c.id))
+            .filter((id: number) => Number.isFinite(id) && id > 0);
+          if (typeof prev === 'number' && ids.includes(prev)) return prev;
+          const loginId = Number(user?.company_id);
+          if (Number.isFinite(loginId) && loginId > 0 && ids.includes(loginId)) {
+            return loginId;
+          }
+          return prev === '' ? '' : prev;
+        });
       }
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [user?.company_id]);
+
+  const companyFilterOptions = useMemo(() => {
+    const list = companies
+      .map((c: any) => ({
+        id: Number(c.id),
+        name: String(c.name || c.company_name || '').trim(),
+      }))
+      .filter((c) => Number.isFinite(c.id) && c.id > 0 && c.name)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return [{ id: '' as number | '', name: t('projectManagement.filters.allCompanies') }, ...list];
+  }, [companies, t]);
+
+  const selectedCompanyOption = useMemo(() => {
+    if (selectedCompanyId === '') {
+      return companyFilterOptions.find((o) => o.id === '') ?? null;
+    }
+    return companyFilterOptions.find((o) => o.id === selectedCompanyId) ?? null;
+  }, [companyFilterOptions, selectedCompanyId]);
 
   const loadUsers = useCallback(async () => {
     try {
@@ -374,7 +415,10 @@ const ProjectManagement: React.FC = () => {
     setSearchTerm('');
     setStatusFilter('all');
     setManagerFilter('all');
-    setSelectedCompanyId('');
+    const loginId = Number(user?.company_id);
+    setSelectedCompanyId(
+      isRootOrAudit && Number.isFinite(loginId) && loginId > 0 ? loginId : ''
+    );
   };
 
   return (
@@ -445,25 +489,27 @@ const ProjectManagement: React.FC = () => {
             sx={{ ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx }}
           />
           {isRootOrAudit && (
-            <FormControl fullWidth size="small" sx={{ ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx }}>
-              <InputLabel shrink>{t('projectManagement.filters.company')}</InputLabel>
-              <Select
-                value={selectedCompanyId === '' ? '' : String(selectedCompanyId)}
-                label={t('projectManagement.filters.company')}
-                displayEmpty
-                onChange={(e) => {
-                  const value = String(e.target.value);
-                  setSelectedCompanyId(value === '' ? '' : Number(value));
-                }}
-              >
-                <MenuItem value="">{t('projectManagement.filters.allCompanies')}</MenuItem>
-                {companies.map((company) => (
-                  <MenuItem key={company.id} value={String(company.id)}>
-                    {company.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Autocomplete
+              options={companyFilterOptions}
+              value={selectedCompanyOption}
+              onChange={(_, next) => {
+                if (!next || next.id === '') setSelectedCompanyId('');
+                else setSelectedCompanyId(Number(next.id));
+              }}
+              getOptionLabel={(option) => option.name}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              disableClearable={Boolean(selectedCompanyOption)}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label={t('projectManagement.filters.company')}
+                  placeholder={t('projectManagement.filters.searchCompany')}
+                  {...mvsOutlinedLabelProps}
+                  sx={{ ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx }}
+                />
+              )}
+            />
           )}
           <FormControl fullWidth size="small" sx={{ ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx }}>
             <InputLabel shrink>{t('projectManagement.filters.status')}</InputLabel>

@@ -2236,6 +2236,7 @@ export default {
       filters: {
         searchPlaceholder: 'Search by name, code, or manager',
         company: 'Company',
+        searchCompany: 'Search company',
         allCompanies: 'All companies',
         status: 'Status',
         allStatuses: 'All statuses',

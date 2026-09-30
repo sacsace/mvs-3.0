@@ -213,8 +213,8 @@ const SystemSettings: React.FC = () => {
     },
     security: {
       passwordMinLength: 8,
-      requireSpecialChars: true,
-      sessionTimeout: 30,
+      requireSpecialChars: false,
+      sessionTimeout: 600,
       twoFactorAuth: false,
       ipWhitelist: false
     },

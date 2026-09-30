@@ -89,6 +89,14 @@ export function shouldApplyProperCaseToInput(
   ) {
     return false;
   }
+  // 댓글·답글: 입력한 대소문자 그대로 유지
+  const commentMeta = `${name} ${el.className || ''} ${el.getAttribute('placeholder') || ''} ${el.getAttribute('aria-label') || ''}`.toLowerCase();
+  if (/comment|reply|댓글|답글/.test(commentMeta)) {
+    return false;
+  }
+  if (el.closest('[data-skip-proper-case="1"], [data-skip-proper-case="true"], [data-comment-input="1"]')) {
+    return false;
+  }
   if (looksLikeIdentityCode(el.value)) return false;
   return true;
 }

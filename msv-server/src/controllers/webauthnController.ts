@@ -16,7 +16,7 @@ import { recordActivityLog } from '../services/activityLogService';
 
 const RP_NAME = process.env.WEBAUTHN_RP_NAME || 'MVS';
 const CHALLENGE_TTL_SEC = 300;
-const DEFAULT_SESSION_TIMEOUT_MINUTES = 30;
+const DEFAULT_SESSION_TIMEOUT_MINUTES = 600;
 const MIN_SESSION_TIMEOUT_MINUTES = 5;
 const MAX_SESSION_TIMEOUT_MINUTES = 24 * 60;
 
