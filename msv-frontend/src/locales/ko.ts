@@ -4822,6 +4822,10 @@ export default {
         remainingShort: '잔금 {{currency}} {{amount}}',
         commentIndicator: '댓글'
       },
+      listView: {
+        viewAll: '전체보기',
+        viewPages: '페이지로 보기',
+      },
       empty: {
         noResults: '표시할 지출결의서가 없습니다.',
         noTransferItems: '승인된 지출결의서 중 잔금이 남은 건만 표시됩니다.'
@@ -5021,11 +5025,14 @@ export default {
         gstPaymentCalculationLabel: 'GST 납부 계산식',
         attachmentFileName: '첨부 파일명',
         attachmentFileNameHint: '다운로드 시 사용할 파일명입니다. 확장자는 유지됩니다.',
-        invoiceTypeHint: '첨부 전 Tax Invoice / Proforma Invoice를 선택하세요. Proforma로도 송금할 수 있지만, Tax Invoice가 있어야 종료(지급 완료)됩니다.',
+        invoiceTypeHint:
+          '첨부 전 Tax Invoice / Proforma Invoice / 인보이스 없음을 선택하세요. Proforma로도 송금할 수 있지만, Tax Invoice가 있어야 종료됩니다. 인보이스 없음은 전액 송금 후 바로 종료됩니다.',
         invoiceTypeTax: 'Tax Invoice',
         invoiceTypeProforma: 'Proforma Invoice',
+        invoiceTypeNone: '인보이스 없음',
         prepaid: '선지출',
         prepaidHint: '이미 지출된 금액입니다. 승인하면 송금 없이 바로 지급 완료(종료)됩니다.',
+        noInvoiceHint: '인보이스가 없는 지출입니다. 전액 송금하면 Tax Invoice 없이 지급 완료(종료)됩니다.',
         uploadTaxInvoice: 'Tax Invoice 첨부',
         vendorGroupDoc: '업체·전표',
         vendorGroupPayout: '입금 계좌',
@@ -5141,6 +5148,7 @@ export default {
         receiptDeleted: '영수증 첨부가 삭제되었습니다.',
         taxInvoiceAttached: 'Tax Invoice가 첨부되었습니다.',
         proformaAttached: 'Proforma Invoice가 첨부되었습니다.',
+        noInvoiceAttached: '인보이스 없음으로 파일이 첨부되었습니다.',
         remittanceAwaitingTax: '송금은 완료되었습니다. Tax Invoice를 첨부해야 종료됩니다.',
         deleted: '지출결의서가 성공적으로 삭제되었습니다.',
         approved: '지출결의서가 승인되었습니다.',
@@ -5178,7 +5186,7 @@ export default {
         qrTokenFailed: 'QR 토큰 발급에 실패했습니다.',
         receiptUploadFailed: '영수증 업로드 중 오류가 발생했습니다.',
         receiptDeleteFailed: '영수증 삭제 중 오류가 발생했습니다.',
-        invoiceTypeRequired: '첨부 유형(Tax / Proforma Invoice)을 선택해주세요.',
+        invoiceTypeRequired: '첨부 유형(Tax / Proforma Invoice / 인보이스 없음)을 선택해주세요.',
         deleteFailed: '삭제 중 오류가 발생했습니다.',
         approveFailed: '승인 중 오류가 발생했습니다.',
         rejectFailed: '반려 중 오류가 발생했습니다.',

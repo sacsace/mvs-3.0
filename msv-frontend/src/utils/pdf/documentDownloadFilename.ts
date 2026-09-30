@@ -10,6 +10,7 @@ import { ensurePdfExtension, sanitizeFilenamePart } from './sanitizeFilename';
  * - RPO: 받은 PO (Purchase Order)
  * - WO: 워크오더 (Work Order)
  * - RWO: 받은 워크오더
+ * - RT: 송금 확인증 (Remittance)
  */
 export type DocumentDownloadCode =
   | 'PV'
@@ -19,7 +20,8 @@ export type DocumentDownloadCode =
   | 'RQuot'
   | 'RPO'
   | 'WO'
-  | 'RWO';
+  | 'RWO'
+  | 'RT';
 
 /** yyyyMMdd (로컬 기준) */
 export function formatDownloadDateToken(date?: Date | string | null): string {

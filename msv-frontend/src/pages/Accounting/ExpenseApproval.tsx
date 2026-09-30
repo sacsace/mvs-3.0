@@ -131,7 +131,7 @@ const isImageReceipt = (filePath: string): boolean =>
 const isPdfReceipt = (filePath: string): boolean =>
   /\.pdf(?:$|[?#])/i.test(String(filePath || ''));
 
-type ExpenseInvoiceType = 'tax' | 'proforma';
+type ExpenseInvoiceType = 'tax' | 'proforma' | 'none';
 
 type ExpenseAttachment = {
   path: string;
@@ -141,6 +141,9 @@ type ExpenseAttachment = {
 const normalizeExpenseInvoiceType = (value: unknown): ExpenseInvoiceType => {
   const raw = String(value || '').trim().toLowerCase();
   if (raw === 'proforma' || raw === 'proforma_invoice' || raw === 'pi') return 'proforma';
+  if (raw === 'none' || raw === 'no_invoice' || raw === 'no-invoice' || raw === '없이' || raw === '없음') {
+    return 'none';
+  }
   return 'tax';
 };
 
@@ -185,6 +188,26 @@ const normalizeExpenseAttachments = (value: unknown): ExpenseAttachment[] => {
 const expenseHasTaxInvoice = (attachments: ExpenseAttachment[] | string[] | unknown) =>
   normalizeExpenseAttachments(attachments).some((row) => row.invoiceType === 'tax');
 
+/** 인보이스 없음 — Tax Invoice 없이 전액 송금 후 종료 가능 */
+const expenseIsNoInvoice = (expense: { itemMeta?: Record<string, any> } | null | undefined) => {
+  if (!expense?.itemMeta) return false;
+  const v = expense.itemMeta.noInvoice ?? expense.itemMeta.no_invoice;
+  if (v === true || v === 'true' || v === 1 || v === '1') return true;
+  const mode = String(
+    expense.itemMeta.invoiceMode || expense.itemMeta.invoice_mode || ''
+  )
+    .trim()
+    .toLowerCase();
+  return mode === 'none' || mode === 'no_invoice' || mode === 'no-invoice';
+};
+
+/** Proforma + 선지출 — 승인 시 송금 없이 지급 완료 처리 */
+const expenseIsPrepaid = (expense: { itemMeta?: Record<string, any> } | null | undefined) => {
+  if (!expense?.itemMeta) return false;
+  const v = expense.itemMeta.isPrepaid ?? expense.itemMeta.is_prepaid;
+  return v === true || v === 'true' || v === 1 || v === '1';
+};
+
 const expenseIsAwaitingTaxInvoice = (expense: {
   attachments?: ExpenseAttachment[] | string[];
   totalAmount?: number;
@@ -194,6 +217,7 @@ const expenseIsAwaitingTaxInvoice = (expense: {
   itemMeta?: Record<string, any>;
 }) => {
   if (expenseIsPrepaid(expense)) return false;
+  if (expenseIsNoInvoice(expense)) return false;
   const total = Number(expense.totalAmount || 0);
   const paid = Number(expense.paidAmount || 0);
   const remaining = Math.max(0, total - paid);
@@ -202,13 +226,6 @@ const expenseIsAwaitingTaxInvoice = (expense: {
   if (String(expense.paymentRequestStatus || '').toLowerCase() === 'paid') return false;
   if (expense.status === 'paid') return false;
   return !expenseHasTaxInvoice(expense.attachments);
-};
-
-/** Proforma + 선지출 — 승인 시 송금 없이 지급 완료 처리 */
-const expenseIsPrepaid = (expense: { itemMeta?: Record<string, any> } | null | undefined) => {
-  if (!expense?.itemMeta) return false;
-  const v = expense.itemMeta.isPrepaid ?? expense.itemMeta.is_prepaid;
-  return v === true || v === 'true' || v === 1 || v === '1';
 };
 
 interface ExpenseItem {
@@ -1330,47 +1347,30 @@ const stripCorporateSuffixFromFilename = (value: string) =>
     .replace(/\s+\./g, '.')
     .trim();
 
-/** 송금 확인증 파일명에서 제외할 단어 (대소문자 무시) */
-const REMITTANCE_PROOF_SKIP_WORDS = new Set(['expenses', 'payment', 'voucher']);
-
-/** 제목 → 파일명용: 괄호 제거, expenses/payment/voucher 제외 */
-const sanitizeRemittanceTitleForFileName = (title: string) => {
-  const withoutParens = String(title || '')
-    .replace(/[()（）\[\]【】]/g, ' ')
-    .replace(/[\\/:*?"<>|]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  const words = withoutParens.split(/\s+/).filter(Boolean);
-  const kept = words.filter((word) => {
-    const normalized = word.toLowerCase().replace(/[^a-z0-9]/gi, '');
-    return normalized && !REMITTANCE_PROOF_SKIP_WORDS.has(normalized);
-  });
-  return stripCorporateSuffixFromFilename(kept.join(' '));
-};
-
-const takeFileNameSnippet = (value: string, maxChars: number) => {
-  const cleaned = stripCorporateSuffixFromFilename(
-    String(value || '')
-      .replace(/[\\/:*?"<>|]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
-  if (!cleaned) return '';
-  return Array.from(cleaned).slice(0, maxChars).join('');
-};
-
-/** 송금 확인증 기본 파일명: YYYYMMDD_RT + 지출결의서 제목 */
-const buildRemittanceProofFileName = (file: File, expenseTitle?: string) => {
-  const ymd = formatLocalYmd(new Date()).replace(/-/g, '');
-  const titlePart =
-    takeFileNameSnippet(sanitizeRemittanceTitleForFileName(expenseTitle || ''), 80) || 'Remittance';
+/** 송금 확인증: yyyymmdd_RT (회사명) (지출목적 15자) */
+const buildRemittanceProofFileName = (
+  file: File,
+  opts?: { companyName?: string; purpose?: string; title?: string }
+) => {
   const fromName = String(file.name || '').split('.').pop() || '';
   const fromType = (file.type.split('/')[1] || 'png').replace(/^jpeg$/i, 'jpg');
   const ext = ((fromName.length <= 4 ? fromName : fromType)
     .replace(/[^a-z0-9]/gi, '')
     .slice(0, 4)
     .toLowerCase() || 'png').replace(/^jpeg$/, 'jpg');
-  return `${ymd}_RT ${titlePart}.${ext}`;
+  const detailSource = stripCorporateSuffixFromFilename(
+    String(opts?.purpose || opts?.title || 'Remittance')
+      .replace(/[()（）\[\]【】]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  ) || 'Remittance';
+  return buildDocumentDownloadFilename({
+    code: 'RT',
+    companyName: opts?.companyName || 'Company',
+    detail: detailSource,
+    detailMaxLength: 15,
+    extension: ext,
+  });
 };
 
 const getFileExtension = (fileName: string) => {
@@ -2071,6 +2071,7 @@ const ExpenseApproval: React.FC = () => {
   const [companyOptions, setCompanyOptions] = useState<Array<{ id: number; name: string }>>([]);
   const [listSortKey, setListSortKey] = useState<ExpenseListSortKey | null>(null);
   const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc');
+  const [listViewMode, setListViewMode] = useState<'page' | 'all'>('page');
   const [page, setPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [companyLogo, setCompanyLogo] = useState('');
@@ -2127,6 +2128,9 @@ const ExpenseApproval: React.FC = () => {
     perLineGst: false,
     /** Proforma 선지출 — 승인 시 송금 탭 생략 */
     isPrepaid: false,
+    /** 인보이스 없음 — Tax Invoice 없이 종료 가능 */
+    noInvoice: false,
+    invoiceMode: 'tax' as ExpenseInvoiceType,
   });
   const [ccUserIds, setCcUserIds] = useState<number[]>([]);
   const [qrOpen, setQrOpen] = useState(false);
@@ -3356,7 +3360,17 @@ const ExpenseApproval: React.FC = () => {
       gstProfessionalTax: Number(meta.gstProfessionalTax ?? meta.gst_professional_tax ?? 0),
       perLineGst: Boolean(meta.perLineGst ?? meta.per_line_gst),
       isPrepaid: Boolean(meta.isPrepaid ?? meta.is_prepaid),
+      noInvoice: Boolean(meta.noInvoice ?? meta.no_invoice) ||
+        String(meta.invoiceMode || meta.invoice_mode || '').toLowerCase() === 'none',
+      invoiceMode: (Boolean(meta.noInvoice ?? meta.no_invoice)
+        ? 'none'
+        : normalizeExpenseInvoiceType(meta.invoiceMode || meta.invoice_mode || 'tax')) as ExpenseInvoiceType,
     });
+    setReceiptInvoiceType(
+      Boolean(meta.noInvoice ?? meta.no_invoice)
+        ? 'none'
+        : normalizeExpenseInvoiceType(meta.invoiceMode || meta.invoice_mode || 'tax')
+    );
     setPartnerInputValue(
       String(meta.department || '').trim() ||
         linkedPartner?.company_name ||
@@ -3414,7 +3428,10 @@ const ExpenseApproval: React.FC = () => {
       gstProfessionalTax: 0,
       perLineGst: false,
       isPrepaid: false,
+      noInvoice: false,
+      invoiceMode: 'tax' as ExpenseInvoiceType,
     });
+    setReceiptInvoiceType('tax');
     setDraftId(null);
     setHeaderStatusBanner('');
     lastSavedPayloadRef.current = '';
@@ -3535,6 +3552,11 @@ const ExpenseApproval: React.FC = () => {
       gstRoundingAdjustment: next === 'gst' ? prev.gstRoundingAdjustment : 0,
       gstProfessionalTax: next === 'gst' ? prev.gstProfessionalTax : 0,
       isPrepaid: next === 'gst' || next === 'tds' ? false : prev.isPrepaid,
+      noInvoice: next === 'gst' || next === 'tds' ? false : prev.noInvoice,
+      invoiceMode:
+        next === 'gst' || next === 'tds'
+          ? ('tax' as ExpenseInvoiceType)
+          : prev.invoiceMode,
     }));
     setLineItems(next === 'gst' ? createGstSummaryLineItems() : [createEmptyLineItem(next)]);
     if (next === 'gst' || next === 'tds') {
@@ -3918,7 +3940,9 @@ const ExpenseApproval: React.FC = () => {
           options?.typeLabel ||
           (file.invoiceType === 'proforma'
             ? t('expenseApproval.voucher.invoiceTypeProforma')
-            : t('expenseApproval.voucher.invoiceTypeTax'));
+            : file.invoiceType === 'none'
+              ? t('expenseApproval.voucher.invoiceTypeNone')
+              : t('expenseApproval.voucher.invoiceTypeTax'));
         const showTypeBadge = !file.path.includes('expense-remittance-proofs');
         const canDelete =
           Boolean(options?.deletable && options?.onDelete) &&
@@ -4026,8 +4050,18 @@ const ExpenseApproval: React.FC = () => {
                     px: 0.5,
                     py: 0.15,
                     borderRadius: '2px',
-                    bgcolor: file.invoiceType === 'proforma' ? '#FEF3C7' : '#DCFCE7',
-                    color: file.invoiceType === 'proforma' ? '#92400E' : '#166534',
+                    bgcolor:
+                      file.invoiceType === 'proforma'
+                        ? '#FEF3C7'
+                        : file.invoiceType === 'none'
+                          ? '#E5E7EB'
+                          : '#DCFCE7',
+                    color:
+                      file.invoiceType === 'proforma'
+                        ? '#92400E'
+                        : file.invoiceType === 'none'
+                          ? '#374151'
+                          : '#166534',
                     fontSize: '0.62rem',
                     fontWeight: 700,
                     lineHeight: 1.2,
@@ -4124,7 +4158,9 @@ const ExpenseApproval: React.FC = () => {
           ? t('expenseApproval.success.calculationAttached')
           : invoiceTypeForUpload === 'proforma'
             ? t('expenseApproval.success.proformaAttached')
-            : t('expenseApproval.success.taxInvoiceAttached')
+            : invoiceTypeForUpload === 'none'
+              ? t('expenseApproval.success.noInvoiceAttached')
+              : t('expenseApproval.success.taxInvoiceAttached')
       );
     } catch (uploadError: any) {
       setError(
@@ -4268,9 +4304,11 @@ const ExpenseApproval: React.FC = () => {
   };
 
   const canUserRevisionRejectExpense = (expense: ExpenseApprovalItem) => {
-    if (!isDesignatedApprover(expense)) return false;
     if (isExpensePaymentCompleted(expense)) return false;
-    return ['submitted', 'in_review', 'approved'].includes(expense.status);
+    if (!['submitted', 'in_review', 'approved'].includes(expense.status)) return false;
+    // root: 승인 후에도 수정 반려 가능 (지정 승인자 아니어도)
+    if (isRootUser) return true;
+    return isDesignatedApprover(expense);
   };
 
   const canChangeExpenseApprover = (expense: ExpenseApprovalItem) => {
@@ -4346,12 +4384,26 @@ const ExpenseApproval: React.FC = () => {
     }
     const named = new File(
       [file],
-      buildRemittanceProofFileName(file, selectedExpense?.title || ''),
+      buildRemittanceProofFileName(file, {
+        companyName:
+          companyName ||
+          selectedExpense?.companyName ||
+          '',
+        purpose: selectedExpense?.purpose || formData.purpose || '',
+        title: selectedExpense?.title || formData.title || '',
+      }),
       { type: file.type, lastModified: file.lastModified }
     );
     setPaymentProofFile(named);
     setProofNameDraft(stripFileExtensionForDisplay(named.name));
-  }, [selectedExpense?.title]);
+  }, [
+    companyName,
+    formData.purpose,
+    formData.title,
+    selectedExpense?.companyName,
+    selectedExpense?.purpose,
+    selectedExpense?.title,
+  ]);
 
   const applyProofFileName = useCallback((nextName: string) => {
     setPaymentProofFile((prev) => {
@@ -4476,7 +4528,7 @@ const ExpenseApproval: React.FC = () => {
     const proofToSend = renameFileKeepingExtension(paymentProofFile, proofNameDraft);
     if (proofToSend.name !== paymentProofFile.name) {
       setPaymentProofFile(proofToSend);
-      setProofNameDraft(proofToSend.name);
+      setProofNameDraft(stripFileExtensionForDisplay(proofToSend.name));
     }
     await handleCompletePayment(selectedExpense.id, amount, proofToSend);
   };
@@ -4920,6 +4972,7 @@ const ExpenseApproval: React.FC = () => {
     (page - 1) * itemsPerPage,
     page * itemsPerPage
   );
+  const visibleExpenses = listViewMode === 'all' ? displayedExpenses : paginatedExpenses;
 
   const listStateBoxSx = {
     ...mvsBodyListTableSx,
@@ -6900,9 +6953,15 @@ const ExpenseApproval: React.FC = () => {
                     <RadioGroup
                       row
                       value={receiptInvoiceType}
-                      onChange={(e) =>
-                        setReceiptInvoiceType(e.target.value as ExpenseInvoiceType)
-                      }
+                      onChange={(e) => {
+                        const next = e.target.value as ExpenseInvoiceType;
+                        setReceiptInvoiceType(next);
+                        setVoucherData((prev) => ({
+                          ...prev,
+                          invoiceMode: next,
+                          noInvoice: next === 'none',
+                        }));
+                      }}
                       sx={{ mr: 1 }}
                     >
                       <FormControlLabel
@@ -6914,6 +6973,11 @@ const ExpenseApproval: React.FC = () => {
                         value="proforma"
                         control={<Radio size="small" />}
                         label={t('expenseApproval.voucher.invoiceTypeProforma')}
+                      />
+                      <FormControlLabel
+                        value="none"
+                        control={<Radio size="small" />}
+                        label={t('expenseApproval.voucher.invoiceTypeNone')}
                       />
                     </RadioGroup>
                     <FormControlLabel
@@ -6937,6 +7001,15 @@ const ExpenseApproval: React.FC = () => {
                       sx={{ display: 'block', mb: 1 }}
                     >
                       {t('expenseApproval.voucher.prepaidHint')}
+                    </Typography>
+                  ) : null}
+                  {voucherData.noInvoice && !voucherData.isPrepaid ? (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', mb: 1 }}
+                    >
+                      {t('expenseApproval.voucher.noInvoiceHint')}
                     </Typography>
                   ) : null}
                 </>
@@ -8306,7 +8379,15 @@ const ExpenseApproval: React.FC = () => {
                       <RadioGroup
                         row
                         value={receiptInvoiceType}
-                        onChange={(e) => setReceiptInvoiceType(e.target.value as ExpenseInvoiceType)}
+                        onChange={(e) => {
+                          const next = e.target.value as ExpenseInvoiceType;
+                          setReceiptInvoiceType(next);
+                          setVoucherData((prev) => ({
+                            ...prev,
+                            invoiceMode: next,
+                            noInvoice: next === 'none',
+                          }));
+                        }}
                         sx={{ mb: 0.75 }}
                       >
                         <FormControlLabel
@@ -8318,6 +8399,11 @@ const ExpenseApproval: React.FC = () => {
                           value="proforma"
                           control={<Radio size="small" />}
                           label={t('expenseApproval.voucher.invoiceTypeProforma')}
+                        />
+                        <FormControlLabel
+                          value="none"
+                          control={<Radio size="small" />}
+                          label={t('expenseApproval.voucher.invoiceTypeNone')}
                         />
                       </RadioGroup>
                     )}
@@ -9004,7 +9090,11 @@ const ExpenseApproval: React.FC = () => {
                         value={proofNameDraft}
                         disabled={paymentSubmitting}
                         onChange={(e) =>
-                          setProofNameDraft(stripCorporateSuffixFromFilename(e.target.value))
+                          setProofNameDraft(
+                            stripFileExtensionForDisplay(
+                              stripCorporateSuffixFromFilename(e.target.value)
+                            )
+                          )
                         }
                         onFocus={(e) => e.target.select()}
                         onBlur={() => applyProofFileName(proofNameDraft)}
@@ -9487,7 +9577,67 @@ const ExpenseApproval: React.FC = () => {
 
       {/* 지출결의서 목록 테이블 */}
       <Box sx={mvsBodyListZoneSx}>
-        {paginatedExpenses.length === 0 ? (
+        <Box
+          sx={{
+            mb: 1.25,
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 0.75,
+          }}
+        >
+          <Button
+            size="small"
+            disableElevation
+            variant={listViewMode === 'all' ? 'contained' : 'outlined'}
+            onClick={() => {
+              setListViewMode('all');
+              setPage(1);
+            }}
+            sx={{
+              height: 32,
+              minWidth: 0,
+              px: 1.5,
+              textTransform: 'none',
+              fontWeight: 600,
+              fontSize: '0.75rem',
+              borderRadius: '10px',
+              boxShadow: 'none',
+              whiteSpace: 'nowrap',
+              ...(listViewMode === 'all'
+                ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+            }}
+          >
+            {t('expenseApproval.listView.viewAll')}
+          </Button>
+          <Button
+            size="small"
+            disableElevation
+            variant={listViewMode === 'page' ? 'contained' : 'outlined'}
+            onClick={() => {
+              setListViewMode('page');
+              setPage(1);
+            }}
+            sx={{
+              height: 32,
+              minWidth: 0,
+              px: 1.5,
+              textTransform: 'none',
+              fontWeight: 600,
+              fontSize: '0.75rem',
+              borderRadius: '10px',
+              boxShadow: 'none',
+              whiteSpace: 'nowrap',
+              ...(listViewMode === 'page'
+                ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+            }}
+          >
+            {t('expenseApproval.listView.viewPages')}
+          </Button>
+        </Box>
+        {visibleExpenses.length === 0 ? (
           <Box sx={listStateBoxSx}>
             <Typography variant="body2" color="text.secondary">
               {listTab === 'transfer'
@@ -9594,14 +9744,14 @@ const ExpenseApproval: React.FC = () => {
               </TableRow>
             </TableHead>
               <TableBody sx={mvsTableBodyRowSx}>
-                {paginatedExpenses.map((expense, index) => (
+                {visibleExpenses.map((expense, index) => (
                 <TableRow
                   key={expense.id}
                   onClick={() => handleViewExpense(expense)}
                     sx={{ cursor: 'pointer', '&:active': { bgcolor: 'action.selected' } }}
                   >
                   <TableCell sx={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums', width: 52, minWidth: 52, maxWidth: 52 }}>
-                    {(page - 1) * itemsPerPage + index + 1}
+                    {(listViewMode === 'page' ? (page - 1) * itemsPerPage : 0) + index + 1}
                   </TableCell>
                   <TableCell sx={{ width: 112, minWidth: 112, maxWidth: 112 }}>
                     {formatLocalYmd(expense.createdAt)
@@ -9760,14 +9910,16 @@ const ExpenseApproval: React.FC = () => {
         </TableContainer>
         )}
 
-        <Box sx={mvsBodyPaginationSx}>
-          <Pagination
-            count={Math.ceil(filteredExpenses.length / itemsPerPage)}
-            page={page}
-            onChange={(_, value) => setPage(value)}
-            color="primary"
-          />
-        </Box>
+        {listViewMode === 'page' ? (
+          <Box sx={mvsBodyPaginationSx}>
+            <Pagination
+              count={Math.max(1, Math.ceil(displayedExpenses.length / itemsPerPage))}
+              page={page}
+              onChange={(_, value) => setPage(value)}
+              color="primary"
+            />
+          </Box>
+        ) : null}
       </Box>
 
       {/* 스낵바 */}

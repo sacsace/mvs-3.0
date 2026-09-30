@@ -2331,7 +2331,7 @@ const resolveExpenseReceiptDiskPath = (relativePath: string) => {
 const expenseHasReceipts = (attachments: any) =>
   normalizeExpenseAttachments(attachments).length > 0;
 
-type ExpenseInvoiceType = 'tax' | 'proforma';
+type ExpenseInvoiceType = 'tax' | 'proforma' | 'none';
 
 type ExpenseAttachmentRecord = {
   path: string;
@@ -2341,6 +2341,7 @@ type ExpenseAttachmentRecord = {
 const normalizeExpenseInvoiceType = (value: unknown): ExpenseInvoiceType => {
   const raw = String(value || '').trim().toLowerCase();
   if (raw === 'proforma' || raw === 'proforma_invoice' || raw === 'pi') return 'proforma';
+  if (raw === 'none' || raw === 'no_invoice' || raw === 'no-invoice') return 'none';
   return 'tax';
 };
 
@@ -2385,10 +2386,22 @@ const isExpensePrepaidMeta = (itemsValue: any) => {
   return v === true || v === 'true' || v === 1 || v === '1';
 };
 
+const isExpenseNoInvoiceMeta = (itemsValue: any) => {
+  const meta = mergeExpenseItemsMeta(itemsValue, {}).meta || {};
+  const v = meta.noInvoice ?? meta.no_invoice;
+  if (v === true || v === 'true' || v === 1 || v === '1') return true;
+  const mode = String(meta.invoiceMode || meta.invoice_mode || '')
+    .trim()
+    .toLowerCase();
+  return mode === 'none' || mode === 'no_invoice' || mode === 'no-invoice';
+};
+
 const tryFinalizeExpenseIfReady = async (expense: any, actorUserId?: number) => {
   const remaining = getExpenseRemainingAmount(expense);
   if (remaining > 0) return false;
-  if (!expenseHasTaxInvoice(expense.attachments)) return false;
+  const canCloseWithoutTax =
+    isExpenseNoInvoiceMeta(expense.items) || isExpensePrepaidMeta(expense.items);
+  if (!canCloseWithoutTax && !expenseHasTaxInvoice(expense.attachments)) return false;
   const paymentStatus = String(expense.payment_request_status || '').toLowerCase();
   const docStatus = String(expense.status || '').toLowerCase();
   if (paymentStatus === 'paid' && docStatus === 'paid') return false;
@@ -3362,10 +3375,12 @@ export const updateExpenseReportStatus = async (req: RequestWithUser, res: Respo
   try {
     const { id } = req.params;
     const { status, reason, reject_kind: rejectKindRaw } = req.body;
-    const { tenant_id, company_id, id: user_id } = req.user;
-    const expense = await (ExpenseReport as any).findOne({
-      where: { id, tenant_id, company_id, is_active: true }
-    });
+    const { tenant_id, company_id, id: user_id, role } = req.user;
+    const where: Record<string, unknown> = { id, tenant_id, is_active: true };
+    if (role !== 'root' && role !== 'audit') {
+      where.company_id = company_id;
+    }
+    const expense = await (ExpenseReport as any).findOne({ where });
 
     if (!expense) {
       return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
@@ -3373,6 +3388,7 @@ export const updateExpenseReportStatus = async (req: RequestWithUser, res: Respo
 
     const prevStatus = expense.status;
     const designatedId = readExpenseApproverId(expense);
+    const isRootActor = role === 'root';
 
     if (!['submitted', 'approved', 'rejected'].includes(String(status))) {
       return res.status(400).json({ success: false, message: '허용되지 않은 상태입니다.' });
@@ -3428,7 +3444,8 @@ export const updateExpenseReportStatus = async (req: RequestWithUser, res: Respo
             : '반려된 문서는 재요청 후에만 승인할 수 있습니다.',
         });
       }
-      if (!designatedId || designatedId !== Number(user_id)) {
+      // root는 지정 승인자가 아니어도 수정 반려(승인 후 포함) 가능
+      if (!isRootActor && (!designatedId || designatedId !== Number(user_id))) {
         return res.status(403).json({ success: false, message: '지정된 승인권자만 처리할 수 있습니다.' });
       }
     }
@@ -3704,7 +3721,14 @@ export const uploadExpenseReceiptByToken = async (req: Request, res: Response) =
     }
     const attachments = normalizeExpenseAttachments(expense.attachments);
     attachments.push({ path: relativePath, invoiceType });
-    await expense.update({ attachments });
+    const patch: Record<string, unknown> = { attachments };
+    if (invoiceType === 'none') {
+      patch.items = mergeExpenseItemsMeta(expense.items, {
+        noInvoice: true,
+        invoiceMode: 'none',
+      });
+    }
+    await expense.update(patch);
     await tryFinalizeExpenseIfReady(expense, decoded.userId);
     await expense.reload();
     res.json({
@@ -3733,10 +3757,10 @@ export const uploadExpenseReceiptById = async (req: RequestWithUser, res: Respon
       (req.body && (req.body as any).invoiceType) ||
       (req.body && (req.body as any).invoice_type) ||
       (req.query && (req.query as any).invoiceType);
-    if (!rawType || !['tax', 'proforma', 'proforma_invoice', 'pi', 'tax_invoice'].includes(String(rawType).trim().toLowerCase())) {
+    if (!rawType || !['tax', 'proforma', 'proforma_invoice', 'pi', 'tax_invoice', 'none', 'no_invoice', 'no-invoice'].includes(String(rawType).trim().toLowerCase())) {
       return res.status(400).json({
         success: false,
-        message: '첨부 유형(Tax Invoice / Proforma Invoice)을 선택해주세요.',
+        message: '첨부 유형(Tax Invoice / Proforma Invoice / 인보이스 없음)을 선택해주세요.',
       });
     }
     const invoiceType = normalizeExpenseInvoiceType(rawType);
@@ -3769,7 +3793,14 @@ export const uploadExpenseReceiptById = async (req: RequestWithUser, res: Respon
       }
     }
     attachments.push(...newRows);
-    await expense.update({ attachments });
+    const patch: Record<string, unknown> = { attachments };
+    if (invoiceType === 'none') {
+      patch.items = mergeExpenseItemsMeta(expense.items, {
+        noInvoice: true,
+        invoiceMode: 'none',
+      });
+    }
+    await expense.update(patch);
     await tryFinalizeExpenseIfReady(expense, user_id);
     await expense.reload();
     res.json({
@@ -4310,8 +4341,9 @@ export const completeExpensePayment = async (req: RequestWithUser, res: Response
     const paidAfter = roundMoney(paidBefore + requestedAmount);
     const isFullPayment = requestedAmount >= remaining - 0.001;
     const hasTaxInvoice = expenseHasTaxInvoice(expense.attachments);
-    const canClose = isFullPayment && hasTaxInvoice;
-    const awaitingTaxInvoice = isFullPayment && !hasTaxInvoice;
+    const noInvoice = isExpenseNoInvoiceMeta(expense.items);
+    const canClose = isFullPayment && (hasTaxInvoice || noInvoice);
+    const awaitingTaxInvoice = isFullPayment && !hasTaxInvoice && !noInvoice;
     const transferLogs = Array.isArray(expense.bank_transfer_logs)
       ? [...expense.bank_transfer_logs]
       : [];

@@ -4771,6 +4771,10 @@ export default {
         remainingShort: 'Remaining: {{currency}} {{amount}}',
         commentIndicator: 'Comment'
       },
+      listView: {
+        viewAll: 'View all',
+        viewPages: 'View by page',
+      },
       empty: {
         noResults: 'No expense reports to display.',
         noTransferItems: 'Only approved expense reports with a remaining balance are shown.'
@@ -4971,12 +4975,15 @@ export default {
         attachmentFileName: 'Attachment file name',
         attachmentFileNameHint: 'Used when downloading. The file extension is kept.',
         invoiceTypeHint:
-          'Select tax invoice or proforma invoice before uploading. Proforma allows remittance, but tax invoice is required to close.',
+          'Select tax invoice, proforma invoice, or no invoice before uploading. Proforma allows remittance, but tax invoice is required to close. No invoice closes after full remittance.',
         invoiceTypeTax: 'Tax invoice',
         invoiceTypeProforma: 'Proforma invoice',
+        invoiceTypeNone: 'No invoice',
         prepaid: 'Prepaid',
         prepaidHint:
           'This amount is already spent. Approval closes it as paid without remittance.',
+        noInvoiceHint:
+          'No invoice for this expense. Full remittance closes payment without a tax invoice.',
         uploadTaxInvoice: 'Upload tax invoice',
         vendorGroupDoc: 'Vendor & voucher',
         vendorGroupPayout: 'Payout account',
@@ -5092,6 +5099,7 @@ export default {
         receiptDeleted: 'Receipt attachment has been removed.',
         taxInvoiceAttached: 'Tax invoice has been attached.',
         proformaAttached: 'Proforma invoice has been attached.',
+        noInvoiceAttached: 'Supporting file attached as no invoice.',
         remittanceAwaitingTax: 'Remittance recorded. Upload a tax invoice to close this case.',
         deleted: 'Expense report has been deleted successfully.',
         approved: 'Expense report has been approved.',
@@ -5127,7 +5135,7 @@ export default {
         qrTokenFailed: 'Failed to issue QR token.',
         receiptUploadFailed: 'An error occurred while uploading receipt.',
         receiptDeleteFailed: 'An error occurred while deleting the receipt.',
-        invoiceTypeRequired: 'Please select tax invoice or proforma invoice.',
+        invoiceTypeRequired: 'Please select tax invoice, proforma invoice, or no invoice.',
         deleteFailed: 'An error occurred while deleting.',
         approveFailed: 'An error occurred while approving.',
         rejectFailed: 'An error occurred while rejecting.',

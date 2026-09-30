@@ -228,7 +228,7 @@ export const accountingService = {
   },
 
   // ?�큰?�로 ?�수�??�로??(?��??�에???�용)
-  uploadExpenseReceipt: async (token: string, file: File, invoiceType: 'tax' | 'proforma' = 'tax') => {
+  uploadExpenseReceipt: async (token: string, file: File, invoiceType: 'tax' | 'proforma' | 'none' = 'tax') => {
     const formData = new FormData();
     formData.append('token', token);
     formData.append('file', file);
@@ -243,7 +243,7 @@ export const accountingService = {
   uploadExpenseReceiptById: async (
     id: number,
     files: File[],
-    invoiceType: 'tax' | 'proforma'
+    invoiceType: 'tax' | 'proforma' | 'none'
   ) => {
     const formData = new FormData();
     files.forEach((file) => formData.append('files', file));
