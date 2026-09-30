@@ -5,6 +5,8 @@ import {
   numberEditProps,
   otHourEditProps,
   roundOtHour,
+  roundUnpaidLeave,
+  unpaidLeaveEditProps,
 } from './payrollGridUtils';
 import { toProperCaseInput } from '../../../utils/textCase';
 
@@ -13,7 +15,6 @@ export type PayrollCellAnchor = { rowId: number | string; field: string };
 const NUMERIC_FIELDS = new Set([
   'total_salary',
   'total_day_of_month',
-  'unpaid_leave',
   'basic_salary',
   'house_rent_allowance',
   'other_allowance',
@@ -38,7 +39,6 @@ export function isPayrollGridCellEditable(
     field === 'days_worked' ||
     field === 'sum_total' ||
     field === 'net_salary_payable' ||
-    field === 'ot_rate' ||
     field === 'esic_employee' ||
     field === 'esic_employer' ||
     field === 'emp_id' ||
@@ -80,6 +80,7 @@ export function parsePayrollFieldInput(
 ): unknown {
   const trimmed = raw.trim();
   if (field === 'day_ot_hour') return otHourEditProps.valueParser(trimmed);
+  if (field === 'unpaid_leave') return unpaidLeaveEditProps.valueParser(trimmed);
 
   const custom = customColumnByField(field, customColumns);
   if (custom) {
@@ -126,6 +127,18 @@ export function patchPayrollRowField(
     const n = roundOtHour(Number(value) || 0);
     next.day_ot_hour = n;
     if (n > 0) next.ot_manual = true;
+    return next;
+  }
+
+  if (field === 'unpaid_leave') {
+    next.unpaid_leave = String(roundUnpaidLeave(Number(value) || 0));
+    return next;
+  }
+
+  if (field === 'ot_rate') {
+    const n = Math.max(0, Math.floor(typeof value === 'number' ? value : Number(value) || 0));
+    next.ot_rate = n;
+    next.ot_rate_manual = true;
     return next;
   }
 

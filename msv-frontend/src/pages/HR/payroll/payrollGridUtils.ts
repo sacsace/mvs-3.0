@@ -76,19 +76,20 @@ export function roundInr(n: number): number {
   return Math.floor(n);
 }
 
-/** 근무일수 = 월 총일 − 무급휴가 (0 ~ 월 총일로 클램프, 정수) */
+/** 근무일수 = 월 총일 − 무급휴가 (0 ~ 월 총일로 클램프, 소수 1자리) */
 export function derivedDaysWorkedFromCalendarAndUnpaid(
   totalDayOfMonth: unknown,
   unpaidLeave: unknown
 ): number {
   const calendarDays = Math.max(1, num(totalDayOfMonth) || 30);
-  const unpaid = Math.max(0, num(unpaidLeave));
-  const raw = Math.round(calendarDays - unpaid);
-  return Math.min(Math.max(0, raw), calendarDays);
+  const unpaid = roundUnpaidLeave(num(unpaidLeave));
+  const raw = calendarDays - unpaid;
+  return Math.min(Math.max(0, roundUnpaidLeave(raw)), calendarDays);
 }
 
 export function derivedDaysWorkedString(totalDayOfMonth: unknown, unpaidLeave: unknown): string {
-  return String(derivedDaysWorkedFromCalendarAndUnpaid(totalDayOfMonth, unpaidLeave));
+  const n = derivedDaysWorkedFromCalendarAndUnpaid(totalDayOfMonth, unpaidLeave);
+  return String(n);
 }
 
 /** 엑셀 OT/Rate = 기본급 / 26 / 8 × 2 */
@@ -267,14 +268,20 @@ function resolveOtInputsFromExtra(
   otManual = false
 ): { ot_rate: number; day_ot_hour: number; night_ot_hour: number } {
   const defaultRate = basic > 0 ? defaultOtRateFromBasic(basic) : 0;
+  const rateManual = isManualOverrideFlag(x, 'ot_rate_manual');
+  const storedManualRate = Math.max(0, Math.floor(num(x.ot_rate)));
 
   // 미적용: 자동(근태) OT는 무시. 수동 입력이 있을 때만 day_ot_hour 사용.
   if (!otEligible) {
     if (!otManual) {
-      return { ot_rate: defaultRate, day_ot_hour: 0, night_ot_hour: 0 };
+      return {
+        ot_rate: rateManual ? storedManualRate : defaultRate,
+        day_ot_hour: 0,
+        night_ot_hour: 0,
+      };
     }
-    let otRate = num(x.ot_rate);
-    if (otRate <= 0) otRate = defaultRate;
+    let otRate = rateManual ? storedManualRate : num(x.ot_rate);
+    if (!rateManual && otRate <= 0) otRate = defaultRate;
     return {
       ot_rate: otRate,
       day_ot_hour: mergeOtHours(x.day_ot_hour, x.night_ot_hour),
@@ -288,8 +295,8 @@ function resolveOtInputsFromExtra(
     Object.prototype.hasOwnProperty.call(x, 'ot_rate');
 
   if (hasHourFields) {
-    let otRate = num(x.ot_rate);
-    if (otRate <= 0 && basic > 0) {
+    let otRate = rateManual ? storedManualRate : num(x.ot_rate);
+    if (!rateManual && otRate <= 0 && basic > 0) {
       otRate = defaultOtRateFromBasic(basic);
     }
     return {
@@ -669,10 +676,14 @@ export function recalculatePayrollRow(
   const totalSalary = packageSum;
 
   const calendarDays = Math.max(1, num(row.total_day_of_month) || 30);
-  const worked = derivedDaysWorkedFromCalendarAndUnpaid(row.total_day_of_month, row.unpaid_leave);
+  const unpaidNormalized = roundUnpaidLeave(num(row.unpaid_leave));
+  const worked = derivedDaysWorkedFromCalendarAndUnpaid(row.total_day_of_month, unpaidNormalized);
   const days_worked = String(worked);
+  const unpaid_leave = String(unpaidNormalized);
 
-  const otRate = basic > 0 ? defaultOtRateFromBasic(basic) : 0;
+  const defaultOtRate = basic > 0 ? defaultOtRateFromBasic(basic) : 0;
+  const otRateManual = Boolean(row.ot_rate_manual);
+  const otRate = otRateManual ? Math.max(0, Math.floor(num(row.ot_rate))) : defaultOtRate;
   const otEligible = row.ot_eligible === true;
   const otManual = Boolean(row.ot_manual);
   const applyOt = shouldApplyOtPay(otEligible, otManual);
@@ -733,12 +744,14 @@ export function recalculatePayrollRow(
     custom_allowances: customAllowances,
     custom_allowance_inputs,
     total_salary: totalSalary,
+    unpaid_leave,
     days_worked,
     ot_rate: otRate,
     day_ot_hour: dayOtHour,
     night_ot_hour: 0,
     ot_eligible: otEligible,
     ot_manual: otManual && dayOtHour > 0,
+    ot_rate_manual: otRateManual,
     overtime,
     transport_allowance: 0,
     sum_total,
@@ -785,6 +798,11 @@ export function roundOtHour(n: number): number {
   return Math.round(Math.max(0, n) * 10) / 10;
 }
 
+/** 무급휴가·근무일수 — 소수점 이하 1자리 */
+export function roundUnpaidLeave(n: number): number {
+  return roundOtHour(n);
+}
+
 export function formatOtHourDisplay(value: unknown): string {
   if (value === '' || value === null || value === undefined) return '';
   const n = typeof value === 'number' ? value : parseFloat(String(value).replace(/,/g, ''));
@@ -795,6 +813,10 @@ export function formatOtHourDisplay(value: unknown): string {
   });
 }
 
+export function formatUnpaidLeaveDisplay(value: unknown): string {
+  return formatOtHourDisplay(value);
+}
+
 export const otHourEditProps = {
   type: 'number' as const,
   valueFormatter: (value: unknown) => formatOtHourDisplay(value),
@@ -802,6 +824,16 @@ export const otHourEditProps = {
     if (value === '' || value == null) return 0;
     const n = parseFloat(String(value).replace(/,/g, ''));
     return Number.isFinite(n) ? roundOtHour(n) : 0;
+  }
+};
+
+export const unpaidLeaveEditProps = {
+  type: 'number' as const,
+  valueFormatter: (value: unknown) => formatUnpaidLeaveDisplay(value),
+  valueParser: (value: unknown) => {
+    if (value === '' || value == null) return 0;
+    const n = parseFloat(String(value).replace(/,/g, ''));
+    return Number.isFinite(n) ? roundUnpaidLeave(n) : 0;
   }
 };
 
@@ -936,6 +968,7 @@ export function payrollRecordToGridRow(
 
   const otEligible = isOtEligible(x, emp);
   const otManual = isOtManualOverride(x);
+  const otRateManual = isManualOverrideFlag(x, 'ot_rate_manual');
   const ptEligible = isPtEligible(x, emp);
   const pfManual = isManualOverrideFlag(x, 'pf_manual');
   const tdsManual = isManualOverrideFlag(x, 'tds_manual');
@@ -997,6 +1030,7 @@ export function payrollRecordToGridRow(
     night_ot_hour: 0,
     ot_eligible: otEligible,
     ot_manual: otManual && dayOtHour > 0,
+    ot_rate_manual: otRateManual,
     pt_eligible: ptEligible,
     pf_manual: pfManual,
     tds_manual: tdsManual,
@@ -1057,6 +1091,7 @@ export function gridRowToPayload(
     night_ot_hour: 0,
     ot_eligible: recalculated.ot_eligible === true,
     ot_manual: Boolean(recalculated.ot_manual),
+    ot_rate_manual: Boolean(recalculated.ot_rate_manual),
     pt_eligible: recalculated.pt_eligible !== false,
     pf_manual: Boolean(recalculated.pf_manual),
     tds_manual: Boolean(recalculated.tds_manual),

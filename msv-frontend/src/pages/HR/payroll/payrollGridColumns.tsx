@@ -8,8 +8,10 @@ import {
   countEditProps,
   formatMaybeNumericString,
   formatNumberDisplay,
+  formatUnpaidLeaveDisplay,
   numberEditProps,
   otHourEditProps,
+  unpaidLeaveEditProps,
 } from './payrollGridUtils';
 import { evaluatePayrollColumnFormula } from './payrollColumnFormula';
 import {
@@ -378,7 +380,7 @@ export function buildPayrollGridColumns({
       editable: allowCellEdit,
       headerClassName: 'payroll-col-days',
       cellClassName: 'payroll-col-days payroll-col-user-input',
-      valueFormatter: (value: unknown) => formatMaybeNumericString(value)
+      ...unpaidLeaveEditProps
     }),
     colDef({
       field: 'days_worked',
@@ -387,15 +389,15 @@ export function buildPayrollGridColumns({
       editable: false,
       headerClassName: 'payroll-col-days payroll-col-days-end',
       cellClassName: 'payroll-col-days payroll-col-days-end',
-      valueFormatter: (value: unknown) => formatMaybeNumericString(value)
+      valueFormatter: (value: unknown) => formatUnpaidLeaveDisplay(value)
     }),
     colDef({
       field: 'ot_rate',
       headerName: t('payrollManagement.gridColumns.otRate'),
       minWidth: 56,
-      editable: false,
+      editable: allowCellEdit,
       headerClassName: 'payroll-col-attendance payroll-col-attendance-start',
-      cellClassName: 'payroll-col-attendance payroll-col-attendance-start payroll-col-center',
+      cellClassName: 'payroll-col-attendance payroll-col-attendance-start payroll-col-user-input payroll-col-center',
       ...numberEditProps
     }),
     colDef({

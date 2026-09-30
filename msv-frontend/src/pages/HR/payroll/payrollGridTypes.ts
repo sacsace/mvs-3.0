@@ -43,6 +43,8 @@ export type PayrollGridRow = {
   pt_eligible?: boolean;
   /** 그리드에서 OT 시간을 수동 입력한 경우 — 미적용 직원이어도 OT 계산 허용 */
   ot_manual?: boolean;
+  /** 그리드에서 OT 요율을 직접 입력한 경우 — 기본급 공식으로 덮어쓰지 않음 */
+  ot_rate_manual?: boolean;
   /** 그리드에서 PF(직원) 금액을 수동 입력한 경우 — 자동 재계산 덮어쓰기 방지 */
   pf_manual?: boolean;
   /** 그리드에서 TDS 금액을 수동 입력한 경우 */
