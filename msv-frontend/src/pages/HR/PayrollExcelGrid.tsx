@@ -246,6 +246,10 @@ const PayrollExcelGrid: React.FC<Props> = ({
       if (prevOt !== nextOt) {
         next.ot_manual = nextOt > 0;
       }
+      if (Math.floor(Number(prev.ot_rate) || 0) !== Math.floor(Number(next.ot_rate) || 0)) {
+        next.ot_rate_manual = true;
+        next.ot_rate = Math.max(0, Math.floor(Number(next.ot_rate) || 0));
+      }
       if (Math.floor(Number(prev.pf_employee) || 0) !== Math.floor(Number(next.pf_employee) || 0)) {
         next.pf_manual = true;
         next.pf_employee = String(Math.max(0, Math.floor(Number(next.pf_employee) || 0)));
