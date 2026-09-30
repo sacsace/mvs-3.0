@@ -26,9 +26,18 @@ async function runDelete(
   replacements: Record<string, unknown>,
   transaction: Transaction
 ): Promise<void> {
+  // Postgres: 트랜잭션 안 오류는 전체 중단(25P02) → SAVEPOINT로 격리
+  const savepoint = `sp_del_${Math.random().toString(36).slice(2, 10)}`;
+  await sequelize.query(`SAVEPOINT ${savepoint}`, { transaction });
   try {
     await sequelize.query(sql, { replacements, transaction });
+    await sequelize.query(`RELEASE SAVEPOINT ${savepoint}`, { transaction });
   } catch (error: any) {
+    try {
+      await sequelize.query(`ROLLBACK TO SAVEPOINT ${savepoint}`, { transaction });
+    } catch {
+      /* ignore */
+    }
     // 운영 DB에 아직 없는 테이블(예: chat_messages)은 건너뛴다
     const code = error?.parent?.code || error?.original?.code || error?.code;
     const msg = String(error?.parent?.message || error?.original?.message || error?.message || '');
