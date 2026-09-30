@@ -189,6 +189,83 @@ async function deleteChatRooms(ctx: DeleteContext, transaction: Transaction): Pr
   await deleteByCompanyId('chat_rooms', ctx, transaction);
 }
 
+/**
+ * GL/회계: gl_voucher_lines.account_id 가 RESTRICT 이므로
+ * companies → gl_accounts CASCADE 전에 전표라인·전표를 먼저 제거해야 한다.
+ */
+async function deleteAccountingData(ctx: DeleteContext, transaction: Transaction): Promise<void> {
+  // 1) 이 회사 전표의 라인
+  await runDelete(
+    `DELETE FROM gl_voucher_lines
+     WHERE voucher_id IN (SELECT id FROM gl_vouchers WHERE company_id = :companyId)`,
+    { companyId: ctx.companyId },
+    transaction
+  );
+  // 2) 이 회사 계정을 참조하는 라인(다른 전표에 묶여 있어도 RESTRICT 차단됨)
+  await runDelete(
+    `DELETE FROM gl_voucher_lines
+     WHERE account_id IN (SELECT id FROM gl_accounts WHERE company_id = :companyId)`,
+    { companyId: ctx.companyId },
+    transaction
+  );
+  await runDelete(
+    `DELETE FROM ac_voucher_audit_logs
+     WHERE voucher_id IN (SELECT id FROM gl_vouchers WHERE company_id = :companyId)`,
+    { companyId: ctx.companyId },
+    transaction
+  );
+  await runDelete(
+    `UPDATE ac_import_source_documents
+     SET voucher_id = NULL
+     WHERE company_id = :companyId AND voucher_id IS NOT NULL`,
+    { companyId: ctx.companyId },
+    transaction
+  );
+  await deleteByCompanyId('gl_vouchers', ctx, transaction);
+
+  await runDelete(
+    `DELETE FROM auto_voucher_audit_logs
+     WHERE auto_voucher_id IN (SELECT id FROM auto_vouchers WHERE company_id = :companyId)`,
+    { companyId: ctx.companyId },
+    transaction
+  );
+  await deleteByCompanyId('auto_vouchers', ctx, transaction);
+  await deleteByCompanyId('auto_voucher_rules', ctx, transaction);
+
+  // import 자식 → 배치/템플릿
+  await runDelete(
+    `DELETE FROM ac_import_issues
+     WHERE batch_id IN (SELECT id FROM ac_import_batches WHERE company_id = :companyId)`,
+    { companyId: ctx.companyId },
+    transaction
+  );
+  await runDelete(
+    `DELETE FROM ac_import_batch_documents
+     WHERE batch_id IN (SELECT id FROM ac_import_batches WHERE company_id = :companyId)`,
+    { companyId: ctx.companyId },
+    transaction
+  );
+  await deleteByCompanyId('ac_import_mappings', ctx, transaction);
+  await deleteByCompanyId('ac_import_batches', ctx, transaction);
+  await deleteByCompanyId('ac_import_source_documents', ctx, transaction);
+  await deleteByCompanyId('ac_import_templates', ctx, transaction);
+
+  // 마스터(계정 FK는 SET NULL이지만 회사 CASCADE 전에 정리)
+  await deleteByCompanyId('ac_transaction_items', ctx, transaction);
+  await deleteByCompanyId('ac_bank_accounts', ctx, transaction);
+  await deleteByCompanyId('ac_tds_codes', ctx, transaction);
+  await deleteByCompanyId('ac_gst_codes', ctx, transaction);
+  await deleteByCompanyId('ac_voucher_types', ctx, transaction);
+  await deleteByCompanyId('ac_financial_years', ctx, transaction);
+
+  await runDelete(
+    `UPDATE gl_accounts SET parent_id = NULL WHERE company_id = :companyId`,
+    { companyId: ctx.companyId },
+    transaction
+  );
+  await deleteByCompanyId('gl_accounts', ctx, transaction);
+}
+
 async function deleteCompanyScopedData(ctx: DeleteContext, transaction: Transaction): Promise<void> {
   await deleteWorkBoards(ctx, transaction);
   await deleteEmploymentContracts(ctx, transaction);
@@ -196,6 +273,7 @@ async function deleteCompanyScopedData(ctx: DeleteContext, transaction: Transact
   await deletePartners(ctx, transaction);
   await deleteCustomerRelated(ctx, transaction);
   await deleteChatRooms(ctx, transaction);
+  await deleteAccountingData(ctx, transaction);
 
   const companyTables = [
     'inventory_transactions',
