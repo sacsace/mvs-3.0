@@ -1085,6 +1085,7 @@ export default {
     partnerManagement: {
       pageTitle: 'Partners / Customers',
       description: 'Manage partner companies and customers in one place.',
+      company: 'Company',
       excelSampleDownload: 'Download Excel Sample',
       excelExport: 'Export to Excel',
       excelImport: 'Import from Excel',

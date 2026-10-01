@@ -1,6 +1,7 @@
 import express from 'express';
 import { Response } from 'express';
 import { Customer, RoomBooking } from '../models';
+import { resolveRequestCompanyId } from '../utils/resolveRequestCompanyId';
 import { validateBody } from '../middleware/validate';
 import { authenticateToken } from '../middleware/auth';
 import { requireAdminRootOrMenuPermissionAnyOf } from '../middleware/menuPermission';
@@ -21,11 +22,24 @@ const permDelete = requireAdminRootOrMenuPermissionAnyOf(CUSTOMER_MENU_ROUTES, [
 
 router.use(authenticateToken);
 
+async function companyIdForRequest(req: AuthRequest, res: Response): Promise<number | null> {
+  try {
+    return await resolveRequestCompanyId(req);
+  } catch (error: any) {
+    if (error?.status === 400) {
+      res.status(400).json({ success: false, message: error.message || '선택한 회사를 찾을 수 없습니다.' });
+      return null;
+    }
+    throw error;
+  }
+}
+
 // 고객 목록 조회
 router.get('/', permRead, async (req: AuthRequest, res: Response) => {
   try {
     const tenantId = req.user.tenant_id;
-    const companyId = req.user.company_id;
+    const companyId = await companyIdForRequest(req, res);
+    if (companyId == null) return;
 
     const customers = await (Customer as any).findAll({
       where: { tenant_id: tenantId, company_id: companyId },
@@ -118,11 +132,14 @@ router.get('/:id', permRead, async (req: AuthRequest, res: Response) => {
       });
     }
 
+    const companyId = await companyIdForRequest(req, res);
+    if (companyId == null) return;
+
     const customer = await (Customer as any).findOne({
       where: {
         id: numericId,
         tenant_id: req.user.tenant_id,
-        company_id: req.user.company_id
+        company_id: companyId
       }
     });
 
@@ -158,10 +175,13 @@ router.post(
   }),
   async (req: AuthRequest, res: Response) => {
     try {
+      const companyId = await companyIdForRequest(req, res);
+      if (companyId == null) return;
+      const { company_id: _ignoredCompanyId, companyId: _ignoredCompanyIdCamel, ...body } = req.body || {};
       const customerData = {
-        ...req.body,
+        ...body,
         tenant_id: req.user.tenant_id,
-        company_id: req.user.company_id
+        company_id: companyId
       };
 
       const customer = await (Customer as any).create(customerData);
@@ -204,11 +224,14 @@ router.put(
         });
       }
 
+      const companyId = await companyIdForRequest(req, res);
+      if (companyId == null) return;
+
       const customer = await (Customer as any).findOne({
         where: {
           id: numericId,
           tenant_id: req.user.tenant_id,
-          company_id: req.user.company_id
+          company_id: companyId
         }
       });
 
@@ -219,7 +242,8 @@ router.put(
         });
       }
 
-      await customer.update(req.body);
+      const { company_id: _ignoredCompanyId, companyId: _ignoredCompanyIdCamel, ...body } = req.body || {};
+      await customer.update(body);
 
       res.json({
         success: true,
@@ -250,11 +274,14 @@ router.delete('/:id', permDelete, async (req: AuthRequest, res: Response) => {
       });
     }
 
+    const companyId = await companyIdForRequest(req, res);
+    if (companyId == null) return;
+
     const customer = await (Customer as any).findOne({
       where: {
         id: numericId,
         tenant_id: req.user.tenant_id,
-        company_id: req.user.company_id
+        company_id: companyId
       }
     });
 

@@ -2055,8 +2055,8 @@ const ExpenseApproval: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
-  /** '' | draftCreated | autoSaved | autoSaveFailed — render with t() for i18n */
-  const [headerStatusBanner, setHeaderStatusBanner] = useState<'' | 'draftCreated' | 'autoSaved' | 'autoSaveFailed'>('');
+  /** '' | draftCreated — render with t() for i18n */
+  const [headerStatusBanner, setHeaderStatusBanner] = useState<'' | 'draftCreated'>('');
   const [isInitializingDraft, setIsInitializingDraft] = useState(false);
   const [draftId, setDraftId] = useState<number | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<ExpenseApprovalItem | null>(null);
@@ -2150,12 +2150,11 @@ const ExpenseApproval: React.FC = () => {
   const [paymentProofPreviewUrl, setPaymentProofPreviewUrl] = useState<string>('');
   const [proofNameDraft, setProofNameDraft] = useState('');
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
-  const lastSavedPayloadRef = useRef<string>('');
   /** 초안 생성 중복 방지 (의존성 루프/StrictMode 대비) */
   const draftInitInFlightRef = useRef(false);
-  /** 제출 중에는 자동저장이 덮어쓰거나 오류 토스트를 띄우지 않음 */
+  /** ensureDraftReady 대기 중 최신 draftId (state 클로저 우회) */
+  const draftIdReadyRef = useRef<number | null>(null);
   const submitInFlightRef = useRef(false);
-  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
   const [uploadingReceipts, setUploadingReceipts] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
@@ -2614,6 +2613,7 @@ const ExpenseApproval: React.FC = () => {
           parseExpenseItems(response.data?.items).meta?.voucherNo ||
           response.data?.expense_id ||
           '';
+        draftIdReadyRef.current = newId;
         setDraftId(newId);
         setCurrentAttachments(normalizeExpenseAttachments(response.data?.attachments));
         if (assignedNo) {
@@ -2622,16 +2622,6 @@ const ExpenseApproval: React.FC = () => {
             return { ...prev, voucherNo: assignedNo };
           });
         }
-        lastSavedPayloadRef.current = JSON.stringify({
-          ...payload,
-          items: {
-            ...payload.items,
-            meta: {
-              ...payload.items.meta,
-              ...(assignedNo ? { voucherNo: assignedNo } : {}),
-            },
-          },
-        });
       setHeaderStatusBanner('draftCreated');
       } catch (err: any) {
         if (cancelled) return;
@@ -2655,75 +2645,61 @@ const ExpenseApproval: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- create 진입·draftId 기준 (타이핑으로 재생성 금지)
   }, [viewMode, draftId, t]);
 
-  // 초안 자동저장 (debounce). LinearProgress(saving)는 제출 시에만 사용해 깜빡임 방지.
-  useEffect(() => {
-    const activeExpenseId = viewMode === 'edit' ? selectedExpense?.id : draftId;
-    if (!activeExpenseId) return;
-    if (viewMode !== 'create' && viewMode !== 'edit') return;
-    if (isInitializingDraft || saving || submitInFlightRef.current) return;
-    if (
-      viewMode === 'edit' &&
-      selectedExpense &&
-      isRevisionRejectedExpense(selectedExpense)
-    ) {
-      return;
+  /** 제출·영수증 업로드 전에 draftId가 준비될 때까지 대기(또는 즉시 생성) */
+  const ensureDraftReady = useCallback(async (): Promise<number | null> => {
+    if (viewMode === 'edit') return selectedExpense?.id ?? null;
+    if (draftIdReadyRef.current) return draftIdReadyRef.current;
+    if (draftId) {
+      draftIdReadyRef.current = draftId;
+      return draftId;
     }
 
-    const payload = buildExpensePayload('draft');
-    const payloadString = JSON.stringify(payload);
-    if (payloadString === lastSavedPayloadRef.current) return;
+    // 진입 시 초안 생성이 진행 중이면 잠시 대기
+    const deadline = Date.now() + 8000;
+    while (draftInitInFlightRef.current && !draftIdReadyRef.current && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    if (draftIdReadyRef.current) return draftIdReadyRef.current;
 
-    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
-    autosaveTimerRef.current = setTimeout(async () => {
-      if (submitInFlightRef.current || saving) return;
-      try {
-        const latest = buildExpensePayload('draft');
-        const latestString = JSON.stringify(latest);
-        if (latestString === lastSavedPayloadRef.current) return;
-        const response = await accountingService.updateExpenseReport(activeExpenseId, latest);
-        if (submitInFlightRef.current) return;
-        if (response?.success) {
-          setCurrentAttachments(normalizeExpenseAttachments(response.data?.attachments));
-          const assignedNo = parseExpenseItems(response.data?.items).meta?.voucherNo || '';
-          if (assignedNo) {
-            setVoucherData((prev) =>
-              prev.voucherNo === assignedNo ? prev : { ...prev, voucherNo: assignedNo }
-            );
-          }
-          lastSavedPayloadRef.current = latestString;
-          setHeaderStatusBanner('autoSaved');
-          setError('');
-        } else {
-          const msg = String(response?.message || '').trim();
-          // 이미 제출된 문서에 대한 자동저장 충돌은 무시 (제출 직후 레이스)
-          if (/검토 중이거나 처리된/.test(msg)) return;
-          setHeaderStatusBanner('autoSaveFailed');
-          if (msg) setError(`${t('expenseApproval.voucher.autoSaveFailed')}: ${msg}`);
-        }
-      } catch (err: any) {
-        if (submitInFlightRef.current) return;
-        const msg = String(err?.response?.data?.message || '').trim();
-        if (/검토 중이거나 처리된/.test(msg)) return;
-        setHeaderStatusBanner('autoSaveFailed');
-        if (msg) setError(`${t('expenseApproval.voucher.autoSaveFailed')}: ${msg}`);
+    // 대기 후에도 없으면 즉시 생성
+    try {
+      setIsInitializingDraft(true);
+      draftInitInFlightRef.current = true;
+      const payload = buildExpensePayload('draft');
+      const response = await accountingService.createExpenseReport(payload);
+      if (!response?.success) {
+        throw new Error(response?.message || t('expenseApproval.errors.createDraftFailed'));
       }
-    }, 800);
-
-    return () => {
-      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
-    };
-  }, [
-    formData,
-    lineItems,
-    voucherData,
-    draftId,
-    selectedExpense,
-    viewMode,
-    isInitializingDraft,
-    saving,
-    buildExpensePayload,
-    t,
-  ]);
+      const newId = response.data?.id || null;
+      if (newId) {
+        draftIdReadyRef.current = newId;
+        setDraftId(newId);
+        setCurrentAttachments(normalizeExpenseAttachments(response.data?.attachments));
+        const assignedNo =
+          parseExpenseItems(response.data?.items).meta?.voucherNo ||
+          response.data?.expense_id ||
+          '';
+        if (assignedNo) {
+          setVoucherData((prev) =>
+            prev.voucherNo === assignedNo ? prev : { ...prev, voucherNo: assignedNo }
+          );
+        }
+        setHeaderStatusBanner('draftCreated');
+      }
+      return newId;
+    } catch (err: any) {
+      const serverMsg = String(err?.response?.data?.message || err?.message || '').trim();
+      setError(
+        serverMsg
+          ? `${t('expenseApproval.errors.createDraftFailed')} (${serverMsg})`
+          : t('expenseApproval.errors.createDraftFailed')
+      );
+      return null;
+    } finally {
+      draftInitInFlightRef.current = false;
+      setIsInitializingDraft(false);
+    }
+  }, [viewMode, selectedExpense?.id, draftId, buildExpensePayload, t]);
 
   const filteredExpenses = useMemo(() => {
     let filtered = expenses;
@@ -3386,8 +3362,8 @@ const ExpenseApproval: React.FC = () => {
         ''
     );
     setDraftId(expense.id);
+    draftIdReadyRef.current = expense.id;
     setHeaderStatusBanner('');
-    lastSavedPayloadRef.current = '';
     setViewMode('edit');
   };
 
@@ -3442,8 +3418,8 @@ const ExpenseApproval: React.FC = () => {
     });
     setReceiptInvoiceType('tax');
     setDraftId(null);
+    draftIdReadyRef.current = null;
     setHeaderStatusBanner('');
-    lastSavedPayloadRef.current = '';
     draftInitInFlightRef.current = false;
     submitInFlightRef.current = false;
     setViewMode('create');
@@ -3471,7 +3447,7 @@ const ExpenseApproval: React.FC = () => {
       setError(t('expenseApproval.errors.cannotSelectSelf'));
       return;
     }
-    const activeExpenseId = viewMode === 'edit' ? selectedExpense?.id : draftId;
+    const activeExpenseId = await ensureDraftReady();
     if (!activeExpenseId) {
       setError(t('expenseApproval.errors.draftNotReadyRetry'));
       return;
@@ -3489,10 +3465,6 @@ const ExpenseApproval: React.FC = () => {
     }
     setSaving(true);
     submitInFlightRef.current = true;
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current);
-      autosaveTimerRef.current = null;
-    }
     try {
       const payload = {
         ...buildExpensePayload('submitted'),
@@ -3511,6 +3483,7 @@ const ExpenseApproval: React.FC = () => {
       setViewMode('list');
       setSelectedExpense(null);
       setDraftId(null);
+      draftIdReadyRef.current = null;
     } catch (saveError: any) {
       submitInFlightRef.current = false;
       const serverMsg = String(saveError?.response?.data?.message || saveError?.message || '').trim();
@@ -3775,7 +3748,7 @@ const ExpenseApproval: React.FC = () => {
   };
 
   const handleOpenQr = async () => {
-    const activeExpenseId = viewMode === 'edit' ? selectedExpense?.id : draftId;
+    const activeExpenseId = await ensureDraftReady();
     if (!activeExpenseId) {
       setError(t('expenseApproval.errors.draftNotReady'));
       return;
@@ -3910,7 +3883,7 @@ const ExpenseApproval: React.FC = () => {
 
   const handleDeleteReceipt = async (file: ExpenseAttachment) => {
     if (file.path.includes('expense-remittance-proofs')) return;
-    const activeExpenseId = viewMode === 'edit' ? selectedExpense?.id : draftId;
+    const activeExpenseId = await ensureDraftReady();
     if (!activeExpenseId) {
       setError(t('expenseApproval.errors.draftNotReady'));
       return;
@@ -4122,7 +4095,10 @@ const ExpenseApproval: React.FC = () => {
       setError(t('expenseApproval.errors.invoiceTypeRequired'));
       return;
     }
-    const activeExpenseId = viewMode === 'edit' || viewMode === 'view' ? selectedExpense?.id : draftId;
+    const activeExpenseId =
+      viewMode === 'edit' || viewMode === 'view'
+        ? selectedExpense?.id ?? null
+        : await ensureDraftReady();
     if (!activeExpenseId) {
       setError(t('expenseApproval.errors.draftNotReady'));
       return;
@@ -5162,16 +5138,6 @@ const ExpenseApproval: React.FC = () => {
             {headerStatusBanner === 'draftCreated' && (
               <Typography variant="body2" color="text.secondary">
                 {t('expenseApproval.success.draftCreated')}
-              </Typography>
-            )}
-            {headerStatusBanner === 'autoSaved' && (
-              <Typography variant="body2" color="text.secondary">
-                {t('expenseApproval.voucher.autoSaveSaved')}
-              </Typography>
-            )}
-            {headerStatusBanner === 'autoSaveFailed' && (
-              <Typography variant="body2" color="error">
-                {t('expenseApproval.voucher.autoSaveFailed')}
               </Typography>
             )}
               <Button variant="outlined" onClick={() => setViewMode('list')} sx={mvsBodyOutlinedBtnSx}>

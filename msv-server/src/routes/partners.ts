@@ -10,6 +10,7 @@ import {
   GlVoucherLine,
   AcImportMapping,
 } from '../models';
+import { resolveRequestCompanyId } from '../utils/resolveRequestCompanyId';
 import sequelize from '../config/database';
 import { authenticateToken } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
@@ -52,6 +53,19 @@ const isBlankPartnerValue = (value: unknown) => {
 const invalidatePartnersCache = async () => {
   await referenceCacheDel('ref:partners:*');
 };
+
+/** root는 선택한 회사, 그 외는 로그인 회사. 실패 시 응답 후 null */
+async function companyIdForRequest(req: Request, res: Response): Promise<number | null> {
+  try {
+    return await resolveRequestCompanyId(req as any);
+  } catch (error: any) {
+    if (error?.status === 400) {
+      res.status(400).json({ success: false, message: error.message || '선택한 회사를 찾을 수 없습니다.' });
+      return null;
+    }
+    throw error;
+  }
+}
 
 const partnerGstInclude = {
   model: PartnerGstNumber,
@@ -145,18 +159,15 @@ const upload = multer({
 router.get('/', authenticateToken, async (req: Request, res: Response) => {
   try {
     const tenantId = (req as any).user.tenant_id;
-    const companyId = (req as any).user.company_id;
+    const companyId = await companyIdForRequest(req, res);
+    if (companyId == null) return;
     const userRole = (req as any).user.role;
-    
-        
-    // root나 audit 권한이면 모든 파트너 조회 가능, 아니면 자신의 회사 파트너만
-    const whereClause: any = {};
-    if (userRole !== 'root' && userRole !== 'audit') {
-      whereClause.tenant_id = tenantId;
-      whereClause.company_id = companyId;
-    }
 
-    whereClause.is_active = true;
+    const whereClause: any = {
+      tenant_id: tenantId,
+      company_id: companyId,
+      is_active: true,
+    };
 
     const cacheKey = buildReferenceCacheKey(['ref', 'partners', tenantId, companyId, userRole]);
     const cached = await referenceCacheGet(cacheKey);
@@ -196,7 +207,8 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 router.post('/merge', authenticateToken, async (req: Request, res: Response) => {
   try {
     const tenantId = (req as any).user.tenant_id;
-    const companyId = (req as any).user.company_id;
+    const companyId = await companyIdForRequest(req, res);
+    if (companyId == null) return;
     const keepId = Number(req.body?.keepId);
     const mergeIdsRaw = Array.isArray(req.body?.mergeIds) ? req.body.mergeIds : [];
     const mergeIds = [...new Set(
@@ -376,7 +388,8 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const tenantId = (req as any).user.tenant_id;
-    const companyId = (req as any).user.company_id;
+    const companyId = await companyIdForRequest(req, res);
+    if (companyId == null) return;
 
     const partner = await (Partner as any).findOne({
       where: { 
@@ -436,7 +449,8 @@ router.post(
   async (req: Request, res: Response) => {
   try {
     const tenantId = (req as any).user.tenant_id;
-    const companyId = (req as any).user.company_id;
+    const companyId = await companyIdForRequest(req, res);
+    if (companyId == null) return;
     const { gstNumbers, ...partnerFormData } = req.body;
 
     // GST 번호 검증 (선택 — 건물주/소상공인 등 미등록 가능)
@@ -572,7 +586,8 @@ router.put(
   try {
     const { id } = req.params;
     const tenantId = (req as any).user.tenant_id;
-    const companyId = (req as any).user.company_id;
+    const companyId = await companyIdForRequest(req, res);
+    if (companyId == null) return;
     const { gstNumbers, ...partnerData } = req.body;
 
     const partner = await (Partner as any).findOne({
@@ -725,7 +740,8 @@ router.delete('/:id', authenticateToken, async (req: Request, res: Response) => 
   try {
     const { id } = req.params;
     const tenantId = (req as any).user.tenant_id;
-    const companyId = (req as any).user.company_id;
+    const companyId = await companyIdForRequest(req, res);
+    if (companyId == null) return;
 
     const partner = await (Partner as any).findOne({
       where: { 
@@ -860,16 +876,14 @@ router.get('/excel/sample', authenticateToken, async (req: Request, res: Respons
 router.get('/excel/export', authenticateToken, async (req: Request, res: Response) => {
   try {
     const tenantId = (req as any).user.tenant_id;
-    const companyId = (req as any).user.company_id;
-    const userRole = (req as any).user.role;
+    const companyId = await companyIdForRequest(req, res);
+    if (companyId == null) return;
 
-    // 파트너 목록 조회 (목록 조회와 동일한 로직)
-    const whereClause: any = {};
-    if (userRole !== 'root' && userRole !== 'audit') {
-      whereClause.tenant_id = tenantId;
-      whereClause.company_id = companyId;
-    }
-    whereClause.is_active = true;
+    const whereClause: any = {
+      tenant_id: tenantId,
+      company_id: companyId,
+      is_active: true,
+    };
 
     const partners = await (Partner as any).findAll({
       where: whereClause,
@@ -966,7 +980,8 @@ router.post('/excel/import', authenticateToken, upload.single('file'), async (re
     }
 
     const tenantId = (req as any).user.tenant_id;
-    const companyId = (req as any).user.company_id;
+    const companyId = await companyIdForRequest(req, res);
+    if (companyId == null) return;
 
     // Excel 파일 파싱
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });

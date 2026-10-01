@@ -1139,6 +1139,7 @@ export default {
     partnerManagement: {
       pageTitle: '파트너 업체/고객 관리',
       description: '파트너 업체와 고객 정보를 한곳에서 관리합니다.',
+      company: '회사',
       excelSampleDownload: 'Excel 샘플 다운로드',
       excelExport: 'Excel 내보내기',
       excelImport: 'Excel 가져오기',

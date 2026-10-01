@@ -56,7 +56,8 @@ import {
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { api, partnerService } from '../../services/api';
+import { api, companyService, partnerService } from '../../services/api';
+import { useStore } from '../../store';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
@@ -303,6 +304,8 @@ interface Partner {
 
 const PartnerManagement: React.FC = () => {
   const { t } = useTranslation();
+  const user = useStore((s) => s.user);
+  const isRoot = user?.role === 'root';
   const theme = useTheme();
   const isCompactToolbar = useMediaQuery(theme.breakpoints.down('md'));
   const menuFlags = useMenuRoutePermissionFlags(PARTNER_MENU_ROUTES);
@@ -333,6 +336,51 @@ const PartnerManagement: React.FC = () => {
   const [merging, setMerging] = useState(false);
   const [page, setPage] = useState(1);
   const [companyNameError, setCompanyNameError] = useState('');
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>(() =>
+    user?.company_id != null && Number(user.company_id) > 0 ? Number(user.company_id) : ''
+  );
+  const [companyOptions, setCompanyOptions] = useState<Array<{ id: number; name: string }>>([]);
+
+  const effectiveCompanyId = useMemo(() => {
+    if (!isRoot) return undefined;
+    return typeof selectedCompanyId === 'number' && selectedCompanyId > 0 ? selectedCompanyId : undefined;
+  }, [isRoot, selectedCompanyId]);
+
+  useEffect(() => {
+    if (!isRoot) {
+      setCompanyOptions([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await companyService.getCompanies();
+        const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+        if (cancelled) return;
+        const list: Array<{ id: number; name: string }> = rows
+          .map((c: any) => ({
+            id: Number(c.id),
+            name: String(c.name || c.company_name || '').trim(),
+          }))
+          .filter((c: { id: number; name: string }) => Number.isFinite(c.id) && c.id > 0 && c.name)
+          .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name));
+        setCompanyOptions(list);
+        setSelectedCompanyId((prev) => {
+          if (typeof prev === 'number' && list.some((c) => c.id === prev)) return prev;
+          const loginId = Number(user?.company_id);
+          if (Number.isFinite(loginId) && loginId > 0 && list.some((c) => c.id === loginId)) {
+            return loginId;
+          }
+          return list[0]?.id ?? '';
+        });
+      } catch {
+        if (!cancelled) setCompanyOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isRoot, user?.company_id]);
 
   const formatPartners = useCallback((partnersData: any[]): Partner[] => {
     const mapped = partnersData.map((p: any) => ({
@@ -454,11 +502,16 @@ const PartnerManagement: React.FC = () => {
       setLoading(false);
       return;
     }
+    if (isRoot && !effectiveCompanyId) {
+      setPartners([]);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       const [partnerResponse, customerResponse] = await Promise.all([
-        partnerService.getPartners(),
-        api.get('/customers').catch(() => ({ data: [] })),
+        partnerService.getPartners(effectiveCompanyId),
+        api.get('/customers', { params: effectiveCompanyId ? { company_id: effectiveCompanyId } : undefined }).catch(() => ({ data: [] })),
       ]);
       const partnersData = Array.isArray(partnerResponse?.data)
         ? partnerResponse.data
@@ -504,7 +557,7 @@ const PartnerManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [menuFlags.menusLoading, menuFlags.canRead, formatPartners, formatCustomersAsPartners]);
+  }, [menuFlags.menusLoading, menuFlags.canRead, formatPartners, formatCustomersAsPartners, isRoot, effectiveCompanyId]);
 
   useEffect(() => {
     void loadPartners();
@@ -669,11 +722,14 @@ const PartnerManagement: React.FC = () => {
           industry: formDataWithValidGst.industry,
           status: formDataWithValidGst.status === 'suspended' ? 'inactive' : formDataWithValidGst.status,
         };
-        await api.put(`/customers/${selectedPartner.sourceId}`, payload);
+        await api.put(`/customers/${selectedPartner.sourceId}`, {
+          ...payload,
+          ...(effectiveCompanyId ? { company_id: effectiveCompanyId } : {}),
+        });
       } else if (selectedPartner && (selectedPartner.recordSource || 'partner') === 'partner') {
-        await partnerService.updatePartner(selectedPartner.id, formDataWithValidGst);
+        await partnerService.updatePartner(selectedPartner.id, formDataWithValidGst, effectiveCompanyId);
       } else {
-        await partnerService.createPartner(formDataWithValidGst);
+        await partnerService.createPartner(formDataWithValidGst, effectiveCompanyId);
       }
       setOpenDialog(false);
       setCompanyNameError('');
@@ -732,7 +788,7 @@ const PartnerManagement: React.FC = () => {
             if (row?.recordSource === 'customer' && row.sourceId) {
               await api.delete(`/customers/${row.sourceId}`);
             } else {
-              await partnerService.deletePartner(id);
+              await partnerService.deletePartner(id, effectiveCompanyId);
             }
             removePartnersFromList([id]);
             setNotify({
@@ -776,7 +832,7 @@ const PartnerManagement: React.FC = () => {
                 if (row?.recordSource === 'customer' && row.sourceId) {
                   return api.delete(`/customers/${row.sourceId}`);
                 }
-                return partnerService.deletePartner(id);
+                return partnerService.deletePartner(id, effectiveCompanyId);
               })
             );
             removePartnersFromList(idsToDelete);
@@ -814,7 +870,7 @@ const PartnerManagement: React.FC = () => {
   // Excel 파일 내보내기
   const handleExportExcel = async () => {
     try {
-      await partnerService.exportExcel();
+      await partnerService.exportExcel(effectiveCompanyId);
     } catch (error: any) {
       setNotify({ message: t('partnerManagement.excelExportError'), severity: 'error' });
     }
@@ -839,7 +895,7 @@ const PartnerManagement: React.FC = () => {
     setImportResult(null);
 
     try {
-      const result = await partnerService.importExcel(importFile);
+      const result = await partnerService.importExcel(importFile, effectiveCompanyId);
       setImportResult(result);
       
       if (result.success && result.data) {
@@ -1126,6 +1182,29 @@ const PartnerManagement: React.FC = () => {
       <MvsPageHeader
         title={t('partnerManagement.pageTitle')}
         description={t('partnerManagement.description')}
+        actions={
+          isRoot ? (
+            <TextField
+              select
+              size="small"
+              label={t('partnerManagement.company')}
+              value={selectedCompanyId === '' ? '' : String(selectedCompanyId)}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                setSelectedCompanyId(Number.isFinite(next) && next > 0 ? next : '');
+                setPage(1);
+                setSelectedPartnerIds([]);
+              }}
+              sx={{ minWidth: 220 }}
+            >
+              {companyOptions.map((company) => (
+                <MenuItem key={company.id} value={String(company.id)}>
+                  {company.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          ) : null
+        }
       />
 
       {!menuFlags.menusLoading && !menuFlags.canRead && (
