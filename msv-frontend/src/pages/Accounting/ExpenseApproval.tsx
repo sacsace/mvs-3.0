@@ -2747,6 +2747,8 @@ const ExpenseApproval: React.FC = () => {
     },
     [t, i18n.language]
   );
+
+  const filteredExpenses = useMemo(() => {
     let filtered = expenses;
 
     if (listTab === 'written' && user?.id) {

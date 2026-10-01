@@ -1,4 +1,32 @@
-import { api } from '../client';
+import { api, API_BASE_URL, getAuthTokenFromStorage } from '../client';
+
+async function postMultipartFormData(path: string, formData: FormData, timeoutMs = 120000) {
+  const token = getAuthTokenFromStorage();
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer =
+    controller && timeoutMs > 0
+      ? setTimeout(() => controller.abort(), timeoutMs)
+      : null;
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: formData,
+      signal: controller?.signal,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const err: any = new Error(
+        String((data as any)?.message || '').trim() || `Upload failed (${response.status})`
+      );
+      err.response = { data, status: response.status };
+      throw err;
+    }
+    return data;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 export const accountingService = {
   // SAP Excel / CSV Import
@@ -231,13 +259,8 @@ export const accountingService = {
     formData.append('token', token);
     formData.append('file', file);
     formData.append('invoiceType', invoiceType);
-    const response = await api.post('/accounting/expenses/upload-receipt', formData, {
-      timeout: 120000,
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity,
-      transformRequest: [(data) => data],
-    });
-    return response.data;
+    // axios Content-Type 이슈 회피: fetch는 boundary를 브라우저가 자동 설정
+    return postMultipartFormData('/accounting/expenses/upload-receipt', formData);
   },
 
   // 지출결의서 영수증 업로드 (PC)
@@ -249,13 +272,7 @@ export const accountingService = {
     const formData = new FormData();
     files.forEach((file) => formData.append('files', file));
     formData.append('invoiceType', invoiceType);
-    const response = await api.post(`/accounting/expenses/${id}/upload-receipt`, formData, {
-      timeout: 120000,
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity,
-      transformRequest: [(data) => data],
-    });
-    return response.data;
+    return postMultipartFormData(`/accounting/expenses/${id}/upload-receipt`, formData);
   },
 
   deleteExpenseReceipt: async (id: number, path: string) => {
