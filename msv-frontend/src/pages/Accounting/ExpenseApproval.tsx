@@ -82,7 +82,7 @@ import {
 import { useStore } from '../../store';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { accountingService, companyService, partnerService, workAssigneeListService } from '../../services/api';
-import { resolveHeaderCompanyInfo, useReferenceDataStore } from '../../store/referenceDataStore';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { resolveRegisteredStateCodeFromCompanyLike } from '../HR/payroll/indianProfessionalTax';
 import { getUploadUrl, downloadUploadFile, fetchUploadObjectUrl } from '../../utils/uploadUrl';
 import AuthMedia from '../../components/Common/AuthMedia';
@@ -2069,13 +2069,17 @@ const ExpenseApproval: React.FC = () => {
   const [priorityFilter, setPriorityFilter] = useState('');
   const [companyFilterId, setCompanyFilterId] = useState<number | ''>('');
   const [companyOptions, setCompanyOptions] = useState<Array<{ id: number; name: string }>>([]);
-  /** root: 목록·작성에 쓰는 회사. 일반 사용자: 로그인 회사 */
+  /** root: 목록·작성에 쓰는 회사(필터 선택). 일반 사용자: 로그인 회사 */
   const effectiveCompanyId = useMemo(() => {
+    if (isRootUser) {
+      if (typeof companyFilterId === 'number' && companyFilterId > 0) return companyFilterId;
+      const fromExpense = Number(selectedExpense?.companyId);
+      if (Number.isFinite(fromExpense) && fromExpense > 0) return fromExpense;
+      return 0;
+    }
     const fromUser = Number(user?.company_id);
-    if (Number.isFinite(fromUser) && fromUser > 0) return fromUser;
-    if (typeof companyFilterId === 'number' && companyFilterId > 0) return companyFilterId;
-    return 0;
-  }, [user?.company_id, companyFilterId]);
+    return Number.isFinite(fromUser) && fromUser > 0 ? fromUser : 0;
+  }, [isRootUser, user?.company_id, companyFilterId, selectedExpense?.companyId]);
   const [listSortKey, setListSortKey] = useState<ExpenseListSortKey | null>(null);
   const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc');
   const [listViewMode, setListViewMode] = useState<'page' | 'all'>('page');
@@ -2883,33 +2887,26 @@ const ExpenseApproval: React.FC = () => {
       setCompanyGstState('');
       return;
     }
-    resolveHeaderCompanyInfo(user).then((info) => {
-      setCompanyLogo(info.logo || '');
-      if (info.name) setCompanyName(info.name);
-    });
 
-    const companyId =
-      Number(selectedExpense?.companyId) ||
-      effectiveCompanyId ||
-      Number(user.company_id) ||
-      0;
-
+    const companyId = effectiveCompanyId;
     if (!(companyId > 0)) {
-      // root 등 회사 미지정: GST 주 비교 불가 → 세율은 수동 입력 허용
+      setCompanyLogo('');
+      setCompanyName('');
+      setCompanyAddress('');
       setCompanyGstNumber('');
       setCompanyGstState('');
-      if (!user.company_id && !effectiveCompanyId) {
-        setCompanyAddress('');
-      }
       return;
     }
 
+    let cancelled = false;
     Promise.all([
       useReferenceDataStore.getState().fetchCompanyById(companyId),
       companyService.getCompanyGstNumbers(companyId).catch(() => null),
     ])
       .then(([company, gstRes]) => {
-        if (company?.name) setCompanyName(String(company.name));
+        if (cancelled) return;
+        setCompanyName(String(company?.name || '').trim());
+        setCompanyLogo(String(company?.company_logo || company?.logo || '').trim());
         setCompanyAddress(String(company?.address || '').trim());
         const gstList = pickGstNumberList(gstRes);
         const gstNumber = gstList[0] || pickCompanyGstNumber(company);
@@ -2924,10 +2921,18 @@ const ExpenseApproval: React.FC = () => {
         );
       })
       .catch(() => {
+        if (cancelled) return;
+        setCompanyLogo('');
+        setCompanyName('');
+        setCompanyAddress('');
         setCompanyGstNumber('');
         setCompanyGstState('');
       });
-  }, [user, selectedExpense?.companyId, effectiveCompanyId]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, effectiveCompanyId]);
 
   // GST 세율은 사용자가 직접 입력한 값만 사용 (파트너·GSTIN으로 자동 채우지 않음)
 
@@ -9387,20 +9392,53 @@ const ExpenseApproval: React.FC = () => {
         title={t('expenseApproval.title')}
         mb={2}
         actions={
-        <Tooltip title={createGuard.tooltipTitle} disableHoverListener={!createGuard.tooltipTitle}>
-          <span style={{ display: 'inline-flex' }}>
-        <Button
-          variant="contained"
-          disableElevation
-          startIcon={<AddIcon fontSize="small" />}
-          onClick={handleCreateExpense}
-              disabled={createGuard.disabled}
-              sx={mvsBodyPrimaryBtnSx}
-        >
-          {t('expenseApproval.actions.requestExpense')}
-        </Button>
-          </span>
-        </Tooltip>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+            {isRootUser && (
+              <TextField
+                size="small"
+                select
+                label={t('expenseApproval.filters.company')}
+                value={companyFilterId === '' ? '' : String(companyFilterId)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  handleRootCompanyChange(v === '' ? '' : Number(v));
+                }}
+                InputLabelProps={{ shrink: true }}
+                SelectProps={{
+                  displayEmpty: true,
+                  renderValue: (selected) => {
+                    if (selected === '' || selected == null) {
+                      return t('expenseApproval.filters.allCompanies');
+                    }
+                    const found = companyOptions.find((c) => String(c.id) === String(selected));
+                    return found?.name || String(selected);
+                  },
+                }}
+                sx={{ minWidth: { xs: 180, sm: 260 }, ...expenseApprovalFilterFieldSx }}
+              >
+                <MenuItem value="">{t('expenseApproval.filters.allCompanies')}</MenuItem>
+                {companyOptions.map((c) => (
+                  <MenuItem key={c.id} value={String(c.id)}>
+                    {c.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+            <Tooltip title={createGuard.tooltipTitle} disableHoverListener={!createGuard.tooltipTitle}>
+              <span style={{ display: 'inline-flex' }}>
+                <Button
+                  variant="contained"
+                  disableElevation
+                  startIcon={<AddIcon fontSize="small" />}
+                  onClick={handleCreateExpense}
+                  disabled={createGuard.disabled}
+                  sx={mvsBodyPrimaryBtnSx}
+                >
+                  {t('expenseApproval.actions.requestExpense')}
+                </Button>
+              </span>
+            </Tooltip>
+          </Box>
         }
       />
 
@@ -9419,16 +9457,12 @@ const ExpenseApproval: React.FC = () => {
             setPage(1);
             setListSortKey(null);
             setListSortDir('asc');
-            if (value === 'transfer') {
+            if (value === 'transfer' && isRootUser && companyFilterId === '') {
               const nextCompanyId = resolveDefaultTransferCompanyFilterId();
-              // 송금 탭은 회사 필터로 재조회 → 이전 목록이 잠깐 보이지 않게 비움
-              if (nextCompanyId !== companyFilterId) {
+              if (nextCompanyId) {
                 setExpenses([]);
+                setCompanyFilterId(nextCompanyId);
               }
-              setCompanyFilterId(nextCompanyId);
-            } else if (companyFilterId !== '') {
-              setExpenses([]);
-              setCompanyFilterId('');
             }
           }}
           sx={{
@@ -9511,10 +9545,7 @@ const ExpenseApproval: React.FC = () => {
             display: 'grid', 
             gridTemplateColumns: {
               xs: '1fr',
-              sm:
-                isRootUser
-                  ? 'minmax(160px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(140px, 1.2fr) auto'
-                  : 'minmax(180px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) auto',
+              sm: 'minmax(180px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) auto',
             },
             gap: 2, 
             alignItems: 'flex-end',
@@ -9647,38 +9678,6 @@ const ExpenseApproval: React.FC = () => {
                 <MenuItem value="high">{t('expenseApproval.priority.high')}</MenuItem>
                 <MenuItem value="urgent">{t('expenseApproval.priority.urgent')}</MenuItem>
             </TextField>
-            {isRootUser && (
-              <TextField
-                fullWidth
-                size="small"
-                select
-                label={t('expenseApproval.filters.company')}
-                value={companyFilterId === '' ? '' : String(companyFilterId)}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  handleRootCompanyChange(v === '' ? '' : Number(v));
-                }}
-                InputLabelProps={{ shrink: true }}
-                SelectProps={{
-                  displayEmpty: true,
-                  renderValue: (selected) => {
-                    if (selected === '' || selected == null) {
-                      return t('expenseApproval.filters.allCompanies');
-                    }
-                    const found = companyOptions.find((c) => String(c.id) === String(selected));
-                    return found?.name || String(selected);
-                  },
-                }}
-                sx={expenseApprovalFilterFieldSx}
-              >
-                <MenuItem value="">{t('expenseApproval.filters.allCompanies')}</MenuItem>
-                {companyOptions.map((c) => (
-                  <MenuItem key={c.id} value={String(c.id)}>
-                    {c.name}
-                  </MenuItem>
-                ))}
-              </TextField>
-            )}
               <Button
                 variant="outlined"
               startIcon={<FilterIcon sx={{ fontSize: 18 }} />}
@@ -9686,11 +9685,6 @@ const ExpenseApproval: React.FC = () => {
                   setSearchTerm('');
                   setStatusFilter('');
                   setPriorityFilter('');
-                setCompanyFilterId(
-                  listTab === 'transfer' && isRootUser
-                    ? resolveDefaultTransferCompanyFilterId()
-                    : ''
-                );
                 setListSortKey(null);
                 setListSortDir('asc');
                 setPage(1);
