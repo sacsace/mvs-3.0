@@ -269,11 +269,15 @@ const maybeRefreshSessionByActivity = async () => {
 // 요청 인터셉터
 api.interceptors.request.use(
   async (config) => {
-    // FormData 업로드 시 기본 application/json 제거 → 브라우저가 boundary 포함 multipart 설정
+    // FormData 업로드 시 Content-Type을 비워 브라우저가 boundary 포함 multipart를 설정하게 함
+    // (multipart/form-data를 boundary 없이 넣거나 application/json이 남으면 multer가 파일을 못 받음)
     if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
       const headers = config.headers as any;
       if (headers) {
-        if (typeof headers.delete === 'function') {
+        if (typeof headers.set === 'function') {
+          // AxiosHeaders: false → Content-Type 헤더 생략
+          headers.set('Content-Type', false);
+        } else if (typeof headers.delete === 'function') {
           headers.delete('Content-Type');
           headers.delete('content-type');
         } else {

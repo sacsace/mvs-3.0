@@ -5138,6 +5138,11 @@ export default {
         qrTokenFailed: 'Failed to issue QR token.',
         receiptUploadFailed: 'An error occurred while uploading receipt.',
         receiptDeleteFailed: 'An error occurred while deleting the receipt.',
+        fileRequired: 'A file is required.',
+        selectCompanyFirst: 'Please select a company first.',
+        companyNotFound: 'The selected company could not be found.',
+        cannotEditProcessed:
+          'This document is under review or already processed and cannot be edited. Check the status in the list.',
         invoiceTypeRequired: 'Please select tax invoice, proforma invoice, or no invoice.',
         deleteFailed: 'An error occurred while deleting.',
         approveFailed: 'An error occurred while approving.',

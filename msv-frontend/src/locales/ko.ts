@@ -5189,6 +5189,11 @@ export default {
         qrTokenFailed: 'QR 토큰 발급에 실패했습니다.',
         receiptUploadFailed: '영수증 업로드 중 오류가 발생했습니다.',
         receiptDeleteFailed: '영수증 삭제 중 오류가 발생했습니다.',
+        fileRequired: '파일이 필요합니다.',
+        selectCompanyFirst: '회사를 먼저 선택해주세요.',
+        companyNotFound: '선택한 회사를 찾을 수 없습니다.',
+        cannotEditProcessed:
+          '검토 중이거나 처리된 문서는 수정할 수 없습니다. 목록에서 문서 상태를 확인해 주세요.',
         invoiceTypeRequired: '첨부 유형(Tax / Proforma Invoice / 인보이스 없음)을 선택해주세요.',
         deleteFailed: '삭제 중 오류가 발생했습니다.',
         approveFailed: '승인 중 오류가 발생했습니다.',

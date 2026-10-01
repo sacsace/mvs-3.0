@@ -35,6 +35,7 @@ import {
 } from '../services/workAssigneeScope';
 import { finalizeExpenseReceiptFilename } from '../utils/documentDownloadFilename';
 import { getUploadRoot } from '../utils/uploadPath';
+import { resolveRequestCompanyId } from '../utils/resolveRequestCompanyId';
 
 const ensureInvoiceColumns = async () => {
   try {
@@ -2960,7 +2961,20 @@ const notifyExpenseReportRevisionRejected = (req: RequestWithUser, expense: any)
 // 지출결의서 생성
 export const createExpenseReport = async (req: RequestWithUser, res: Response) => {
   try {
-    const { tenant_id, company_id, id: requester_id } = req.user;
+    const { tenant_id, id: requester_id } = req.user;
+    let company_id: number;
+    try {
+      company_id = await resolveRequestCompanyId(req);
+    } catch (scopeErr: any) {
+      return res.status(scopeErr?.status || 400).json({
+        success: false,
+        message: scopeErr?.message || '회사를 선택해주세요.',
+      });
+    }
+    if (!Number.isFinite(company_id) || company_id <= 0) {
+      return res.status(400).json({ success: false, message: '회사를 선택해주세요.' });
+    }
+
     const {
       expense_id,
       title,
@@ -3169,9 +3183,9 @@ export const createExpenseReport = async (req: RequestWithUser, res: Response) =
 export const updateExpenseReport = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id, id: user_id, username } = req.user;
+    const { tenant_id, id: user_id, username } = req.user;
     const expense = await (ExpenseReport as any).findOne({
-      where: { id, tenant_id, company_id, is_active: true }
+      where: expenseScopeWhere(req.user, id),
     });
 
     if (!expense) {
@@ -3180,6 +3194,7 @@ export const updateExpenseReport = async (req: RequestWithUser, res: Response) =
     if (Number(expense.requester_id) !== Number(user_id)) {
       return res.status(403).json({ success: false, message: '작성자만 수정할 수 있습니다.' });
     }
+    const company_id = Number(expense.company_id);
 
     const prevStatus = String(expense.status || 'draft');
     const isRevisionResubmit =
@@ -3763,7 +3778,7 @@ export const uploadExpenseReceiptByToken = async (req: Request, res: Response) =
 export const uploadExpenseReceiptById = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id, id: user_id } = req.user;
+    const { id: user_id } = req.user;
     const files = ((req as any).files || []) as Array<{ filename?: string }>;
     if (!files.length) {
       return res.status(400).json({ success: false, message: '파일이 필요합니다.' });
@@ -3780,7 +3795,7 @@ export const uploadExpenseReceiptById = async (req: RequestWithUser, res: Respon
     }
     const invoiceType = normalizeExpenseInvoiceType(rawType);
     const expense = await (ExpenseReport as any).findOne({
-      where: { id, tenant_id, company_id, is_active: true }
+      where: expenseScopeWhere(req.user, id),
     });
     if (!expense) {
       return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });

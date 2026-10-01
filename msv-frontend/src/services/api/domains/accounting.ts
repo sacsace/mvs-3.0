@@ -12,7 +12,6 @@ export const accountingService = {
     if (params?.sheetName) formData.append('sheetName', params.sheetName);
     if (params?.headerRowNumber) formData.append('headerRowNumber', String(params.headerRowNumber));
     const response = await api.post('/accounting/sap/inspect', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 600000,
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
@@ -41,7 +40,6 @@ export const accountingService = {
     formData.append('template', JSON.stringify(template));
     if (params?.company_id) formData.append('company_id', String(params.company_id));
     const response = await api.post('/accounting/sap/preview', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 600000,
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
@@ -227,14 +225,17 @@ export const accountingService = {
     return response.data;
   },
 
-  // ?�큰?�로 ?�수�??�로??(?��??�에???�용)
+  // 토큰으로 영수증 업로드 (휴대폰에서 사용)
   uploadExpenseReceipt: async (token: string, file: File, invoiceType: 'tax' | 'proforma' | 'none' = 'tax') => {
     const formData = new FormData();
     formData.append('token', token);
     formData.append('file', file);
     formData.append('invoiceType', invoiceType);
     const response = await api.post('/accounting/expenses/upload-receipt', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+      transformRequest: [(data) => data],
     });
     return response.data;
   },
@@ -249,7 +250,10 @@ export const accountingService = {
     files.forEach((file) => formData.append('files', file));
     formData.append('invoiceType', invoiceType);
     const response = await api.post(`/accounting/expenses/${id}/upload-receipt`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+      transformRequest: [(data) => data],
     });
     return response.data;
   },
@@ -283,7 +287,8 @@ export const accountingService = {
     if (amount != null) formData.append('amount', String(amount));
     if (proof) formData.append('proof', proof);
     const response = await api.post(`/accounting/expenses/${id}/complete-payment`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      timeout: 120000,
+      transformRequest: [(data) => data],
     });
     return response.data;
   },
@@ -294,7 +299,8 @@ export const accountingService = {
     if (amount != null) formData.append('amount', String(amount));
     if (proof) formData.append('proof', proof);
     const response = await api.post(`/accounting/expenses/${id}/retry-transfer`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      timeout: 120000,
+      transformRequest: [(data) => data],
     });
     return response.data;
   },
@@ -371,8 +377,9 @@ export const accountingService = {
     formData.append('file', file);
     formData.append('sourceDocType', sourceDocType);
     const response = await api.post('/accounting/auto-vouchers/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    params: companyId ? { company_id: companyId } : undefined,
+      timeout: 120000,
+      transformRequest: [(data) => data],
+      params: companyId ? { company_id: companyId } : undefined,
     });
     return response.data;
   },

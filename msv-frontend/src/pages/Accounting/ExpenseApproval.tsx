@@ -81,7 +81,7 @@ import {
   Reply as ReplyIcon } from '@mui/icons-material';
 import { useStore } from '../../store';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { accountingService, companyService, workAssigneeListService } from '../../services/api';
+import { accountingService, companyService, partnerService, workAssigneeListService } from '../../services/api';
 import { resolveHeaderCompanyInfo, useReferenceDataStore } from '../../store/referenceDataStore';
 import { resolveRegisteredStateCodeFromCompanyLike } from '../HR/payroll/indianProfessionalTax';
 import { getUploadUrl, downloadUploadFile, fetchUploadObjectUrl } from '../../utils/uploadUrl';
@@ -2069,6 +2069,13 @@ const ExpenseApproval: React.FC = () => {
   const [priorityFilter, setPriorityFilter] = useState('');
   const [companyFilterId, setCompanyFilterId] = useState<number | ''>('');
   const [companyOptions, setCompanyOptions] = useState<Array<{ id: number; name: string }>>([]);
+  /** root: 목록·작성에 쓰는 회사. 일반 사용자: 로그인 회사 */
+  const effectiveCompanyId = useMemo(() => {
+    const fromUser = Number(user?.company_id);
+    if (Number.isFinite(fromUser) && fromUser > 0) return fromUser;
+    if (typeof companyFilterId === 'number' && companyFilterId > 0) return companyFilterId;
+    return 0;
+  }, [user?.company_id, companyFilterId]);
   const [listSortKey, setListSortKey] = useState<ExpenseListSortKey | null>(null);
   const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc');
   const [listViewMode, setListViewMode] = useState<'page' | 'all'>('page');
@@ -2527,6 +2534,7 @@ const ExpenseApproval: React.FC = () => {
     priority: formData.priority,
     due_date: formData.dueDate || null,
     notes: formData.notes || '',
+      ...(isRootUser && effectiveCompanyId > 0 ? { company_id: effectiveCompanyId } : {}),
       items: {
         rows: lineItems.map((item) => {
           if (voucherData.formType === 'gst' && item.gstRowKey) {
@@ -2584,6 +2592,8 @@ const ExpenseApproval: React.FC = () => {
       voucherData,
       ccUserIds,
       totalAmount,
+      isRootUser,
+      effectiveCompanyId,
       user?.id,
       user?.username,
       user?.department,
@@ -2599,6 +2609,11 @@ const ExpenseApproval: React.FC = () => {
       return;
     }
     if (draftId) return;
+    if (isRootUser && !(effectiveCompanyId > 0)) {
+      setIsInitializingDraft(false);
+      draftInitInFlightRef.current = false;
+      return;
+    }
 
     let cancelled = false;
     setIsInitializingDraft(true);
@@ -2646,12 +2661,16 @@ const ExpenseApproval: React.FC = () => {
       // Strict Mode remount 시 재시도 가능하도록
       draftInitInFlightRef.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- create 진입·draftId 기준 (타이핑으로 재생성 금지)
-  }, [viewMode, draftId, t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- create 진입·draftId·회사 기준 (타이핑으로 재생성 금지)
+  }, [viewMode, draftId, t, isRootUser, effectiveCompanyId]);
 
   /** 제출·영수증 업로드 전에 draftId가 준비될 때까지 대기(또는 즉시 생성) */
   const ensureDraftReady = useCallback(async (): Promise<number | null> => {
     if (viewMode === 'edit') return selectedExpense?.id ?? null;
+    if (isRootUser && !(effectiveCompanyId > 0)) {
+      setError(t('expenseApproval.errors.selectCompanyFirst'));
+      return null;
+    }
     if (draftIdReadyRef.current) return draftIdReadyRef.current;
     if (draftId) {
       draftIdReadyRef.current = draftId;
@@ -2703,9 +2722,31 @@ const ExpenseApproval: React.FC = () => {
       draftInitInFlightRef.current = false;
       setIsInitializingDraft(false);
     }
-  }, [viewMode, selectedExpense?.id, draftId, buildExpensePayload, t]);
+  }, [viewMode, selectedExpense?.id, draftId, buildExpensePayload, t, isRootUser, effectiveCompanyId]);
 
-  const filteredExpenses = useMemo(() => {
+  const localizeExpenseApiError = useCallback(
+    (raw: unknown, fallbackKey: string) => {
+      const message = String(raw || '').trim();
+      const messageKeyMap: Record<string, string> = {
+        '파일이 필요합니다.': 'expenseApproval.errors.fileRequired',
+        '파일이 필요합니다': 'expenseApproval.errors.fileRequired',
+        '회사를 선택해주세요.': 'expenseApproval.errors.selectCompanyFirst',
+        '회사를 선택해주세요': 'expenseApproval.errors.selectCompanyFirst',
+        '선택한 회사를 찾을 수 없습니다.': 'expenseApproval.errors.companyNotFound',
+        '첨부 유형(Tax Invoice / Proforma Invoice / 인보이스 없음)을 선택해주세요.':
+          'expenseApproval.errors.invoiceTypeRequired',
+        '검토 중이거나 처리된 문서는 수정할 수 없습니다.': 'expenseApproval.errors.cannotEditProcessed',
+        '검토 중이거나 처리된 문서는 수정할 수 없습니다. 목록에서 문서 상태를 확인해 주세요.':
+          'expenseApproval.errors.cannotEditProcessed',
+      };
+      if (message && messageKeyMap[message]) return t(messageKeyMap[message]);
+      if (message && /[가-힣]/.test(message) && !i18n.language?.startsWith('ko')) {
+        return t(fallbackKey);
+      }
+      return message || t(fallbackKey);
+    },
+    [t, i18n.language]
+  );
     let filtered = expenses;
 
     if (listTab === 'written' && user?.id) {
@@ -2846,16 +2887,17 @@ const ExpenseApproval: React.FC = () => {
     });
 
     const companyId =
-      Number(user.company_id) ||
       Number(selectedExpense?.companyId) ||
-      (typeof companyFilterId === 'number' ? companyFilterId : 0) ||
+      effectiveCompanyId ||
+      Number(user.company_id) ||
       0;
 
     if (!(companyId > 0)) {
       // root 등 회사 미지정: GST 주 비교 불가 → 세율은 수동 입력 허용
-      if (!user.company_id) {
-        setCompanyGstNumber('');
-        setCompanyGstState('');
+      setCompanyGstNumber('');
+      setCompanyGstState('');
+      if (!user.company_id && !effectiveCompanyId) {
+        setCompanyAddress('');
       }
       return;
     }
@@ -2883,19 +2925,19 @@ const ExpenseApproval: React.FC = () => {
         setCompanyGstNumber('');
         setCompanyGstState('');
       });
-  }, [user, selectedExpense?.companyId, companyFilterId]);
+  }, [user, selectedExpense?.companyId, effectiveCompanyId]);
 
   // GST 세율은 사용자가 직접 입력한 값만 사용 (파트너·GSTIN으로 자동 채우지 않음)
 
   useEffect(() => {
     const loadApprovers = async () => {
-      if (!user?.company_id) {
+      if (!(effectiveCompanyId > 0)) {
         setApprovers([]);
         return;
       }
       try {
         const users = await useReferenceDataStore.getState().fetchUsers({
-          company_id: Number(user.company_id),
+          company_id: effectiveCompanyId,
         });
         const options = users.map((item: any) => ({
           id: item.id,
@@ -2907,15 +2949,28 @@ const ExpenseApproval: React.FC = () => {
       }
     };
     loadApprovers();
-  }, [user?.company_id]);
+  }, [effectiveCompanyId]);
 
   useEffect(() => {
     const loadPartners = async () => {
+      if (isRootUser && !(effectiveCompanyId > 0)) {
+        setPartners([]);
+        setPartnerLoadError(false);
+        setPartnerScopeEnforced(false);
+        return;
+      }
       try {
         setPartnerLoadError(false);
         // 강제 새로고침 — 빈 캐시가 굳어 검색이 비는 문제 방지
+        const partnerPromise =
+          isRootUser && effectiveCompanyId > 0
+            ? partnerService.getPartners(effectiveCompanyId).then((res: any) => {
+                const data = res?.data ?? res;
+                return Array.isArray(data) ? data : Array.isArray(data?.rows) ? data.rows : [];
+              })
+            : useReferenceDataStore.getState().fetchPartners(true);
         const [rows, scopeRes] = await Promise.all([
-          useReferenceDataStore.getState().fetchPartners(true),
+          partnerPromise,
           workAssigneeListService.getMyScope().catch(() => null),
         ]);
         const scope = scopeRes?.data;
@@ -3004,7 +3059,7 @@ const ExpenseApproval: React.FC = () => {
       }
     };
     loadPartners();
-  }, []);
+  }, [isRootUser, effectiveCompanyId]);
 
   const filterPartnerOptions = useCallback((options: PartnerOption[], state: { inputValue: string }) => {
     const q = state.inputValue.trim().toLowerCase();
@@ -3062,13 +3117,34 @@ const ExpenseApproval: React.FC = () => {
     if (tab === 'received' || tab === 'written' || tab === 'transfer') {
       if (tab === 'transfer' && !hasTransferAccess) return;
       setListTab(tab);
-      if (tab === 'transfer' && isRootUser) {
+      if (tab === 'transfer' && isRootUser && companyFilterId === '') {
         setCompanyFilterId(resolveDefaultTransferCompanyFilterId());
-      } else if (tab !== 'transfer' && isRootUser) {
-        setCompanyFilterId('');
       }
     }
-  }, [searchParams, hasTransferAccess, isRootUser, resolveDefaultTransferCompanyFilterId]);
+  }, [searchParams, hasTransferAccess, isRootUser, resolveDefaultTransferCompanyFilterId, companyFilterId]);
+
+  const handleRootCompanyChange = useCallback(
+    (next: number | '') => {
+      setCompanyFilterId(next);
+      setPage(1);
+      if (viewMode === 'create') {
+        setDraftId(null);
+        draftIdReadyRef.current = null;
+        draftInitInFlightRef.current = false;
+        setCurrentAttachments([]);
+        setHeaderStatusBanner('');
+        setVoucherData((prev) => ({
+          ...prev,
+          approvedById: '',
+          partnerId: '',
+          department: '',
+          gstNumber: '',
+        }));
+        setPartnerInputValue('');
+      }
+    },
+    [viewMode]
+  );
 
   const openedExpenseQueryRef = useRef<string | null>(null);
   useEffect(() => {
@@ -3380,12 +3456,19 @@ const ExpenseApproval: React.FC = () => {
     );
     setDraftId(expense.id);
     draftIdReadyRef.current = expense.id;
+    if (isRootUser && expense.companyId) {
+      setCompanyFilterId(Number(expense.companyId));
+    }
     setHeaderStatusBanner('');
     setViewMode('edit');
   };
 
   const handleCreateExpense = () => {
     if (!createGuard.guard()) return;
+    if (isRootUser && !(effectiveCompanyId > 0)) {
+      setError(t('expenseApproval.errors.selectCompanyFirst'));
+      return;
+    }
     setSelectedExpense(null);
     setFormData({
       title: '',
@@ -3512,8 +3595,12 @@ const ExpenseApproval: React.FC = () => {
       leaveExpenseForm();
     } catch (saveError: any) {
       submitInFlightRef.current = false;
-      const serverMsg = String(saveError?.response?.data?.message || saveError?.message || '').trim();
-      setError(serverMsg || t('expenseApproval.errors.submitFailed'));
+      setError(
+        localizeExpenseApiError(
+          saveError?.response?.data?.message || saveError?.message,
+          'expenseApproval.errors.submitFailed'
+        )
+      );
     } finally {
       setSaving(false);
     }
@@ -4111,7 +4198,9 @@ const ExpenseApproval: React.FC = () => {
   );
 
   const handleUploadReceipts = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
+    // FileList는 input value 초기화 시 같이 비워지므로 즉시 스냅샷
+    const selectedFiles = files && files.length > 0 ? Array.from(files) : [];
+    if (selectedFiles.length === 0) return;
     const activeFormType =
       viewMode === 'view' || viewMode === 'edit'
         ? resolveExpenseFormType(selectedExpense?.itemMeta)
@@ -4141,7 +4230,7 @@ const ExpenseApproval: React.FC = () => {
         String(formData.purpose || selectedExpense?.purpose || '').trim() ||
         String(lineItems[0]?.description || '').trim() ||
         'PV';
-      const renamed = Array.from(files).map((file) => {
+      const renamed = selectedFiles.map((file) => {
         const mimeExt = String(file.type || '')
           .split('/')
           .pop()
@@ -4183,9 +4272,10 @@ const ExpenseApproval: React.FC = () => {
       );
     } catch (uploadError: any) {
       setError(
-        uploadError?.response?.data?.message ||
-          uploadError?.message ||
-          t('expenseApproval.errors.receiptUploadFailed')
+        localizeExpenseApiError(
+          uploadError?.response?.data?.message || uploadError?.message,
+          'expenseApproval.errors.receiptUploadFailed'
+        )
       );
     } finally {
       setUploadingReceipts(false);
@@ -5161,7 +5251,31 @@ const ExpenseApproval: React.FC = () => {
           title={isEdit ? t('expenseApproval.form.editTitle') : t('expenseApproval.form.createTitle')}
           mb={2}
           actions={
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+            {isRootUser && !isEdit && (
+              <TextField
+                size="small"
+                select
+                label={t('expenseApproval.filters.company')}
+                value={companyFilterId === '' ? '' : String(companyFilterId)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  handleRootCompanyChange(v === '' ? '' : Number(v));
+                }}
+                InputLabelProps={{ shrink: true }}
+                SelectProps={{ displayEmpty: true }}
+                sx={{ minWidth: 200, ...expenseApprovalFilterFieldSx }}
+              >
+                <MenuItem value="" disabled>
+                  {t('expenseApproval.errors.selectCompanyFirst')}
+                </MenuItem>
+                {companyOptions.map((c) => (
+                  <MenuItem key={c.id} value={String(c.id)}>
+                    {c.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
             {headerStatusBanner === 'draftCreated' && (
               <Typography variant="body2" color="text.secondary">
                 {t('expenseApproval.success.draftCreated')}
@@ -9396,7 +9510,7 @@ const ExpenseApproval: React.FC = () => {
             gridTemplateColumns: {
               xs: '1fr',
               sm:
-                isRootUser && listTab === 'transfer'
+                isRootUser
                   ? 'minmax(160px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(140px, 1.2fr) auto'
                   : 'minmax(180px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) auto',
             },
@@ -9409,7 +9523,7 @@ const ExpenseApproval: React.FC = () => {
                 size="small"
               label={t('expenseApproval.placeholders.searchSimple')}
               placeholder={
-                isRootUser && listTab === 'transfer'
+                isRootUser
                   ? t('expenseApproval.placeholders.searchWithCompany')
                   : t('expenseApproval.placeholders.search')
               }
@@ -9531,7 +9645,7 @@ const ExpenseApproval: React.FC = () => {
                 <MenuItem value="high">{t('expenseApproval.priority.high')}</MenuItem>
                 <MenuItem value="urgent">{t('expenseApproval.priority.urgent')}</MenuItem>
             </TextField>
-            {isRootUser && listTab === 'transfer' && (
+            {isRootUser && (
               <TextField
                 fullWidth
                 size="small"
@@ -9540,8 +9654,7 @@ const ExpenseApproval: React.FC = () => {
                 value={companyFilterId === '' ? '' : String(companyFilterId)}
                 onChange={(e) => {
                   const v = e.target.value;
-                  setCompanyFilterId(v === '' ? '' : Number(v));
-                  setPage(1);
+                  handleRootCompanyChange(v === '' ? '' : Number(v));
                 }}
                 InputLabelProps={{ shrink: true }}
                 SelectProps={{
@@ -9777,7 +9890,7 @@ const ExpenseApproval: React.FC = () => {
                       </Typography>
                       <ExpenseCommentCountBadge expense={expense} />
                     </Box>
-                    {isRootUser && listTab === 'transfer' && expense.companyName ? (
+                    {isRootUser && expense.companyName ? (
                       <Typography variant="caption" color="text.secondary" display="block" noWrap>
                         {expense.companyName}
                       </Typography>
