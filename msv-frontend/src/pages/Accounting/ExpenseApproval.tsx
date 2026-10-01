@@ -2781,17 +2781,25 @@ const ExpenseApproval: React.FC = () => {
     }
 
     if (searchTerm) {
-      const q = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (expense) =>
+      const q = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter((expense) => {
+        const partnerName = String(
+          expense.itemMeta?.department ||
+            expense.itemMeta?.partnerName ||
+            expense.itemMeta?.partner_name ||
+            ''
+        ).toLowerCase();
+        return (
           expense.title.toLowerCase().includes(q) ||
           expense.expenseId.toLowerCase().includes(q) ||
           expense.requesterName.toLowerCase().includes(q) ||
           expense.purpose.toLowerCase().includes(q) ||
           String(expense.companyName || '')
             .toLowerCase()
-            .includes(q)
-      );
+            .includes(q) ||
+          partnerName.includes(q)
+        );
+      });
     }
 
     if (listTab !== 'transfer') {
@@ -3151,6 +3159,17 @@ const ExpenseApproval: React.FC = () => {
     },
     [viewMode]
   );
+
+  const selectedRootCompanyOption = useMemo(() => {
+    if (typeof companyFilterId !== 'number' || companyFilterId <= 0) return null;
+    return companyOptions.find((c) => Number(c.id) === Number(companyFilterId)) || null;
+  }, [companyFilterId, companyOptions]);
+
+  const rootCompanyAutocompleteSx = {
+    minWidth: { xs: 180, sm: 280 },
+    maxWidth: { xs: '100%', sm: 360 },
+    ...expenseApprovalFilterFieldSx,
+  } as const;
 
   const openedExpenseQueryRef = useRef<string | null>(null);
   useEffect(() => {
@@ -5265,28 +5284,32 @@ const ExpenseApproval: React.FC = () => {
           actions={
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
             {isRootUser && !isEdit && (
-              <TextField
+              <Autocomplete
                 size="small"
-                select
-                label={t('expenseApproval.filters.company')}
-                value={companyFilterId === '' ? '' : String(companyFilterId)}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  handleRootCompanyChange(v === '' ? '' : Number(v));
+                options={companyOptions}
+                value={selectedRootCompanyOption}
+                onChange={(_, option) => {
+                  handleRootCompanyChange(option ? Number(option.id) : '');
                 }}
-                InputLabelProps={{ shrink: true }}
-                SelectProps={{ displayEmpty: true }}
-                sx={{ minWidth: 200, ...expenseApprovalFilterFieldSx }}
-              >
-                <MenuItem value="" disabled>
-                  {t('expenseApproval.errors.selectCompanyFirst')}
-                </MenuItem>
-                {companyOptions.map((c) => (
-                  <MenuItem key={c.id} value={String(c.id)}>
-                    {c.name}
-                  </MenuItem>
-                ))}
-              </TextField>
+                getOptionLabel={(option) => option.name || ''}
+                isOptionEqualToValue={(a, b) => Number(a.id) === Number(b.id)}
+                filterOptions={(options, state) => {
+                  const q = String(state.inputValue || '')
+                    .trim()
+                    .toLowerCase();
+                  if (!q) return options;
+                  return options.filter((opt) => String(opt.name || '').toLowerCase().includes(q));
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label={t('expenseApproval.filters.company')}
+                    placeholder={t('expenseApproval.placeholders.searchCompany')}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                )}
+                sx={{ minWidth: 200, maxWidth: 360, ...expenseApprovalFilterFieldSx }}
+              />
             )}
             {headerStatusBanner === 'draftCreated' && (
               <Typography variant="body2" color="text.secondary">
@@ -9399,35 +9422,32 @@ const ExpenseApproval: React.FC = () => {
         actions={
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
             {isRootUser && (
-              <TextField
+              <Autocomplete
                 size="small"
-                select
-                label={t('expenseApproval.filters.company')}
-                value={companyFilterId === '' ? '' : String(companyFilterId)}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  handleRootCompanyChange(v === '' ? '' : Number(v));
+                options={companyOptions}
+                value={selectedRootCompanyOption}
+                onChange={(_, option) => {
+                  handleRootCompanyChange(option ? Number(option.id) : '');
                 }}
-                InputLabelProps={{ shrink: true }}
-                SelectProps={{
-                  displayEmpty: true,
-                  renderValue: (selected) => {
-                    if (selected === '' || selected == null) {
-                      return t('expenseApproval.filters.allCompanies');
-                    }
-                    const found = companyOptions.find((c) => String(c.id) === String(selected));
-                    return found?.name || String(selected);
-                  },
+                getOptionLabel={(option) => option.name || ''}
+                isOptionEqualToValue={(a, b) => Number(a.id) === Number(b.id)}
+                filterOptions={(options, state) => {
+                  const q = String(state.inputValue || '')
+                    .trim()
+                    .toLowerCase();
+                  if (!q) return options;
+                  return options.filter((opt) => String(opt.name || '').toLowerCase().includes(q));
                 }}
-                sx={{ minWidth: { xs: 180, sm: 260 }, ...expenseApprovalFilterFieldSx }}
-              >
-                <MenuItem value="">{t('expenseApproval.filters.allCompanies')}</MenuItem>
-                {companyOptions.map((c) => (
-                  <MenuItem key={c.id} value={String(c.id)}>
-                    {c.name}
-                  </MenuItem>
-                ))}
-              </TextField>
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label={t('expenseApproval.filters.company')}
+                    placeholder={t('expenseApproval.filters.allCompanies')}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                )}
+                sx={rootCompanyAutocompleteSx}
+              />
             )}
             <Tooltip title={createGuard.tooltipTitle} disableHoverListener={!createGuard.tooltipTitle}>
               <span style={{ display: 'inline-flex' }}>

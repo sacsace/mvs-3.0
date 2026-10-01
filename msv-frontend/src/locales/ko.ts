@@ -4362,6 +4362,16 @@ export default {
         totalAmount: '합산금',
         empty: '조회 기간에 해당하는 매입 내역이 없습니다.'
       },
+      purchaseDetail: {
+        title: '지출 내역',
+        partner: '협력업체',
+        remarks: '비고',
+        lineItems: '지출 항목',
+        emptyItems: '등록된 지출 항목이 없습니다.',
+        itemDescription: '설명',
+        qty: '수량',
+        unitPrice: '단가'
+      },
       columns: {
         documentNumber: '문서번호',
         date: '일자',
@@ -4854,9 +4864,9 @@ export default {
         allCompanies: '전체 회사'
       },
       placeholders: {
-        search: '제목, 신청자 검색',
+        search: '제목, 신청자, 협력업체 검색',
         searchSimple: '검색',
-        searchCompany: '회사 검색',
+        searchCompany: '회사명 입력하여 검색',
         searchWithCompany: '제목, 신청자, 회사 검색'
       },
       form: {

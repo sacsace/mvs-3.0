@@ -4310,6 +4310,16 @@ export default {
         totalAmount: 'Total',
         empty: 'No purchase records for the selected period.'
       },
+      purchaseDetail: {
+        title: 'Expense details',
+        partner: 'Vendor',
+        remarks: 'Remarks',
+        lineItems: 'Line items',
+        emptyItems: 'No line items recorded.',
+        itemDescription: 'Description',
+        qty: 'Qty',
+        unitPrice: 'Unit price'
+      },
       columns: {
         documentNumber: 'Document No.',
         date: 'Date',
@@ -4803,9 +4813,9 @@ export default {
         allCompanies: 'All companies'
       },
       placeholders: {
-        search: 'Search by title or requester',
+        search: 'Search by title, requester, or vendor',
         searchSimple: 'Search',
-        searchCompany: 'Search company',
+        searchCompany: 'Type to search company',
         searchWithCompany: 'Search by title, requester, or company'
       },
       form: {

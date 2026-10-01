@@ -1810,9 +1810,14 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
     const expenseDateBetween = (dateFilter as any)?.invoice_date?.[Op.between];
     if (Array.isArray(expenseDateBetween) && expenseDateBetween.length === 2) {
       const [start, end] = expenseDateBetween;
-      expenseWhereClause.created_at = {
-        [Op.between]: [`${start} 00:00:00`, `${end} 23:59:59`]
+      const range = {
+        [Op.between]: [`${start} 00:00:00`, `${end} 23:59:59`],
       };
+      // 지급완료일 또는 작성일이 기간에 포함되면 집계 (지출결의서 누락 방지)
+      expenseWhereClause[Op.or] = [
+        { payment_completed_at: range },
+        { created_at: range },
+      ];
     }
     const allExpensesRaw = await (ExpenseReport as any).findAll({
       where: expenseWhereClause,
@@ -1823,11 +1828,15 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
         'requester_name',
         'requester_department',
         'total_amount',
+        'paid_amount',
         'currency',
         'purpose',
         'status',
         'payment_request_status',
+        'payment_completed_at',
+        'submitted_at',
         'created_at',
+        'notes',
         'items',
       ],
       order: [['created_at', 'DESC']]
@@ -1859,12 +1868,74 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
       const status = String(exp.status || '').toLowerCase();
       const payment = String(exp.payment_request_status || '').toLowerCase();
       if (status === 'rejected' || payment === 'rejected') return false;
-      return status === 'paid' || payment === 'paid';
+      if (status === 'paid' || payment === 'paid') return true;
+      // 부분 송금 반영: 지급액이 있으면 매입에 포함
+      return Number(exp.paid_amount || 0) > 0;
     };
+
+    const readExpenseField = (exp: any, snake: string, camel?: string) => {
+      const camelKey = camel || snake.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+      const value = exp?.[snake] ?? exp?.[camelKey] ?? exp?.get?.(snake) ?? exp?.get?.(camelKey);
+      return value;
+    };
+
+    const toStatDateYmd = (raw: unknown): string | null => {
+      if (raw == null || raw === '') return null;
+      if (raw instanceof Date) {
+        if (Number.isNaN(raw.getTime())) return null;
+        const y = raw.getFullYear();
+        const m = String(raw.getMonth() + 1).padStart(2, '0');
+        const d = String(raw.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+      const text = String(raw).trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+      const parsed = new Date(text.includes('T') ? text : `${text}T00:00:00`);
+      if (Number.isNaN(parsed.getTime())) return null;
+      const y = parsed.getFullYear();
+      const m = String(parsed.getMonth() + 1).padStart(2, '0');
+      const d = String(parsed.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
+    const resolveExpenseStatDate = (exp: any): string | null => {
+      const meta = parseExpenseItemsMeta(exp.items);
+      return (
+        toStatDateYmd(readExpenseField(exp, 'payment_completed_at')) ||
+        toStatDateYmd(meta?.voucherDate) ||
+        toStatDateYmd(meta?.paymentDate) ||
+        toStatDateYmd(readExpenseField(exp, 'submitted_at')) ||
+        toStatDateYmd(readExpenseField(exp, 'created_at'))
+      );
+    };
+
+    const resolveExpenseStatAmount = (exp: any) => {
+      const paid = Number(readExpenseField(exp, 'paid_amount') || 0);
+      const total = Number(readExpenseField(exp, 'total_amount') || 0);
+      if (Number.isFinite(paid) && paid > 0) return paid;
+      return Number.isFinite(total) ? total : 0;
+    };
+
+    const mapExpenseLineItemsForStats = (exp: any) =>
+      parseExpenseItemsList(exp.items)
+        .map((row: any) => {
+          const qty = Number(row.qty ?? row.quantity ?? 1);
+          const unitPrice = Number(row.unitPrice ?? row.unit_price ?? row.rate ?? 0);
+          const amount = Number(
+            row.amount ?? row.total ?? row.lineTotal ?? (Number.isFinite(qty) && Number.isFinite(unitPrice) ? qty * unitPrice : 0)
+          );
+          return {
+            description: String(row.description || row.item || row.name || '').trim(),
+            qty: Number.isFinite(qty) ? qty : 1,
+            unit_price: Number.isFinite(unitPrice) ? unitPrice : 0,
+            amount: Number.isFinite(amount) ? amount : 0,
+          };
+        })
+        .filter((row: { description: string; amount: number }) => row.description || row.amount > 0);
 
     const totalExpenses = allExpenses
       .filter(isCountedPurchase)
-      .reduce((sum: number, exp: any) => sum + Number(exp.total_amount || 0), 0);
+      .reduce((sum: number, exp: any) => sum + resolveExpenseStatAmount(exp), 0);
     const netProfit = totalRevenue - totalExpenses;
     
     const totalInvoices = allInvoicesScoped.length;
@@ -1918,7 +1989,9 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
     });
     allExpenses.forEach((exp: any) => {
       if (!isCountedPurchase(exp)) return;
-      addTrendAmount(exp.created_at, Number(exp.total_amount || 0), expenseByDay, expenseByMonth, expenseByQuarter);
+      const amount = resolveExpenseStatAmount(exp);
+      const dateKey = resolveExpenseStatDate(exp) || readExpenseField(exp, 'created_at');
+      addTrendAmount(dateKey, amount, expenseByDay, expenseByMonth, expenseByQuarter);
     });
 
     const toTrendRows = (
@@ -2054,21 +2127,35 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
 
     const purchaseList = allExpenses
       .filter(isCountedPurchase)
-      .map((exp: any) => ({
-      id: exp.id,
-      document_number: exp.expense_id,
-      date: exp.created_at,
-      title: exp.title,
-      requester: exp.requester_name,
-      department: exp.requester_department || '-',
-      purpose: exp.purpose,
-      amount: Number(exp.total_amount || 0),
-      currency: exp.currency || 'INR',
-      status: exp.status,
-      payment_status: exp.payment_request_status || '-'
-    }));
+      .map((exp: any) => {
+        const meta = parseExpenseItemsMeta(exp.items);
+        const partnerName = String(
+          meta.department || meta.partnerName || meta.partner_name || meta.acHolder || ''
+        ).trim();
+        return {
+          id: exp.id,
+          document_number: exp.expense_id,
+          date: resolveExpenseStatDate(exp),
+          title: exp.title,
+          requester: exp.requester_name,
+          department: exp.requester_department || '-',
+          purpose: exp.purpose,
+          amount: resolveExpenseStatAmount(exp),
+          currency: exp.currency || 'INR',
+          status: exp.status,
+          payment_status: exp.payment_request_status || '-',
+          partner_name: partnerName || null,
+          remarks: String(meta.remarks || exp.notes || '').trim() || null,
+          line_items: mapExpenseLineItemsForStats(exp),
+        };
+      })
+      .sort((a: any, b: any) => {
+        const timeA = a.date ? new Date(a.date).getTime() : 0;
+        const timeB = b.date ? new Date(b.date).getTime() : 0;
+        return timeB - timeA;
+      });
 
-    const purchaseTotal = purchaseList.reduce((sum, row) => sum + row.amount, 0);
+    const purchaseTotal = purchaseList.reduce((sum: number, row: any) => sum + row.amount, 0);
     const purchasePaidTotal = purchaseTotal;
 
     res.json({
@@ -2398,13 +2485,20 @@ const isExpenseNoInvoiceMeta = (itemsValue: any) => {
 };
 
 const tryFinalizeExpenseIfReady = async (expense: any, actorUserId?: number) => {
+  const docStatus = String(expense.status || '').toLowerCase();
+  // 초안·제출·검토 중에는 영수증 첨부만으로 지급완료 처리하지 않음
+  // (작성 중 total_amount=0 이면 remaining=0 이 되어 오탐이 났음)
+  if (docStatus !== 'approved' && docStatus !== 'paid') {
+    return false;
+  }
+  const total = roundMoney(Number(expense.total_amount || 0));
+  if (!(total > 0)) return false;
   const remaining = getExpenseRemainingAmount(expense);
   if (remaining > 0) return false;
   const canCloseWithoutTax =
     isExpenseNoInvoiceMeta(expense.items) || isExpensePrepaidMeta(expense.items);
   if (!canCloseWithoutTax && !expenseHasTaxInvoice(expense.attachments)) return false;
   const paymentStatus = String(expense.payment_request_status || '').toLowerCase();
-  const docStatus = String(expense.status || '').toLowerCase();
   if (paymentStatus === 'paid' && docStatus === 'paid') return false;
   await expense.update({
     status: 'paid',
@@ -3199,7 +3293,23 @@ export const updateExpenseReport = async (req: RequestWithUser, res: Response) =
     }
     const company_id = Number(expense.company_id);
 
-    const prevStatus = String(expense.status || 'draft');
+    let prevStatus = String(expense.status || 'draft');
+    // 작성 중(미제출·미지급)인데 영수증 첨부로 paid 오탐된 문서 → 초안으로 복구
+    if (
+      prevStatus === 'paid' &&
+      !expense.submitted_at &&
+      Number(expense.paid_amount || 0) <= 0
+    ) {
+      await expense.update({
+        status: 'draft',
+        payment_request_status: 'not_requested',
+        payment_completed_at: null,
+        payment_completed_by: null,
+      });
+      await expense.reload();
+      prevStatus = 'draft';
+    }
+
     const isRevisionResubmit =
       prevStatus === 'rejected' && isRevisionRejectedExpense(expense.items);
     const isDraftEdit = prevStatus === 'draft';

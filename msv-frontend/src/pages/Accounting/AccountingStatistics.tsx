@@ -21,7 +21,12 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Pagination } from '@mui/material';
+  Pagination,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+} from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
   mvsPageRootSx,
@@ -171,6 +176,13 @@ interface SalesListRow {
   payment_status: string;
 }
 
+interface PurchaseLineItem {
+  description: string;
+  qty: number;
+  unit_price: number;
+  amount: number;
+}
+
 interface PurchaseListRow {
   id: number;
   document_number: string;
@@ -183,6 +195,9 @@ interface PurchaseListRow {
   currency: string;
   status: string;
   payment_status: string;
+  partner_name?: string | null;
+  remarks?: string | null;
+  line_items?: PurchaseLineItem[];
 }
 
 interface TabPanelProps {
@@ -327,6 +342,7 @@ const AccountingStatistics: React.FC = () => {
   const [purchasePage, setPurchasePage] = useState(1);
   const [salesListViewMode, setSalesListViewMode] = useState<ListViewMode>('page');
   const [purchaseListViewMode, setPurchaseListViewMode] = useState<ListViewMode>('page');
+  const [purchaseDetail, setPurchaseDetail] = useState<PurchaseListRow | null>(null);
 
   const selectedFy = useMemo(
     () =>
@@ -469,7 +485,14 @@ const AccountingStatistics: React.FC = () => {
         setDailyData(Array.isArray(data.dailyData) ? data.dailyData : []);
         setSalesList(Array.isArray(data.salesList) ? data.salesList : []);
         setSalesTotal(Number(data.salesTotal) || 0);
-        setPurchaseList(Array.isArray(data.purchaseList) ? data.purchaseList : []);
+        setPurchaseList(
+          (Array.isArray(data.purchaseList) ? data.purchaseList : []).map((row: any) => ({
+            ...row,
+            line_items: Array.isArray(row.line_items) ? row.line_items : [],
+            partner_name: row.partner_name || null,
+            remarks: row.remarks || null,
+          }))
+        );
         setPurchaseTotal(Number(data.purchaseTotal) || 0);
         setPurchasePaidTotal(Number(data.purchasePaidTotal) || 0);
       } else {
@@ -1186,7 +1209,12 @@ const AccountingStatistics: React.FC = () => {
                       </TableHead>
                       <TableBody sx={mvsTableBodyRowSx}>
                         {displayedPurchaseList.map((row) => (
-                          <TableRow key={row.id} hover>
+                          <TableRow
+                            key={row.id}
+                            hover
+                            onClick={() => setPurchaseDetail(row)}
+                            sx={{ cursor: 'pointer', '&:active': { bgcolor: 'action.selected' } }}
+                          >
                             <TableCell>{row.document_number}</TableCell>
                             <TableCell>{formatDate(row.date)}</TableCell>
                             <TableCell>{row.title}</TableCell>
@@ -1470,6 +1498,119 @@ const AccountingStatistics: React.FC = () => {
           </TabPanel>
         </>
       )}
+
+      <Dialog
+        open={Boolean(purchaseDetail)}
+        onClose={() => setPurchaseDetail(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          {t('purchaseSalesStats.purchaseDetail.title')}
+        </DialogTitle>
+        <DialogContent dividers sx={{ px: 2.5, py: 2 }}>
+          {purchaseDetail ? (
+            <Stack spacing={1.5}>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: '112px 1fr',
+                  rowGap: 0.75,
+                  columnGap: 1,
+                  '& > *:nth-of-type(odd)': { color: 'text.secondary', fontSize: '0.8125rem' },
+                  '& > *:nth-of-type(even)': { fontSize: '0.875rem', fontWeight: 600 },
+                }}
+              >
+                <Typography component="span">{t('purchaseSalesStats.columns.documentNumber')}</Typography>
+                <Typography component="span">{purchaseDetail.document_number || '-'}</Typography>
+                <Typography component="span">{t('purchaseSalesStats.columns.date')}</Typography>
+                <Typography component="span">{formatDate(purchaseDetail.date)}</Typography>
+                <Typography component="span">{t('purchaseSalesStats.columns.title')}</Typography>
+                <Typography component="span">{purchaseDetail.title || '-'}</Typography>
+                <Typography component="span">{t('purchaseSalesStats.purchaseDetail.partner')}</Typography>
+                <Typography component="span">{purchaseDetail.partner_name || '-'}</Typography>
+                <Typography component="span">{t('purchaseSalesStats.columns.purpose')}</Typography>
+                <Typography component="span">{purchaseDetail.purpose || '-'}</Typography>
+                <Typography component="span">{t('purchaseSalesStats.columns.requester')}</Typography>
+                <Typography component="span">
+                  {[purchaseDetail.requester, purchaseDetail.department].filter(Boolean).join(' / ') || '-'}
+                </Typography>
+                <Typography component="span">{t('purchaseSalesStats.columns.amount')}</Typography>
+                <Typography component="span" sx={{ color: 'error.main' }}>
+                  {formatCurrency(purchaseDetail.amount)}
+                </Typography>
+                <Typography component="span">{t('purchaseSalesStats.columns.status')}</Typography>
+                <Box component="span" sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+                  {getExpenseStatusChip(purchaseDetail.status)}
+                  {getPaymentStatusChip(purchaseDetail.payment_status)}
+                </Box>
+              </Box>
+
+              {purchaseDetail.remarks ? (
+                <Box>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                    {t('purchaseSalesStats.purchaseDetail.remarks')}
+                  </Typography>
+                  <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                    {purchaseDetail.remarks}
+                  </Typography>
+                </Box>
+              ) : null}
+
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.75 }}>
+                  {t('purchaseSalesStats.purchaseDetail.lineItems')}
+                </Typography>
+                {(purchaseDetail.line_items || []).length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    {t('purchaseSalesStats.purchaseDetail.emptyItems')}
+                  </Typography>
+                ) : (
+                  <TableContainer
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 0,
+                    }}
+                  >
+                    <Table size="small" sx={{ borderCollapse: 'collapse' }}>
+                      <TableHead sx={{ bgcolor: '#C6EFCE' }}>
+                        <TableRow>
+                          <TableCell>{t('purchaseSalesStats.purchaseDetail.itemDescription')}</TableCell>
+                          <TableCell align="right">{t('purchaseSalesStats.purchaseDetail.qty')}</TableCell>
+                          <TableCell align="right">{t('purchaseSalesStats.purchaseDetail.unitPrice')}</TableCell>
+                          <TableCell align="right">{t('purchaseSalesStats.columns.amount')}</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {(purchaseDetail.line_items || []).map((item, index) => (
+                          <TableRow key={`${purchaseDetail.id}-item-${index}`}>
+                            <TableCell>{item.description || '-'}</TableCell>
+                            <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                              {item.qty}
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                              {formatCurrency(item.unit_price)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                              {formatCurrency(item.amount)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </Box>
+            </Stack>
+          ) : null}
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, py: 1.5 }}>
+          <Button onClick={() => setPurchaseDetail(null)} sx={mvsBodyPrimaryBtnSx} variant="contained" disableElevation>
+            {t('common.close')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
