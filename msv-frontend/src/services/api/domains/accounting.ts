@@ -183,9 +183,11 @@ export const accountingService = {
     return response.data;
   },
 
-  // 지출결?�서 ?�세 조회
-  getExpenseReport: async (id: number) => {
-    const response = await api.get(`/accounting/expenses/${id}`);
+  // 지출결의서 상세 조회
+  getExpenseReport: async (id: number, options?: { skipErrorPopup?: boolean }) => {
+    const response = await api.get(`/accounting/expenses/${id}`, {
+      headers: options?.skipErrorPopup ? { 'x-skip-error-popup': 'true' } : undefined,
+    });
     return response.data;
   },
 
@@ -198,8 +200,14 @@ export const accountingService = {
     return response.data;
   },
 
-  markExpenseCommentsRead: async (id: number) => {
-    const response = await api.post(`/accounting/expenses/${id}/comments/read`);
+  markExpenseCommentsRead: async (id: number, options?: { skipErrorPopup?: boolean }) => {
+    const response = await api.post(
+      `/accounting/expenses/${id}/comments/read`,
+      {},
+      {
+        headers: options?.skipErrorPopup ? { 'x-skip-error-popup': 'true' } : undefined,
+      }
+    );
     return response.data;
   },
 

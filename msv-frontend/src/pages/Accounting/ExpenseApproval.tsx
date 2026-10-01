@@ -1347,10 +1347,10 @@ const stripCorporateSuffixFromFilename = (value: string) =>
     .replace(/\s+\./g, '.')
     .trim();
 
-/** 송금 확인증: yyyymmdd_RT (회사명) (지출목적 15자) */
+/** 송금 확인증: yyyymmdd_RT (협력업체명) — 자사명이 아닌 대금 수취 협력업체 */
 const buildRemittanceProofFileName = (
   file: File,
-  opts?: { companyName?: string; purpose?: string; title?: string }
+  opts?: { partnerName?: string }
 ) => {
   const fromName = String(file.name || '').split('.').pop() || '';
   const fromType = (file.type.split('/')[1] || 'png').replace(/^jpeg$/i, 'jpg');
@@ -1358,17 +1358,16 @@ const buildRemittanceProofFileName = (
     .replace(/[^a-z0-9]/gi, '')
     .slice(0, 4)
     .toLowerCase() || 'png').replace(/^jpeg$/, 'jpg');
-  const detailSource = stripCorporateSuffixFromFilename(
-    String(opts?.purpose || opts?.title || 'Remittance')
+  const partnerSource = stripCorporateSuffixFromFilename(
+    String(opts?.partnerName || '')
       .replace(/[()（）\[\]【】]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
-  ) || 'Remittance';
+  );
   return buildDocumentDownloadFilename({
     code: 'RT',
-    companyName: opts?.companyName || 'Company',
-    detail: detailSource,
-    detailMaxLength: 15,
+    companyName: partnerSource || 'Partner',
+    omitDetail: true,
     extension: ext,
   });
 };
@@ -3311,6 +3310,12 @@ const ExpenseApproval: React.FC = () => {
   }, []);
 
   const handleViewExpense = (expense: ExpenseApprovalItem) => {
+    // 초안은 상세 대신 바로 수정 화면으로 (빈 자동초안 열람·404 혼란 방지)
+    if (expense.status === 'draft' && canEditExpense(expense)) {
+      handleEditExpense(expense);
+      return;
+    }
+
     setSelectedExpense({ ...expense, hasUnreadComments: false });
     setExpenses((prev) =>
       prev.map((item) => (item.id === expense.id ? { ...item, hasUnreadComments: false } : item))
@@ -3319,7 +3324,7 @@ const ExpenseApproval: React.FC = () => {
 
     void (async () => {
       try {
-        const response = await accountingService.getExpenseReport(expense.id);
+        const response = await accountingService.getExpenseReport(expense.id, { skipErrorPopup: true });
         if (!response?.success || !response.data) return;
         const mapped = mapExpense(response.data);
         syncExpenseReadState(expense.id, {
@@ -3329,7 +3334,7 @@ const ExpenseApproval: React.FC = () => {
         });
       } catch {
         try {
-          await accountingService.markExpenseCommentsRead(expense.id);
+          await accountingService.markExpenseCommentsRead(expense.id, { skipErrorPopup: true });
           syncExpenseReadState(expense.id, {});
         } catch {
           // keep optimistic unread=false for current session only
@@ -4498,27 +4503,27 @@ const ExpenseApproval: React.FC = () => {
       setProofNameDraft('');
       return;
     }
+    const meta = selectedExpense?.itemMeta || {};
+    const linkedPartner = partners.find((p) => String(p.id) === String(meta.partnerId || voucherData.partnerId || ''));
+    const partnerName =
+      String(meta.department || '').trim() ||
+      String(voucherData.department || '').trim() ||
+      String(linkedPartner?.company_name || '').trim() ||
+      '';
     const named = new File(
       [file],
       buildRemittanceProofFileName(file, {
-        companyName:
-          companyName ||
-          selectedExpense?.companyName ||
-          '',
-        purpose: selectedExpense?.purpose || formData.purpose || '',
-        title: selectedExpense?.title || formData.title || '',
+        partnerName,
       }),
       { type: file.type, lastModified: file.lastModified }
     );
     setPaymentProofFile(named);
     setProofNameDraft(stripFileExtensionForDisplay(named.name));
   }, [
-    companyName,
-    formData.purpose,
-    formData.title,
-    selectedExpense?.companyName,
-    selectedExpense?.purpose,
-    selectedExpense?.title,
+    partners,
+    selectedExpense?.itemMeta,
+    voucherData.department,
+    voucherData.partnerId,
   ]);
 
   const applyProofFileName = useCallback((nextName: string) => {

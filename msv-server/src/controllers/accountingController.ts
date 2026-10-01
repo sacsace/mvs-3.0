@@ -2492,7 +2492,10 @@ const canManageExpenseTransfer = (user: any) =>
 /** root/audit는 테넌트 내 타사 지출결의서도 조회·송금 가능 */
 const expenseScopeWhere = (user: any, id?: number | string) => {
   const where: any = { tenant_id: user.tenant_id, is_active: true };
-  if (id != null) where.id = id;
+  if (id != null && id !== '') {
+    const numericId = Number(id);
+    where.id = Number.isFinite(numericId) ? numericId : id;
+  }
   if (user?.role !== 'root' && user?.role !== 'audit') {
     where.company_id = user.company_id;
   }
@@ -3370,9 +3373,8 @@ export const updateExpenseReport = async (req: RequestWithUser, res: Response) =
 export const deleteExpenseReport = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id } = req.user;
     const expense = await (ExpenseReport as any).findOne({
-      where: { id, tenant_id, company_id, is_active: true }
+      where: expenseScopeWhere(req.user, id),
     });
 
     if (!expense) {
@@ -3594,14 +3596,14 @@ export const updateExpenseReportStatus = async (req: RequestWithUser, res: Respo
 export const changeExpenseApprover = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id, id: user_id, username } = req.user;
+    const { tenant_id, id: user_id, username } = req.user;
     const nextApproverId = toPositiveInt(req.body?.approver_id);
     if (!nextApproverId) {
       return res.status(400).json({ success: false, message: '승인권자를 선택해주세요.' });
     }
 
     const expense = await (ExpenseReport as any).findOne({
-      where: { id, tenant_id, company_id, is_active: true }
+      where: expenseScopeWhere(req.user, id),
     });
     if (!expense) {
       return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
@@ -3615,6 +3617,7 @@ export const changeExpenseApprover = async (req: RequestWithUser, res: Response)
     if (!isCurrentApprover) {
       return res.status(403).json({ success: false, message: '승인 요청을 받은 승인자만 승인권자를 변경할 수 있습니다.' });
     }
+    const company_id = Number(expense.company_id);
 
     const assigned = await assignExpenseApprover({
       expense,
@@ -3681,9 +3684,9 @@ export const changeExpenseApprover = async (req: RequestWithUser, res: Response)
 export const getReceiptUploadToken = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id, id: user_id } = req.user;
+    const { id: user_id } = req.user;
     const expense = await (ExpenseReport as any).findOne({
-      where: { id: parseInt(id, 10), tenant_id, company_id, is_active: true }
+      where: expenseScopeWhere(req.user, id),
     });
     if (!expense) {
       return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
@@ -3850,7 +3853,7 @@ export const uploadExpenseReceiptById = async (req: RequestWithUser, res: Respon
 export const deleteExpenseReceipt = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id, id: user_id } = req.user;
+    const { id: user_id } = req.user;
     const targetPath = String(req.body?.path || req.query?.path || '').trim();
     if (!targetPath) {
       return res.status(400).json({ success: false, message: '삭제할 파일 경로가 필요합니다.' });
@@ -3860,7 +3863,7 @@ export const deleteExpenseReceipt = async (req: RequestWithUser, res: Response) 
     }
 
     const expense = await (ExpenseReport as any).findOne({
-      where: { id, tenant_id, company_id, is_active: true },
+      where: expenseScopeWhere(req.user, id),
     });
     if (!expense) {
       return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
@@ -4145,9 +4148,9 @@ const buildBankTransferPayload = (expense: any, transferAmount?: number) => {
 export const requestExpensePayment = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id, id: user_id } = req.user;
+    const { tenant_id, id: user_id } = req.user;
     const expense = await (ExpenseReport as any).findOne({
-      where: { id, tenant_id, company_id, is_active: true }
+      where: expenseScopeWhere(req.user, id),
     });
     if (!expense) {
       return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
@@ -4159,6 +4162,7 @@ export const requestExpensePayment = async (req: RequestWithUser, res: Response)
       return res.status(400).json({ success: false, message: '지출결의서가 승인된 후에만 결제 요청을 할 수 있습니다.' });
     }
 
+    const company_id = Number(expense.company_id);
     const approvalId = expense.approval_id;
     let approvalRecord = null;
     if (approvalId) {
@@ -4223,10 +4227,9 @@ export const requestExpensePayment = async (req: RequestWithUser, res: Response)
 export const rejectExpensePayment = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id } = req.user;
     const { reason } = req.body || {};
     const expense = await (ExpenseReport as any).findOne({
-      where: { id, tenant_id, company_id, is_active: true }
+      where: expenseScopeWhere(req.user, id),
     });
     if (!expense) {
       return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
@@ -4260,10 +4263,9 @@ export const rejectExpensePayment = async (req: RequestWithUser, res: Response) 
 export const approveExpensePayment = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id } = req.user;
     const { reason } = req.body || {};
     const expense = await (ExpenseReport as any).findOne({
-      where: { id, tenant_id, company_id, is_active: true }
+      where: expenseScopeWhere(req.user, id),
     });
     if (!expense) {
       return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });

@@ -51,11 +51,14 @@ export type BuildDocumentDownloadFilenameOptions = {
   extension?: string;
   companyMaxLength?: number;
   detailMaxLength?: number;
+  /** true면 `(세부사항)` 생략 — 예: 송금확인증 `yyyyMMdd_RT (협력업체명)` */
+  omitDetail?: boolean;
 };
 
 /**
  * 표준 패턴: `yyyyMMdd_{Code} (회사명) (세부사항).pdf`
  * 예: `20260902_PV (Minsub Ventures) (test).pdf`
+ * omitDetail 시: `yyyyMMdd_{Code} (회사명).ext`
  */
 export function buildDocumentDownloadFilename(
   options: BuildDocumentDownloadFilenameOptions
@@ -65,11 +68,15 @@ export function buildDocumentDownloadFilename(
     fallback: 'Company',
     maxLength: options.companyMaxLength ?? 60,
   });
-  const detail = sanitizeFilenamePart(String(options.detail || ''), {
-    fallback: options.code,
-    maxLength: options.detailMaxLength ?? 40,
-  });
-  const base = `${ymd}_${options.code} (${company}) (${detail})`;
+  const base = options.omitDetail
+    ? `${ymd}_${options.code} (${company})`
+    : (() => {
+        const detail = sanitizeFilenamePart(String(options.detail || ''), {
+          fallback: options.code,
+          maxLength: options.detailMaxLength ?? 40,
+        });
+        return `${ymd}_${options.code} (${company}) (${detail})`;
+      })();
   const ext = options.extension === undefined ? 'pdf' : options.extension;
   if (!ext) return base;
   return ext.toLowerCase() === 'pdf' ? ensurePdfExtension(base) : `${base}.${ext.replace(/^\./, '')}`;

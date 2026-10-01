@@ -55,6 +55,11 @@ export const EXPENSE_DOCUMENT_EXPORT_CSS = `
     print-color-adjust: exact !important;
     writing-mode: horizontal-tb !important;
     text-orientation: mixed !important;
+    border-radius: 0 !important;
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
     border-top-color: ${EXPENSE_PDF_LINE} !important;
     border-right-color: ${EXPENSE_PDF_LINE} !important;
     border-bottom-color: ${EXPENSE_PDF_LINE} !important;
@@ -201,30 +206,33 @@ export const EXPENSE_DOCUMENT_EXPORT_CSS = `
     max-width: 58% !important;
     display: grid !important;
     grid-template-columns: 128px minmax(20.4ch, auto) !important;
-    grid-template-rows: minmax(${EXPENSE_PDF_HEADER_ROW_MIN_HEIGHT_PT}pt, auto) minmax(${EXPENSE_PDF_HEADER_ROW_MIN_HEIGHT_PT}pt, auto) !important;
-    height: auto !important;
-    overflow: visible !important;
+    grid-template-rows: ${EXPENSE_PDF_HEADER_ROW_MIN_HEIGHT_PT}pt ${EXPENSE_PDF_HEADER_ROW_MIN_HEIGHT_PT}pt !important;
+    height: ${EXPENSE_PDF_BOX_HEIGHT_PT}pt !important;
+    min-height: ${EXPENSE_PDF_BOX_HEIGHT_PT}pt !important;
+    overflow: hidden !important;
     border: ${EXPENSE_PDF_BORDER} !important;
+    border-radius: 0 !important;
   }
   .expense-pdf-root .expense-pdf-voucher-meta > * {
-    height: auto !important;
-    min-height: ${EXPENSE_PDF_HEADER_ROW_MIN_HEIGHT_PT}pt !important;
+    height: 100% !important;
+    min-height: 0 !important;
     max-height: none !important;
-    padding: 2px 8px !important;
+    padding: 0 8px !important;
     display: flex !important;
     align-items: center !important;
     box-sizing: border-box !important;
     color: #000000 !important;
     -webkit-text-fill-color: #000000 !important;
     border: none !important;
+    border-radius: 0 !important;
     text-align: left !important;
     text-indent: 0 !important;
-    margin-left: 0 !important;
-    white-space: normal !important;
-    word-break: normal !important;
-    overflow-wrap: break-word !important;
-    line-height: 1.15 !important;
-    overflow: visible !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    overflow-wrap: normal !important;
+    line-height: 1 !important;
+    overflow: hidden !important;
   }
   .expense-pdf-root .expense-pdf-voucher-meta > *:nth-child(odd) {
     width: 128px !important;
@@ -243,20 +251,26 @@ export const EXPENSE_DOCUMENT_EXPORT_CSS = `
     flex-wrap: wrap !important;
     width: auto !important;
     max-width: 100% !important;
+    height: ${EXPENSE_PDF_BOX_HEIGHT_PT}pt !important;
+    min-height: ${EXPENSE_PDF_BOX_HEIGHT_PT}pt !important;
     column-gap: 0 !important;
-    row-gap: 4px !important;
+    row-gap: 0 !important;
     margin: 0 0 0 auto !important;
     flex: 0 1 auto !important;
     overflow: visible !important;
     box-sizing: border-box !important;
     justify-content: flex-end !important;
     align-content: flex-start !important;
+    align-items: stretch !important;
   }
   .expense-pdf-root .expense-pdf-stamps-multiline {
     width: 100% !important;
     max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
     margin-left: auto !important;
     justify-content: flex-end !important;
+    row-gap: 0 !important;
   }
   .expense-pdf-root .expense-pdf-stamps-row-break {
     flex-basis: 100% !important;
@@ -269,59 +283,68 @@ export const EXPENSE_DOCUMENT_EXPORT_CSS = `
   .expense-pdf-root .expense-flow-stamp-wrap {
     display: flex !important;
     flex-direction: row !important;
-    align-items: center !important;
+    align-items: stretch !important;
     flex: 0 0 auto !important;
     width: auto !important;
     max-width: 100% !important;
     min-width: 0 !important;
-    height: auto !important;
+    height: ${EXPENSE_PDF_BOX_HEIGHT_PT}pt !important;
     min-height: ${EXPENSE_PDF_BOX_HEIGHT_PT}pt !important;
-    overflow: visible !important;
+    overflow: hidden !important;
     box-sizing: border-box !important;
+    border-radius: 0 !important;
   }
   .expense-pdf-root .expense-flow-stamp-wrap > div:not(.expense-flow-stamp) {
     display: none !important;
   }
   .expense-pdf-root .expense-flow-stamp {
-    display: flex !important;
+    display: grid !important;
+    grid-template-rows: ${EXPENSE_PDF_HEADER_ROW_MIN_HEIGHT_PT}pt ${EXPENSE_PDF_HEADER_ROW_MIN_HEIGHT_PT}pt !important;
     flex-direction: column !important;
     flex: 0 0 auto !important;
     width: auto !important;
     min-width: 0 !important;
     max-width: 100% !important;
-    height: auto !important;
+    height: ${EXPENSE_PDF_BOX_HEIGHT_PT}pt !important;
     min-height: ${EXPENSE_PDF_BOX_HEIGHT_PT}pt !important;
     border: ${EXPENSE_PDF_BORDER} !important;
-    overflow: visible !important;
+    border-left: none !important;
+    border-radius: 0 !important;
+    overflow: hidden !important;
     box-sizing: border-box !important;
   }
-  .expense-pdf-root .expense-flow-stamp-wrap:first-child .expense-flow-stamp {
+  .expense-pdf-root .expense-flow-stamp-wrap:first-child .expense-flow-stamp,
+  .expense-pdf-root .expense-pdf-stamps-row-break + .expense-flow-stamp-wrap .expense-flow-stamp {
     border-left: ${EXPENSE_PDF_BORDER} !important;
   }
   .expense-pdf-root .expense-flow-stamp > div:first-child,
   .expense-pdf-root .expense-flow-stamp > div:last-child {
-    height: auto !important;
-    min-height: ${EXPENSE_PDF_HEADER_ROW_MIN_HEIGHT_PT}pt !important;
+    height: 100% !important;
+    min-height: 0 !important;
     max-height: none !important;
-    padding: 2px 4px !important;
+    padding: 0 4px !important;
+    margin: 0 !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    white-space: normal !important;
-    word-break: normal !important;
-    overflow-wrap: break-word !important;
-    line-height: 1.15 !important;
-    overflow: visible !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    overflow-wrap: normal !important;
+    line-height: 1 !important;
+    overflow: hidden !important;
     box-sizing: border-box !important;
+    border-radius: 0 !important;
   }
   .expense-pdf-root .expense-flow-stamp > div:first-child {
     background: ${EXPENSE_PDF_HEADER_BG} !important;
     border-bottom: ${EXPENSE_PDF_BORDER} !important;
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
   }
   .expense-pdf-root .expense-flow-stamp--relaxed-label > div:first-child {
-    padding: 2px 8px !important;
+    padding: 0 8px !important;
     white-space: nowrap !important;
-    overflow: visible !important;
+    overflow: hidden !important;
     word-break: keep-all !important;
   }
   .expense-pdf-root .expense-flow-stamp--relaxed-label {
@@ -445,6 +468,7 @@ export const EXPENSE_DOCUMENT_EXPORT_CSS = `
     border: none !important;
     outline: none !important;
     box-shadow: none !important;
+    border-radius: 0 !important;
   }
   .expense-pdf-root .expense-pdf-grand-row,
   .expense-pdf-root .expense-pdf-grand-row .MuiTableCell-root {
@@ -532,6 +556,7 @@ export const EXPENSE_DOCUMENT_EXPORT_CSS = `
     width: 100% !important;
     max-width: 100% !important;
     overflow: visible !important;
+    border-radius: 0 !important;
   }
   .expense-pdf-root .MuiTableCell-root {
     border: none !important;
@@ -539,6 +564,7 @@ export const EXPENSE_DOCUMENT_EXPORT_CSS = `
     border-left: none !important;
     border-right: ${EXPENSE_PDF_BORDER} !important;
     border-bottom: ${EXPENSE_PDF_BORDER} !important;
+    border-radius: 0 !important;
     font-size: ${EXPENSE_PDF_FONT_SIZE_PT}pt !important;
     font-weight: 400 !important;
     padding: 0 8px !important;
@@ -564,6 +590,7 @@ export const EXPENSE_DOCUMENT_EXPORT_CSS = `
   .expense-pdf-root .expense-pdf-section .MuiTableContainer-root:has(> .expense-pdf-items),
   .expense-pdf-root .expense-pdf-section .MuiTableContainer-root:has(> table.expense-pdf-items) {
     border: ${EXPENSE_PDF_BORDER} !important;
+    border-radius: 0 !important;
     overflow: visible !important;
   }
   .expense-pdf-root .expense-pdf-items .MuiTableCell-root,
@@ -701,22 +728,6 @@ function injectExportCss(doc: Document, cssText: string): void {
   doc.head.appendChild(style);
 }
 
-function pxToPt(px: number): number {
-  return Math.ceil((px * 72) / 96);
-}
-
-function measureHeaderCellHeightPx(el: HTMLElement): number {
-  el.style.setProperty('height', 'auto', 'important');
-  el.style.setProperty('min-height', `${EXPENSE_PDF_HEADER_ROW_MIN_HEIGHT_PT}pt`, 'important');
-  el.style.setProperty('max-height', 'none', 'important');
-  el.style.setProperty('overflow', 'visible', 'important');
-  el.style.setProperty('white-space', 'normal', 'important');
-  el.style.setProperty('word-break', 'normal', 'important');
-  el.style.setProperty('overflow-wrap', 'break-word', 'important');
-  el.style.setProperty('line-height', '1.15', 'important');
-  return Math.ceil(el.getBoundingClientRect().height);
-}
-
 function measureStampWidthPx(stamp: HTMLElement): number {
   const labelCell = stamp.querySelector(':scope > div:first-child') as HTMLElement | null;
   const relaxed = stamp.classList.contains('expense-flow-stamp--relaxed-label');
@@ -775,14 +786,16 @@ function resolveStampWidthsForPdf(wraps: HTMLElement[], availableWidth: number):
 function applyHeaderRowHeightPt(el: HTMLElement, heightPt: number): void {
   el.style.setProperty('height', `${heightPt}pt`, 'important');
   el.style.setProperty('min-height', `${heightPt}pt`, 'important');
-  el.style.setProperty('max-height', 'none', 'important');
-  el.style.setProperty('overflow', 'visible', 'important');
+  el.style.setProperty('max-height', `${heightPt}pt`, 'important');
+  el.style.setProperty('overflow', 'hidden', 'important');
+  el.style.setProperty('border-radius', '0', 'important');
 }
 
 function applyVoucherMetaBordersForPdf(meta: HTMLElement): void {
   meta.style.setProperty('border', EXPENSE_PDF_BORDER, 'important');
+  meta.style.setProperty('border-radius', '0', 'important');
   meta.style.setProperty('box-sizing', 'border-box', 'important');
-  meta.style.setProperty('overflow', 'visible', 'important');
+  meta.style.setProperty('overflow', 'hidden', 'important');
 
   Array.from(meta.children).forEach((child, index) => {
     const cell = child as HTMLElement;
@@ -793,72 +806,54 @@ function applyVoucherMetaBordersForPdf(meta: HTMLElement): void {
     cell.style.setProperty('border-right', isLabel ? EXPENSE_PDF_BORDER : 'none', 'important');
     // 1행만 가로 구분선 — 2행 하단은 컨테이너 border-bottom 한 줄만 사용
     cell.style.setProperty('border-bottom', isFirstRow ? EXPENSE_PDF_BORDER : 'none', 'important');
+    cell.style.setProperty('border-radius', '0', 'important');
     cell.style.setProperty('box-sizing', 'border-box', 'important');
+    cell.style.setProperty('margin', '0', 'important');
+    cell.style.setProperty('padding-top', '0', 'important');
+    cell.style.setProperty('padding-bottom', '0', 'important');
   });
 }
 
 function adjustExpenseHeaderRowHeightsForPdf(root: HTMLElement): void {
-  let unifiedRow1Pt = EXPENSE_PDF_HEADER_ROW_MIN_HEIGHT_PT;
-  let unifiedRow2Pt = EXPENSE_PDF_HEADER_ROW_MIN_HEIGHT_PT;
+  // 전표번호·작성일자와 작성/승인 결재란 — 동일 2행 높이로 가로선 정렬
+  const unifiedRow1Pt = EXPENSE_PDF_HEADER_ROW_MIN_HEIGHT_PT;
+  const unifiedRow2Pt = EXPENSE_PDF_HEADER_ROW_MIN_HEIGHT_PT;
+  const stampBoxPt = EXPENSE_PDF_BOX_HEIGHT_PT;
 
   const meta = root.querySelector('.expense-pdf-voucher-meta') as HTMLElement | null;
-  const metaRow1Cells: HTMLElement[] = [];
-  const metaRow2Cells: HTMLElement[] = [];
   if (meta) {
     const cells = Array.from(meta.children) as HTMLElement[];
-    metaRow1Cells.push(...cells.slice(0, 2));
-    metaRow2Cells.push(...cells.slice(2, 4));
-    if (metaRow1Cells.length > 0) {
-      unifiedRow1Pt = Math.max(
-        unifiedRow1Pt,
-        ...metaRow1Cells.map((cell) => pxToPt(measureHeaderCellHeightPx(cell)))
-      );
-    }
-    if (metaRow2Cells.length > 0) {
-      unifiedRow2Pt = Math.max(
-        unifiedRow2Pt,
-        ...metaRow2Cells.map((cell) => pxToPt(measureHeaderCellHeightPx(cell)))
-      );
-    }
-  }
-
-  const labelCells: HTMLElement[] = [];
-  const nameCells: HTMLElement[] = [];
-  root.querySelectorAll('.expense-flow-stamp').forEach((stamp) => {
-    const rows = stamp.querySelectorAll(':scope > div');
-    if (rows.length >= 1) labelCells.push(rows[0] as HTMLElement);
-    if (rows.length >= 2) nameCells.push(rows[rows.length - 1] as HTMLElement);
-  });
-
-  if (labelCells.length > 0) {
-    unifiedRow1Pt = Math.max(
-      unifiedRow1Pt,
-      ...labelCells.map((cell) => pxToPt(measureHeaderCellHeightPx(cell)))
-    );
-  }
-  if (nameCells.length > 0) {
-    unifiedRow2Pt = Math.max(
-      unifiedRow2Pt,
-      ...nameCells.map((cell) => pxToPt(measureHeaderCellHeightPx(cell)))
-    );
-  }
-
-  const stampBoxPt = unifiedRow1Pt + unifiedRow2Pt;
-
-  if (meta) {
     meta.style.setProperty('grid-template-rows', `${unifiedRow1Pt}pt ${unifiedRow2Pt}pt`, 'important');
+    meta.style.setProperty('height', `${stampBoxPt}pt`, 'important');
     meta.style.setProperty('min-height', `${stampBoxPt}pt`, 'important');
-    meta.style.removeProperty('height');
-    metaRow1Cells.forEach((cell) => applyHeaderRowHeightPt(cell, unifiedRow1Pt));
-    metaRow2Cells.forEach((cell) => applyHeaderRowHeightPt(cell, unifiedRow2Pt));
+    meta.style.setProperty('max-height', `${stampBoxPt}pt`, 'important');
+    cells.slice(0, 2).forEach((cell) => applyHeaderRowHeightPt(cell, unifiedRow1Pt));
+    cells.slice(2, 4).forEach((cell) => applyHeaderRowHeightPt(cell, unifiedRow2Pt));
     applyVoucherMetaBordersForPdf(meta);
   }
 
-  labelCells.forEach((cell) => applyHeaderRowHeightPt(cell, unifiedRow1Pt));
-  nameCells.forEach((cell) => applyHeaderRowHeightPt(cell, unifiedRow2Pt));
-
-  root.querySelectorAll('.expense-flow-stamp').forEach((stamp) => {
-    applyHeaderRowHeightPt(stamp as HTMLElement, stampBoxPt);
+  root.querySelectorAll('.expense-flow-stamp').forEach((stampEl) => {
+    const stamp = stampEl as HTMLElement;
+    const rows = stamp.querySelectorAll(':scope > div');
+    stamp.style.setProperty('display', 'grid', 'important');
+    stamp.style.setProperty(
+      'grid-template-rows',
+      `${unifiedRow1Pt}pt ${unifiedRow2Pt}pt`,
+      'important'
+    );
+    applyHeaderRowHeightPt(stamp, stampBoxPt);
+    stamp.style.setProperty('border-radius', '0', 'important');
+    stamp.style.setProperty('overflow', 'hidden', 'important');
+    if (rows.length >= 1) {
+      const label = rows[0] as HTMLElement;
+      applyHeaderRowHeightPt(label, unifiedRow1Pt);
+      label.style.setProperty('border-bottom', EXPENSE_PDF_BORDER, 'important');
+      label.style.setProperty('border-top-left-radius', '0', 'important');
+      label.style.setProperty('border-top-right-radius', '0', 'important');
+    }
+    if (rows.length >= 2) {
+      applyHeaderRowHeightPt(rows[rows.length - 1] as HTMLElement, unifiedRow2Pt);
+    }
   });
   root.querySelectorAll('.expense-flow-stamp-wrap:not(.expense-pdf-hide)').forEach((wrap) => {
     applyHeaderRowHeightPt(wrap as HTMLElement, stampBoxPt);
@@ -868,6 +863,10 @@ function adjustExpenseHeaderRowHeightsForPdf(root: HTMLElement): void {
   const stamps = root.querySelector('.expense-pdf-stamps') as HTMLElement | null;
   voucherRow?.style.setProperty('align-items', 'stretch', 'important');
   stamps?.style.setProperty('align-items', 'stretch', 'important');
+  if (stamps && !stamps.classList.contains('expense-pdf-stamps-multiline')) {
+    stamps.style.setProperty('height', `${stampBoxPt}pt`, 'important');
+    stamps.style.setProperty('min-height', `${stampBoxPt}pt`, 'important');
+  }
 }
 
 function hideApprovalArrowsForPdf(wraps: HTMLElement[]): void {
@@ -957,6 +956,7 @@ function layoutApprovalStampsForPdf(root: HTMLElement): void {
       stamp.style.setProperty('flex', `0 0 ${stampWidth}px`, 'important');
       stamp.style.setProperty('border', EXPENSE_PDF_BORDER, 'important');
       stamp.style.setProperty('border-left', 'none', 'important');
+      stamp.style.setProperty('border-radius', '0', 'important');
       stamp.style.setProperty('overflow', 'hidden', 'important');
     }
   });
@@ -1164,6 +1164,14 @@ export function sanitizeExpenseCloneForPdf(clonedDoc: Document): void {
   flattenHeaderForPdf(root);
   injectExportCss(clonedDoc, EXPENSE_DOCUMENT_EXPORT_CSS);
   layoutApprovalStampsForPdf(root);
+  // 화면용 rounded(6px)가 html2canvas에서 깨진 원형 코너로 보이므로 PDF는 전부 직각
+  root.querySelectorAll<HTMLElement>('*').forEach((el) => {
+    el.style.setProperty('border-radius', '0', 'important');
+    el.style.setProperty('border-top-left-radius', '0', 'important');
+    el.style.setProperty('border-top-right-radius', '0', 'important');
+    el.style.setProperty('border-bottom-right-radius', '0', 'important');
+    el.style.setProperty('border-bottom-left-radius', '0', 'important');
+  });
   root.querySelectorAll<HTMLElement>(
     '.MuiTableCell-root, .expense-pdf-title-row > *, .expense-pdf-voucher-meta > *, .expense-flow-stamp > div'
   ).forEach((el) => wrapForExactVerticalCenter(el, clonedDoc));
@@ -1173,6 +1181,7 @@ export function sanitizeExpenseCloneForPdf(clonedDoc: Document): void {
     el.style.setProperty('border', 'none', 'important');
     el.style.setProperty('outline', 'none', 'important');
     el.style.setProperty('box-shadow', 'none', 'important');
+    el.style.setProperty('border-radius', '0', 'important');
     el.style.setProperty('border-collapse', 'collapse', 'important');
     el.style.setProperty('border-spacing', '0', 'important');
   });
@@ -1195,6 +1204,7 @@ export function sanitizeExpenseCloneForPdf(clonedDoc: Document): void {
       el.style.setProperty('border-right', EXPENSE_PDF_BORDER, 'important');
       el.style.setProperty('border-left', isFirstCell ? EXPENSE_PDF_BORDER : 'none', 'important');
     }
+    el.style.setProperty('border-radius', '0', 'important');
     el.style.setProperty('vertical-align', 'middle', 'important');
     el.style.setProperty('line-height', '1', 'important');
     el.style.setProperty('height', `${EXPENSE_PDF_LINE_HEIGHT_PT}pt`, 'important');
@@ -1205,8 +1215,12 @@ export function sanitizeExpenseCloneForPdf(clonedDoc: Document): void {
     const container = tableEl.closest('.MuiTableContainer-root') as HTMLElement | null;
     if (container) {
       container.style.setProperty('border', EXPENSE_PDF_BORDER, 'important');
+      container.style.setProperty('border-radius', '0', 'important');
       container.style.setProperty('overflow', 'visible', 'important');
     }
+  });
+  root.querySelectorAll<HTMLElement>('.expense-pdf-tax .MuiTableContainer-root').forEach((el) => {
+    el.style.setProperty('border-radius', '0', 'important');
   });
   root.querySelectorAll<HTMLElement>(
     '.MuiTableCell-root *, .expense-pdf-title-row *, .expense-pdf-voucher-meta *, .expense-clamp'
