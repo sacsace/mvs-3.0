@@ -2307,6 +2307,10 @@ const ExpenseApproval: React.FC = () => {
     canCompareGstStates && partnerGstStateCode === effectiveCompanyGstState;
   const isInterStateGst =
     canCompareGstStates && partnerGstStateCode !== effectiveCompanyGstState;
+  /** 회사 GST 주 코드를 모르면 주내/주간을 강제하지 않고 둘 다 입력 가능 */
+  const hasPartnerGstin = hasExpenseGstNumber(voucherData.gstNumber);
+  const canEnterIgst = hasPartnerGstin && (!canCompareGstStates || isInterStateGst);
+  const canEnterCgstSgst = hasPartnerGstin && (!canCompareGstStates || isIntraStateGst);
 
   // 주 코드가 바뀌면 비활성 세율은 0으로 정리
   useEffect(() => {
@@ -2840,33 +2844,46 @@ const ExpenseApproval: React.FC = () => {
       setCompanyLogo(info.logo || '');
       if (info.name) setCompanyName(info.name);
     });
-    if (user.company_id) {
-      const companyId = Number(user.company_id);
-      Promise.all([
-        useReferenceDataStore.getState().fetchCompanyById(companyId),
-        companyService.getCompanyGstNumbers(companyId).catch(() => null),
-      ])
-        .then(([company, gstRes]) => {
-          if (company?.name) setCompanyName(String(company.name));
-          setCompanyAddress(String(company?.address || '').trim());
-          const gstList = pickGstNumberList(gstRes);
-          const gstNumber = gstList[0] || pickCompanyGstNumber(company);
-          setCompanyGstNumber(gstNumber);
-          setCompanyGstState(
-            gstStateCode(gstNumber) ||
-              resolveRegisteredStateCodeFromCompanyLike({
-                ...(company || {}),
-                gst_numbers: gstList.length ? gstList : company?.gst_numbers,
-              }) ||
-              ''
-          );
-        })
-        .catch(() => {
-          setCompanyGstNumber('');
-          setCompanyGstState('');
-        });
+
+    const companyId =
+      Number(user.company_id) ||
+      Number(selectedExpense?.companyId) ||
+      (typeof companyFilterId === 'number' ? companyFilterId : 0) ||
+      0;
+
+    if (!(companyId > 0)) {
+      // root 등 회사 미지정: GST 주 비교 불가 → 세율은 수동 입력 허용
+      if (!user.company_id) {
+        setCompanyGstNumber('');
+        setCompanyGstState('');
+      }
+      return;
     }
-  }, [user]);
+
+    Promise.all([
+      useReferenceDataStore.getState().fetchCompanyById(companyId),
+      companyService.getCompanyGstNumbers(companyId).catch(() => null),
+    ])
+      .then(([company, gstRes]) => {
+        if (company?.name) setCompanyName(String(company.name));
+        setCompanyAddress(String(company?.address || '').trim());
+        const gstList = pickGstNumberList(gstRes);
+        const gstNumber = gstList[0] || pickCompanyGstNumber(company);
+        setCompanyGstNumber(gstNumber);
+        setCompanyGstState(
+          gstStateCode(gstNumber) ||
+            resolveRegisteredStateCodeFromCompanyLike({
+              ...(company || {}),
+              gst_numbers: gstList.length ? gstList : company?.gst_numbers,
+            }) ||
+            ''
+        );
+      })
+      .catch(() => {
+        setCompanyGstNumber('');
+        setCompanyGstState('');
+      });
+  }, [user, selectedExpense?.companyId, companyFilterId]);
 
   // GST 세율은 사용자가 직접 입력한 값만 사용 (파트너·GSTIN으로 자동 채우지 않음)
 
@@ -3425,7 +3442,19 @@ const ExpenseApproval: React.FC = () => {
     setViewMode('create');
   };
 
+  const leaveExpenseForm = useCallback(() => {
+    setSelectedExpense(null);
+    setDraftId(null);
+    draftIdReadyRef.current = null;
+    draftInitInFlightRef.current = false;
+    submitInFlightRef.current = false;
+    setHeaderStatusBanner('');
+    setIsInitializingDraft(false);
+    setViewMode('list');
+  }, []);
+
   const handleSaveExpense = async (editReason?: string) => {
+    if (saving || submitInFlightRef.current) return;
     if (viewMode === 'edit' ? !editGuard.guard() : !createGuard.guard()) return;
     if (!formData.title.trim()) {
       setError(t('expenseApproval.errors.requiredTitlePurpose'));
@@ -3480,10 +3509,7 @@ const ExpenseApproval: React.FC = () => {
           : t('expenseApproval.success.submitted')
       );
       await loadExpenseData();
-      setViewMode('list');
-      setSelectedExpense(null);
-      setDraftId(null);
-      draftIdReadyRef.current = null;
+      leaveExpenseForm();
     } catch (saveError: any) {
       submitInFlightRef.current = false;
       const serverMsg = String(saveError?.response?.data?.message || saveError?.message || '').trim();
@@ -3591,7 +3617,8 @@ const ExpenseApproval: React.FC = () => {
       const next = { ...prev, ...patch };
 
       if ('cgstRate' in patch) {
-        if (!intra) {
+        // 주 비교 가능할 때만 주간이면 CGST 차단
+        if (canCompare && !intra) {
           return { ...prev, cgstRate: 0, sgstRate: 0 };
         }
         const cgst = normalizeAllowedHalfGstRate(Number(patch.cgstRate ?? 0));
@@ -3601,7 +3628,7 @@ const ExpenseApproval: React.FC = () => {
       }
 
       if ('igstRate' in patch) {
-        if (!inter) {
+        if (canCompare && !inter) {
           return { ...prev, igstRate: 0 };
         }
         const igst = normalizeAllowedIgstRate(Number(patch.igstRate ?? 0));
@@ -3622,11 +3649,11 @@ const ExpenseApproval: React.FC = () => {
           return { ...item, igstRate: 0, cgstRate: 0, sgstRate: 0 };
         }
         if (kind === 'igst') {
-          if (!isInterStateGst) return { ...item, igstRate: 0 };
+          if (canCompareGstStates && !isInterStateGst) return { ...item, igstRate: 0 };
           const igst = normalizeAllowedIgstRate(Number(value || 0));
           return { ...item, igstRate: igst, cgstRate: 0, sgstRate: 0 };
         }
-        if (!isIntraStateGst) return { ...item, cgstRate: 0, sgstRate: 0 };
+        if (canCompareGstStates && !isIntraStateGst) return { ...item, cgstRate: 0, sgstRate: 0 };
         const cgst = normalizeAllowedHalfGstRate(Number(value || 0));
         return { ...item, cgstRate: cgst, sgstRate: cgst, igstRate: 0 };
       })
@@ -5140,7 +5167,7 @@ const ExpenseApproval: React.FC = () => {
                 {t('expenseApproval.success.draftCreated')}
               </Typography>
             )}
-              <Button variant="outlined" onClick={() => setViewMode('list')} sx={mvsBodyOutlinedBtnSx}>
+              <Button variant="outlined" onClick={leaveExpenseForm} sx={mvsBodyOutlinedBtnSx}>
               {t('expenseApproval.actions.backToList')}
             </Button>
           </Box>
@@ -5873,6 +5900,13 @@ const ExpenseApproval: React.FC = () => {
                   />
                 )}
               </Box>
+              {voucherData.formType === 'general' &&
+                hasPartnerGstin &&
+                !canCompareGstStates && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                    {t('expenseApproval.voucher.gstStateCompareHint')}
+                  </Typography>
+                )}
               {voucherData.formType === 'gst' ? (
               <TableContainer
                 sx={{
@@ -6400,9 +6434,8 @@ const ExpenseApproval: React.FC = () => {
                       <TableCell align="right" sx={lineItemCellSx}>{formatDecimal2(item.total)}</TableCell>
                       {voucherData.perLineGst && (() => {
                         const lineGst = calcLineItemGstAmounts(item);
-                        const hasGst = hasExpenseGstNumber(voucherData.gstNumber);
-                        const igstEnabled = hasGst && isInterStateGst;
-                        const cgstEnabled = hasGst && isIntraStateGst;
+                        const igstEnabled = canEnterIgst;
+                        const cgstEnabled = canEnterCgstSgst;
                         const taxAmt = roundDecimal2(
                           lineGst.igstAmount + lineGst.cgstAmount + lineGst.sgstAmount
                         );
@@ -6666,8 +6699,7 @@ const ExpenseApproval: React.FC = () => {
                   onRateChange: (v: number) => patchVoucherTaxRates({ igstRate: v }),
                   amount: igstAmount,
                   readOnly: false,
-                  enabled:
-                    hasExpenseGstNumber(voucherData.gstNumber) && isInterStateGst,
+                  enabled: canEnterIgst,
                 },
                 {
                   key: 'cgst',
@@ -6677,8 +6709,7 @@ const ExpenseApproval: React.FC = () => {
                   onRateChange: (v: number) => patchVoucherTaxRates({ cgstRate: v }),
                   amount: cgstAmount,
                   readOnly: false,
-                  enabled:
-                    hasExpenseGstNumber(voucherData.gstNumber) && isIntraStateGst,
+                  enabled: canEnterCgstSgst,
                 },
                 {
                   key: 'sgst',
@@ -6688,8 +6719,7 @@ const ExpenseApproval: React.FC = () => {
                   onRateChange: (v: number) => patchVoucherTaxRates({ cgstRate: v }),
                   amount: sgstAmount,
                   readOnly: true,
-                  enabled:
-                    hasExpenseGstNumber(voucherData.gstNumber) && isIntraStateGst,
+                  enabled: canEnterCgstSgst,
                 },
               ] as const).map((row) => (
                 <Box
@@ -7043,7 +7073,7 @@ const ExpenseApproval: React.FC = () => {
             )}
 
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 3 }}>
-              <Button variant="outlined" onClick={() => setViewMode('list')} sx={mvsBodyOutlinedBtnSx}>
+              <Button variant="outlined" onClick={leaveExpenseForm} sx={mvsBodyOutlinedBtnSx}>
                 {t('common.cancel')}
               </Button>
               <Button

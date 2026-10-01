@@ -5106,6 +5106,8 @@ export default {
         formTypeTds: 'TDS',
         perItemGst: '항목별 GST 입력',
         perItemGstRateHint: '항목별',
+        gstStateCompareHint:
+          '회사 GSTIN이 없어 주내/주간을 자동 판별하지 않습니다. IGST 또는 CGST/SGST 중 하나를 직접 선택하세요.',
         tableIgstRate: 'IGST %',
         tableCgstRate: 'CGST %',
         tableSgstRate: 'SGST %',

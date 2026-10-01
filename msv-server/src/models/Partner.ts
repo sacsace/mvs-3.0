@@ -108,7 +108,7 @@ Partner.init(
       allowNull: true,
     },
     phone: {
-      type: DataTypes.STRING(20),
+      type: DataTypes.STRING(50),
       allowNull: true,
     },
     email: {

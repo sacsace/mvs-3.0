@@ -5057,6 +5057,8 @@ export default {
         formTypeTds: 'TDS',
         perItemGst: 'Enter GST per item',
         perItemGstRateHint: 'Per item',
+        gstStateCompareHint:
+          'Company GSTIN is missing, so intra/inter-state cannot be auto-detected. Choose IGST or CGST/SGST manually.',
         tableIgstRate: 'IGST %',
         tableCgstRate: 'CGST %',
         tableSgstRate: 'SGST %',
