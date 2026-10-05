@@ -13,7 +13,6 @@ import type { PayrollGridRow } from './payroll/payrollGridTypes';
 import {
   A4_PAGE_MM,
   DOCUMENT_PDF_CAPTURE_ROOT_ATTR,
-  DOCUMENT_PDF_SCALE_DOWNLOAD,
   DOCUMENT_PDF_SCALE_EMAIL,
   type DocumentPdfMarginsMm,
 } from '../../utils/pdf';
@@ -31,9 +30,33 @@ const PAYSLIP_PDF_MARGINS_MM: DocumentPdfMarginsMm = {
 
 /** MUI md(900px) 이상 레이아웃과 동일하게 캡처 */
 const PDF_CAPTURE_WIDTH_PX = 900;
-/** 다운로드: 선명도 우선 / 메일: 용량 완화 */
-const PDF_DOWNLOAD_JPEG_QUALITY = 0.94;
-const PDF_EMAIL_JPEG_QUALITY = 0.86;
+/**
+ * html2canvas는 벡터 글자가 아니라 비트맵이다.
+ * 다운로드는 A4≈300dpi 근처(900×3) + PNG(무손실)로 글자 번짐을 줄인다.
+ * 메일은 첨부 용량을 위해 scale·JPEG을 낮춘다.
+ */
+const PDF_DOWNLOAD_SCALE = 3;
+const PDF_EMAIL_SCALE = DOCUMENT_PDF_SCALE_EMAIL;
+const PDF_EMAIL_JPEG_QUALITY = 0.88;
+
+function injectPayslipCaptureCss(doc: Document, rootId: string) {
+  const root = doc.getElementById(rootId);
+  if (!root) return;
+  root.setAttribute(DOCUMENT_PDF_CAPTURE_ROOT_ATTR, '');
+  if (doc.head.querySelector('[data-payslip-pdf-capture]')) return;
+  const style = doc.createElement('style');
+  style.setAttribute('data-payslip-pdf-capture', 'true');
+  style.textContent = `
+    [${DOCUMENT_PDF_CAPTURE_ROOT_ATTR}],
+    [${DOCUMENT_PDF_CAPTURE_ROOT_ATTR}] * {
+      -webkit-font-smoothing: antialiased !important;
+      -moz-osx-font-smoothing: grayscale !important;
+      text-rendering: geometricPrecision !important;
+      image-rendering: -webkit-optimize-contrast;
+    }
+  `;
+  doc.head.appendChild(style);
+}
 
 let pdfLibsPromise: Promise<[typeof import('html2canvas'), typeof import('jspdf')]> | null = null;
 
@@ -117,8 +140,8 @@ export async function generatePayslipPdfBlob(
 ): Promise<Blob> {
   const labels = buildPayslipLabels(options?.locale);
   const purpose = options?.purpose ?? 'download';
-  const captureScale = purpose === 'email' ? DOCUMENT_PDF_SCALE_EMAIL : DOCUMENT_PDF_SCALE_DOWNLOAD;
-  const jpegQuality = purpose === 'email' ? PDF_EMAIL_JPEG_QUALITY : PDF_DOWNLOAD_JPEG_QUALITY;
+  const isEmail = purpose === 'email';
+  const captureScale = isEmail ? PDF_EMAIL_SCALE : PDF_DOWNLOAD_SCALE;
   const rootId = nextCaptureRootId();
   const container = document.createElement('div');
   container.style.position = 'fixed';
@@ -166,9 +189,10 @@ export async function generatePayslipPdfBlob(
       windowWidth: PDF_CAPTURE_WIDTH_PX,
       scrollX: 0,
       scrollY: 0,
+      // 글자 단위 렌더 — 작은 라벨의 가장자리 뭉개짐을 완화
+      letterRendering: true,
       onclone: (clonedDoc: Document) => {
-        // 명세서는 자체 타이포를 쓰므로 문서 공통 9pt 강제 CSS는 넣지 않음
-        clonedDoc.getElementById(rootId)?.setAttribute(DOCUMENT_PDF_CAPTURE_ROOT_ATTR, '');
+        injectPayslipCaptureCss(clonedDoc, rootId);
       },
     });
 
@@ -184,9 +208,16 @@ export async function generatePayslipPdfBlob(
     const { widthMm, heightMm } = fitImageToPrintArea(canvas.width, canvas.height, printWidthMm, printHeightMm);
     const x = margins.left + (printWidthMm - widthMm) / 2;
     const y = margins.top;
-    const imgData = canvas.toDataURL('image/jpeg', jpegQuality);
 
-    pdf.addImage(imgData, 'JPEG', x, y, widthMm, heightMm, undefined, 'FAST');
+    // 다운로드: PNG(무손실) — JPEG 블록 노이즈가 글자를 흐리게 만드는 주원인
+    // 메일: JPEG로 용량 완화
+    if (isEmail) {
+      const imgData = canvas.toDataURL('image/jpeg', PDF_EMAIL_JPEG_QUALITY);
+      pdf.addImage(imgData, 'JPEG', x, y, widthMm, heightMm, undefined, 'FAST');
+    } else {
+      const imgData = canvas.toDataURL('image/png');
+      pdf.addImage(imgData, 'PNG', x, y, widthMm, heightMm, undefined, 'FAST');
+    }
 
     return pdf.output('blob');
   } finally {
