@@ -2927,7 +2927,8 @@ const ExpenseApproval: React.FC = () => {
           rows
             .map((c: any) => ({
               id: Number(c.id),
-              name: String(c.name || c.company_name || '').trim(),
+              // 표시용 — Private Limited / Pvt Ltd 등 제거
+              name: stripCorporateSuffixFromFilename(String(c.name || c.company_name || '').trim()),
               tenantId: Number(c.tenant_id || c.tenantId || 0),
             }))
             .filter(
@@ -3257,8 +3258,33 @@ const ExpenseApproval: React.FC = () => {
 
   const rootCompanyAutocompleteSx = {
     minWidth: { xs: 180, sm: 280 },
-    maxWidth: { xs: '100%', sm: 360 },
+    maxWidth: { xs: '100%', sm: 420 },
     ...expenseApprovalFilterFieldSx,
+    '& .MuiAutocomplete-input': {
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+    },
+  } as const;
+
+  const rootCompanyAutocompleteSlotProps = {
+    paper: {
+      sx: {
+        width: 'max-content',
+        minWidth: '100%',
+        maxWidth: 'min(560px, 92vw)',
+      },
+    },
+    listbox: {
+      sx: {
+        '& .MuiAutocomplete-option': {
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          display: 'block',
+        },
+      },
+    },
   } as const;
 
   const openedExpenseQueryRef = useRef<string | null>(null);
@@ -5409,6 +5435,7 @@ const ExpenseApproval: React.FC = () => {
                   if (!q) return options;
                   return options.filter((opt) => String(opt.name || '').toLowerCase().includes(q));
                 }}
+                slotProps={rootCompanyAutocompleteSlotProps}
                 renderInput={(params) => (
                   <TextField
                     {...params}
@@ -5417,7 +5444,16 @@ const ExpenseApproval: React.FC = () => {
                     InputLabelProps={{ shrink: true }}
                   />
                 )}
-                sx={{ minWidth: 200, maxWidth: 360, ...expenseApprovalFilterFieldSx }}
+                sx={{
+                  minWidth: 200,
+                  maxWidth: 420,
+                  ...expenseApprovalFilterFieldSx,
+                  '& .MuiAutocomplete-input': {
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  },
+                }}
               />
             )}
             {headerStatusBanner === 'draftCreated' && (
@@ -9572,6 +9608,7 @@ const ExpenseApproval: React.FC = () => {
                   if (!q) return options;
                   return options.filter((opt) => String(opt.name || '').toLowerCase().includes(q));
                 }}
+                slotProps={rootCompanyAutocompleteSlotProps}
                 renderInput={(params) => (
                   <TextField
                     {...params}

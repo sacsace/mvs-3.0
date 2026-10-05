@@ -70,6 +70,7 @@ import { useTranslation } from 'react-i18next';
 import { useStore } from '../../store';
 import { accountingService } from '../../services/api';
 import { UTILS } from '../../constants';
+import { shortCompanyName } from '../../utils/companyDisplayName';
 
 type PeriodMode = 'date' | 'quarter' | 'fiscalYear';
 
@@ -631,7 +632,7 @@ const AccountingStatistics: React.FC = () => {
     const companyLabel =
       selectedCompanyId === ''
         ? t('purchaseSalesStats.export.allCompanies')
-        : companies.find((company) => company.id === selectedCompanyId)?.name ||
+        : shortCompanyName(companies.find((company) => company.id === selectedCompanyId)?.name) ||
           (selectedCompanyId ? t('purchaseSalesStats.export.companyWithId', { id: selectedCompanyId }) : '') ||
           user?.username ||
           t('purchaseSalesStats.export.selectedCompany');
@@ -825,13 +826,46 @@ const AccountingStatistics: React.FC = () => {
                 }
               }}
               InputLabelProps={{ shrink: true }}
-              SelectProps={{ displayEmpty: true }}
-              sx={{ ...accountingStatsFilterFieldSx, width: { xs: '100%', sm: 220 }, minWidth: 180, flex: '0 0 auto' }}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (value) => {
+                  if (value === '' || value == null) {
+                    return t('purchaseSalesStats.filters.allCompanies');
+                  }
+                  const found = companies.find((c) => Number(c.id) === Number(value));
+                  return shortCompanyName(found?.name) || String(value);
+                },
+                MenuProps: {
+                  PaperProps: {
+                    sx: {
+                      maxWidth: 'min(560px, 92vw)',
+                      '& .MuiMenuItem-root': {
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        display: 'block',
+                      },
+                    },
+                  },
+                },
+              }}
+              sx={{
+                ...accountingStatsFilterFieldSx,
+                width: { xs: '100%', sm: 220 },
+                minWidth: 180,
+                flex: '0 0 auto',
+                '& .MuiOutlinedInput-root': { overflow: 'hidden' },
+                '& .MuiSelect-select': {
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                },
+              }}
             >
               <MenuItem value="">{t('purchaseSalesStats.filters.allCompanies')}</MenuItem>
               {companies.map((company) => (
                 <MenuItem key={company.id} value={company.id}>
-                  {company.name}
+                  {shortCompanyName(company.name) || company.name}
                 </MenuItem>
               ))}
             </TextField>

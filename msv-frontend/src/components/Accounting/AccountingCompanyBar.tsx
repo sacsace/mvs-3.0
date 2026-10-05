@@ -3,6 +3,11 @@ import { Autocomplete, Card, CardContent, TextField, Typography } from '@mui/mat
 import { useTranslation } from 'react-i18next';
 import { mvsBodyCardSx, mvsOutlinedLabelProps, mvsSearchFieldSx } from '../../theme/mvsLayout';
 import type { AccountingCompany } from '../../hooks/useAccountingCompany';
+import {
+  companySelectListboxSlotProps,
+  companySelectNowrapSx,
+  shortCompanyName,
+} from '../../utils/companyDisplayName';
 
 type Props = {
   canSelectCompany: boolean;
@@ -39,10 +44,16 @@ const AccountingCompanyBar: React.FC<Props> = ({
           onChange={(_, newValue) => {
             if (newValue?.id) onChangeCompany(newValue.id);
           }}
-          getOptionLabel={(option) => option.name}
+          getOptionLabel={(option) => shortCompanyName(option.name) || option.name}
           isOptionEqualToValue={(option, value) => option.id === value.id}
           disableClearable={Boolean(selectedCompany)}
-          sx={{ minWidth: 280, width: { xs: '100%', sm: 360 }, ...mvsSearchFieldSx }}
+          slotProps={companySelectListboxSlotProps}
+          sx={{
+            minWidth: 280,
+            width: { xs: '100%', sm: 360 },
+            ...mvsSearchFieldSx,
+            ...companySelectNowrapSx,
+          }}
           renderInput={(params) => (
             <TextField
               {...params}
@@ -50,6 +61,7 @@ const AccountingCompanyBar: React.FC<Props> = ({
               label={t('accountingScope.company')}
               {...mvsOutlinedLabelProps}
               placeholder={t('accountingScope.searchCompany', { defaultValue: 'Search company' })}
+              sx={companySelectNowrapSx}
             />
           )}
         />

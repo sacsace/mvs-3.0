@@ -11,14 +11,14 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  MenuItem,
   TextField,
   Typography,
   CircularProgress,
   Chip,
   Stack,
   Tooltip,
-  IconButton
+  IconButton,
+  Autocomplete,
 } from '@mui/material';
 import FormFieldLabeled from '../../components/Common/FormFieldLabeled';
 import {
@@ -51,6 +51,11 @@ import { useNavigate } from 'react-router-dom';
 import { workBoardService } from '../../services/api';
 import { getUploadUrl } from '../../utils/uploadUrl';
 import { showErrorPopup } from '../../utils/errorHandler';
+import {
+  companySelectListboxSlotProps,
+  companySelectNowrapSx,
+  shortCompanyName,
+} from '../../utils/companyDisplayName';
 import { useMenuStore, useStore } from '../../store';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
@@ -553,34 +558,42 @@ const WorkBoardsPage: React.FC = () => {
     setOpen(true);
   };
 
-  const selectedCompanyLabel = useMemo(() => {
-    if (selectedCompanyId === 0) return isEn ? 'All companies' : '전체 회사';
-    if (selectedCompanyId == null) return '';
-    const found = companies.find((c: any) => Number(c.id) === Number(selectedCompanyId));
-    const name = String(found?.name || found?.company_name || '').trim();
-    return name;
-  }, [companies, isEn, selectedCompanyId]);
+  const companyFilterOptions = useMemo(() => {
+    const allLabel = isEn ? 'All companies' : '전체 회사';
+    const list = companies
+      .map((c: any) => ({
+        id: Number(c.id),
+        name: shortCompanyName(c.name || c.company_name) || `#${c.id}`,
+      }))
+      .filter((c) => Number.isFinite(c.id) && c.id > 0)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return [{ id: 0, name: allLabel }, ...list];
+  }, [companies, isEn]);
+
+  const selectedCompanyOption = useMemo(() => {
+    const id =
+      selectedCompanyId === 0 || selectedCompanyId == null
+        ? 0
+        : Number(selectedCompanyId) > 0
+          ? Number(selectedCompanyId)
+          : 0;
+    return companyFilterOptions.find((o) => o.id === id) ?? companyFilterOptions[0] ?? null;
+  }, [companyFilterOptions, selectedCompanyId]);
 
   const companySelectField =
     isRootUser ? (
-      <TextField
-        select
-        size="small"
-        label={t('workBoards.filters.company')}
-        value={selectedCompanyId === 0 ? 0 : selectedCompanyId != null && selectedCompanyId > 0 ? selectedCompanyId : 0}
-        onChange={(e) => {
-          const num = Number(e.target.value);
-          setSelectedCompanyId(Number.isFinite(num) && num >= 0 ? num : 0);
+      <Autocomplete
+        options={companyFilterOptions}
+        value={selectedCompanyOption}
+        onChange={(_, next) => {
+          if (!next || next.id === 0) setSelectedCompanyId(0);
+          else setSelectedCompanyId(Number(next.id));
         }}
+        getOptionLabel={(option) => option.name}
+        isOptionEqualToValue={(a, b) => a.id === b.id}
+        disableClearable={Boolean(selectedCompanyOption)}
         disabled={companiesLoading}
-        {...mvsOutlinedLabelProps}
-        SelectProps={{
-          displayEmpty: true,
-          renderValue: () => {
-            if (companiesLoading) return t('common.loading');
-            return selectedCompanyLabel || (isEn ? 'All companies' : '전체 회사');
-          },
-        }}
+        slotProps={companySelectListboxSlotProps}
         sx={{
           minWidth: { xs: '100%', sm: 220 },
           maxWidth: { xs: '100%', sm: 280 },
@@ -588,27 +601,33 @@ const WorkBoardsPage: React.FC = () => {
           mt: 1.25,
           ...mvsSearchFieldSx,
           ...mvsFilterFieldHeightSx,
-          overflow: 'visible',
-          '& .MuiFormLabel-root': {
-            overflow: 'visible',
-            maxWidth: 'none',
-            lineHeight: 1.2,
-          },
-          '& .MuiOutlinedInput-root': {
-            overflow: 'visible',
-          },
-          '& .MuiOutlinedInput-notchedOutline': {
-            overflow: 'visible',
-          },
+          ...companySelectNowrapSx,
         }}
-      >
-        <MenuItem value={0}>{isEn ? 'All companies' : '전체 회사'}</MenuItem>
-        {companies.map((company) => (
-          <MenuItem key={company.id} value={Number(company.id)}>
-            {company.name || company.company_name || `#${company.id}`}
-          </MenuItem>
-        ))}
-      </TextField>
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            size="small"
+            label={t('workBoards.filters.company')}
+            placeholder={
+              companiesLoading
+                ? t('common.loading')
+                : t('workBoards.filters.searchCompany')
+            }
+            {...mvsOutlinedLabelProps}
+            sx={{
+              ...mvsSearchFieldSx,
+              ...mvsFilterFieldHeightSx,
+              ...companySelectNowrapSx,
+              overflow: 'visible',
+              '& .MuiFormLabel-root': {
+                overflow: 'visible',
+                maxWidth: 'none',
+                lineHeight: 1.2,
+              },
+            }}
+          />
+        )}
+      />
     ) : null;
 
   const openEditDialog = (board: any) => {

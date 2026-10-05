@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useStore } from '../store';
+import { shortCompanyName } from '../utils/companyDisplayName';
 
 export type AccountingCompany = { id: number; name: string };
 
@@ -23,7 +24,8 @@ export const useAccountingCompany = () => {
 
   const selectedCompanyName = useMemo(() => {
     if (!effectiveCompanyId) return '';
-    return companies.find((c) => c.id === effectiveCompanyId)?.name || `Company ${effectiveCompanyId}`;
+    const raw = companies.find((c) => c.id === effectiveCompanyId)?.name || `Company ${effectiveCompanyId}`;
+    return shortCompanyName(raw) || raw;
   }, [companies, effectiveCompanyId]);
 
   const companyQuery = useMemo(

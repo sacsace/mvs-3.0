@@ -38,6 +38,11 @@ import { useTheme } from '@mui/material/styles';
 import { api, projectService } from '../../services/api';
 import { useReferenceDataStore, filterActiveCompanyUsers } from '../../store/referenceDataStore';
 import { useMenuStore, useStore } from '../../store';
+import {
+  companySelectListboxSlotProps,
+  companySelectNowrapSx,
+  shortCompanyName,
+} from '../../utils/companyDisplayName';
 import { showErrorPopup, showSuccessPopup } from '../../utils/errorHandler';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
@@ -245,7 +250,7 @@ const ProjectManagement: React.FC = () => {
     const list = companies
       .map((c: any) => ({
         id: Number(c.id),
-        name: String(c.name || c.company_name || '').trim(),
+        name: shortCompanyName(c.name || c.company_name),
       }))
       .filter((c) => Number.isFinite(c.id) && c.id > 0 && c.name)
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -499,6 +504,8 @@ const ProjectManagement: React.FC = () => {
               getOptionLabel={(option) => option.name}
               isOptionEqualToValue={(a, b) => a.id === b.id}
               disableClearable={Boolean(selectedCompanyOption)}
+              slotProps={companySelectListboxSlotProps}
+              sx={companySelectNowrapSx}
               renderInput={(params) => (
                 <TextField
                   {...params}
@@ -506,7 +513,7 @@ const ProjectManagement: React.FC = () => {
                   label={t('projectManagement.filters.company')}
                   placeholder={t('projectManagement.filters.searchCompany')}
                   {...mvsOutlinedLabelProps}
-                  sx={{ ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx }}
+                  sx={{ ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx, ...companySelectNowrapSx }}
                 />
               )}
             />

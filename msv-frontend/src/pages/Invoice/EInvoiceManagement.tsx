@@ -31,7 +31,9 @@ import {
   Tab,
   InputAdornment,
   ToggleButton,
-  ToggleButtonGroup } from '@mui/material';
+  ToggleButtonGroup,
+  Autocomplete,
+} from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -74,6 +76,11 @@ import {
 import { useStore } from '../../store';
 import { api, accountingService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
+import {
+  companySelectListboxSlotProps,
+  companySelectNowrapSx,
+  shortCompanyName,
+} from '../../utils/companyDisplayName';
 import { AxiosResponse } from 'axios';
 import { useTranslation } from 'react-i18next';
 import { usePageMenuPermission } from '../../context/MenuPermissionContext';
@@ -283,6 +290,24 @@ const EInvoiceManagement: React.FC = () => {
   const [listSubTab, setListSubTab] = useState<'requested' | 'pending'>('requested');
   const [companyUsers, setCompanyUsers] = useState<Array<{ id: number; username: string; email: string }>>([]);
   const [proformaApproverId, setProformaApproverId] = useState<number | ''>('');
+
+  const companyFilterOptions = useMemo(() => {
+    const list = companies
+      .map((c: any) => ({
+        id: Number(c.id),
+        name: shortCompanyName(c.name || c.company_name),
+      }))
+      .filter((c) => Number.isFinite(c.id) && c.id > 0 && c.name)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return [{ id: '' as number | '', name: t('eInvoiceManagement.filters.allCompanies') }, ...list];
+  }, [companies, t]);
+
+  const selectedCompanyOption = useMemo(() => {
+    if (selectedCompanyId === '') {
+      return companyFilterOptions.find((o) => o.id === '') ?? null;
+    }
+    return companyFilterOptions.find((o) => o.id === Number(selectedCompanyId)) ?? null;
+  }, [companyFilterOptions, selectedCompanyId]);
 
   const normalizeParty = (party: any, fallbackName: string) => ({
     id: String(party?.id ?? ''),
@@ -1231,32 +1256,30 @@ const EInvoiceManagement: React.FC = () => {
                         sx={eInvoiceFilterFieldSx}
                       />
                       {(user?.role === 'root' || user?.role === 'audit') && (
-                        <TextField
-                          fullWidth
-                          size="small"
-                          select
-                          label={t('eInvoiceManagement.filters.company')}
-                          value={selectedCompanyId}
-                          onChange={(e) => {
-                            const value = String(e.target.value);
-                            if (value === '') {
-                              setSelectedCompanyId('');
-                            } else {
-                              const num = Number(value);
-                              setSelectedCompanyId(isNaN(num) ? '' : num);
-                            }
+                        <Autocomplete
+                          options={companyFilterOptions}
+                          value={selectedCompanyOption}
+                          onChange={(_, next) => {
+                            if (!next || next.id === '') setSelectedCompanyId('');
+                            else setSelectedCompanyId(Number(next.id));
                           }}
-                          {...mvsOutlinedLabelProps}
-                          SelectProps={{ displayEmpty: true }}
-                          sx={eInvoiceFilterFieldSx}
-                        >
-                          <MenuItem value="">{t('eInvoiceManagement.filters.allCompanies')}</MenuItem>
-                          {companies.map((company) => (
-                            <MenuItem key={company.id} value={company.id}>
-                              {company.name}
-                            </MenuItem>
-                          ))}
-                        </TextField>
+                          getOptionLabel={(option) => option.name}
+                          isOptionEqualToValue={(a, b) => a.id === b.id}
+                          disableClearable={Boolean(selectedCompanyOption)}
+                          slotProps={companySelectListboxSlotProps}
+                          sx={{ ...eInvoiceFilterFieldSx, ...companySelectNowrapSx }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              fullWidth
+                              size="small"
+                              label={t('eInvoiceManagement.filters.company')}
+                              placeholder={t('eInvoiceManagement.filters.searchCompany')}
+                              {...mvsOutlinedLabelProps}
+                              sx={{ ...eInvoiceFilterFieldSx, ...companySelectNowrapSx }}
+                            />
+                          )}
+                        />
                       )}
                       <TextField
                         fullWidth

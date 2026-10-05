@@ -101,6 +101,10 @@ import {
   generateEmployeePersonalRecordPdfBlob,
 } from './employeePersonalRecordPdf';
 import { shortCompanyName, toPayslipCompanyInfo } from '../HR/PayslipContent';
+import {
+  companySelectListboxSlotProps,
+  companySelectNowrapSx,
+} from '../../utils/companyDisplayName';
 
 const USER_MGMT_MENU_ROUTES = ['/hr/users', '/users'];
 const USERS_PER_PAGE = 10;
@@ -295,7 +299,10 @@ const CompanySearchSelect: React.FC<CompanySearchSelectProps> = ({
   error,
 }) => {
   const options = useMemo<CompanyPickOption[]>(() => {
-    const list = companies.map((company) => ({ id: company.id, name: company.name }));
+    const list = companies.map((company) => ({
+      id: company.id,
+      name: shortCompanyName(company.name) || company.name,
+    }));
     if (allowAll) return [{ id: '', name: allLabel }, ...list];
     return list;
   }, [allowAll, allLabel, companies]);
@@ -320,7 +327,8 @@ const CompanySearchSelect: React.FC<CompanySearchSelectProps> = ({
       disabled={disabled}
       fullWidth={fullWidth}
       disableClearable={allowAll ? Boolean(selected) : false}
-      sx={sx}
+      slotProps={companySelectListboxSlotProps}
+      sx={{ ...companySelectNowrapSx, ...sx }}
       renderInput={(params) => (
         <TextField
           {...params}
@@ -331,7 +339,7 @@ const CompanySearchSelect: React.FC<CompanySearchSelectProps> = ({
           error={error}
           helperText={helperText}
           {...(outlinedProps as object)}
-          sx={textFieldSx}
+          sx={{ ...companySelectNowrapSx, ...textFieldSx }}
         />
       )}
     />

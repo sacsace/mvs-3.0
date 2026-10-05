@@ -50,7 +50,6 @@ const isFullBleedBodyRoute = (pathname: string): boolean => {
   if (pathname === '/basic-info/login-info' || pathname.startsWith('/basic-info/login-info/')) return true;
   if (pathname === '/hr/payroll' || pathname.startsWith('/hr/payroll/')) return true;
   if (pathname === '/hr/payslip-send' || pathname.startsWith('/hr/payslip-send/')) return true;
-  if (pathname === '/accounting/gs-enc-cost' || pathname.startsWith('/accounting/gs-enc-cost/')) return true;
   return false;
 };
 
