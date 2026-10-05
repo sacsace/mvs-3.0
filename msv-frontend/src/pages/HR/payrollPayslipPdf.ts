@@ -13,18 +13,27 @@ import type { PayrollGridRow } from './payroll/payrollGridTypes';
 import {
   A4_PAGE_MM,
   DOCUMENT_PDF_CAPTURE_ROOT_ATTR,
-  DOCUMENT_PDF_MARGINS_MM,
-  injectDocumentPdfStandardCss,
+  DOCUMENT_PDF_SCALE_DOWNLOAD,
+  DOCUMENT_PDF_SCALE_EMAIL,
+  type DocumentPdfMarginsMm,
 } from '../../utils/pdf';
 
 const A4_WIDTH_MM = A4_PAGE_MM.width;
 const A4_HEIGHT_MM = A4_PAGE_MM.height;
 
+/** 급여 명세서는 좌·우 여백을 동일하게 (문서 공통 20/10과 별도) */
+const PAYSLIP_PDF_MARGINS_MM: DocumentPdfMarginsMm = {
+  left: 12,
+  right: 12,
+  top: 10,
+  bottom: 10,
+};
+
 /** MUI md(900px) 이상 레이아웃과 동일하게 캡처 */
 const PDF_CAPTURE_WIDTH_PX = 900;
-/** 화면용 충분 + 메일 첨부 용량 최소화 (scale 2 + PNG → 수십 MB 방지) */
-const PDF_CAPTURE_SCALE = 1.6;
-const PDF_JPEG_QUALITY = 0.82;
+/** 다운로드: 선명도 우선 / 메일: 용량 완화 */
+const PDF_DOWNLOAD_JPEG_QUALITY = 0.94;
+const PDF_EMAIL_JPEG_QUALITY = 0.86;
 
 let pdfLibsPromise: Promise<[typeof import('html2canvas'), typeof import('jspdf')]> | null = null;
 
@@ -102,9 +111,14 @@ export async function generatePayslipPdfBlob(
     locale?: 'en' | 'ko';
     headerLayout?: PayslipHeaderLayout;
     companyId?: string | number | null;
+    /** download: 고해상도 / email: 첨부 용량 완화 (기본 download) */
+    purpose?: 'download' | 'email';
   }
 ): Promise<Blob> {
   const labels = buildPayslipLabels(options?.locale);
+  const purpose = options?.purpose ?? 'download';
+  const captureScale = purpose === 'email' ? DOCUMENT_PDF_SCALE_EMAIL : DOCUMENT_PDF_SCALE_DOWNLOAD;
+  const jpegQuality = purpose === 'email' ? PDF_EMAIL_JPEG_QUALITY : PDF_DOWNLOAD_JPEG_QUALITY;
   const rootId = nextCaptureRootId();
   const container = document.createElement('div');
   container.style.position = 'fixed';
@@ -144,7 +158,7 @@ export async function generatePayslipPdfBlob(
       throw new Error('Payslip PDF capture root not found');
     }
     const canvas = await html2canvas(target, {
-      scale: PDF_CAPTURE_SCALE,
+      scale: captureScale,
       useCORS: true,
       logging: false,
       backgroundColor: '#FFFFFF',
@@ -153,8 +167,8 @@ export async function generatePayslipPdfBlob(
       scrollX: 0,
       scrollY: 0,
       onclone: (clonedDoc: Document) => {
+        // 명세서는 자체 타이포를 쓰므로 문서 공통 9pt 강제 CSS는 넣지 않음
         clonedDoc.getElementById(rootId)?.setAttribute(DOCUMENT_PDF_CAPTURE_ROOT_ATTR, '');
-        injectDocumentPdfStandardCss(clonedDoc);
       },
     });
 
@@ -164,15 +178,15 @@ export async function generatePayslipPdfBlob(
       orientation: 'portrait',
       compress: true
     });
-    const printWidthMm = A4_WIDTH_MM - DOCUMENT_PDF_MARGINS_MM.left - DOCUMENT_PDF_MARGINS_MM.right;
-    const printHeightMm = A4_HEIGHT_MM - DOCUMENT_PDF_MARGINS_MM.top - DOCUMENT_PDF_MARGINS_MM.bottom;
+    const margins = PAYSLIP_PDF_MARGINS_MM;
+    const printWidthMm = A4_WIDTH_MM - margins.left - margins.right;
+    const printHeightMm = A4_HEIGHT_MM - margins.top - margins.bottom;
     const { widthMm, heightMm } = fitImageToPrintArea(canvas.width, canvas.height, printWidthMm, printHeightMm);
-    const x = DOCUMENT_PDF_MARGINS_MM.left + (printWidthMm - widthMm) / 2;
-    const y = DOCUMENT_PDF_MARGINS_MM.top;
-    // PNG는 무손실이라 수~십수 MB가 됨. JPEG로 압축.
-    const imgData = canvas.toDataURL('image/jpeg', PDF_JPEG_QUALITY);
+    const x = margins.left + (printWidthMm - widthMm) / 2;
+    const y = margins.top;
+    const imgData = canvas.toDataURL('image/jpeg', jpegQuality);
 
-    pdf.addImage(imgData, 'JPEG', x, y, widthMm, heightMm, undefined, 'MEDIUM');
+    pdf.addImage(imgData, 'JPEG', x, y, widthMm, heightMm, undefined, 'FAST');
 
     return pdf.output('blob');
   } finally {

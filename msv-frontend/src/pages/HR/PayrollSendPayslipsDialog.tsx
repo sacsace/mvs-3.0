@@ -141,7 +141,8 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({
           const blob = await generatePayslipPdfBlob(row, companyInfo, {
             locale: 'en',
             headerLayout,
-            companyId: resolvedCompanyId
+            companyId: resolvedCompanyId,
+            purpose: 'email',
           });
           const b64 = await payslipBlobToBase64(blob);
           const res = await payrollService.sendPayrollPayslip(

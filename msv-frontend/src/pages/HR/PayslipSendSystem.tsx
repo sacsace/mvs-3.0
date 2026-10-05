@@ -901,7 +901,7 @@ const PayslipSendSystem: React.FC = () => {
 
     const sendOne = async (row: PayrollGridRow) => {
       try {
-        const pdf = await generatePayslipPdfBlob(row, companyInfo, { locale: 'en' });
+        const pdf = await generatePayslipPdfBlob(row, companyInfo, { locale: 'en', purpose: 'email' });
         const result = await payrollService.sendImportedPayslip({
           to: row.employee_email,
           employee_name: row.employee_name,

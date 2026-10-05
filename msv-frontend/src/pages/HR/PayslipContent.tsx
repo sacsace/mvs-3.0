@@ -244,7 +244,7 @@ function SectionHeading({ children, compact }: { children: React.ReactNode; comp
     <Typography
       sx={{
         fontWeight: 700,
-        fontSize: compact ? '0.72rem' : '0.8125rem',
+        fontSize: compact ? '0.78rem' : '0.8125rem',
         letterSpacing: '0.06em',
         color: 'primary.main',
         mb: compact ? 0.75 : 1.5,
@@ -280,7 +280,7 @@ function EmpField({
       <Typography
         variant="caption"
         color="text.secondary"
-        sx={{ display: 'block', fontWeight: 600, mb: compact ? 0.15 : 0.35, fontSize: compact ? '0.65rem' : undefined }}
+        sx={{ display: 'block', fontWeight: 600, mb: compact ? 0.15 : 0.35, fontSize: compact ? '0.71rem' : undefined }}
       >
         {label}
       </Typography>
@@ -290,7 +290,7 @@ function EmpField({
           fontWeight: 600,
           color: highlight ? USER_INPUT_COLOR : link ? 'info.main' : 'text.primary',
           wordBreak: 'break-word',
-          fontSize: compact ? '0.78rem' : undefined,
+          fontSize: compact ? '0.84rem' : undefined,
           lineHeight: compact ? 1.25 : undefined,
         }}
       >
@@ -339,7 +339,7 @@ function LedgerRow({
         sx={{
           fontWeight: total ? 700 : 500,
           color: highlightColor ?? (earnTotal ? 'primary.main' : deductTotal ? 'warning.dark' : 'text.secondary'),
-          fontSize: compact ? '0.75rem' : '0.8125rem',
+          fontSize: compact ? '0.81rem' : '0.8125rem',
           minWidth: 0,
           flex: 1,
           pr: 1,
@@ -354,7 +354,7 @@ function LedgerRow({
           fontVariantNumeric: 'tabular-nums',
           color: highlightColor ?? (earnTotal ? 'primary.main' : deductTotal ? 'warning.dark' : 'text.primary'),
           whiteSpace: 'nowrap',
-          fontSize: compact ? '0.75rem' : '0.8125rem',
+          fontSize: compact ? '0.81rem' : '0.8125rem',
           textAlign: 'right',
           ml: 'auto',
           minWidth: compact ? '7.5rem' : '8.5rem',
@@ -379,12 +379,12 @@ function LedgerSpacer({ isLast }: { isLast?: boolean }) {
   );
 }
 
-function LedgerColumnHeader({ title }: { title: string }) {
+function LedgerColumnHeader({ title, compact }: { title: string; compact?: boolean }) {
   return (
     <Box
       sx={{
-        px: 2,
-        py: 1.25,
+        px: compact ? 1.5 : 2,
+        py: compact ? 1 : 1.25,
         bgcolor: '#F1F5F9',
         borderBottom: `1px solid ${MVS_ROW_BORDER}`,
         borderTop: '2px solid',
@@ -394,7 +394,7 @@ function LedgerColumnHeader({ title }: { title: string }) {
       <Typography
         sx={{
           fontWeight: 600,
-          fontSize: '0.8125rem',
+          fontSize: compact ? '0.875rem' : '0.8125rem',
           letterSpacing: '0.02em',
           color: '#475569',
           textTransform: 'uppercase'
@@ -435,9 +435,9 @@ function EarningsDeductionsTable({
   return (
     <Box sx={{ ...mvsBodyTableFrameSx, mb: forPdf ? 1.5 : 2.5, overflow: 'hidden' }}>
       <Box sx={{ display: 'grid', gridTemplateColumns: gridColumns }}>
-        <LedgerColumnHeader title={labels.earnings} />
+        <LedgerColumnHeader title={labels.earnings} compact={forPdf} />
         <Box sx={{ display: dividerDisplay, bgcolor: '#CBD5E1' }} />
-        <LedgerColumnHeader title={labels.employeeDeductions} />
+        <LedgerColumnHeader title={labels.employeeDeductions} compact={forPdf} />
       </Box>
 
       {detailRows.map((line, index) => (
@@ -552,7 +552,7 @@ function PayslipHeader({
               borderRadius: '6px',
               bgcolor: 'primary.50',
               color: 'primary.main',
-              fontSize: '0.65rem',
+              fontSize: forPdf ? '0.71rem' : '0.65rem',
               fontWeight: 700,
               letterSpacing: '0.14em'
             }}
@@ -562,7 +562,7 @@ function PayslipHeader({
           <Typography
             sx={{
               ...mvsPageTitleSx,
-              fontSize: { xs: '1.2rem', sm: '1.35rem' },
+              fontSize: forPdf ? '1.27rem' : { xs: '1.2rem', sm: '1.35rem' },
               mb: employeeName ? 0.5 : 1.5,
               color: 'text.primary'
             }}
@@ -573,7 +573,7 @@ function PayslipHeader({
             <Typography
               sx={{
                 fontWeight: 700,
-                fontSize: forPdf ? '1.15rem' : { xs: '1.2rem', sm: '1.35rem' },
+                fontSize: forPdf ? '1.21rem' : { xs: '1.2rem', sm: '1.35rem' },
                 color: 'text.primary',
                 lineHeight: 1.25,
                 mb: 1.5,
@@ -603,7 +603,14 @@ function PayslipHeader({
                 >
                   {item.label}
                 </Typography>
-                <Typography sx={{ fontWeight: 700, fontSize: '1.2rem', color: 'primary.main', lineHeight: 1.1 }}>
+                <Typography
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: forPdf ? '1.26rem' : '1.2rem',
+                    color: 'primary.main',
+                    lineHeight: 1.1,
+                  }}
+                >
                   {item.value || '—'}
                 </Typography>
               </Box>
@@ -653,12 +660,26 @@ function PayslipHeader({
               {labels.companyName}
             </Typography>
             {companyName !== '—' ? (
-              <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.35, color: 'text.primary' }}>
+              <Typography
+                sx={{
+                  fontWeight: 700,
+                  fontSize: forPdf ? '0.96rem' : '0.9rem',
+                  lineHeight: 1.35,
+                  color: 'text.primary',
+                }}
+              >
                 {companyName}
               </Typography>
             ) : null}
             {companyContact ? (
-              <Typography sx={{ ...mvsPageDescriptionSx, fontSize: '0.72rem', mt: 0.5, lineHeight: 1.45 }}>
+              <Typography
+                sx={{
+                  ...mvsPageDescriptionSx,
+                  fontSize: forPdf ? '0.78rem' : '0.72rem',
+                  mt: 0.5,
+                  lineHeight: 1.45,
+                }}
+              >
                 {companyContact}
               </Typography>
             ) : null}
@@ -888,7 +909,7 @@ const PayslipContent = React.forwardRef<HTMLDivElement, Props>(function PayslipC
               sx={{
                 fontWeight: 700,
                 color: 'primary.main',
-                fontSize: forPdf ? '0.75rem' : '0.85rem',
+                fontSize: forPdf ? '0.81rem' : '0.85rem',
                 mb: 0.5,
               }}
             >
@@ -897,7 +918,7 @@ const PayslipContent = React.forwardRef<HTMLDivElement, Props>(function PayslipC
             <Typography
               sx={{
                 fontWeight: 700,
-                fontSize: forPdf ? '1.45rem' : { xs: '1.65rem', sm: '1.9rem' },
+                fontSize: forPdf ? '1.51rem' : { xs: '1.65rem', sm: '1.9rem' },
                 color: 'text.primary',
                 fontVariantNumeric: 'tabular-nums',
                 lineHeight: 1.15,
@@ -912,7 +933,7 @@ const PayslipContent = React.forwardRef<HTMLDivElement, Props>(function PayslipC
                 ...mvsPageDescriptionSx,
                 color: 'success.dark',
                 fontWeight: 600,
-                fontSize: forPdf ? '0.72rem' : undefined,
+                fontSize: forPdf ? '0.78rem' : undefined,
               }}
             >
               {labels.amountInWords}: {inrAmountInWords(netPay)}
@@ -925,7 +946,7 @@ const PayslipContent = React.forwardRef<HTMLDivElement, Props>(function PayslipC
               ...mvsPageDescriptionSx,
               display: 'block',
               textAlign: 'center',
-              fontSize: forPdf ? '0.65rem' : undefined,
+              fontSize: forPdf ? '0.71rem' : undefined,
             }}
           >
             {labels.autoGenerated}
