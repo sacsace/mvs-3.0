@@ -2755,16 +2755,21 @@ const ExpenseApproval: React.FC = () => {
     let filtered = expenses;
 
     if (listTab === 'written' && user?.id) {
-      filtered = filtered.filter(expense => expense.requesterId === user.id);
+      // root: 선택한 회사(또는 전체)의 작성 건을 관리 — 본인 작성분으로 좁히지 않음
+      if (!isRootUser) {
+        filtered = filtered.filter((expense) => expense.requesterId === user.id);
+      }
     }
     if (listTab === 'received' && user?.id) {
-      filtered = filtered.filter(expense => {
+      filtered = filtered.filter((expense) => {
         if (expense.status === 'draft') return false;
+        // root: 회사 필터 기준 타사 받은 결의서 열람·처리
+        if (isRootUser) return true;
         if (expense.currentApproverId === user.id) return true;
         if (expense.itemMeta?.checkedById && Number(expense.itemMeta.checkedById) === user.id) return true;
         if (expense.itemMeta?.approvedById && Number(expense.itemMeta.approvedById) === user.id) return true;
         if ((expense.ccUserIds || []).includes(Number(user.id))) return true;
-        return expense.approvalFlow?.some(step => step.approverId === user.id);
+        return expense.approvalFlow?.some((step) => step.approverId === user.id);
       });
     }
     if (listTab === 'transfer') {
@@ -2826,6 +2831,7 @@ const ExpenseApproval: React.FC = () => {
     priorityFilter,
     listTab,
     user,
+    isRootUser,
     hasTransferAccess,
     getTransferFilterKey,
     isExpensePaidForList,
@@ -4439,8 +4445,10 @@ const ExpenseApproval: React.FC = () => {
   };
 
   const canUserApproveExpense = (expense: ExpenseApprovalItem) => {
-    if (!isDesignatedApprover(expense)) return false;
-    return ['submitted', 'in_review'].includes(expense.status);
+    if (!['submitted', 'in_review'].includes(expense.status)) return false;
+    // root: 지정 승인자가 아니어도 타사 결의서 승인 가능
+    if (isRootUser) return true;
+    return isDesignatedApprover(expense);
   };
 
   const canUserRevisionRejectExpense = (expense: ExpenseApprovalItem) => {
@@ -4454,6 +4462,7 @@ const ExpenseApproval: React.FC = () => {
   const canChangeExpenseApprover = (expense: ExpenseApprovalItem) => {
     if (!user?.id) return false;
     if (['approved', 'rejected', 'paid'].includes(expense.status)) return false;
+    if (isRootUser) return true;
     return isDesignatedApprover(expense);
   };
 
@@ -9982,7 +9991,8 @@ const ExpenseApproval: React.FC = () => {
                           </IconButton>
                         </Tooltip>
                       )}
-                      {listTab === 'received' && canUserApproveExpense(expense) && (
+                      {(listTab === 'received' || (isRootUser && listTab === 'written')) &&
+                        canUserApproveExpense(expense) && (
                         <>
                           <Tooltip title={t('expenseApproval.actions.accept')}>
                             <IconButton
@@ -10016,7 +10026,7 @@ const ExpenseApproval: React.FC = () => {
                           </Tooltip>
                         </>
                       )}
-                      {listTab === 'received'
+                      {(listTab === 'received' || (isRootUser && listTab === 'written'))
                         && !canUserApproveExpense(expense)
                         && canUserRevisionRejectExpense(expense) && (
                         <Tooltip title={t('expenseApproval.actions.revisionReject')}>

@@ -3562,7 +3562,8 @@ export const updateExpenseReportStatus = async (req: RequestWithUser, res: Respo
           message: '반려된 문서는 재요청 후에만 승인할 수 있습니다.',
         });
       }
-      if (!designatedId || designatedId !== Number(user_id)) {
+      // root: 지정 승인자가 아니어도 타사 결의서 승인 가능
+      if (!isRootActor && (!designatedId || designatedId !== Number(user_id))) {
         return res.status(403).json({ success: false, message: '지정된 승인권자만 처리할 수 있습니다.' });
       }
     }
@@ -3724,7 +3725,9 @@ export const changeExpenseApprover = async (req: RequestWithUser, res: Response)
 
     const designatedId = readExpenseApproverId(expense);
     const isCurrentApprover = designatedId != null && designatedId === Number(user_id);
-    if (!isCurrentApprover) {
+    const isRootActor = req.user?.role === 'root';
+    // root: 타사 결의서 승인권자도 변경 가능
+    if (!isCurrentApprover && !isRootActor) {
       return res.status(403).json({ success: false, message: '승인 요청을 받은 승인자만 승인권자를 변경할 수 있습니다.' });
     }
     const company_id = Number(expense.company_id);
