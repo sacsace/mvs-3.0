@@ -574,7 +574,7 @@ export default {
       ptEligibleHintWithState:
         'Company GST state: {{state}} ({{code}}) — PT is calculated from this state on payroll.',
       pfCap: 'PF ceiling',
-      pfCap1800: 'Cap at 1,800',
+      pfCap1800: 'Cap at 3,000',
       pfCap12pct: '12% of basic',
       pfCapTotal12pct: '12% of total (50/50 split)',
       pfCapNone: 'No PF',

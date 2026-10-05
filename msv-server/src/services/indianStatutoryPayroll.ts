@@ -4,9 +4,9 @@
  * Sum Total(Gross): 시트 기준 (기본급 / 월 총일) × 근무일 + 연장 + 상여.
  *
  * PF 모드
- * - basic_12pct(기본): ROUND(MIN(Basic×12%, 1,800), 0) — 엑셀 K9
+ * - basic_12pct(기본): ROUND(MIN(Basic×12%, 상한), 0) — 엑셀 K9
  * - gross_6pct: Sum Total × 6% = 직원·고용주 각각
- * - epf_12pct_half: Gross×50%×12%, 상한 1,800 옵션
+ * - epf_12pct_half: Gross×50%×12%, 상한(PF_CAP_INR=3000) 옵션
  *
  * ESI: 지급합계(Q)>21,000 이면 면제. 직원 Q×0.75% / 사업주 Q×3.25%.
  * PT: Gross≥25,000 → 200(설정 가능).
@@ -24,7 +24,7 @@ export type IndianStatutoryOptions = {
   statutoryApplicable?: boolean;
   /** PF 산출 방식. 기본 gross_6pct(참고 급여 시트) */
   pfMode?: PfMode;
-  /** epf_12pct_half 일 때만: true면 min(50%×Gross×12%, 1800) */
+  /** epf_12pct_half 일 때만: true면 min(50%×Gross×12%, PF_CAP_INR) */
   pfCapAt1800?: boolean;
   /** 인사정보 PF 계산 방식 (basic_12pct 시트 모드에서 사용) */
   pfCalcMode?: UserPfCalcMode;
@@ -108,10 +108,13 @@ export function epfWageBase(gross: number): number {
   return rupee(gross * 0.5);
 }
 
-/** 직원 PF: 12% × (Gross×50%). 상한 적용 시 최대 1,800 루피 */
+/** PF 상한액 (cap_1800 모드). DB 모드키는 호환을 위해 cap_1800 유지 */
+export const PF_CAP_INR = 3000;
+
+/** 직원 PF: 12% × (Gross×50%). 상한 적용 시 최대 PF_CAP_INR 루피 */
 export function computePfEmployeeEpfHalf(gross: number, pfCapAt1800: boolean): number {
   const raw = rupee(epfWageBase(gross) * 0.12);
-  if (pfCapAt1800) return rupee(Math.min(raw, 1800));
+  if (pfCapAt1800) return rupee(Math.min(raw, PF_CAP_INR));
   return raw;
 }
 
@@ -119,14 +122,14 @@ export function computePfEmployerMatchEmployee(pfEmployee: number): number {
   return rupee(pfEmployee);
 }
 
-/** PF 직원·사업주 = ROUND(MIN(Basic × 12%, 1,800), 0). capAt1800=false면 상한 없이 12% */
+/** PF 직원·사업주 = ROUND(MIN(Basic × 12%, 상한), 0). capAt1800=false면 상한 없이 12% */
 export function computePfFromBasicSalary(
   basicSalary: number,
   pfCapAt1800 = true
 ): { pf_employee: number; pf_employer: number } {
   const basic = Math.max(0, basicSalary);
   const raw = basic * 0.12;
-  const amount = Math.round(pfCapAt1800 ? Math.min(raw, 1800) : raw);
+  const amount = Math.round(pfCapAt1800 ? Math.min(raw, PF_CAP_INR) : raw);
   return { pf_employee: amount, pf_employer: amount };
 }
 
@@ -137,7 +140,7 @@ export function normalizeUserPfCalcMode(raw: unknown): UserPfCalcMode {
   return 'cap_1800';
 }
 
-/** 인사정보 PF 계산: 상한 1800 / 기본급 12% / 총급여 12%(직원·사업주 각 50%) / 없음 */
+/** 인사정보 PF 계산: 상한(PF_CAP_INR) / 기본급 12% / 총급여 12%(직원·사업주 각 50%) / 없음 */
 export function computePfFromCalcMode(
   basicSalary: number,
   totalSalary: number,

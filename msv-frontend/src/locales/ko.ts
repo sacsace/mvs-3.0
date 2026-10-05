@@ -572,7 +572,7 @@ export default {
       ptEligibleHintWithState:
         '회사 GST 등록 주: {{state}} ({{code}}) — 급여 지급 시 해당 주 기준으로 PT가 자동 계산됩니다.',
       pfCap: 'PF 상한',
-      pfCap1800: '상한 1,800',
+      pfCap1800: '상한 3,000',
       pfCap12pct: '기본급 12%',
       pfCapTotal12pct: '총급여의 12% (직원·사업주 각 50%)',
       pfCapNone: 'PF 없음',

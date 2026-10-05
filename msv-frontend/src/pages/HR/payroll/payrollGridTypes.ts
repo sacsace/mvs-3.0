@@ -51,9 +51,9 @@ export type PayrollGridRow = {
   tds_manual?: boolean;
   /** 그리드에서 PT 금액을 수동 입력한 경우 */
   pt_manual?: boolean;
-  /** true면 PF 상한 1,800 (기본), false면 기본급×12% — deprecated, pf_calc_mode 사용 */
+  /** true면 PF 상한 적용 (기본), false면 기본급×12% — deprecated, pf_calc_mode 사용 */
   pf_cap_1800?: boolean;
-  /** 인사정보 PF 계산: cap_1800 | basic_12pct | total_12pct | none */
+  /** 인사정보 PF 계산: cap_1800(상한 3,000) | basic_12pct | total_12pct | none */
   pf_calc_mode?: 'cap_1800' | 'basic_12pct' | 'total_12pct' | 'none';
   transport_allowance: number;
   overtime: number;

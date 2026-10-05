@@ -61,7 +61,8 @@ export function computeEsicContributions(
 }
 
 const PF_BASIC_RATE = 0.12;
-const PF_CAP_INR = 1800;
+/** PF 상한액 (cap_1800 모드). 표기·계산 모두 이 값 사용 */
+const PF_CAP_INR = 3000;
 const LEGACY_DAY_SHIFT_RATE_INR = 50;
 
 function num(v: unknown, fallback = 0): number {
@@ -471,7 +472,7 @@ function resolvePfModeFromExtra(x: Record<string, unknown>): PfMode {
  * - Sum Total = (근무일 × Total Salary / 월총일) + OT + Extra Allowance
  * - OT Rate = Basic Salary ÷ 26 ÷ 8 × 2
  * - OT = 주간 OT시간 × OT Rate
- * - PF(직원·사업주) = ROUND(MIN(Basic Salary × 12%, 1,800), 0) — 인사정보에서 상한 해제 시 12%만 적용 (pf_manual 시 유지)
+ * - PF(직원·사업주) = ROUND(MIN(Basic Salary × 12%, 3,000), 0) — 인사정보에서 상한 해제 시 12%만 적용 (pf_manual 시 유지)
  * - ESIC(직원) = IF(지급합계>21,000, 0, 지급합계×0.75%)
  * - TDS = 신규 세제 LET 수식… / 12 (tds_manual 시 유지)
  * - PT = 지급합계 > 25,000 일 때만 주별 슬랩(또는 200) 적용, 이하이면 0 (pt_manual 시 유지)
