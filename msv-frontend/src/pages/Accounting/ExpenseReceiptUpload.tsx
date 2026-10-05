@@ -43,7 +43,7 @@ const ExpenseReceiptUpload: React.FC = () => {
       }
       setSuccess(
         invoiceType === 'proforma'
-          ? 'Proforma Invoice 업로드가 완료되었습니다.'
+          ? 'Proforma Invoice (Quotation) 업로드가 완료되었습니다.'
           : 'Tax Invoice 업로드가 완료되었습니다.'
       );
       setFile(null);
@@ -63,7 +63,7 @@ const ExpenseReceiptUpload: React.FC = () => {
               영수증 업로드
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              QR 코드로 연결된 지출결의서에 영수증을 업로드합니다. Tax / Proforma를 선택하세요.
+              QR 코드로 연결된 지출결의서에 영수증을 업로드합니다. Tax / Proforma Invoice (Quotation)을 선택하세요.
             </Typography>
 
             {!token && (
@@ -81,7 +81,7 @@ const ExpenseReceiptUpload: React.FC = () => {
               <FormControlLabel
                 value="proforma"
                 control={<Radio size="small" />}
-                label="Proforma Invoice"
+                label="Proforma Invoice (Quotation)"
               />
             </RadioGroup>
 

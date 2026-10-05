@@ -4986,9 +4986,9 @@ export default {
         attachmentFileName: 'Attachment file name',
         attachmentFileNameHint: 'Used when downloading. The file extension is kept.',
         invoiceTypeHint:
-          'Select tax invoice, proforma invoice, or no invoice before uploading. Proforma allows remittance, but tax invoice is required to close. No invoice closes after full remittance.',
+          'Select Tax Invoice / Proforma Invoice (Quotation) / No invoice before uploading. Proforma Invoice (Quotation) allows remittance, but Tax Invoice is required to close. No invoice closes after full remittance.',
         invoiceTypeTax: 'Tax invoice',
-        invoiceTypeProforma: 'Proforma invoice',
+        invoiceTypeProforma: 'Proforma Invoice (Quotation)',
         invoiceTypeNone: 'No invoice',
         prepaid: 'Prepaid',
         prepaidHint:
@@ -5111,7 +5111,7 @@ export default {
         calculationAttached: 'Calculation file has been attached.',
         receiptDeleted: 'Receipt attachment has been removed.',
         taxInvoiceAttached: 'Tax invoice has been attached.',
-        proformaAttached: 'Proforma invoice has been attached.',
+        proformaAttached: 'Proforma Invoice (Quotation) has been attached.',
         noInvoiceAttached: 'Supporting file attached as no invoice.',
         remittanceAwaitingTax: 'Remittance recorded. Upload a tax invoice to close this case.',
         deleted: 'Expense report has been deleted successfully.',
@@ -5153,7 +5153,7 @@ export default {
         companyNotFound: 'The selected company could not be found.',
         cannotEditProcessed:
           'This document is under review or already processed and cannot be edited. Check the status in the list.',
-        invoiceTypeRequired: 'Please select tax invoice, proforma invoice, or no invoice.',
+        invoiceTypeRequired: 'Please select Tax Invoice / Proforma Invoice (Quotation) / No invoice.',
         deleteFailed: 'An error occurred while deleting.',
         approveFailed: 'An error occurred while approving.',
         rejectFailed: 'An error occurred while rejecting.',

@@ -1058,32 +1058,86 @@ const expenseApprovalStampWrapSx = {
   width: 'auto',
 } as const;
 
-/** 승인자 Autocomplete — 이름 길이에 맞게 너비 확장, 잘림 방지 */
-const expenseApproverAutocompleteSx = {
-  width: 'max-content',
-  minWidth: 140,
-  maxWidth: '100%',
-  '& .MuiAutocomplete-inputRoot': {
-    flexWrap: 'nowrap',
-    paddingRight: '48px !important',
-  },
-  '& .MuiAutocomplete-input': {
-    width: 'auto !important',
-    minWidth: '6ch !important',
-    textOverflow: 'clip',
-  },
-  '& .MuiAutocomplete-endAdornment': {
-    top: '50%',
-    transform: 'translateY(-50%)',
-    right: 0,
-  },
-} as const;
+/** 빈 검색 상태 최소폭 */
+const EXPENSE_FLOW_STAMP_MIN_WIDTH = 96;
+/** 작성 박스 — 이름 좌우 여유 */
+const EXPENSE_PREPARED_STAMP_PAD_X = 1.5;
+/** 작성 박스 가로 — 이름 폭 대비 배율 (추가 10% 확대) */
+const EXPENSE_PREPARED_STAMP_WIDTH_SCALE = 1.21;
+/** 승인 Autocomplete — 드롭다운(▼) 아이콘만 (clear X 없음) */
+const EXPENSE_APPROVER_ADORNMENT_PX = 26;
+/** 승인 입력 왼쪽 패딩 (우측 ▼ 아이콘 폭보다 좁게) */
+const EXPENSE_APPROVER_PAD_LEFT_PX = 4;
+
+/** 검색 가능한 승인자 중 가장 긴 이름 글자 수 */
+function getLongestApproverNameChars(
+  options: Array<{ id?: number; name?: string } | null | undefined>
+): number {
+  let max = 0;
+  for (const opt of options) {
+    const n = Array.from(String(opt?.name || '').trim()).length;
+    if (n > max) max = n;
+  }
+  return max;
+}
+
+/**
+ * 승인자 Autocomplete 가로폭 —
+ * 검색 가능 사용자 중 가장 긴 이름을 기본 폭으로 사용 (선택 전에도 동일)
+ */
+function getExpenseApproverControlSx(longestNameChars: number) {
+  const chars = Math.max(longestNameChars, 4);
+  // 오른쪽은 ▼ 아이콘 폭, 왼쪽은 그보다 10% 좁혀 좌측 공백 축소
+  const growWidth = `calc(${chars} * 0.55em + 10px + ${EXPENSE_APPROVER_PAD_LEFT_PX + EXPENSE_APPROVER_ADORNMENT_PX}px)`;
+  return {
+    width: growWidth,
+    minWidth: growWidth,
+    maxWidth: 'min(400px, 100%)',
+    flexShrink: 0,
+    margin: 0,
+    '& .MuiAutocomplete-inputRoot': {
+      flexWrap: 'nowrap',
+      paddingLeft: `${EXPENSE_APPROVER_PAD_LEFT_PX}px !important`,
+      paddingRight: `${EXPENSE_APPROVER_ADORNMENT_PX}px !important`,
+      width: '100%',
+      minHeight: 32,
+      boxSizing: 'border-box',
+      justifyContent: 'center',
+    },
+    '& .MuiAutocomplete-input': {
+      width: '100% !important',
+      minWidth: '0 !important',
+      paddingLeft: '0 !important',
+      paddingRight: '0 !important',
+      textAlign: 'center',
+      textOverflow: 'ellipsis',
+      overflow: 'hidden',
+    },
+    '& .MuiAutocomplete-endAdornment': {
+      top: '50%',
+      transform: 'translateY(-50%)',
+      right: 0,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 0,
+      margin: 0,
+    },
+    '& .MuiAutocomplete-clearIndicator': {
+      marginRight: '-2px',
+      padding: '2px',
+    },
+    '& .MuiAutocomplete-popupIndicator': {
+      marginRight: '-2px',
+      padding: '2px',
+    },
+  } as const;
+}
 
 const expenseApproverAutocompleteSlotProps = {
   paper: {
     sx: {
       width: 'max-content',
-      minWidth: 180,
+      minWidth: 160,
       maxWidth: 'min(480px, 90vw)',
     },
   },
@@ -1116,9 +1170,9 @@ const ExpenseFlowStamp = ({
   <Box
     className={`expense-flow-stamp${relaxedLabel ? ' expense-flow-stamp--relaxed-label' : ''}`}
     sx={{
-      width: wide ? 222 : fluidWidth ? 'max-content' : 140,
-      minWidth: wide ? 222 : relaxedLabel ? 168 : fluidWidth ? 140 : 140,
-      maxWidth: wide ? 222 : relaxedLabel ? 'none' : fluidWidth ? 'none' : 140,
+      width: wide ? 222 : fluidWidth ? 'max-content' : 'max-content',
+      minWidth: wide ? 222 : relaxedLabel ? 148 : EXPENSE_FLOW_STAMP_MIN_WIDTH,
+      maxWidth: wide ? 222 : relaxedLabel || fluidWidth ? 'none' : 'max-content',
       flexShrink: 0,
       border: `1px solid ${EXPENSE_STAMP_LINE}`,
       borderRadius: EXPENSE_STAMP_RADIUS,
@@ -1133,7 +1187,7 @@ const ExpenseFlowStamp = ({
     <Box
       sx={{
         ...expenseStampHeaderSx,
-        px: relaxedLabel ? 1.25 : 0.5,
+        px: relaxedLabel ? 0.75 : 0.35,
         py: 0.35,
       }}
     >
@@ -1158,9 +1212,10 @@ const ExpenseFlowStamp = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        px: 1,
-        width: fluidWidth ? 'max-content' : '100%',
-        minWidth: '100%',
+        pl: children ? 0.5 : EXPENSE_PREPARED_STAMP_PAD_X,
+        pr: children ? 0.25 : EXPENSE_PREPARED_STAMP_PAD_X,
+        width: '100%',
+        minWidth: EXPENSE_FLOW_STAMP_MIN_WIDTH,
         boxSizing: 'border-box',
       }}
     >
@@ -1175,6 +1230,7 @@ const ExpenseFlowStamp = ({
             overflow: fluidWidth ? 'visible' : 'hidden',
             textOverflow: fluidWidth ? 'clip' : 'ellipsis',
             maxWidth: fluidWidth ? 'none' : '100%',
+            px: 0.5,
           }}
         >
           {name}
@@ -2068,13 +2124,15 @@ const ExpenseApproval: React.FC = () => {
   const [priorityFilter, setPriorityFilter] = useState('');
   const [companyFilterId, setCompanyFilterId] = useState<number | ''>('');
   const [companyOptions, setCompanyOptions] = useState<Array<{ id: number; name: string }>>([]);
-  /** root: 목록·작성에 쓰는 회사(필터 선택). 일반 사용자: 로그인 회사 */
+  /** root: 필터 회사 → 열람 중인 문서 회사 → 로그인 회사. 일반 사용자: 로그인 회사 */
   const effectiveCompanyId = useMemo(() => {
     if (isRootUser) {
       if (typeof companyFilterId === 'number' && companyFilterId > 0) return companyFilterId;
       const fromExpense = Number(selectedExpense?.companyId);
       if (Number.isFinite(fromExpense) && fromExpense > 0) return fromExpense;
-      return 0;
+      // 전체 회사 선택 시에도 작성·초안은 로그인 회사 기준으로 진행
+      const fromUser = Number(user?.company_id);
+      return Number.isFinite(fromUser) && fromUser > 0 ? fromUser : 0;
     }
     const fromUser = Number(user?.company_id);
     return Number.isFinite(fromUser) && fromUser > 0 ? fromUser : 0;
@@ -2736,7 +2794,7 @@ const ExpenseApproval: React.FC = () => {
         '회사를 선택해주세요.': 'expenseApproval.errors.selectCompanyFirst',
         '회사를 선택해주세요': 'expenseApproval.errors.selectCompanyFirst',
         '선택한 회사를 찾을 수 없습니다.': 'expenseApproval.errors.companyNotFound',
-        '첨부 유형(Tax Invoice / Proforma Invoice / 인보이스 없음)을 선택해주세요.':
+        '첨부 유형(Tax Invoice / Proforma Invoice (Quotation) / 인보이스 없음)을 선택해주세요.':
           'expenseApproval.errors.invoiceTypeRequired',
         '검토 중이거나 처리된 문서는 수정할 수 없습니다.': 'expenseApproval.errors.cannotEditProcessed',
         '검토 중이거나 처리된 문서는 수정할 수 없습니다. 목록에서 문서 상태를 확인해 주세요.':
@@ -3166,10 +3224,36 @@ const ExpenseApproval: React.FC = () => {
     [viewMode]
   );
 
+  /** 목록용: 맨 위에 "전체 회사" 선택지 */
+  const ROOT_COMPANY_ALL_ID = 0;
+  const rootCompanyFilterOptions = useMemo(
+    () => [{ id: ROOT_COMPANY_ALL_ID, name: t('expenseApproval.filters.allCompanies') }, ...companyOptions],
+    [companyOptions, t]
+  );
+
   const selectedRootCompanyOption = useMemo(() => {
-    if (typeof companyFilterId !== 'number' || companyFilterId <= 0) return null;
-    return companyOptions.find((c) => Number(c.id) === Number(companyFilterId)) || null;
-  }, [companyFilterId, companyOptions]);
+    if (typeof companyFilterId !== 'number' || companyFilterId <= 0) {
+      return rootCompanyFilterOptions[0];
+    }
+    return companyOptions.find((c) => Number(c.id) === Number(companyFilterId));
+  }, [companyFilterId, companyOptions, rootCompanyFilterOptions]);
+
+  const handleRootCompanyOptionChange = useCallback(
+    (option: { id: number; name: string } | null) => {
+      if (!option || Number(option.id) === ROOT_COMPANY_ALL_ID) {
+        handleRootCompanyChange('');
+        return;
+      }
+      handleRootCompanyChange(Number(option.id));
+    },
+    [handleRootCompanyChange]
+  );
+
+  /** 작성 화면: 전체 필터여도 실제 작성 회사(로그인 회사 등)를 표시 */
+  const selectedCreateCompanyOption = useMemo(() => {
+    if (!(effectiveCompanyId > 0)) return null;
+    return companyOptions.find((c) => Number(c.id) === Number(effectiveCompanyId)) || null;
+  }, [effectiveCompanyId, companyOptions]);
 
   const rootCompanyAutocompleteSx = {
     minWidth: { xs: 180, sm: 280 },
@@ -3502,7 +3586,14 @@ const ExpenseApproval: React.FC = () => {
 
   const handleCreateExpense = () => {
     if (!createGuard.guard()) return;
-    if (isRootUser && !(effectiveCompanyId > 0)) {
+    const loginCompanyId = Number(user?.company_id);
+    // 전체 회사 선택 시에도 필터는 유지하고, 작성만 로그인 회사(effectiveCompanyId)로 진행
+    const writeCompanyId =
+      (typeof companyFilterId === 'number' && companyFilterId > 0
+        ? companyFilterId
+        : null) ??
+      (Number.isFinite(loginCompanyId) && loginCompanyId > 0 ? loginCompanyId : 0);
+    if (isRootUser && !(writeCompanyId > 0)) {
       setError(t('expenseApproval.errors.selectCompanyFirst'));
       return;
     }
@@ -4810,6 +4901,12 @@ const ExpenseApproval: React.FC = () => {
     });
   }, [approvers, user?.id, viewMode, selectedExpense?.requesterId]);
 
+  /** 승인 박스 기본 가로 = 검색 가능 승인자 중 가장 긴 이름 */
+  const longestSelectableApproverNameChars = useMemo(
+    () => getLongestApproverNameChars(selectableApprovers),
+    [selectableApprovers]
+  );
+
   const selectableCcUsers = useMemo(() => {
     const requesterId = viewMode === 'create' ? user?.id : selectedExpense?.requesterId ?? user?.id;
     const approvedId = voucherData.approvedById ? Number(voucherData.approvedById) : null;
@@ -5296,12 +5393,15 @@ const ExpenseApproval: React.FC = () => {
               <Autocomplete
                 size="small"
                 options={companyOptions}
-                value={selectedRootCompanyOption}
+                value={selectedCreateCompanyOption}
                 onChange={(_, option) => {
-                  handleRootCompanyChange(option ? Number(option.id) : '');
+                  if (option && Number(option.id) > 0) {
+                    handleRootCompanyChange(Number(option.id));
+                  }
                 }}
                 getOptionLabel={(option) => option.name || ''}
                 isOptionEqualToValue={(a, b) => Number(a.id) === Number(b.id)}
+                disableClearable={Boolean(selectedCreateCompanyOption)}
                 filterOptions={(options, state) => {
                   const q = String(state.inputValue || '')
                     .trim()
@@ -5378,11 +5478,20 @@ const ExpenseApproval: React.FC = () => {
                     flexShrink: 0,
                   }}
                 >
-                  <Box sx={{ width: 147, border: `1px solid ${EXPENSE_STAMP_LINE}`, borderRadius: EXPENSE_STAMP_RADIUS, bgcolor: '#FFFFFF', overflow: 'hidden' }}>
+                  <Box
+                    sx={{
+                      width: 'max-content',
+                      minWidth: EXPENSE_FLOW_STAMP_MIN_WIDTH,
+                      border: `1px solid ${EXPENSE_STAMP_LINE}`,
+                      borderRadius: EXPENSE_STAMP_RADIUS,
+                      bgcolor: '#FFFFFF',
+                      overflow: 'hidden',
+                    }}
+                  >
                     <Box
                       sx={{
                         ...expenseStampHeaderSx,
-                        px: 0.5,
+                        px: 1,
                         py: 0.35,
                       }}
                     >
@@ -5396,11 +5505,21 @@ const ExpenseApproval: React.FC = () => {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        px: 0.5,
+                        px: EXPENSE_PREPARED_STAMP_PAD_X,
                         py: 0.5,
+                        minWidth: `calc(${Math.max(Array.from(String(user?.username || '-').trim()).length, 4)} * 0.55em * ${EXPENSE_PREPARED_STAMP_WIDTH_SCALE} + 18px)`,
                       }}
                     >
-                      <Typography sx={{ fontWeight: 700, fontSize: '0.8125rem', textAlign: 'center', color: EXPENSE_STAMP_LABEL }}>
+                      <Typography
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: '0.8125rem',
+                          textAlign: 'center',
+                          color: EXPENSE_STAMP_LABEL,
+                          whiteSpace: 'nowrap',
+                          px: 1,
+                        }}
+                      >
                         {user?.username || '-'}
                       </Typography>
                     </Box>
@@ -5410,9 +5529,9 @@ const ExpenseApproval: React.FC = () => {
 
                   <Box
                     sx={{
-                      minWidth: 160,
                       width: 'max-content',
-                      maxWidth: 'min(480px, 100%)',
+                      minWidth: EXPENSE_FLOW_STAMP_MIN_WIDTH,
+                      maxWidth: 'min(400px, 100%)',
                       border: `1px solid ${EXPENSE_STAMP_LINE}`,
                       borderRadius: EXPENSE_STAMP_RADIUS,
                       bgcolor: '#FFFFFF',
@@ -5436,22 +5555,23 @@ const ExpenseApproval: React.FC = () => {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        px: 0.75,
+                        px: 0.25,
                         py: 0.5,
                         width: 'max-content',
-                        minWidth: '100%',
+                        minWidth: EXPENSE_FLOW_STAMP_MIN_WIDTH,
                         boxSizing: 'border-box',
                       }}
                     >
                   <Autocomplete
                         size="small"
+                        disableClearable
                         options={selectableApprovers}
                     getOptionLabel={(option) => option.name}
                         isOptionEqualToValue={(a, b) => Number(a.id) === Number(b.id)}
                         value={
                           selectableApprovers.find((item) => String(item.id) === String(voucherData.approvedById))
                           || approvers.find((item) => String(item.id) === String(voucherData.approvedById))
-                          || null
+                          || undefined
                         }
                         onChange={(_, value) => {
                           if (value && isSameUserId(value.id, user?.id)) {
@@ -5464,7 +5584,7 @@ const ExpenseApproval: React.FC = () => {
                             setCcUserIds((prev) => prev.filter((id) => !isSameUserId(id, value.id)));
                           }
                         }}
-                        sx={expenseApproverAutocompleteSx}
+                        sx={getExpenseApproverControlSx(longestSelectableApproverNameChars)}
                         slotProps={expenseApproverAutocompleteSlotProps}
                     renderInput={(params) => (
                           <TextField
@@ -5487,8 +5607,8 @@ const ExpenseApproval: React.FC = () => {
                                 textAlign: 'center',
                                 py: 0.25,
                                 whiteSpace: 'nowrap',
-                                textOverflow: 'clip',
-                                overflow: 'visible',
+                                textOverflow: 'ellipsis',
+                                overflow: 'hidden',
                               },
                             }}
                           />
@@ -7763,6 +7883,7 @@ const ExpenseApproval: React.FC = () => {
                               {canChangeApproverThis && node.editable ? (
                                 <Autocomplete
                                   size="small"
+                                  disableClearable
                                   disabled={approverSaving}
                                   options={selectableApprovers}
                                   getOptionLabel={(option) => option.name}
@@ -7770,12 +7891,12 @@ const ExpenseApproval: React.FC = () => {
                                   value={
                                     selectableApprovers.find((item) => isSameUserId(item.id, approvedById))
                                     || approvers.find((item) => isSameUserId(item.id, approvedById))
-                                    || null
+                                    || undefined
                                   }
                                   onChange={(_, value) => {
                                     handleChangeApprover(value);
                                   }}
-                                  sx={expenseApproverAutocompleteSx}
+                                  sx={getExpenseApproverControlSx(longestSelectableApproverNameChars)}
                                   slotProps={expenseApproverAutocompleteSlotProps}
                                   renderInput={(params) => (
                                     <TextField
@@ -7803,8 +7924,8 @@ const ExpenseApproval: React.FC = () => {
                                           height: 32,
                                           boxSizing: 'border-box',
                                           whiteSpace: 'nowrap',
-                                          textOverflow: 'clip',
-                                          overflow: 'visible',
+                                          textOverflow: 'ellipsis',
+                                          overflow: 'hidden',
                                         },
                                       }}
                                     />
@@ -9433,13 +9554,17 @@ const ExpenseApproval: React.FC = () => {
             {isRootUser && (
               <Autocomplete
                 size="small"
-                options={companyOptions}
-                value={selectedRootCompanyOption}
-                onChange={(_, option) => {
-                  handleRootCompanyChange(option ? Number(option.id) : '');
-                }}
+                options={rootCompanyFilterOptions}
+                value={
+                  selectedRootCompanyOption ?? {
+                    id: ROOT_COMPANY_ALL_ID,
+                    name: t('expenseApproval.filters.allCompanies'),
+                  }
+                }
+                onChange={(_, option) => handleRootCompanyOptionChange(option)}
                 getOptionLabel={(option) => option.name || ''}
                 isOptionEqualToValue={(a, b) => Number(a.id) === Number(b.id)}
+                disableClearable
                 filterOptions={(options, state) => {
                   const q = String(state.inputValue || '')
                     .trim()

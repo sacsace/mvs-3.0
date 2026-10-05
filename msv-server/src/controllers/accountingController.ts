@@ -3906,7 +3906,7 @@ export const uploadExpenseReceiptById = async (req: RequestWithUser, res: Respon
     if (!rawType || !['tax', 'proforma', 'proforma_invoice', 'pi', 'tax_invoice', 'none', 'no_invoice', 'no-invoice'].includes(String(rawType).trim().toLowerCase())) {
       return res.status(400).json({
         success: false,
-        message: '첨부 유형(Tax Invoice / Proforma Invoice / 인보이스 없음)을 선택해주세요.',
+        message: '첨부 유형(Tax Invoice / Proforma Invoice (Quotation) / 인보이스 없음)을 선택해주세요.',
       });
     }
     const invoiceType = normalizeExpenseInvoiceType(rawType);
