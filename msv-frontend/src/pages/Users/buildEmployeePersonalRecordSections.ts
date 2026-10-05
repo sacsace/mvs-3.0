@@ -103,7 +103,11 @@ export function buildEmployeePersonalRecordSections(params: {
   const sections: PersonalRecordSection[] = [];
 
   const basicFields: { label: string; value: string }[] = [];
-  pushField(basicFields, t('userManagement.employeeNumber'), su.employee_number);
+  pushField(
+    basicFields,
+    t('userManagement.employeeNumber'),
+    su.employee_number ? String(su.employee_number).toUpperCase() : su.employee_number
+  );
   pushField(basicFields, t('userManagement.name'), user.username);
   pushField(basicFields, t('userManagement.dateOfBirth'), birthDateDisplay);
   pushField(basicFields, t('userManagement.gender'), genderLabel);

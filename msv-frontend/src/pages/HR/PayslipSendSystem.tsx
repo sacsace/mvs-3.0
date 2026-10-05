@@ -2,6 +2,7 @@ import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState }
 import ExcelJS from 'exceljs';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Checkbox,
@@ -31,6 +32,10 @@ import { formatOtHourDisplay } from './payroll/payrollGridUtils';
 import { generatePayslipPdfBlob, payslipBlobToBase64 } from './payrollPayslipPdf';
 import { payrollService, companyService } from '../../services/api';
 import { shortCompanyName, type PayslipCompanyInfo, toPayslipCompanyInfo } from './PayslipContent';
+import {
+  companySelectListboxSlotProps,
+  companySelectNowrapSx,
+} from '../../utils/companyDisplayName';
 import {
   mvsBodyCardSx,
   mvsBodyListTableSx,
@@ -612,7 +617,7 @@ const makePayrollRow = (
     row_no: rowNo + 1,
     sourceRow: rowNo + 1,
     issues,
-    emp_id: firstMappedText(source, mapping, 'emp_id'),
+    emp_id: String(firstMappedText(source, mapping, 'emp_id') || '').trim().toUpperCase(),
     bank_account: firstMappedText(source, mapping, 'bank_account'),
     ifsc: firstMappedText(source, mapping, 'ifsc'),
     bank_name: firstMappedText(source, mapping, 'bank_name'),
@@ -704,7 +709,7 @@ const PayslipSendSystem: React.FC = () => {
         const list = rows
           .map((c: any) => ({
             id: Number(c.id),
-            name: String(c.name || c.company_name || '').trim(),
+            name: shortCompanyName(c.name || c.company_name) || String(c.name || c.company_name || '').trim(),
           }))
           .filter((c: { id: number; name: string }) => Number.isFinite(c.id) && c.id > 0 && c.name)
           .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name));
@@ -997,36 +1002,43 @@ const PayslipSendSystem: React.FC = () => {
         </Box>
         <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 2, display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
           {isRootUser ? (
-            <TextField
-              select
-              size="small"
-              label={t(`${p}.senderCompany`)}
-              value={senderCompanyId === '' ? '' : String(senderCompanyId)}
-              onChange={(e) => {
-                const v = e.target.value;
-                setSenderCompanyId(v === '' ? '' : Number(v));
+            <Autocomplete
+              options={companyOptions}
+              value={
+                typeof senderCompanyId === 'number'
+                  ? companyOptions.find((c) => c.id === senderCompanyId) ?? null
+                  : null
+              }
+              onChange={(_, next) => {
+                setSenderCompanyId(next?.id && next.id > 0 ? next.id : '');
               }}
-              sx={{ ...filterFieldSx, minWidth: { xs: '100%', sm: 280 }, maxWidth: { sm: 360 } }}
-              {...mvsOutlinedLabelProps}
-              helperText={t(`${p}.senderCompanyHelper`)}
-              SelectProps={{
-                displayEmpty: true,
-                renderValue: (selected) => {
-                  if (selected === '' || selected == null) return t(`${p}.senderCompanyPlaceholder`);
-                  const found = companyOptions.find((c) => String(c.id) === String(selected));
-                  return found?.name || String(selected);
-                },
+              getOptionLabel={(option) => option.name}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              disableClearable={Boolean(
+                typeof senderCompanyId === 'number' &&
+                  companyOptions.some((c) => c.id === senderCompanyId)
+              )}
+              slotProps={companySelectListboxSlotProps}
+              sx={{
+                ...filterFieldSx,
+                minWidth: { xs: '100%', sm: 280 },
+                maxWidth: { sm: 360 },
+                ...companySelectNowrapSx,
               }}
-            >
-              <MenuItem value="">
-                <em>{t(`${p}.senderCompanyPlaceholder`)}</em>
-              </MenuItem>
-              {companyOptions.map((c) => (
-                <MenuItem key={c.id} value={String(c.id)}>
-                  {c.name}
-                </MenuItem>
-              ))}
-            </TextField>
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label={t(`${p}.senderCompany`)}
+                  placeholder={t(`${p}.senderCompanySearch`, {
+                    defaultValue: t(`${p}.senderCompanyPlaceholder`),
+                  })}
+                  helperText={t(`${p}.senderCompanyHelper`)}
+                  {...mvsOutlinedLabelProps}
+                  sx={companySelectNowrapSx}
+                />
+              )}
+            />
           ) : null}
           <TextField
             size="small"

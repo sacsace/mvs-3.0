@@ -763,6 +763,7 @@ export default {
         'Create contract → select employee → choose approver → enter details → preview → submit for approval → employee signs → complete.',
       reset: 'Reset',
       company: 'Company',
+      searchCompany: 'Search company',
       tabs: {
         contracts: 'Contracts',
         templates: 'Templates',
@@ -1086,6 +1087,7 @@ export default {
       pageTitle: 'Partners / Customers',
       description: 'Manage partner companies and customers in one place.',
       company: 'Company',
+      searchCompany: 'Search company',
       excelSampleDownload: 'Download Excel Sample',
       excelExport: 'Export to Excel',
       excelImport: 'Import from Excel',
@@ -1553,6 +1555,7 @@ export default {
     payrollManagement: {
       title: 'Payroll Management',
       company: 'Company',
+      searchCompany: 'Search company',
       selectCompany: 'Select company',
       selectCompanyRequired: 'Select a company to manage payroll.',
       description: 'Manage monthly payroll generation, finalization, payslip delivery, and payroll data.',
@@ -1570,6 +1573,7 @@ export default {
         uploadButton: 'Upload payroll Excel',
         senderCompany: 'Sending company',
         senderCompanyPlaceholder: 'Select company',
+        senderCompanySearch: 'Search company',
         senderCompanyHelper: 'Root can choose which company to use for PDF, mail, and {{company}}.',
         selectCompanyRequired: 'Please select the sending company.',
         payMonth: 'Pay month',

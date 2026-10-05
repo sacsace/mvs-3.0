@@ -3722,6 +3722,10 @@ const ExpenseApproval: React.FC = () => {
       viewMode === 'edit' &&
       selectedExpense != null &&
       isRevisionRejectedExpense(selectedExpense);
+    const isPreApprovalEdit =
+      viewMode === 'edit' &&
+      selectedExpense != null &&
+      (selectedExpense.status === 'submitted' || selectedExpense.status === 'in_review');
     if (isRevisionResubmitEdit && !String(editReason || '').trim()) {
       setReasonDialogType('expense-edit');
       setReasonTargetId(activeExpenseId);
@@ -3743,7 +3747,9 @@ const ExpenseApproval: React.FC = () => {
       setSuccess(
         isRevisionResubmitEdit
           ? t('expenseApproval.success.resubmittedAfterRevision')
-          : t('expenseApproval.success.submitted')
+          : isPreApprovalEdit
+            ? t('expenseApproval.success.edited')
+            : t('expenseApproval.success.submitted')
       );
       await loadExpenseData();
       leaveExpenseForm();
@@ -4587,7 +4593,13 @@ const ExpenseApproval: React.FC = () => {
     if (!user?.id) return false;
     if (listTab === 'received' || listTab === 'transfer') return false;
     if (!isSameUserId(expense.requesterId, user.id)) return false;
-    return expense.status === 'draft' || isRevisionRejectedExpense(expense);
+    // 초안·수정반려·제출/검토 중(승인 전)만 작성자 수정 가능
+    return (
+      expense.status === 'draft' ||
+      expense.status === 'submitted' ||
+      expense.status === 'in_review' ||
+      isRevisionRejectedExpense(expense)
+    );
   };
 
   const canResubmitExpense = (expense: ExpenseApprovalItem) => {
@@ -5408,6 +5420,10 @@ const ExpenseApproval: React.FC = () => {
       isEdit &&
       selectedExpense != null &&
       isRevisionRejectedExpense(selectedExpense);
+    const isPreApprovalEdit =
+      isEdit &&
+      selectedExpense != null &&
+      (selectedExpense.status === 'submitted' || selectedExpense.status === 'in_review');
     return (
       <Box sx={{ ...mvsPageRootSx }}>
         <MvsPageHeader
@@ -7400,12 +7416,16 @@ const ExpenseApproval: React.FC = () => {
                 {saving
                   ? isRevisionResubmitEdit
                     ? t('expenseApproval.voucher.resubmitAfterRevisionSaving')
-                    : t('expenseApproval.voucher.submitSaving')
+                    : isPreApprovalEdit
+                      ? t('common.processing')
+                      : t('expenseApproval.voucher.submitSaving')
                   : isRevisionResubmitEdit
                     ? t('expenseApproval.voucher.resubmitAfterRevision')
-                    : isEdit
-                      ? t('expenseApproval.voucher.submit')
-                      : t('expenseApproval.voucher.create')}
+                    : isPreApprovalEdit
+                      ? t('common.save')
+                      : isEdit
+                        ? t('expenseApproval.voucher.submit')
+                        : t('expenseApproval.voucher.create')}
               </Button>
             </Box>
             </Box>
@@ -9123,6 +9143,17 @@ const ExpenseApproval: React.FC = () => {
                   onClick={() => openReasonDialog('expense-revision-reject', selectedExpense.id)}
                 >
                   {t('expenseApproval.actions.revisionReject')}
+                </Button>
+              )}
+              {canEditThis && (
+                <Button
+                  variant="contained"
+                  disableElevation
+                  startIcon={<EditIcon />}
+                  onClick={() => handleEditExpense(selectedExpense)}
+                  sx={mvsBodyPrimaryBtnSx}
+                >
+                  {t('expenseApproval.actions.editDetail')}
                 </Button>
               )}
             </Box>

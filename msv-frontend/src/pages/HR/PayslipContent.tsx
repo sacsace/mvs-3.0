@@ -865,7 +865,11 @@ const PayslipContent = React.forwardRef<HTMLDivElement, Props>(function PayslipC
                 value={displayText(row.unpaid_leave) || '0'}
                 highlight
               />
-              <EmpField compact={forPdf} label={labels.empId} value={row.emp_id} />
+              <EmpField
+                compact={forPdf}
+                label={labels.empId}
+                value={row.emp_id ? String(row.emp_id).toUpperCase() : row.emp_id}
+              />
               <EmpField
                 compact={forPdf}
                 label={labels.designation}

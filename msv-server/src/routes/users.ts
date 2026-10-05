@@ -90,6 +90,11 @@ function normalizeExcelBankName(raw: unknown): string | null {
   return value || null;
 }
 
+/** 사원번호(사번) — 항상 대문자로 저장 */
+function normalizeEmployeeNumber(raw: unknown): string {
+  return String(raw ?? '').trim().toUpperCase();
+}
+
 // bcrypt를 사용한 비밀번호 해싱 함수 (authController와 동일)
 const hashPassword = async (password: string): Promise<string> => {
   return await bcrypt.hash(password, 10);
@@ -266,12 +271,12 @@ const generateEmployeeNumber = async (companyId: number, companyName: string): P
     // 3자리 숫자로 포맷팅 (001, 002, ...)
     const formattedNumber = nextNumber.toString().padStart(3, '0');
     
-    return `${abbreviation}-${formattedNumber}`;
+    return normalizeEmployeeNumber(`${abbreviation}-${formattedNumber}`);
   } catch (error: any) {
     console.error('사원번호 생성 오류:', error);
     // 오류 발생 시 기본값 반환
     const abbreviation = getCompanyAbbreviation(companyName);
-    return `${abbreviation}-001`;
+    return normalizeEmployeeNumber(`${abbreviation}-001`);
   }
 };
 
@@ -1231,32 +1236,30 @@ router.post(
     });
 
     // 사원번호 자동 생성 (employee_number가 없거나 빈 문자열인 경우)
-    let finalEmployeeNumber = employee_number;
-    if (!finalEmployeeNumber || finalEmployeeNumber.trim() === '') {
+    let finalEmployeeNumber = normalizeEmployeeNumber(employee_number);
+    if (!finalEmployeeNumber) {
       if (company) {
         finalEmployeeNumber = await generateEmployeeNumber(company.id, company.name);
       } else {
         // 회사 정보를 찾을 수 없는 경우 기본값
         finalEmployeeNumber = await generateEmployeeNumber(targetCompanyId, 'Company');
       }
-    } else {
-      finalEmployeeNumber = String(finalEmployeeNumber).trim();
-      // root가 직접 입력한 경우 같은 회사 내 중복 방지
-      if ((req as any).user.role === 'root') {
-        const duplicateEmp = await (User as any).findOne({
-          where: {
-            company_id: targetCompanyId,
-            employee_number: finalEmployeeNumber,
-            status: { [Op.ne]: 'inactive' },
-          },
-          attributes: ['id'],
+      finalEmployeeNumber = normalizeEmployeeNumber(finalEmployeeNumber);
+    } else if ((req as any).user.role === 'root') {
+      // root가 직접 입력한 경우 같은 회사 내 중복 방지 (대소문자 무시)
+      const duplicateEmp = await (User as any).findOne({
+        where: {
+          company_id: targetCompanyId,
+          employee_number: { [Op.iLike]: finalEmployeeNumber },
+          status: { [Op.ne]: 'inactive' },
+        },
+        attributes: ['id'],
+      });
+      if (duplicateEmp) {
+        return res.status(409).json({
+          success: false,
+          message: '같은 회사에 이미 사용 중인 사원번호입니다.',
         });
-        if (duplicateEmp) {
-          return res.status(409).json({
-            success: false,
-            message: '같은 회사에 이미 사용 중인 사원번호입니다.',
-          });
-        }
       }
     }
 
@@ -1616,12 +1619,12 @@ router.put(
       if (currentUserRole !== 'root') {
         // 사원번호 변경은 root만 허용 (비-root 요청의 해당 필드는 무시)
       } else {
-        const trimmedEmpNo = String(employee_number || '').trim();
+        const trimmedEmpNo = normalizeEmployeeNumber(employee_number);
         if (trimmedEmpNo) {
           const duplicateEmp = await (User as any).findOne({
             where: {
               company_id: effectiveCompanyId,
-              employee_number: trimmedEmpNo,
+              employee_number: { [Op.iLike]: trimmedEmpNo },
               id: { [Op.ne]: id },
               status: { [Op.ne]: 'inactive' },
             },
@@ -2179,10 +2182,10 @@ router.post(
           }
         }
 
-        // 사원번호 자동 생성 (없는 경우)
-        let employeeNumber = row['사원번호']?.toString().trim() || '';
+        // 사원번호 자동 생성 (없는 경우) — 대문자로 저장
+        let employeeNumber = normalizeEmployeeNumber(row['사원번호']);
         if (!employeeNumber && reactivateUser?.employee_number) {
-          employeeNumber = String(reactivateUser.employee_number);
+          employeeNumber = normalizeEmployeeNumber(reactivateUser.employee_number);
         }
         if (!employeeNumber && finalCompanyId) {
           const company = await (Company as any).findByPk(finalCompanyId);
@@ -2203,9 +2206,12 @@ router.post(
                 sequence = parseInt(match[1]) + 1;
               }
             }
-            employeeNumber = `${abbreviation}-${sequence.toString().padStart(3, '0')}`;
+            employeeNumber = normalizeEmployeeNumber(
+              `${abbreviation}-${sequence.toString().padStart(3, '0')}`
+            );
           }
         }
+        employeeNumber = normalizeEmployeeNumber(employeeNumber);
 
         // 비밀번호 검증 및 해싱
         const password = row['비밀번호'].toString().trim();

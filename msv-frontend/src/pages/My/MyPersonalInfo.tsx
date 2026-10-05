@@ -790,7 +790,9 @@ const MyPersonalInfo: React.FC = () => {
                     }}
                   >
                     <ReadField label={t('userManagement.employeeNumber')}>
-                      {profile.employee_number || '-'}
+                      {profile.employee_number
+                        ? String(profile.employee_number).toUpperCase()
+                        : '-'}
                     </ReadField>
                     <ReadField label={t('userManagement.hireDate')}>
                       {profile.hire_date

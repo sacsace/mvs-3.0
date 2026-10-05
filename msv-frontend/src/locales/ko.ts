@@ -761,6 +761,7 @@ export default {
         '계약 작성 → 근로 대상 → 승인자 → 기본 정보 → 미리보기 → 승인 제출 → 근로자 서명 → 완료 순서로 관리합니다.',
       reset: '초기화',
       company: '회사',
+      searchCompany: '회사명 검색',
       tabs: {
         contracts: '계약 목록',
         templates: '템플릿',
@@ -1140,6 +1141,7 @@ export default {
       pageTitle: '파트너 업체/고객 관리',
       description: '파트너 업체와 고객 정보를 한곳에서 관리합니다.',
       company: '회사',
+      searchCompany: '회사명 검색',
       excelSampleDownload: 'Excel 샘플 다운로드',
       excelExport: 'Excel 내보내기',
       excelImport: 'Excel 가져오기',
@@ -1605,6 +1607,7 @@ export default {
     payrollManagement: {
       title: '급여 관리',
       company: '회사',
+      searchCompany: '회사명 검색',
       selectCompany: '회사 선택',
       selectCompanyRequired: '급여를 처리할 회사를 선택해 주세요.',
       description: '급여월별 급여 생성·확정, 명세서 발송 및 급여 데이터를 관리합니다.',
@@ -1622,6 +1625,7 @@ export default {
         uploadButton: '급여 엑셀 업로드',
         senderCompany: '발송 회사',
         senderCompanyPlaceholder: '회사 선택',
+        senderCompanySearch: '회사명 검색',
         senderCompanyHelper: 'Root는 발송·PDF·메일({{company}})에 사용할 회사를 선택합니다.',
         selectCompanyRequired: '발송 회사를 선택해주세요.',
         payMonth: '급여월',

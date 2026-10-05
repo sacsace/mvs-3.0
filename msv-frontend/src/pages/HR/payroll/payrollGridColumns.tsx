@@ -262,6 +262,7 @@ export function buildPayrollGridColumns({
       minWidth: 88,
       editable: false,
       cellClassName: 'payroll-col-emp-id',
+      valueGetter: (_value, row) => String(row?.emp_id ?? '').trim().toUpperCase(),
     }),
     colDef({
       field: 'bank_account',

@@ -76,6 +76,11 @@ import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { usePageMenuPermission } from '../../context/MenuPermissionContext';
 import { useMenuActionGuard } from '../../hooks/useMenuActionGuard';
+import {
+  companySelectListboxSlotProps,
+  companySelectNowrapSx,
+  shortCompanyName,
+} from '../../utils/companyDisplayName';
 
 const EMPLOYMENT_CONTRACT_MENU_ROUTES = ['/hr/employment-contracts', '/hr'] as const;
 
@@ -452,7 +457,13 @@ const EmploymentContractManagement: React.FC = () => {
     if (!isRoot) return;
     try {
       const rows = await useReferenceDataStore.getState().fetchCompanies();
-      const mapped = rows.map((c: any) => ({ id: Number(c.id), name: String(c.name || `Company ${c.id}`) }));
+      const mapped = rows
+        .map((c: any) => ({
+          id: Number(c.id),
+          name: shortCompanyName(c.name) || String(c.name || `Company ${c.id}`),
+        }))
+        .filter((c) => Number.isFinite(c.id) && c.id > 0)
+        .sort((a, b) => a.name.localeCompare(b.name));
       setCompanies(mapped);
       if (!selectedCompanyId && mapped.length > 0) {
         const loginCompanyId = Number(user?.company_id || 0);
@@ -1368,7 +1379,51 @@ const EmploymentContractManagement: React.FC = () => {
 
   return (
     <Box sx={{ ...mvsPageRootSx }}>
-      <MvsPageHeader title={t('employmentContractManagement.pageTitle')} description={t('employmentContractManagement.description')} />
+      <MvsPageHeader
+        title={t('employmentContractManagement.pageTitle')}
+        description={t('employmentContractManagement.description')}
+        actions={
+          isRoot ? (
+            <Autocomplete
+              options={companies}
+              value={
+                typeof selectedCompanyId === 'number'
+                  ? companies.find((c) => c.id === selectedCompanyId) ?? null
+                  : null
+              }
+              onChange={(_, next) => {
+                setSelectedCompanyId(next?.id && next.id > 0 ? next.id : '');
+              }}
+              getOptionLabel={(option) => option.name}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              disableClearable={Boolean(
+                typeof selectedCompanyId === 'number' &&
+                  companies.some((c) => c.id === selectedCompanyId)
+              )}
+              slotProps={companySelectListboxSlotProps}
+              sx={{
+                minWidth: 220,
+                maxWidth: 320,
+                ...mvsSearchFieldSx,
+                ...mvsFilterFieldHeightSx,
+                ...companySelectNowrapSx,
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label={t('employmentContractManagement.company')}
+                  placeholder={t('employmentContractManagement.searchCompany', {
+                    defaultValue: '회사명 검색',
+                  })}
+                  {...mvsOutlinedLabelProps}
+                  sx={companySelectNowrapSx}
+                />
+              )}
+            />
+          ) : null
+        }
+      />
 
       {!menuFlags.menusLoading && !menuFlags.canRead && (
         <Alert severity="warning" sx={{ mb: 3 }}>
@@ -1457,11 +1512,7 @@ const EmploymentContractManagement: React.FC = () => {
           ) : null}
         </Box>
 
-        {(isRoot && (tab === 'contracts' || tab === 'templates')) ||
-        tab === 'my' ||
-        tab === 'contracts' ||
-        tab === 'approvals' ||
-        tab === 'templates' ? (
+        {tab === 'my' || tab === 'contracts' || tab === 'approvals' || tab === 'templates' ? (
           <Box
             sx={{
               px: { xs: 2, sm: 2.5 },
@@ -1470,35 +1521,13 @@ const EmploymentContractManagement: React.FC = () => {
               display: 'grid',
               gridTemplateColumns: {
                 xs: '1fr',
-                sm:
-                  tab === 'my'
-                    ? '1fr minmax(220px, 320px)'
-                    : isRoot && (tab === 'contracts' || tab === 'templates')
-                      ? 'minmax(220px, 320px) minmax(220px, 1fr)'
-                      : 'minmax(220px, 360px)',
+                sm: tab === 'my' ? '1fr minmax(220px, 320px)' : 'minmax(220px, 360px)',
               },
               gap: 2,
               alignItems: 'center',
+              justifyContent: tab === 'my' ? 'stretch' : 'end',
             }}
           >
-            {isRoot && (tab === 'contracts' || tab === 'templates') ? (
-                <TextField
-                select
-                size="small"
-                fullWidth
-                label={t('employmentContractManagement.company')}
-                {...CONTRACT_FILTER_OUTLINED}
-                value={selectedCompanyId}
-                onChange={(e) => setSelectedCompanyId(Number(e.target.value))}
-                sx={contractFilterFieldSx}
-              >
-                {companies.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>
-                    {c.name}
-                  </MenuItem>
-                ))}
-              </TextField>
-            ) : null}
             {tab === 'my' ? (
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                 {(['all', 'in_progress', 'completed'] as MyContractFilterMode[]).map((mode) => (

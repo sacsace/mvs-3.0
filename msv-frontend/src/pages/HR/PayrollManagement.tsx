@@ -16,6 +16,7 @@ import {
   InputAdornment,
   Tooltip,
   CircularProgress,
+  Autocomplete,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -55,6 +56,11 @@ import { syncPayrollGridSettingsFromServer } from './payroll/payrollGridSettings
 import { resolveRegisteredStateCodeFromCompanyLike } from './payroll/indianProfessionalTax';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 import { normalizePayMonth, isPayMonthAfterCurrent } from '../../utils/payMonth';
+import {
+  companySelectListboxSlotProps,
+  companySelectNowrapSx,
+  shortCompanyName,
+} from '../../utils/companyDisplayName';
 
 const PAYROLL_MENU_ROUTES = ['/hr/payroll', '/hr'] as const;
 const PAYSLIP_SEND_MENU_ROUTES = ['/hr/payslip-send', '/hr'] as const;
@@ -179,7 +185,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
         const list: Array<{ id: number; name: string }> = rows
           .map((c: any) => ({
             id: Number(c.id),
-            name: String(c.name || c.company_name || '').trim(),
+            name: shortCompanyName(c.name || c.company_name) || String(c.name || c.company_name || '').trim(),
           }))
           .filter((c: { id: number; name: string }) => Number.isFinite(c.id) && c.id > 0 && c.name)
           .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name));
@@ -681,38 +687,41 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
         )}
         actions={
           isRoot ? (
-            <TextField
-              select
-              size="small"
-              label={t('payrollManagement.company')}
-              {...PAYROLL_FILTER_OUTLINED}
-              value={selectedCompanyId === '' ? '' : String(selectedCompanyId)}
-              onChange={(e) => {
-                const v = e.target.value;
-                setSelectedCompanyId(v === '' ? '' : Number(v));
+            <Autocomplete
+              options={companyOptions}
+              value={
+                typeof selectedCompanyId === 'number'
+                  ? companyOptions.find((c) => c.id === selectedCompanyId) ?? null
+                  : null
+              }
+              onChange={(_, next) => {
+                setSelectedCompanyId(next?.id && next.id > 0 ? next.id : '');
               }}
+              getOptionLabel={(option) => option.name}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              disableClearable={Boolean(
+                typeof selectedCompanyId === 'number' &&
+                  companyOptions.some((c) => c.id === selectedCompanyId)
+              )}
               disabled={menuFlags.menusLoading || !menuFlags.canRead}
-              sx={{ ...payrollFilterFieldSx, minWidth: { xs: '100%', sm: 260 }, maxWidth: { sm: 360 } }}
-              SelectProps={{
-                displayEmpty: true,
-                renderValue: (selected) => {
-                  if (selected === '' || selected == null) {
-                    return t('payrollManagement.selectCompany');
-                  }
-                  const found = companyOptions.find((c) => String(c.id) === String(selected));
-                  return found?.name || String(selected);
-                },
+              slotProps={companySelectListboxSlotProps}
+              sx={{
+                ...payrollFilterFieldSx,
+                minWidth: { xs: '100%', sm: 260 },
+                maxWidth: { sm: 360 },
+                ...companySelectNowrapSx,
               }}
-            >
-              <MenuItem value="">
-                <em>{t('payrollManagement.selectCompany')}</em>
-              </MenuItem>
-              {companyOptions.map((c) => (
-                <MenuItem key={c.id} value={String(c.id)}>
-                  {c.name}
-                </MenuItem>
-              ))}
-            </TextField>
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label={t('payrollManagement.company')}
+                  placeholder={t('payrollManagement.searchCompany')}
+                  {...PAYROLL_FILTER_OUTLINED}
+                  sx={companySelectNowrapSx}
+                />
+              )}
+            />
           ) : null
         }
       />

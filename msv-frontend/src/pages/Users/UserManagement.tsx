@@ -776,7 +776,7 @@ const UserManagement: React.FC = () => {
     try {
       const response = await userService.getNextEmployeeNumber(companyId);
       if (response?.success) {
-        const nextNumber = response.data?.employee_number || '';
+        const nextNumber = String(response.data?.employee_number || '').trim().toUpperCase();
         setFormData((prev) => ({ ...prev, employee_number: nextNumber }));
       }
     } catch {
@@ -1169,7 +1169,7 @@ const UserManagement: React.FC = () => {
     setCareerCertificateFiles({});
     setCertificateCopyFiles({});
     setFormData({
-      employee_number: (user as any).employee_number || '',
+      employee_number: String((user as any).employee_number || '').trim().toUpperCase(),
       username: user.username,
       birth_date: (user as any).birth_date || '',
       gender: (user as any).gender || '',
@@ -1526,7 +1526,7 @@ const UserManagement: React.FC = () => {
         if (!(user?.role === 'root' && String(submitData.employee_number || '').trim())) {
           submitData.employee_number = '';
         } else {
-          submitData.employee_number = String(submitData.employee_number).trim();
+          submitData.employee_number = String(submitData.employee_number).trim().toUpperCase();
         }
         const createResponse = await api.post('/users', submitData);
         savedUserId = Number(createResponse.data?.data?.id);
@@ -2810,8 +2810,12 @@ const UserManagement: React.FC = () => {
                       }
                       onChange={(e) => {
                         if (user?.role !== 'root') return;
-                        setFormData({ ...formData, employee_number: e.target.value });
+                        setFormData({
+                          ...formData,
+                          employee_number: e.target.value.toUpperCase(),
+                        });
                       }}
+                      inputProps={{ style: { textTransform: 'uppercase' } }}
                       disabled={user?.role !== 'root'}
                       helperText={
                         user?.role === 'root'
@@ -3966,9 +3970,13 @@ const UserManagement: React.FC = () => {
                         })()}
                       </Box>
                     ) : null}
-                    {renderDetailField(t('userManagement.employeeNumber'), su.employee_number, {
-                      show: hasDetailValue(su.employee_number),
-                    })}
+                    {renderDetailField(
+                      t('userManagement.employeeNumber'),
+                      su.employee_number ? String(su.employee_number).toUpperCase() : su.employee_number,
+                      {
+                        show: hasDetailValue(su.employee_number),
+                      }
+                    )}
                     {renderDetailField(t('userManagement.name'), selectedUser.username, {
                       show: hasDetailValue(selectedUser.username),
                       valueSx: { fontWeight: 600 },

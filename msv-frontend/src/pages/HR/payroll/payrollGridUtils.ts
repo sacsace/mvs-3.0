@@ -1004,7 +1004,7 @@ export function payrollRecordToGridRow(
   const row: PayrollGridRow = {
     id: p.id,
     row_no: index + 1,
-    emp_id: ex(x, 'emp_id') || str(emp.employee_number),
+    emp_id: String(ex(x, 'emp_id') || str(emp.employee_number) || '').trim().toUpperCase(),
     bank_account: ex(x, 'bank_account'),
     ifsc: ex(x, 'ifsc'),
     bank_name: toProperCaseInput(ex(x, 'bank_name')),

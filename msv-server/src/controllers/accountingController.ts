@@ -3313,19 +3313,9 @@ export const updateExpenseReport = async (req: RequestWithUser, res: Response) =
     const isRevisionResubmit =
       prevStatus === 'rejected' && isRevisionRejectedExpense(expense.items);
     const isDraftEdit = prevStatus === 'draft';
-    const requestedStatusEarly = String(req.body?.status || prevStatus);
-    if (!isDraftEdit && !isRevisionResubmit) {
-      // 이중 클릭·네트워크 재시도로 이미 제출된 문서에 다시 submitted 요청이 오면 성공으로 처리
-      if (
-        (prevStatus === 'submitted' || prevStatus === 'in_review') &&
-        requestedStatusEarly === 'submitted'
-      ) {
-        return res.json({
-          success: true,
-          data: sanitizeExpenseForUser(expense, req.user),
-          alreadySubmitted: true,
-        });
-      }
+    // 제출·검토 중(승인 전)은 작성자가 내용 수정 가능
+    const isPreApprovalEdit = prevStatus === 'submitted' || prevStatus === 'in_review';
+    if (!isDraftEdit && !isRevisionResubmit && !isPreApprovalEdit) {
       return res.status(400).json({
         success: false,
         message: '검토 중이거나 처리된 문서는 수정할 수 없습니다. 목록에서 문서 상태를 확인해 주세요.',
@@ -3453,6 +3443,9 @@ export const updateExpenseReport = async (req: RequestWithUser, res: Response) =
         )
       );
       nextBody.status = 'submitted';
+    } else if (isPreApprovalEdit) {
+      // 승인 전 수정: 상태는 제출됨으로 유지(검토 중이었더라도 재검토 대기)
+      nextBody.status = 'submitted';
     } else {
       nextBody.status = isSubmit ? 'submitted' : prevStatus;
     }
@@ -3468,7 +3461,8 @@ export const updateExpenseReport = async (req: RequestWithUser, res: Response) =
     await expense.update(nextBody);
     await expense.reload();
 
-    if (isSubmit) {
+    // 최초 제출·수정반려 재제출만 알림 (승인 전 단순 수정은 스팸 방지로 제외)
+    if (isSubmit && !isPreApprovalEdit) {
       notifyExpenseReportSubmitted(req, expense);
     }
 

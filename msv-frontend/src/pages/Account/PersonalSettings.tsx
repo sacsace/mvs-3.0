@@ -560,7 +560,12 @@ const PersonalSettings: React.FC = () => {
                   t('personalSettings.position'),
                   formatPositionLabel(profile.position, i18n.language) || '-',
                 ],
-                [t('personalSettings.employeeNumber'), profile.employee_number || '-'],
+                [
+                  t('personalSettings.employeeNumber'),
+                  profile.employee_number
+                    ? String(profile.employee_number).toUpperCase()
+                    : '-',
+                ],
               ].map(([label, value]) => (
                 <Box key={label}>
                   <Typography variant="caption" color="text.secondary">
