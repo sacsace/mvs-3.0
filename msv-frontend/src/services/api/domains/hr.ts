@@ -84,13 +84,13 @@ export const vacationService = {
     return response.data;
   },
 
-  // 휴가 정책 조회
-  getVacationPolicy: async () => {
-    const response = await api.get('/hr/vacations/policy');
+  // 휴가 정책 조회 (root는 company_id로 타사 정책 조회)
+  getVacationPolicy: async (params?: { company_id?: number }) => {
+    const response = await api.get('/hr/vacations/policy', { params });
     return response.data;
   },
 
-  // ?��? ?�책 ?�??
+  // 휴가 정책 저장 (root는 company_id로 타사 정책 수정)
   updateVacationPolicy: async (data: {
     annualLeaveStartDays?: number;
     annualLeaveEarnDays?: number;
@@ -100,6 +100,7 @@ export const vacationService = {
     forceFixedAnnualForTenure?: boolean;
     forceFixedAnnualDays?: number;
     forceFixedAnnualMinYears?: number;
+    company_id?: number;
   }) => {
     const response = await api.put('/hr/vacations/policy', data);
     return response.data;

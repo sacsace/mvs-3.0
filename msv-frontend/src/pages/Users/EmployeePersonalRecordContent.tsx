@@ -238,8 +238,9 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
             if (!fields.length && !items.length) return null;
 
             return (
-              <Box key={section.title}>
+              <Box key={section.title} data-pdf-break="">
                 <Box
+                  data-pdf-break=""
                   sx={{
                     px: 1,
                     py: 0.4,
@@ -257,7 +258,7 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
                   <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                     <Box component="tbody">
                       {chunkPairs(fields, 2).map((pair, rowIdx) => (
-                        <Box component="tr" key={`${section.title}-r${rowIdx}`}>
+                        <Box component="tr" key={`${section.title}-r${rowIdx}`} data-pdf-break="">
                           {pair.map((field) => (
                             <React.Fragment key={`${section.title}-${field.label}`}>
                               <Box
@@ -324,7 +325,7 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
                   <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                     <Box component="tbody">
                       {items.map((item, idx) => (
-                        <Box component="tr" key={`${section.title}-i${idx}`}>
+                        <Box component="tr" key={`${section.title}-i${idx}`} data-pdf-break="">
                           <Box
                             component="td"
                             sx={{
@@ -375,6 +376,7 @@ const EmployeePersonalRecordContent = React.forwardRef<HTMLDivElement, EmployeeP
           })}
 
           <Box
+            data-pdf-break=""
             sx={{
               display: 'flex',
               justifyContent: 'space-between',

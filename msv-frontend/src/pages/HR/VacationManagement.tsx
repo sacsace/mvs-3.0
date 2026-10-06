@@ -82,7 +82,7 @@ import {
 import { useStore, useMenuStore } from '../../store';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
-import { vacationService } from '../../services/api';
+import { companyService, vacationService } from '../../services/api';
 import { getUploadUrl } from '../../utils/uploadUrl';
 import { useTranslation } from 'react-i18next';
 import DepartmentLeaveCalendar, { CALENDAR_DEPARTMENT_ALL_VALUE } from './DepartmentLeaveCalendar';
@@ -91,6 +91,11 @@ import PromptDialog from '../../components/Common/PromptDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { usePromptDialog } from '../../hooks/usePromptDialog';
 import { formatPositionLabel } from '../../utils/positionLabels';
+import {
+  companySelectListboxSlotProps,
+  companySelectNowrapSx,
+  shortCompanyName,
+} from '../../utils/companyDisplayName';
 
 interface VacationRequest {
   id: number;
@@ -225,6 +230,26 @@ const VacationManagement: React.FC = () => {
 
   const hrElevated = user?.role === 'root' || user?.role === 'admin';
   const isRootUser = user?.role === 'root';
+  /** root: 헤더 회사 선택 — 타사 휴가·정책 조회/수정 */
+  const [companyFilterId, setCompanyFilterId] = useState<number>(() => {
+    const id = Number(user?.company_id);
+    return Number.isFinite(id) && id > 0 ? id : 0;
+  });
+  const [companyOptions, setCompanyOptions] = useState<Array<{ id: number; name: string }>>([]);
+  const effectiveCompanyId = useMemo(() => {
+    if (isRootUser) {
+      const fromFilter = Number(companyFilterId);
+      if (Number.isFinite(fromFilter) && fromFilter > 0) return fromFilter;
+    }
+    const fromUser = Number(user?.company_id);
+    return Number.isFinite(fromUser) && fromUser > 0 ? fromUser : 0;
+  }, [isRootUser, companyFilterId, user?.company_id]);
+  const selectedCompanyOption = useMemo(
+    () =>
+      companyOptions.find((c) => Number(c.id) === Number(effectiveCompanyId)) ||
+      (effectiveCompanyId > 0 ? { id: effectiveCompanyId, name: '' } : null),
+    [companyOptions, effectiveCompanyId]
+  );
   /** 직원별 잔여일·휴가 형태 — admin/root 전용 */
   const canAccessLeaveAdminTabs = hrElevated;
   const clampLeaveTab = useCallback((tab: number) => {
@@ -303,7 +328,7 @@ const VacationManagement: React.FC = () => {
     setError(null);
     try {
       const params: { company_id?: number } = {};
-      if (user?.company_id) params.company_id = user.company_id;
+      if (effectiveCompanyId > 0) params.company_id = effectiveCompanyId;
       const response = await vacationService.getLeaveBalances(params);
       if (response.success) {
         const rows = (Array.isArray(response.data) ? response.data : []).map((row: any) => ({
@@ -335,8 +360,8 @@ const VacationManagement: React.FC = () => {
     try {
       // 회사 전체 휴가 조회 (root/admin)
       const params: { company_id?: number } = {};
-      if (user?.company_id) {
-        params.company_id = user.company_id;
+      if (effectiveCompanyId > 0) {
+        params.company_id = effectiveCompanyId;
       }
       const response = await vacationService.getVacations(params);
       if (response.success) {
@@ -405,10 +430,10 @@ const VacationManagement: React.FC = () => {
         // 내가 신청한 휴가
         params.user_id = user?.id;
       } else if (adjustedTab === 2) {
-        // 휴가 결재: root는 등록 회사 전체 조회, 그 외는 본인 결재 대상만
+        // 휴가 결재: root는 선택 회사 전체 조회, 그 외는 본인 결재 대상만
         if (isRootUser) {
-          if (user?.company_id) {
-            params.company_id = user.company_id;
+          if (effectiveCompanyId > 0) {
+            params.company_id = effectiveCompanyId;
           }
         } else {
           params.approved_by = user?.id;
@@ -467,7 +492,9 @@ const VacationManagement: React.FC = () => {
 
   const loadVacationPolicy = async () => {
     try {
-      const response = await vacationService.getVacationPolicy();
+      const params =
+        isRootUser && effectiveCompanyId > 0 ? { company_id: effectiveCompanyId } : undefined;
+      const response = await vacationService.getVacationPolicy(params);
       if (response.success) {
         setVacationPolicy(response.data);
       }
@@ -475,6 +502,44 @@ const VacationManagement: React.FC = () => {
       /* ignore */
     }
   };
+
+  useEffect(() => {
+    if (!isRootUser) {
+      setCompanyOptions([]);
+      return;
+    }
+    let cancelled = false;
+    const tenantId = Number(user?.tenant_id);
+    void (async () => {
+      try {
+        const res = await companyService.getCompanies();
+        const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+        if (cancelled) return;
+        setCompanyOptions(
+          rows
+            .map((c: any) => ({
+              id: Number(c.id),
+              name: shortCompanyName(String(c.name || c.company_name || '').trim()),
+              tenantId: Number(c.tenant_id || c.tenantId || 0),
+            }))
+            .filter(
+              (c: { id: number; name: string; tenantId: number }) =>
+                Number.isFinite(c.id) &&
+                c.id > 0 &&
+                c.name &&
+                (!Number.isFinite(tenantId) || tenantId <= 0 || !c.tenantId || c.tenantId === tenantId)
+            )
+            .map(({ id, name }: { id: number; name: string }) => ({ id, name }))
+            .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name))
+        );
+      } catch {
+        if (!cancelled) setCompanyOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isRootUser, user?.tenant_id]);
 
   useEffect(() => {
     // admin/root: 0=현황, 3=잔여일, 4=휴가 형태
@@ -489,8 +554,8 @@ const VacationManagement: React.FC = () => {
     if (canAccessLeaveAdminTabs && activeTab === 4) {
       void loadVacationPolicy();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- activeTab·권한 변경 시에만 목록 재조회
-  }, [activeTab, canAccessLeaveAdminTabs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 탭·권한·선택 회사 변경 시 재조회
+  }, [activeTab, canAccessLeaveAdminTabs, effectiveCompanyId]);
 
   const buildPolicyPayload = (overrides: Partial<{
     annualLeaveStartDays: number;
@@ -517,11 +582,16 @@ const VacationManagement: React.FC = () => {
       overrides.forceFixedAnnualDays ?? vacationPolicy?.forceFixedAnnualDays ?? 12,
     forceFixedAnnualMinYears:
       overrides.forceFixedAnnualMinYears ?? vacationPolicy?.forceFixedAnnualMinYears ?? 1,
+    ...(isRootUser && effectiveCompanyId > 0 ? { company_id: effectiveCompanyId } : {}),
   });
 
   const handleSavePolicy = async (startDays: number) => {
     if (!canEditPolicy) {
       setError(t('vacationManagement.adminOnlyLeaveType'));
+      return;
+    }
+    if (isRootUser && !(effectiveCompanyId > 0)) {
+      setError(t('vacationManagement.selectCompany'));
       return;
     }
     setSavingPolicy(true);
@@ -546,6 +616,10 @@ const VacationManagement: React.FC = () => {
   const handleToggleAbsenceDeduction = async (checked: boolean) => {
     if (!canEditPolicy) {
       setError(t('vacationManagement.adminOnlyLeaveType'));
+      return;
+    }
+    if (isRootUser && !(effectiveCompanyId > 0)) {
+      setError(t('vacationManagement.selectCompany'));
       return;
     }
     setSavingPolicy(true);
@@ -573,6 +647,10 @@ const VacationManagement: React.FC = () => {
   const handleToggleForceFixedAnnual = async (checked: boolean) => {
     if (!canEditPolicy) {
       setError(t('vacationManagement.adminOnlyLeaveType'));
+      return;
+    }
+    if (isRootUser && !(effectiveCompanyId > 0)) {
+      setError(t('vacationManagement.selectCompany'));
       return;
     }
     setSavingPolicy(true);
@@ -604,6 +682,10 @@ const VacationManagement: React.FC = () => {
   const handleSaveForceFixedAnnualDays = async (days: number) => {
     if (!canEditPolicy) {
       setError(t('vacationManagement.adminOnlyLeaveType'));
+      return;
+    }
+    if (isRootUser && !(effectiveCompanyId > 0)) {
+      setError(t('vacationManagement.selectCompany'));
       return;
     }
     const nextDays = Math.max(1, Math.floor(Number(days) || 12));
@@ -638,6 +720,10 @@ const VacationManagement: React.FC = () => {
       setError(t('vacationManagement.adminOnlyLeaveType'));
       return;
     }
+    if (isRootUser && !(effectiveCompanyId > 0)) {
+      setError(t('vacationManagement.selectCompany'));
+      return;
+    }
 
     const currentTypes = vacationPolicy?.availableTypes || DEFAULT_AVAILABLE_TYPES;
     const newTypes = currentTypes.includes(vacationType)
@@ -666,6 +752,10 @@ const VacationManagement: React.FC = () => {
   const handleSaveLeaveTypeDays = async (vacationType: string, days: number) => {
     if (!canEditPolicy) {
       setError(t('vacationManagement.adminOnlyLeaveType'));
+      return;
+    }
+    if (isRootUser && !(effectiveCompanyId > 0)) {
+      setError(t('vacationManagement.selectCompany'));
       return;
     }
 
@@ -747,8 +837,8 @@ const VacationManagement: React.FC = () => {
         params.user_id = user?.id;
       } else if (adjustedTab === 2) {
         if (isRootUser) {
-          if (user?.company_id) {
-            params.company_id = user.company_id;
+          if (effectiveCompanyId > 0) {
+            params.company_id = effectiveCompanyId;
           }
         } else {
           params.approved_by = user?.id;
@@ -1014,7 +1104,7 @@ const VacationManagement: React.FC = () => {
     void (async () => {
       try {
         const params: { user_id: number; company_id?: number } = { user_id: row.userId };
-        if (user?.company_id) params.company_id = user.company_id;
+        if (effectiveCompanyId > 0) params.company_id = effectiveCompanyId;
         const response = await vacationService.getVacations(params);
         if (response.success) {
           const list = (response.data || []).map(mapApiVacation) as VacationRequest[];
@@ -2534,6 +2624,51 @@ const VacationManagement: React.FC = () => {
       <MvsPageHeader
         title={t('vacationManagement.title')}
         description={t('vacationManagement.description')}
+        actions={
+          isRootUser ? (
+            <Autocomplete
+              size="small"
+              disableClearable
+              options={companyOptions}
+              value={
+                selectedCompanyOption ??
+                (effectiveCompanyId > 0
+                  ? { id: effectiveCompanyId, name: '' }
+                  : { id: 0, name: '' })
+              }
+              onChange={(_, option) => {
+                const nextId = Number(option?.id);
+                if (Number.isFinite(nextId) && nextId > 0) {
+                  setCompanyFilterId(nextId);
+                  setPage(1);
+                  setPendingPage(1);
+                  setProcessedPage(1);
+                }
+              }}
+              getOptionLabel={(opt) => opt?.name || ''}
+              isOptionEqualToValue={(a, b) => Number(a?.id) === Number(b?.id)}
+              filterOptions={(options, state) => {
+                const q = String(state.inputValue || '').trim().toLowerCase();
+                if (!q) return options;
+                return options.filter((opt) => String(opt.name || '').toLowerCase().includes(q));
+              }}
+              slotProps={companySelectListboxSlotProps}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label={t('vacationManagement.selectCompany')}
+                  InputLabelProps={mvsOutlinedLabelProps}
+                />
+              )}
+              sx={{
+                minWidth: { xs: 180, sm: 260 },
+                maxWidth: { xs: '100%', sm: 360 },
+                ...mvsFilterFieldHeightSx,
+                ...companySelectNowrapSx,
+              }}
+            />
+          ) : undefined
+        }
       />
 
       {error && (

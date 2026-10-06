@@ -456,7 +456,7 @@ export default {
       stats: {
         totalUsers: '총 사용자',
         activeUsers: '활성 사용자',
-        inactiveUsers: '비활성 사용자',
+        inactiveUsers: '퇴사 사용자',
       },
       empty: {
         loading: '사용자 목록을 불러오는 중...',
@@ -472,10 +472,10 @@ export default {
       company: '회사',
       allCompanies: '전체',
       searchCompany: '회사명 검색',
-      includeInactive: '비활성 사용자 포함',
+      includeInactive: '퇴사 사용자 포함',
       noSearchResults: '검색 결과가 없습니다.',
       noUsersToDisplay: '표시할 사용자가 없습니다.',
-      noUsersIncludeInactive: '비활성 사용자를 보려면 "비활성 사용자 포함" 옵션을 활성화하세요.',
+      noUsersIncludeInactive: '퇴사 사용자를 보려면 "퇴사 사용자 포함" 옵션을 활성화하세요.',
       loadFailed: '사용자 목록을 불러오는데 실패했습니다.',
       name: '이름',
       email: '이메일',
@@ -504,7 +504,7 @@ export default {
       auditRoleRootOnly: 'Audit 권한은 Root 사용자만 부여할 수 있습니다.',
       roleHigherDenied: '본인보다 상위 역할은 부여할 수 없습니다.',
       statusActive: '활성',
-      statusInactive: '비활성',
+      statusInactive: '퇴사',
       selectUsers: '삭제할 사용자를 선택해주세요.',
       editUserTitle: '사용자 정보 수정',
       createUserTitle: '신규 사용자 등록',
@@ -5378,6 +5378,7 @@ export default {
     vacationManagement: {
       title: '휴가 관리',
       description: '휴가 신청·승인·현황 및 휴가 정책을 관리합니다.',
+      selectCompany: '회사 선택',
       reset: '초기화',
       empty: {
         loading: '휴가 목록을 불러오는 중입니다.',

@@ -8,16 +8,26 @@ import EmployeePersonalRecordContent, {
 import {
   A4_PAGE_MM,
   DOCUMENT_PDF_CAPTURE_ROOT_ATTR,
-  DOCUMENT_PDF_MARGINS_MM,
-  injectDocumentPdfStandardCss,
+  type DocumentPdfMarginsMm,
 } from '../../utils/pdf';
 
 const A4_WIDTH_MM = A4_PAGE_MM.width;
 const A4_HEIGHT_MM = A4_PAGE_MM.height;
-/** A4 세로 본문 폭(~186mm)에 맞춘 캡처 너비 */
-const PDF_CAPTURE_WIDTH_PX = 720;
-const PDF_CAPTURE_SCALE = 1.85;
-const PDF_JPEG_QUALITY = 0.86;
+
+/** 좌·우 동일 여백 (문서 공통 20/10과 별도) */
+const PERSONAL_RECORD_PDF_MARGINS_MM: DocumentPdfMarginsMm = {
+  left: 12,
+  right: 12,
+  top: 10,
+  bottom: 10,
+};
+
+/** A4 세로 본문 폭에 맞춘 캡처 너비 */
+const PDF_CAPTURE_WIDTH_PX = 780;
+/**
+ * html2canvas는 비트맵 — scale 3 + PNG로 글자 번짐을 줄인다.
+ */
+const PDF_CAPTURE_SCALE = 3;
 
 let pdfLibsPromise: Promise<[typeof import('html2canvas'), typeof import('jspdf')]> | null = null;
 
@@ -26,6 +36,74 @@ function loadPdfLibs() {
     pdfLibsPromise = Promise.all([import('html2canvas'), import('jspdf')]);
   }
   return pdfLibsPromise;
+}
+
+function injectPersonalRecordCaptureCss(doc: Document, rootId: string) {
+  const root = doc.getElementById(rootId);
+  if (!root) return;
+  root.setAttribute(DOCUMENT_PDF_CAPTURE_ROOT_ATTR, '');
+  if (doc.head.querySelector('[data-personal-record-pdf-capture]')) return;
+  const style = doc.createElement('style');
+  style.setAttribute('data-personal-record-pdf-capture', 'true');
+  style.textContent = `
+    [${DOCUMENT_PDF_CAPTURE_ROOT_ATTR}],
+    [${DOCUMENT_PDF_CAPTURE_ROOT_ATTR}] * {
+      -webkit-font-smoothing: antialiased !important;
+      -moz-osx-font-smoothing: grayscale !important;
+      text-rendering: geometricPrecision !important;
+      image-rendering: -webkit-optimize-contrast;
+    }
+  `;
+  doc.head.appendChild(style);
+}
+
+/** 섹션·행 경계(캔버스 px) — 페이지 나눔 시 중간 짤림 방지 */
+function collectBreakPointsPx(root: HTMLElement, scale: number): number[] {
+  const rootRect = root.getBoundingClientRect();
+  const points = new Set<number>([0]);
+  root.querySelectorAll('[data-pdf-break]').forEach((node) => {
+    const el = node as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    const y = Math.round((rect.top - rootRect.top) * scale);
+    if (y > 0) points.add(y);
+  });
+  points.add(Math.round(root.scrollHeight * scale));
+  return Array.from(points).sort((a, b) => a - b);
+}
+
+type PageSlice = { y: number; h: number };
+
+function buildPageSlices(
+  canvasHeight: number,
+  usableHPx: number,
+  breakPoints: number[]
+): PageSlice[] {
+  const pages: PageSlice[] = [];
+  let cursor = 0;
+  const epsilon = 2;
+
+  while (cursor < canvasHeight - epsilon) {
+    const maxEnd = Math.min(canvasHeight, cursor + usableHPx);
+    if (maxEnd >= canvasHeight - epsilon) {
+      pages.push({ y: cursor, h: canvasHeight - cursor });
+      break;
+    }
+
+    let best = -1;
+    for (const bp of breakPoints) {
+      if (bp <= cursor + epsilon) continue;
+      if (bp <= maxEnd + epsilon) best = bp;
+      else break;
+    }
+
+    // 경계가 없으면 하드 컷, 있으면 행/섹션 앞에서 자름
+    const end = best > cursor + epsilon ? best : maxEnd;
+    const h = Math.max(1, end - cursor);
+    pages.push({ y: cursor, h });
+    cursor = end;
+  }
+
+  return pages;
 }
 
 export async function generateEmployeePersonalRecordPdfBlob(
@@ -40,6 +118,7 @@ export async function generateEmployeePersonalRecordPdfBlob(
   container.style.width = `${PDF_CAPTURE_WIDTH_PX}px`;
   container.style.zIndex = '-1';
   container.style.pointerEvents = 'none';
+  container.style.background = '#FFFFFF';
   document.body.appendChild(container);
 
   const root = createRoot(container);
@@ -67,6 +146,8 @@ export async function generateEmployeePersonalRecordPdfBlob(
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
     });
 
+    await document.fonts.ready;
+
     const host = document.getElementById(rootId);
     if (host) {
       const imgs = Array.from(host.querySelectorAll('img'));
@@ -84,7 +165,7 @@ export async function generateEmployeePersonalRecordPdfBlob(
             })
         )
       );
-      await new Promise((r) => setTimeout(r, 80));
+      await new Promise((r) => setTimeout(r, 120));
     }
 
     const el = document.getElementById(rootId);
@@ -98,13 +179,27 @@ export async function generateEmployeePersonalRecordPdfBlob(
       logging: false,
       width: PDF_CAPTURE_WIDTH_PX,
       windowWidth: PDF_CAPTURE_WIDTH_PX,
+      scrollX: 0,
+      scrollY: 0,
+      letterRendering: true,
       onclone: (clonedDoc: Document) => {
-        clonedDoc.getElementById(rootId)?.setAttribute(DOCUMENT_PDF_CAPTURE_ROOT_ATTR, '');
-        injectDocumentPdfStandardCss(clonedDoc);
+        injectPersonalRecordCaptureCss(clonedDoc, rootId);
       },
     });
 
-    // 항상 A4 세로 — 가로 폭에 맞추고 길면 페이지 분할
+    const margins = PERSONAL_RECORD_PDF_MARGINS_MM;
+    const pageW = A4_WIDTH_MM;
+    const pageH = A4_HEIGHT_MM;
+    const printWidthMm = pageW - margins.left - margins.right;
+    const usableH = pageH - margins.top - margins.bottom;
+    const widthMm = printWidthMm;
+    const heightMm = (canvas.height / canvas.width) * widthMm;
+    const pxPerMm = canvas.height / heightMm;
+    const usableHPx = Math.floor(usableH * pxPerMm);
+    // 좌우 동일 여백 — 가로 중앙 정렬
+    const offsetX = margins.left + (printWidthMm - widthMm) / 2;
+    const offsetY = margins.top;
+
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -112,41 +207,38 @@ export async function generateEmployeePersonalRecordPdfBlob(
       compress: true,
     });
 
-    const pageW = A4_WIDTH_MM;
-    const pageH = A4_HEIGHT_MM;
-    const printWidthMm = pageW - DOCUMENT_PDF_MARGINS_MM.left - DOCUMENT_PDF_MARGINS_MM.right;
-    const usableH = pageH - DOCUMENT_PDF_MARGINS_MM.top - DOCUMENT_PDF_MARGINS_MM.bottom;
-    const widthMm = printWidthMm;
-    const heightMm = (canvas.height / canvas.width) * widthMm;
-    const pxPerMm = canvas.height / heightMm;
-    const offsetX = DOCUMENT_PDF_MARGINS_MM.left;
-    const offsetY = DOCUMENT_PDF_MARGINS_MM.top;
-
-    if (heightMm <= usableH) {
-      const imgData = canvas.toDataURL('image/jpeg', PDF_JPEG_QUALITY);
-      pdf.addImage(imgData, 'JPEG', offsetX, offsetY, widthMm, heightMm, undefined, 'MEDIUM');
+    if (heightMm <= usableH + 0.2) {
+      const imgData = canvas.toDataURL('image/png');
+      pdf.addImage(imgData, 'PNG', offsetX, offsetY, widthMm, heightMm, undefined, 'FAST');
     } else {
-      let offsetMm = 0;
-      let page = 0;
-      while (offsetMm < heightMm - 0.5) {
+      const breakPoints = collectBreakPointsPx(el, PDF_CAPTURE_SCALE);
+      const slices = buildPageSlices(canvas.height, usableHPx, breakPoints);
+
+      slices.forEach((slice, page) => {
         if (page > 0) pdf.addPage('a4', 'portrait');
-        const sliceHMm = Math.min(usableH, heightMm - offsetMm);
-        const srcY = Math.floor(offsetMm * pxPerMm);
-        const srcH = Math.max(1, Math.floor(sliceHMm * pxPerMm));
         const sliceCanvas = document.createElement('canvas');
         sliceCanvas.width = canvas.width;
-        sliceCanvas.height = srcH;
+        sliceCanvas.height = slice.h;
         const ctx = sliceCanvas.getContext('2d');
         if (ctx) {
           ctx.fillStyle = '#FFFFFF';
           ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-          ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
+          ctx.drawImage(
+            canvas,
+            0,
+            slice.y,
+            canvas.width,
+            slice.h,
+            0,
+            0,
+            canvas.width,
+            slice.h
+          );
         }
-        const sliceData = sliceCanvas.toDataURL('image/jpeg', PDF_JPEG_QUALITY);
-        pdf.addImage(sliceData, 'JPEG', offsetX, offsetY, widthMm, sliceHMm, undefined, 'MEDIUM');
-        offsetMm += sliceHMm;
-        page += 1;
-      }
+        const sliceHMm = slice.h / pxPerMm;
+        const sliceData = sliceCanvas.toDataURL('image/png');
+        pdf.addImage(sliceData, 'PNG', offsetX, offsetY, widthMm, sliceHMm, undefined, 'FAST');
+      });
     }
 
     return pdf.output('blob');

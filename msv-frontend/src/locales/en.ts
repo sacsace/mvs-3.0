@@ -458,7 +458,7 @@ export default {
       stats: {
         totalUsers: 'Total Users',
         activeUsers: 'Active Users',
-        inactiveUsers: 'Inactive Users',
+        inactiveUsers: 'Resigned Users',
       },
       empty: {
         loading: 'Loading users...',
@@ -474,10 +474,10 @@ export default {
       company: 'Company',
       allCompanies: 'All',
       searchCompany: 'Search company',
-      includeInactive: 'Include inactive users',
+      includeInactive: 'Include resigned users',
       noSearchResults: 'No search results.',
       noUsersToDisplay: 'No users to display.',
-      noUsersIncludeInactive: 'Enable "Include inactive users" to see inactive users.',
+      noUsersIncludeInactive: 'Enable "Include resigned users" to see resigned users.',
       loadFailed: 'Failed to load user list.',
       name: 'Name',
       email: 'Email',
@@ -506,7 +506,7 @@ export default {
       auditRoleRootOnly: 'Only Root users can assign the Audit role.',
       roleHigherDenied: 'You cannot assign a role higher than your own.',
       statusActive: 'Active',
-      statusInactive: 'Inactive',
+      statusInactive: 'Resigned',
       selectUsers: 'Please select users to delete.',
       editUserTitle: 'Edit User Information',
       createUserTitle: 'Register New User',
@@ -5402,6 +5402,7 @@ export default {
     vacationManagement: {
       title: 'Leave Management',
       description: 'Manage leave requests, approvals, status, and leave policies.',
+      selectCompany: 'Select company',
       reset: 'Reset',
       empty: {
         loading: 'Loading leave requests…',

@@ -793,8 +793,17 @@ export const rejectVacation = async (req: AuthRequest, res: Response) => {
 // 휴가 정책 조회
 export const getVacationPolicy = async (req: AuthRequest, res: Response) => {
   try {
-    const companyId = req.user?.company_id;
     const tenantId = req.user?.tenant_id;
+    const { resolveRequestCompanyId } = await import('../utils/resolveRequestCompanyId');
+    let companyId: number;
+    try {
+      companyId = await resolveRequestCompanyId(req);
+    } catch (err: any) {
+      return res.status(err?.status || 400).json({
+        success: false,
+        message: err?.message || '회사를 선택할 수 없습니다.',
+      });
+    }
 
     if (!companyId) {
       return res.status(400).json({
@@ -885,7 +894,6 @@ export const getVacationPolicy = async (req: AuthRequest, res: Response) => {
 // 휴가 정책 저장
 export const updateVacationPolicy = async (req: AuthRequest, res: Response) => {
   try {
-    const companyId = req.user?.company_id;
     const tenantId = req.user?.tenant_id;
     const userRole = req.user?.role;
 
@@ -895,6 +903,20 @@ export const updateVacationPolicy = async (req: AuthRequest, res: Response) => {
         success: false,
         message: '권한이 없습니다.'
       });
+    }
+
+    // root는 body/query company_id로 타사 휴가 형태 수정, admin은 로그인 회사만
+    let companyId = Number(req.user?.company_id);
+    if (userRole === 'root') {
+      const { resolveRequestCompanyId } = await import('../utils/resolveRequestCompanyId');
+      try {
+        companyId = await resolveRequestCompanyId(req);
+      } catch (err: any) {
+        return res.status(err?.status || 400).json({
+          success: false,
+          message: err?.message || '회사를 선택할 수 없습니다.',
+        });
+      }
     }
 
     if (!companyId) {
