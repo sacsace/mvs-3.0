@@ -120,6 +120,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
   const { t } = useTranslation();
   const user = useStore((s) => s.user);
   const isRoot = useStore((s) => s.user?.role === 'root');
+  const canSelectCompany = useStore((s) => s.user?.role === 'root' || s.user?.role === 'audit');
   const menuFlags = useMenuRoutePermissionFlags(
     payslipSendOnly ? PAYSLIP_SEND_MENU_ROUTES : PAYROLL_MENU_ROUTES
   );
@@ -159,12 +160,12 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
   const [companyOptions, setCompanyOptions] = useState<Array<{ id: number; name: string }>>([]);
 
   const effectiveCompanyId = useMemo(() => {
-    if (isRoot) {
+    if (canSelectCompany) {
       return typeof selectedCompanyId === 'number' && selectedCompanyId > 0 ? selectedCompanyId : null;
     }
     const loginId = Number(user?.company_id);
     return Number.isFinite(loginId) && loginId > 0 ? loginId : null;
-  }, [isRoot, selectedCompanyId, user?.company_id]);
+  }, [canSelectCompany, selectedCompanyId, user?.company_id]);
 
   const companyScopeOpts = useMemo(
     () => (effectiveCompanyId != null ? { company_id: effectiveCompanyId } : undefined),
@@ -172,7 +173,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
   );
 
   useEffect(() => {
-    if (!isRoot) {
+    if (!canSelectCompany) {
       setCompanyOptions([]);
       return;
     }
@@ -205,7 +206,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     return () => {
       cancelled = true;
     };
-  }, [isRoot, user?.company_id]);
+  }, [canSelectCompany, user?.company_id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -686,7 +687,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
             : 'payrollManagement.description'
         )}
         actions={
-          isRoot ? (
+          canSelectCompany ? (
             <Autocomplete
               options={companyOptions}
               value={

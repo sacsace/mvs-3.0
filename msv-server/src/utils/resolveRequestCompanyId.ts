@@ -1,8 +1,10 @@
 import { Company } from '../models';
 
+import { canSelectOtherCompany } from './companyScope';
+
 /**
  * 일반 사용자는 로그인 회사.
- * root는 query/body의 company_id가 같은 테넌트 회사일 때 그 회사를 사용한다.
+ * root/audit는 query/body의 company_id가 같은 테넌트 회사일 때 그 회사를 사용한다.
  */
 export async function resolveRequestCompanyId(req: {
   user?: { role?: string; company_id?: number; tenant_id?: number };
@@ -11,7 +13,7 @@ export async function resolveRequestCompanyId(req: {
 }): Promise<number> {
   const user = req.user || {};
   const loginCompanyId = Number(user.company_id);
-  if (String(user.role || '') !== 'root') {
+  if (!canSelectOtherCompany(user.role)) {
     return loginCompanyId;
   }
 

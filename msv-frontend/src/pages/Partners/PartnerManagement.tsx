@@ -312,6 +312,7 @@ const PartnerManagement: React.FC = () => {
   const { t } = useTranslation();
   const user = useStore((s) => s.user);
   const isRoot = user?.role === 'root';
+  const canSelectCompany = isRoot || user?.role === 'audit';
   const theme = useTheme();
   const isCompactToolbar = useMediaQuery(theme.breakpoints.down('md'));
   const menuFlags = useMenuRoutePermissionFlags(PARTNER_MENU_ROUTES);
@@ -348,12 +349,12 @@ const PartnerManagement: React.FC = () => {
   const [companyOptions, setCompanyOptions] = useState<Array<{ id: number; name: string }>>([]);
 
   const effectiveCompanyId = useMemo(() => {
-    if (!isRoot) return undefined;
+    if (!canSelectCompany) return undefined;
     return typeof selectedCompanyId === 'number' && selectedCompanyId > 0 ? selectedCompanyId : undefined;
-  }, [isRoot, selectedCompanyId]);
+  }, [canSelectCompany, selectedCompanyId]);
 
   useEffect(() => {
-    if (!isRoot) {
+    if (!canSelectCompany) {
       setCompanyOptions([]);
       return;
     }
@@ -386,7 +387,7 @@ const PartnerManagement: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [isRoot, user?.company_id]);
+  }, [canSelectCompany, user?.company_id]);
 
   const formatPartners = useCallback((partnersData: any[]): Partner[] => {
     const mapped = partnersData.map((p: any) => ({
@@ -508,7 +509,7 @@ const PartnerManagement: React.FC = () => {
       setLoading(false);
       return;
     }
-    if (isRoot && !effectiveCompanyId) {
+    if (canSelectCompany && !effectiveCompanyId) {
       setPartners([]);
       setLoading(false);
       return;
@@ -563,7 +564,7 @@ const PartnerManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [menuFlags.menusLoading, menuFlags.canRead, formatPartners, formatCustomersAsPartners, isRoot, effectiveCompanyId]);
+  }, [menuFlags.menusLoading, menuFlags.canRead, formatPartners, formatCustomersAsPartners, canSelectCompany, effectiveCompanyId]);
 
   useEffect(() => {
     void loadPartners();
@@ -1189,7 +1190,7 @@ const PartnerManagement: React.FC = () => {
         title={t('partnerManagement.pageTitle')}
         description={t('partnerManagement.description')}
         actions={
-          isRoot ? (
+          canSelectCompany ? (
             <Autocomplete
               options={companyOptions}
               value={

@@ -15,6 +15,7 @@ import {
 import { pushNotification } from './notificationController';
 import SocketService from '../services/socketService';
 import { createEmploymentContractPdfFile } from '../utils/employmentContractPdf';
+import { canSelectOtherCompany } from '../utils/companyScope';
 import {
   buildDocumentHash,
   completeAspEsign,
@@ -290,20 +291,60 @@ const writeAuditLog = async (
   }
 };
 
+const canViewEmploymentContracts = (req: RequestWithUser): boolean =>
+  canManageEmploymentContracts(req) || canSelectOtherCompany(req.user?.role);
+
 const getScopedCompany = async (req: RequestWithUser, requestedCompanyId?: number | null) => {
-  if (req.user.role !== 'root') {
+  if (!canSelectOtherCompany(req.user.role)) {
     return {
       tenant_id: req.user.tenant_id,
       company_id: req.user.company_id
     };
   }
 
-  if (!requestedCompanyId) return { tenant_id: null, company_id: null };
+  if (!requestedCompanyId) {
+    if (req.user.role === 'audit') {
+      return {
+        tenant_id: req.user.tenant_id,
+        company_id: req.user.company_id
+      };
+    }
+    return { tenant_id: null, company_id: null };
+  }
   const company = await (Company as any).findByPk(requestedCompanyId, {
     attributes: ['id', 'tenant_id']
   });
   if (!company) return null;
+  if (Number(company.tenant_id) !== Number(req.user.tenant_id) && req.user.role !== 'root') {
+    return null;
+  }
   return { tenant_id: company.tenant_id, company_id: company.id };
+};
+
+const applyCompanyListScope = async (
+  req: RequestWithUser,
+  whereClause: Record<string, unknown>,
+  requestedCompanyId?: number | null
+) => {
+  if (!canSelectOtherCompany(req.user.role)) {
+    whereClause.tenant_id = req.user.tenant_id;
+    whereClause.company_id = req.user.company_id;
+    return true;
+  }
+  if (requestedCompanyId) {
+    const scope = await getScopedCompany(req, requestedCompanyId);
+    if (!scope) return false;
+    if (scope.tenant_id) whereClause.tenant_id = scope.tenant_id;
+    if (scope.company_id) whereClause.company_id = scope.company_id;
+    return true;
+  }
+  if (req.user.role === 'audit') {
+    whereClause.tenant_id = req.user.tenant_id;
+    whereClause.company_id = req.user.company_id;
+  } else {
+    whereClause.tenant_id = req.user.tenant_id;
+  }
+  return true;
 };
 
 const requireValidEmployee = async (employeeId: number, companyId?: number | null) => {
@@ -316,17 +357,9 @@ export const getEmploymentContractTemplates = async (req: RequestWithUser, res: 
   try {
     const requestedCompanyId = toIntOrNull(req.query.company_id);
     const whereClause: any = { is_active: true };
-
-    if (req.user.role !== 'root') {
-      whereClause.tenant_id = req.user.tenant_id;
-      whereClause.company_id = req.user.company_id;
-    } else if (requestedCompanyId) {
-      const scope = await getScopedCompany(req, requestedCompanyId);
-      if (!scope) {
-        return res.status(404).json({ success: false, message: '회사를 찾을 수 없습니다.' });
-      }
-      whereClause.company_id = scope.company_id;
-      whereClause.tenant_id = scope.tenant_id;
+    const scoped = await applyCompanyListScope(req, whereClause, requestedCompanyId);
+    if (!scoped) {
+      return res.status(404).json({ success: false, message: '회사를 찾을 수 없습니다.' });
     }
 
     const rows = await (EmploymentContractTemplate as any).findAll({
@@ -468,22 +501,16 @@ export const deleteEmploymentContractTemplate = async (req: RequestWithUser, res
 
 export const getEmploymentContracts = async (req: RequestWithUser, res: Response) => {
   try {
-    if (!assertManagerPermission(req, res, '계약 목록 조회')) return;
+    if (!canViewEmploymentContracts(req)) {
+      return res.status(403).json({ success: false, message: '계약 목록 조회 권한이 없습니다.' });
+    }
 
     const requestedCompanyId = toIntOrNull(req.query.company_id);
     const employeeId = toIntOrNull(req.query.employee_id);
     const status = req.query.status ? String(req.query.status) : '';
     const whereClause: any = { is_active: true };
-
-    if (req.user.role !== 'root') {
-      whereClause.tenant_id = req.user.tenant_id;
-      whereClause.company_id = req.user.company_id;
-    } else if (requestedCompanyId) {
-      const scope = await getScopedCompany(req, requestedCompanyId);
-      if (!scope) return res.status(404).json({ success: false, message: '회사를 찾을 수 없습니다.' });
-      whereClause.tenant_id = scope.tenant_id;
-      whereClause.company_id = scope.company_id;
-    }
+    const scoped = await applyCompanyListScope(req, whereClause, requestedCompanyId);
+    if (!scoped) return res.status(404).json({ success: false, message: '회사를 찾을 수 없습니다.' });
 
     if (employeeId) whereClause.employee_id = employeeId;
     if (status) whereClause.status = status;
@@ -528,9 +555,11 @@ export const getEmploymentContract = async (req: RequestWithUser, res: Response)
     if (!id) return res.status(400).json({ success: false, message: '유효하지 않은 계약 ID입니다.' });
 
     const whereClause: any = { id, is_active: true };
-    if (req.user.role !== 'root') {
+    if (!canSelectOtherCompany(req.user.role)) {
       whereClause.tenant_id = req.user.tenant_id;
       whereClause.company_id = req.user.company_id;
+    } else {
+      whereClause.tenant_id = req.user.tenant_id;
     }
 
     const contract = await (EmploymentContract as any).findOne({
@@ -569,7 +598,7 @@ export const getEmploymentContract = async (req: RequestWithUser, res: Response)
 
     const isEmployee = Number(contract.employee_id) === Number(req.user.id);
     const isApprover = Number(contract.approver_id) === Number(req.user.id);
-    if (!canManageEmploymentContracts(req) && !isEmployee && !isApprover) {
+    if (!canViewEmploymentContracts(req) && !isEmployee && !isApprover) {
       return res.status(403).json({ success: false, message: '해당 계약을 조회할 권한이 없습니다.' });
     }
     if (
@@ -1225,9 +1254,11 @@ export const getPendingApprovalContracts = async (req: RequestWithUser, res: Res
 
 const findScopedActiveContract = async (req: RequestWithUser, id: number) => {
   const whereClause: any = { id, is_active: true };
-  if (req.user.role !== 'root') {
+  if (!canSelectOtherCompany(req.user.role)) {
     whereClause.tenant_id = req.user.tenant_id;
     whereClause.company_id = req.user.company_id;
+  } else {
+    whereClause.tenant_id = req.user.tenant_id;
   }
   return (EmploymentContract as any).findOne({ where: whereClause });
 };
@@ -1499,15 +1530,17 @@ export const getEmploymentContractAuditLogs = async (req: RequestWithUser, res: 
     if (!id) return res.status(400).json({ success: false, message: '유효하지 않은 계약 ID입니다.' });
 
     const whereClause: any = { id };
-    if (req.user.role !== 'root') {
+    if (!canSelectOtherCompany(req.user.role)) {
       whereClause.tenant_id = req.user.tenant_id;
       whereClause.company_id = req.user.company_id;
+    } else {
+      whereClause.tenant_id = req.user.tenant_id;
     }
 
     const contract = await (EmploymentContract as any).findOne({ where: whereClause, attributes: ['id', 'employee_id', 'company_id'] });
     if (!contract) return res.status(404).json({ success: false, message: '전자근로계약을 찾을 수 없습니다.' });
 
-    if (!canManageEmploymentContracts(req) && Number(contract.employee_id) !== Number(req.user.id)) {
+    if (!canViewEmploymentContracts(req) && Number(contract.employee_id) !== Number(req.user.id)) {
       return res.status(403).json({ success: false, message: '감사로그 조회 권한이 없습니다.' });
     }
 
@@ -1547,9 +1580,11 @@ export const downloadEmploymentContractPdf = async (req: RequestWithUser, res: R
     if (!id) return res.status(400).json({ success: false, message: '유효하지 않은 계약 ID입니다.' });
 
     const whereClause: any = { id, is_active: true };
-    if (req.user.role !== 'root') {
+    if (!canSelectOtherCompany(req.user.role)) {
       whereClause.tenant_id = req.user.tenant_id;
       whereClause.company_id = req.user.company_id;
+    } else {
+      whereClause.tenant_id = req.user.tenant_id;
     }
 
     const contract = await (EmploymentContract as any).findOne({ where: whereClause });
@@ -1557,7 +1592,7 @@ export const downloadEmploymentContractPdf = async (req: RequestWithUser, res: R
 
     const isEmployee = Number(contract.employee_id) === Number(req.user.id);
     const isApprover = Number(contract.approver_id) === Number(req.user.id);
-    if (!canManageEmploymentContracts(req) && !isEmployee && !isApprover) {
+    if (!canViewEmploymentContracts(req) && !isEmployee && !isApprover) {
       return res.status(403).json({ success: false, message: 'PDF 다운로드 권한이 없습니다.' });
     }
 

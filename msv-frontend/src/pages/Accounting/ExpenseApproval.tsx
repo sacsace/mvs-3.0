@@ -2100,8 +2100,10 @@ const ExpenseApproval: React.FC = () => {
   const editGuard = useMenuActionGuard('edit', EXPENSE_APPROVAL_MENU_ROUTES);
   const deleteGuard = useMenuActionGuard('delete', EXPENSE_APPROVAL_MENU_ROUTES);
   const isRootUser = user?.role === 'root';
+  const isAuditUser = user?.role === 'audit';
+  const canViewAllCompanies = isRootUser || isAuditUser;
   const hasTransferAccess = Boolean(user?.is_payment_officer) || isRootUser;
-  const resolveDefaultTransferCompanyFilterId = useCallback((): number | '' => {
+  const resolveDefaultCompanyFilterId = useCallback((): number | '' => {
     const userCompanyId = Number(user?.company_id);
     return Number.isFinite(userCompanyId) && userCompanyId > 0 ? userCompanyId : '';
   }, [user?.company_id]);
@@ -2122,11 +2124,17 @@ const ExpenseApproval: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
-  const [companyFilterId, setCompanyFilterId] = useState<number | ''>('');
+  const [companyFilterId, setCompanyFilterId] = useState<number | ''>(() => {
+    const userCompanyId = Number(user?.company_id);
+    return Number.isFinite(userCompanyId) && userCompanyId > 0 ? userCompanyId : '';
+  });
+  const companyFilterInitializedRef = useRef(
+    typeof companyFilterId === 'number' && companyFilterId > 0
+  );
   const [companyOptions, setCompanyOptions] = useState<Array<{ id: number; name: string }>>([]);
-  /** root: 필터 회사 → 열람 중인 문서 회사 → 로그인 회사. 일반 사용자: 로그인 회사 */
+  /** root/audit: 필터 회사 → 열람 중인 문서 회사 → 로그인 회사. 일반 사용자: 로그인 회사 */
   const effectiveCompanyId = useMemo(() => {
-    if (isRootUser) {
+    if (canViewAllCompanies) {
       if (typeof companyFilterId === 'number' && companyFilterId > 0) return companyFilterId;
       const fromExpense = Number(selectedExpense?.companyId);
       if (Number.isFinite(fromExpense) && fromExpense > 0) return fromExpense;
@@ -2136,7 +2144,7 @@ const ExpenseApproval: React.FC = () => {
     }
     const fromUser = Number(user?.company_id);
     return Number.isFinite(fromUser) && fromUser > 0 ? fromUser : 0;
-  }, [isRootUser, user?.company_id, companyFilterId, selectedExpense?.companyId]);
+  }, [canViewAllCompanies, user?.company_id, companyFilterId, selectedExpense?.companyId]);
   const [listSortKey, setListSortKey] = useState<ExpenseListSortKey | null>(null);
   const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc');
   const [listViewMode, setListViewMode] = useState<'page' | 'all'>('page');
@@ -2517,7 +2525,7 @@ const ExpenseApproval: React.FC = () => {
     setExpenses([]);
     try {
       const params: Record<string, number> = {};
-      if (isRootUser && companyFilterId) {
+      if (canViewAllCompanies && companyFilterId) {
         params.company_id = Number(companyFilterId);
       }
       const response = await accountingService.getExpenseReports(params);
@@ -2535,7 +2543,7 @@ const ExpenseApproval: React.FC = () => {
     }
   // mapExpense is a render-local mapper; listing it would refetch on every render
   // eslint-disable-next-line react-hooks/exhaustive-deps -- stable mapping helper
-  }, [t, isRootUser, companyFilterId]);
+  }, [t, canViewAllCompanies, companyFilterId]);
 
   const getTransferFilterKey = useCallback((expense: ExpenseApprovalItem) => {
     if (expenseIsPrepaid(expense)) {
@@ -2813,16 +2821,16 @@ const ExpenseApproval: React.FC = () => {
     let filtered = expenses;
 
     if (listTab === 'written' && user?.id) {
-      // root: 선택한 회사(또는 전체)의 작성 건을 관리 — 본인 작성분으로 좁히지 않음
-      if (!isRootUser) {
+      // root/audit: 선택한 회사(또는 전체)의 작성 건을 열람 — 본인 작성분으로 좁히지 않음
+      if (!canViewAllCompanies) {
         filtered = filtered.filter((expense) => expense.requesterId === user.id);
       }
     }
     if (listTab === 'received' && user?.id) {
       filtered = filtered.filter((expense) => {
         if (expense.status === 'draft') return false;
-        // root: 회사 필터 기준 타사 받은 결의서 열람·처리
-        if (isRootUser) return true;
+        // root/audit: 회사 필터 기준 타사 받은 결의서 열람
+        if (canViewAllCompanies) return true;
         if (expense.currentApproverId === user.id) return true;
         if (expense.itemMeta?.checkedById && Number(expense.itemMeta.checkedById) === user.id) return true;
         if (expense.itemMeta?.approvedById && Number(expense.itemMeta.approvedById) === user.id) return true;
@@ -2889,7 +2897,7 @@ const ExpenseApproval: React.FC = () => {
     priorityFilter,
     listTab,
     user,
-    isRootUser,
+    canViewAllCompanies,
     hasTransferAccess,
     getTransferFilterKey,
     isExpensePaidForList,
@@ -2911,7 +2919,7 @@ const ExpenseApproval: React.FC = () => {
   }, [loadExpenseData, menuFlags.menusLoading, menuFlags.canRead]);
 
   useEffect(() => {
-    if (!isRootUser) {
+    if (!canViewAllCompanies) {
       setCompanyOptions([]);
       setCompanyFilterId('');
       return;
@@ -2948,7 +2956,17 @@ const ExpenseApproval: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [isRootUser, user?.tenant_id]);
+  }, [canViewAllCompanies, user?.tenant_id]);
+
+  useEffect(() => {
+    if (!canViewAllCompanies || companyFilterInitializedRef.current) return;
+    const next = resolveDefaultCompanyFilterId();
+    if (!next) return;
+    companyFilterInitializedRef.current = true;
+    if (companyFilterId === '') {
+      setCompanyFilterId(next);
+    }
+  }, [canViewAllCompanies, resolveDefaultCompanyFilterId, companyFilterId]);
 
   useEffect(() => {
     if (!user) {
@@ -3197,13 +3215,14 @@ const ExpenseApproval: React.FC = () => {
       if (tab === 'transfer' && !hasTransferAccess) return;
       setListTab(tab);
       if (tab === 'transfer' && isRootUser && companyFilterId === '') {
-        setCompanyFilterId(resolveDefaultTransferCompanyFilterId());
+        setCompanyFilterId(resolveDefaultCompanyFilterId());
       }
     }
-  }, [searchParams, hasTransferAccess, isRootUser, resolveDefaultTransferCompanyFilterId, companyFilterId]);
+  }, [searchParams, hasTransferAccess, isRootUser, resolveDefaultCompanyFilterId, companyFilterId]);
 
   const handleRootCompanyChange = useCallback(
     (next: number | '') => {
+      companyFilterInitializedRef.current = true;
       setCompanyFilterId(next);
       setPage(1);
       if (viewMode === 'create') {
@@ -3236,7 +3255,12 @@ const ExpenseApproval: React.FC = () => {
     if (typeof companyFilterId !== 'number' || companyFilterId <= 0) {
       return rootCompanyFilterOptions[0];
     }
-    return companyOptions.find((c) => Number(c.id) === Number(companyFilterId));
+    return (
+      companyOptions.find((c) => Number(c.id) === Number(companyFilterId)) || {
+        id: companyFilterId,
+        name: '',
+      }
+    );
   }, [companyFilterId, companyOptions, rootCompanyFilterOptions]);
 
   const handleRootCompanyOptionChange = useCallback(
@@ -4772,7 +4796,7 @@ const ExpenseApproval: React.FC = () => {
         setSelectedExpense(null);
         setListTab('transfer');
         if (isRootUser) {
-          setCompanyFilterId(resolveDefaultTransferCompanyFilterId());
+          setCompanyFilterId(resolveDefaultCompanyFilterId());
         }
         setViewMode('list');
       }
@@ -9618,7 +9642,7 @@ const ExpenseApproval: React.FC = () => {
         mb={2}
         actions={
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-            {isRootUser && (
+            {canViewAllCompanies && (
               <Autocomplete
                 size="small"
                 options={rootCompanyFilterOptions}
@@ -9685,7 +9709,7 @@ const ExpenseApproval: React.FC = () => {
             setListSortKey(null);
             setListSortDir('asc');
             if (value === 'transfer' && isRootUser && companyFilterId === '') {
-              const nextCompanyId = resolveDefaultTransferCompanyFilterId();
+              const nextCompanyId = resolveDefaultCompanyFilterId();
               if (nextCompanyId) {
                 setExpenses([]);
                 setCompanyFilterId(nextCompanyId);
@@ -9783,7 +9807,7 @@ const ExpenseApproval: React.FC = () => {
                 size="small"
               label={t('expenseApproval.placeholders.searchSimple')}
               placeholder={
-                isRootUser
+                canViewAllCompanies
                   ? t('expenseApproval.placeholders.searchWithCompany')
                   : t('expenseApproval.placeholders.search')
               }
@@ -10113,7 +10137,7 @@ const ExpenseApproval: React.FC = () => {
                       </Typography>
                       <ExpenseCommentCountBadge expense={expense} />
                     </Box>
-                    {isRootUser && expense.companyName ? (
+                    {canViewAllCompanies && expense.companyName ? (
                       <Typography variant="caption" color="text.secondary" display="block" noWrap>
                         {expense.companyName}
                       </Typography>

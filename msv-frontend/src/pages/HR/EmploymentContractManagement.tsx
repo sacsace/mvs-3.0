@@ -198,15 +198,17 @@ const EmploymentContractManagement: React.FC = () => {
   const editGuard = useMenuActionGuard('edit', EMPLOYMENT_CONTRACT_MENU_ROUTES);
   const deleteGuard = useMenuActionGuard('delete', EMPLOYMENT_CONTRACT_MENU_ROUTES);
   const isRoot = user?.role === 'root';
+  const canSelectCompany = isRoot || user?.role === 'audit';
   const canManage = useMemo(
     () => menuFlags.canMutate || ['root', 'admin'].includes(String(user?.role || '')),
     [menuFlags.canMutate, user?.role]
   );
+  const canViewCompanyContracts = canManage || canSelectCompany;
   const canDelete = isRoot && deleteGuard.allowed;
 
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
 
-  const [tab, setTab] = useState<TabMode>(canManage ? 'contracts' : 'my');
+  const [tab, setTab] = useState<TabMode>(canViewCompanyContracts ? 'contracts' : 'my');
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>('');
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
@@ -421,8 +423,8 @@ const EmploymentContractManagement: React.FC = () => {
   }, [tab, contracts, templates, myContracts, pendingApprovals, t, activeContractStatuses, pendingContractStatuses, completedContractStatuses]);
 
   useEffect(() => {
-    if (!canManage) setTab('my');
-  }, [canManage]);
+    if (!canViewCompanyContracts) setTab('my');
+  }, [canViewCompanyContracts]);
 
   useEffect(() => {
     setSearchQuery('');
@@ -454,7 +456,7 @@ const EmploymentContractManagement: React.FC = () => {
   }, [approvalsPage, approvalsTotalPages]);
 
   const loadCompanies = useCallback(async () => {
-    if (!isRoot) return;
+    if (!canSelectCompany) return;
     try {
       const rows = await useReferenceDataStore.getState().fetchCompanies();
       const mapped = rows
@@ -473,11 +475,11 @@ const EmploymentContractManagement: React.FC = () => {
     } catch {
       setMessage({ type: 'error', text: t('employmentContractManagement.loadCompaniesFailed', { defaultValue: '회사 목록을 불러오지 못했습니다.' }) });
     }
-  }, [isRoot, selectedCompanyId, user?.company_id, t]);
+  }, [canSelectCompany, selectedCompanyId, user?.company_id, t]);
 
   const loadUsers = useCallback(async () => {
     try {
-      const params = isRoot && selectedCompanyId ? { company_id: Number(selectedCompanyId) } : undefined;
+      const params = canSelectCompany && selectedCompanyId ? { company_id: Number(selectedCompanyId) } : undefined;
       const rows = await useReferenceDataStore.getState().fetchUsers(params);
       setUsers(
         rows
@@ -487,12 +489,12 @@ const EmploymentContractManagement: React.FC = () => {
     } catch {
       setMessage({ type: 'error', text: t('employmentContractManagement.loadUsersFailed', { defaultValue: '직원 목록을 불러오지 못했습니다.' }) });
     }
-  }, [isRoot, selectedCompanyId, t]);
+  }, [canSelectCompany, selectedCompanyId, t]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const queryCompanyId = isRoot && selectedCompanyId ? Number(selectedCompanyId) : undefined;
+      const queryCompanyId = canSelectCompany && selectedCompanyId ? Number(selectedCompanyId) : undefined;
       const [myRes, approvalsRes] = await Promise.all([
         employmentContractService.getMyContracts(),
         employmentContractService.getPendingApprovals(),
@@ -500,7 +502,7 @@ const EmploymentContractManagement: React.FC = () => {
       setMyContracts(Array.isArray(myRes?.data) ? myRes.data : []);
       setPendingApprovals(Array.isArray(approvalsRes?.data) ? approvalsRes.data : []);
 
-      if (canManage) {
+      if (canViewCompanyContracts) {
         const [templateRes, contractRes] = await Promise.all([
         employmentContractService.getTemplates(queryCompanyId),
         employmentContractService.getContracts({ company_id: queryCompanyId }),
@@ -516,7 +518,7 @@ const EmploymentContractManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [canManage, isRoot, selectedCompanyId, t]);
+  }, [canViewCompanyContracts, canSelectCompany, selectedCompanyId, t]);
 
   useEffect(() => {
     void loadCompanies();
@@ -1383,7 +1385,7 @@ const EmploymentContractManagement: React.FC = () => {
         title={t('employmentContractManagement.pageTitle')}
         description={t('employmentContractManagement.description')}
         actions={
-          isRoot ? (
+          canSelectCompany ? (
             <Autocomplete
               options={companies}
               value={
@@ -1467,8 +1469,8 @@ const EmploymentContractManagement: React.FC = () => {
           >
             <Tab value="my" label={t('employmentContractManagement.tabs.my')} />
             <Tab value="approvals" label={t('employmentContractManagement.tabs.approvals')} />
-            {canManage ? <Tab value="contracts" label={t('employmentContractManagement.tabs.contracts')} /> : null}
-            {canManage ? <Tab value="templates" label={t('employmentContractManagement.tabs.templates')} /> : null}
+            {canViewCompanyContracts ? <Tab value="contracts" label={t('employmentContractManagement.tabs.contracts')} /> : null}
+            {canViewCompanyContracts ? <Tab value="templates" label={t('employmentContractManagement.tabs.templates')} /> : null}
           </Tabs>
           {tab === 'contracts' && canManage ? (
             <Tooltip title={createGuard.tooltipTitle} disableHoverListener={!createGuard.tooltipTitle}>

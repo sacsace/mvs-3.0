@@ -115,9 +115,9 @@ function resolvePayrollScope(req: RequestWithUser) {
     ? parseInt(String((req.body as Record<string, unknown>).company_id), 10)
     : undefined;
 
-  // 일반·admin·audit: 항상 로그인 회사. root만 선택 회사로 전환.
+  // 일반·admin: 항상 로그인 회사. root/audit는 선택 회사로 전환(조회).
   let effectiveCompanyId = companyId;
-  if (userRole === 'root') {
+  if (userRole === 'root' || userRole === 'audit') {
     const requested = queryCompanyId || bodyCompanyId;
     if (requested != null && Number.isFinite(requested) && requested > 0) {
       effectiveCompanyId = requested;

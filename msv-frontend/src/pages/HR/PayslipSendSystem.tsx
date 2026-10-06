@@ -662,6 +662,7 @@ const PayslipSendSystem: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const user = useStore((s) => s.user);
   const isRootUser = user?.role === 'root';
+  const canSelectCompany = isRootUser || user?.role === 'audit';
   const p = 'payrollManagement.payslipSendSystem';
   const [headers, setHeaders] = useState<string[]>([]);
   const [columnFormulas, setColumnFormulas] = useState<Record<number, string>>({});
@@ -688,15 +689,15 @@ const PayslipSendSystem: React.FC = () => {
   const [companyInfo, setCompanyInfo] = useState<PayslipCompanyInfo | null>(null);
 
   const effectiveCompanyId = useMemo(() => {
-    if (isRootUser) {
+    if (canSelectCompany) {
       return typeof senderCompanyId === 'number' && senderCompanyId > 0 ? senderCompanyId : null;
     }
     const loginId = Number(user?.company_id);
     return Number.isFinite(loginId) && loginId > 0 ? loginId : null;
-  }, [isRootUser, senderCompanyId, user?.company_id]);
+  }, [canSelectCompany, senderCompanyId, user?.company_id]);
 
   useEffect(() => {
-    if (!isRootUser) {
+    if (!canSelectCompany) {
       setCompanyOptions([]);
       return;
     }
@@ -728,7 +729,7 @@ const PayslipSendSystem: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [isRootUser, user?.company_id]);
+  }, [canSelectCompany, user?.company_id]);
 
   useEffect(() => {
     if (!effectiveCompanyId) {
@@ -1001,7 +1002,7 @@ const PayslipSendSystem: React.FC = () => {
           />
         </Box>
         <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 2, display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
-          {isRootUser ? (
+          {canSelectCompany ? (
             <Autocomplete
               options={companyOptions}
               value={

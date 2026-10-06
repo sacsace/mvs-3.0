@@ -9,6 +9,7 @@ import {
 import { validateBody } from '../middleware/validate';
 import sequelize from '../config/database';
 import { enrichCompanyList, serializeCompanyBase, batchGstNumbersByCompany } from '../utils/companySerializer';
+import { canSelectOtherCompany } from '../utils/companyScope';
 import {
   buildReferenceCacheKey,
   referenceCacheGet,
@@ -149,10 +150,12 @@ router.get('/', authenticateToken, async (req, res) => {
     const userRole = (req as any).user.role;
     const userCompanyId = (req as any).user.company_id;
 
-    // root만 전체 회사 조회. 그 외는 로그인한 회사만.
+    // root: 전체. audit: 같은 테넌트 전체. 그 외: 로그인한 회사만.
     const whereClause: any = {};
     if (userRole === 'root') {
       // no filter
+    } else if (userRole === 'audit') {
+      whereClause.tenant_id = tenantId;
     } else {
       whereClause.tenant_id = tenantId;
       if (userCompanyId != null) {
@@ -289,7 +292,7 @@ router.get('/:id/gst-numbers', authenticateToken, async (req, res) => {
     }
 
     const userCompanyId = (req as any).user.company_id;
-    if (userRole !== 'root' && Number(userCompanyId) !== id) {
+    if (!canSelectOtherCompany(userRole) && Number(userCompanyId) !== id) {
       return res.status(403).json({
         success: false,
         message: '자신이 속한 회사 정보만 조회할 수 있습니다.'
@@ -365,8 +368,8 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const userRole = (req as any).user.role;
     const userCompanyId = (req as any).user.company_id;
 
-    // root만 다른 회사 조회 가능. 그 외는 로그인 회사만.
-    if (userRole !== 'root' && Number(userCompanyId) !== Number(id)) {
+    // root/audit는 다른 회사 조회 가능. 그 외는 로그인 회사만.
+    if (!canSelectOtherCompany(userRole) && Number(userCompanyId) !== Number(id)) {
       return res.status(403).json({
         success: false,
         message: '자신이 속한 회사 정보만 조회할 수 있습니다.'

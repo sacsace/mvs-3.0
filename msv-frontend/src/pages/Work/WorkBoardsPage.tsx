@@ -380,6 +380,7 @@ const WorkBoardsPage: React.FC = () => {
   const { menus, hasMenuPermission } = useMenuStore();
   const workMenuId = useMemo(() => findMenuIdByPath(menus, WORK_PROJECTS_ROUTE), [menus]);
   const isRootUser = user?.role === 'root';
+  const canSelectCompany = isRootUser || user?.role === 'audit';
   const canCreateBoard = isRootUser || (workMenuId != null && hasMenuPermission(workMenuId, 'create'));
   const canEditBoard = isRootUser || (workMenuId != null && hasMenuPermission(workMenuId, 'edit'));
   const themePrimaryColor = isHexColor(theme.palette.primary.main)
@@ -404,17 +405,17 @@ const WorkBoardsPage: React.FC = () => {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  /** root: 0=전체 회사, >0=특정 회사. 그 외: 로그인 회사 */
+  /** root/audit: 0=전체 회사, >0=특정 회사. 그 외: 로그인 회사 */
   const effectiveCompanyId = useMemo(() => {
-    if (isRootUser) {
+    if (canSelectCompany) {
       if (selectedCompanyId == null || selectedCompanyId === 0) return null;
       return Number.isFinite(selectedCompanyId) ? selectedCompanyId : null;
     }
     return user?.company_id != null ? Number(user.company_id) : null;
-  }, [isRootUser, selectedCompanyId, user?.company_id]);
+  }, [canSelectCompany, selectedCompanyId, user?.company_id]);
 
   useEffect(() => {
-    if (!isRootUser) return;
+    if (!canSelectCompany) return;
     const userCompanyId = user?.company_id != null ? Number(user.company_id) : NaN;
     if (Number.isFinite(userCompanyId) && userCompanyId > 0) {
       setSelectedCompanyId((prev) => (prev == null ? userCompanyId : prev));
@@ -459,14 +460,14 @@ const WorkBoardsPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [isRootUser, t, user?.company_id]);
+  }, [canSelectCompany, t, user?.company_id]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await workBoardService.getBoards({
         light: true,
-        ...(isRootUser && effectiveCompanyId != null ? { company_id: effectiveCompanyId } : {}),
+        ...(canSelectCompany && effectiveCompanyId != null ? { company_id: effectiveCompanyId } : {}),
       });
       if (res.success) {
         setBoards(res.data || []);
@@ -478,7 +479,7 @@ const WorkBoardsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [effectiveCompanyId, isRootUser, t]);
+  }, [effectiveCompanyId, canSelectCompany, t]);
 
   useEffect(() => {
     load();
@@ -581,7 +582,7 @@ const WorkBoardsPage: React.FC = () => {
   }, [companyFilterOptions, selectedCompanyId]);
 
   const companySelectField =
-    isRootUser ? (
+    canSelectCompany ? (
       <Autocomplete
         options={companyFilterOptions}
         value={selectedCompanyOption}

@@ -542,15 +542,13 @@ export const getWorkBoards = async (req: RequestWithUser, res: Response) => {
 
     if (user.role === 'root' || user.role === 'audit') {
       const where: any = { tenant_id: user.tenant_id };
-      if (user.role === 'root') {
-        const resolved = await resolveRootTargetCompanyId(user, req.query.company_id);
-        if (resolved.error) {
-          return res.status(400).json({ success: false, message: resolved.error });
-        }
-        // 회사 지정 시에만 필터. 미지정/all 이면 테넌트 전체 보드 (멤버 여부 무관)
-        if (!resolved.allCompanies && resolved.companyId != null && Number.isFinite(resolved.companyId)) {
-          where.company_id = resolved.companyId;
-        }
+      const resolved = await resolveRootTargetCompanyId(user, req.query.company_id);
+      if (resolved.error) {
+        return res.status(400).json({ success: false, message: resolved.error });
+      }
+      // 회사 지정 시에만 필터. 미지정/all 이면 테넌트 전체 보드 (멤버 여부 무관)
+      if (!resolved.allCompanies && resolved.companyId != null && Number.isFinite(resolved.companyId)) {
+        where.company_id = resolved.companyId;
       }
       boards = await WorkBoard.findAll({
         where,
