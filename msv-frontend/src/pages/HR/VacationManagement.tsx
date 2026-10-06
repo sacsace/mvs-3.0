@@ -2657,7 +2657,7 @@ const VacationManagement: React.FC = () => {
                 <TextField
                   {...params}
                   label={t('vacationManagement.selectCompany')}
-                  InputLabelProps={mvsOutlinedLabelProps}
+                  {...VACATION_FILTER_OUTLINED}
                 />
               )}
               sx={{
