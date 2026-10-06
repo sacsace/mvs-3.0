@@ -1,6 +1,36 @@
 import { Request, Response } from 'express';
-import { Menu, UserPermission, User } from '../models';
+import { Menu, UserPermission, User, Company } from '../models';
 import { Op } from 'sequelize';
+import { isMinsubCompanyName } from '../middleware/auth';
+
+/** Minsub Ventures 소속에만 노출하는 메뉴 route */
+const MINSUB_ONLY_MENU_ROUTES = ['/work/assignee-list'];
+
+const isMinsubOnlyMenuRoute = (route?: string | null): boolean => {
+  if (!route) return false;
+  return MINSUB_ONLY_MENU_ROUTES.some(
+    (base) => route === base || route.startsWith(`${base}/`)
+  );
+};
+
+const filterMinsubOnlyMenus = (menus: any[], companyName?: string | null): any[] => {
+  if (isMinsubCompanyName(companyName)) return menus;
+  return menus.filter((m) => !isMinsubOnlyMenuRoute(m?.route));
+};
+
+const resolveUserCompanyName = async (userId: number | string): Promise<string | null> => {
+  const row = await (User as any).findByPk(userId, {
+    attributes: ['id', 'company_id'],
+    include: [{ model: Company, as: 'company', attributes: ['id', 'name'], required: false }],
+  });
+  if (!row) return null;
+  const embedded = row.company?.name || row.Company?.name;
+  if (embedded) return String(embedded);
+  const companyId = Number(row.company_id);
+  if (!Number.isFinite(companyId) || companyId <= 0) return null;
+  const company = await (Company as any).findByPk(companyId, { attributes: ['name'] });
+  return company?.name ? String(company.name) : null;
+};
 
 // 사용자별 메뉴 목록 조회 (권한 기반)
 export const getUserMenus = async (req: Request, res: Response) => {
@@ -92,6 +122,10 @@ export const getUserMenus = async (req: Request, res: Response) => {
      * 「내 정보·업무」는 모든 역할에 기본 부여한다.
      * (과거 root 전용 숨김 로직 제거)
      */
+
+    // 고객사 리스트 등 Minsub 전용 메뉴는 해당 회사 사용자에게만 노출
+    const companyName = await resolveUserCompanyName(userId);
+    userMenus = filterMinsubOnlyMenus(userMenus, companyName);
 
     // 계층 구조로 변환
     const menuTree = buildMenuTree(userMenus, language as string);

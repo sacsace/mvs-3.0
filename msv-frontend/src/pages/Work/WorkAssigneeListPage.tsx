@@ -51,11 +51,13 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { workAssigneeListService } from '../../services/api';
 import { showErrorPopup } from '../../utils/errorHandler';
 import { useMenuStore, useStore } from '../../store';
 import { filterActiveCompanyUsers, useReferenceDataStore } from '../../store/referenceDataStore';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
+import { canAccessMinsubOnlyWorkMenus } from '../../utils/canAccessSystemLoginHistory';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
@@ -543,6 +545,7 @@ function AssigneeColumn({
 
 const WorkAssigneeListPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { user } = useStore();
   const { menus, hasMenuPermission } = useMenuStore();
   const menuId = useMemo(() => findMenuIdByPath(menus, ROUTE), [menus]);
@@ -550,6 +553,8 @@ const WorkAssigneeListPage: React.FC = () => {
   const canCreate = isRoot || (menuId != null && hasMenuPermission(menuId, 'create'));
   const canEdit = isRoot || (menuId != null && hasMenuPermission(menuId, 'edit'));
   const canDelete = isRoot || (menuId != null && hasMenuPermission(menuId, 'delete'));
+  const [accessChecked, setAccessChecked] = useState(false);
+  const [canAccessPage, setCanAccessPage] = useState(false);
 
   const [assignees, setAssignees] = useState<Assignee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -577,7 +582,22 @@ const WorkAssigneeListPage: React.FC = () => {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const allowed = await canAccessMinsubOnlyWorkMenus(user);
+      if (cancelled) return;
+      setCanAccessPage(allowed);
+      setAccessChecked(true);
+      if (!allowed) navigate('/', { replace: true });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, navigate]);
+
   const load = useCallback(async () => {
+    if (!canAccessPage) return;
     setLoading(true);
     try {
       const res = await workAssigneeListService.getList(
@@ -601,11 +621,11 @@ const WorkAssigneeListPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [t, user?.company_id]);
+  }, [t, user?.company_id, canAccessPage]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (accessChecked && canAccessPage) load();
+  }, [accessChecked, canAccessPage, load]);
 
   const filteredAssignees = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -1095,6 +1115,14 @@ const WorkAssigneeListPage: React.FC = () => {
       await load();
     }
   };
+
+  if (!accessChecked || !canAccessPage) {
+    return (
+      <Box sx={{ ...mvsPageRootFullBleedSx, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 240 }}>
+        <CircularProgress size={28} />
+      </Box>
+    );
+  }
 
   return (
     <Box sx={mvsPageRootFullBleedSx}>

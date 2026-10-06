@@ -225,7 +225,8 @@ export const restrictAuditToReadOnly = (req: AuthRequest, res: Response, next: N
   next();
 };
 
-const isMinsubCompanyName = (name?: string): boolean => {
+/** Minsub Ventures 전용 기능·메뉴 판별 (회사명 부분 일치) */
+export const isMinsubCompanyName = (name?: string | null): boolean => {
   if (!name) return false;
   return name.toLowerCase().includes('minsub ventures');
 };

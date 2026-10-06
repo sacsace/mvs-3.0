@@ -4953,6 +4953,7 @@ export default {
         create: 'Create',
         qrDialogHint: 'Scan the QR code on your phone and upload receipt photos.',
         qrGenerating: 'Generating QR code…',
+        autoSaveSaving: 'Auto-saving…',
         autoSaveSaved: 'Auto-saved',
         autoSaveFailed: 'Auto-save failed',
         partnerLoadFailed: 'Could not load partners. Refresh and try again.',

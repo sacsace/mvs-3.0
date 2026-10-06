@@ -5002,6 +5002,7 @@ export default {
         create: '작성',
         qrDialogHint: '휴대폰에서 QR 코드를 스캔하고 영수증 사진을 업로드하세요.',
         qrGenerating: 'QR 코드 생성 중...',
+        autoSaveSaving: '자동 저장 중...',
         autoSaveSaved: '자동 저장됨',
         autoSaveFailed: '자동 저장 실패',
         partnerLoadFailed: '협력업체 목록을 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.',

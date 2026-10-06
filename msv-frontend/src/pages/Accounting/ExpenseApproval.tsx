@@ -2114,6 +2114,8 @@ const ExpenseApproval: React.FC = () => {
   const [saving, setSaving] = useState(false);
   /** '' | draftCreated — render with t() for i18n */
   const [headerStatusBanner, setHeaderStatusBanner] = useState<'' | 'draftCreated'>('');
+  /** 작성·초안 수정 중 자동 저장 상태 */
+  const [autoSaveHint, setAutoSaveHint] = useState<'' | 'saving' | 'saved' | 'failed'>('');
   const [isInitializingDraft, setIsInitializingDraft] = useState(false);
   const [draftId, setDraftId] = useState<number | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<ExpenseApprovalItem | null>(null);
@@ -2231,6 +2233,11 @@ const ExpenseApproval: React.FC = () => {
   /** ensureDraftReady 대기 중 최신 draftId (state 클로저 우회) */
   const draftIdReadyRef = useRef<number | null>(null);
   const submitInFlightRef = useRef(false);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSaveSeqRef = useRef(0);
+  const lastAutoSavedJsonRef = useRef('');
+  /** 수정 화면 진입 직후 자동 저장 스킵 */
+  const autoSaveSkipUntilRef = useRef(0);
   const inputRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
   const [uploadingReceipts, setUploadingReceipts] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
@@ -2704,6 +2711,7 @@ const ExpenseApproval: React.FC = () => {
         draftIdReadyRef.current = newId;
         setDraftId(newId);
         setCurrentAttachments(normalizeExpenseAttachments(response.data?.attachments));
+        lastAutoSavedJsonRef.current = JSON.stringify(payload);
         if (assignedNo) {
           setVoucherData((prev) => {
             if (prev.voucherNo === assignedNo) return prev;
@@ -2767,6 +2775,7 @@ const ExpenseApproval: React.FC = () => {
         draftIdReadyRef.current = newId;
         setDraftId(newId);
         setCurrentAttachments(normalizeExpenseAttachments(response.data?.attachments));
+        lastAutoSavedJsonRef.current = JSON.stringify(payload);
         const assignedNo =
           parseExpenseItems(response.data?.items).meta?.voucherNo ||
           response.data?.expense_id ||
@@ -2792,6 +2801,87 @@ const ExpenseApproval: React.FC = () => {
       setIsInitializingDraft(false);
     }
   }, [viewMode, selectedExpense?.id, draftId, buildExpensePayload, t, isRootUser, effectiveCompanyId]);
+
+  /** 작성·초안 편집 중 입력을 초안으로 자동 저장 */
+  const persistDraftAutoSave = useCallback(async () => {
+    if (submitInFlightRef.current || saving || isInitializingDraft) return;
+    const isCreateDraft = viewMode === 'create';
+    const isEditDraft = viewMode === 'edit' && selectedExpense?.status === 'draft';
+    if (!isCreateDraft && !isEditDraft) return;
+    if (isCreateDraft ? !createGuard.allowed : !editGuard.allowed) return;
+
+    const activeId = isCreateDraft
+      ? draftIdReadyRef.current || draftId
+      : selectedExpense?.id ?? null;
+    if (!activeId) return;
+
+    const payload = buildExpensePayload('draft');
+    const fingerprint = JSON.stringify(payload);
+    if (fingerprint === lastAutoSavedJsonRef.current) return;
+
+    const seq = ++autoSaveSeqRef.current;
+    setAutoSaveHint('saving');
+    try {
+      const response = await accountingService.updateExpenseReport(activeId, payload);
+      if (seq !== autoSaveSeqRef.current) return;
+      if (!response?.success) {
+        throw new Error(response?.message || t('expenseApproval.voucher.autoSaveFailed'));
+      }
+      lastAutoSavedJsonRef.current = fingerprint;
+      setAutoSaveHint('saved');
+    } catch {
+      if (seq !== autoSaveSeqRef.current) return;
+      setAutoSaveHint('failed');
+    }
+  }, [
+    saving,
+    isInitializingDraft,
+    viewMode,
+    selectedExpense?.status,
+    selectedExpense?.id,
+    draftId,
+    buildExpensePayload,
+    createGuard.allowed,
+    editGuard.allowed,
+    t,
+  ]);
+
+  useEffect(() => {
+    const isCreateDraft = viewMode === 'create' && !!draftId;
+    const isEditDraft = viewMode === 'edit' && selectedExpense?.status === 'draft';
+    if (!isCreateDraft && !isEditDraft) return;
+    if (isInitializingDraft || saving || submitInFlightRef.current) return;
+
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    // 수정 화면 진입 직후 스킵 구간이 있으면 그 이후까지 대기
+    const delay = Math.max(1200, autoSaveSkipUntilRef.current - Date.now());
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      void persistDraftAutoSave();
+    }, delay);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+    };
+  }, [
+    formData,
+    lineItems,
+    voucherData,
+    ccUserIds,
+    viewMode,
+    draftId,
+    selectedExpense?.id,
+    selectedExpense?.status,
+    isInitializingDraft,
+    saving,
+    persistDraftAutoSave,
+  ]);
 
   const localizeExpenseApiError = useCallback(
     (raw: unknown, fallbackKey: string) => {
@@ -3631,6 +3721,9 @@ const ExpenseApproval: React.FC = () => {
       setCompanyFilterId(Number(expense.companyId));
     }
     setHeaderStatusBanner('');
+    lastAutoSavedJsonRef.current = '';
+    setAutoSaveHint('');
+    autoSaveSkipUntilRef.current = Date.now() + 1500;
     setViewMode('edit');
   };
 
@@ -3700,10 +3793,24 @@ const ExpenseApproval: React.FC = () => {
     setHeaderStatusBanner('');
     draftInitInFlightRef.current = false;
     submitInFlightRef.current = false;
+    lastAutoSavedJsonRef.current = '';
+    setAutoSaveHint('');
+    autoSaveSkipUntilRef.current = 0;
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
     setViewMode('create');
   };
 
   const leaveExpenseForm = useCallback(() => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    autoSaveSeqRef.current += 1;
+    lastAutoSavedJsonRef.current = '';
+    setAutoSaveHint('');
     setSelectedExpense(null);
     setDraftId(null);
     draftIdReadyRef.current = null;
@@ -3716,6 +3823,12 @@ const ExpenseApproval: React.FC = () => {
 
   const handleSaveExpense = async (editReason?: string) => {
     if (saving || submitInFlightRef.current) return;
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    autoSaveSeqRef.current += 1;
+    setAutoSaveHint('');
     if (viewMode === 'edit' ? !editGuard.guard() : !createGuard.guard()) return;
     if (!formData.title.trim()) {
       setError(t('expenseApproval.errors.requiredTitlePurpose'));
@@ -5499,6 +5612,21 @@ const ExpenseApproval: React.FC = () => {
             {headerStatusBanner === 'draftCreated' && (
               <Typography variant="body2" color="text.secondary">
                 {t('expenseApproval.success.draftCreated')}
+              </Typography>
+            )}
+            {autoSaveHint === 'saving' && (
+              <Typography variant="body2" color="text.secondary">
+                {t('expenseApproval.voucher.autoSaveSaving')}
+              </Typography>
+            )}
+            {autoSaveHint === 'saved' && (
+              <Typography variant="body2" color="text.secondary">
+                {t('expenseApproval.voucher.autoSaveSaved')}
+              </Typography>
+            )}
+            {autoSaveHint === 'failed' && (
+              <Typography variant="body2" color="error">
+                {t('expenseApproval.voucher.autoSaveFailed')}
               </Typography>
             )}
               <Button variant="outlined" onClick={leaveExpenseForm} sx={mvsBodyOutlinedBtnSx}>

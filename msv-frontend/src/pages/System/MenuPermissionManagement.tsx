@@ -50,6 +50,11 @@ import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { showErrorPopup, showSuccessPopup } from '../../utils/errorHandler';
 import { useTranslation } from 'react-i18next';
 import { getUploadUrl } from '../../utils/uploadUrl';
+import {
+  filterMenusForMinsubCompany,
+  isMinsubCompanyName,
+  isMinsubOnlyMenuRoute,
+} from '../../utils/canAccessSystemLoginHistory';
 
 interface User {
   id: number;
@@ -968,6 +973,22 @@ const MenuPermissionManagement: React.FC = () => {
     loadPermissions();
   }, [selectedUserId, selectedCompanyId, canManagePermissionPage]);
 
+  /** 선택 대상 회사명 — Minsub 전용 메뉴 표시 여부 판단 */
+  const permissionTargetCompanyName = useMemo(() => {
+    if (selectedUserId) {
+      return users.find((u) => u.id === selectedUserId)?.company ?? '';
+    }
+    if (selectedCompanyId) {
+      return companies.find((c) => c.id === selectedCompanyId)?.name ?? '';
+    }
+    return null as string | null;
+  }, [selectedUserId, selectedCompanyId, users, companies]);
+
+  const visibleMenuList = useMemo(() => {
+    if (permissionTargetCompanyName == null) return menuList;
+    return filterMenusForMinsubCompany(menuList, permissionTargetCompanyName);
+  }, [menuList, permissionTargetCompanyName]);
+
   // 메뉴 트리 렌더링
   const renderMenuTree = (menuList: Menu[], level: number = 0, parentIndex: number = 0, isLast: boolean = false) => {
     // 메뉴 순서 조정: 회사 정보 관리와 파트너 업체 관리 순서 바꾸기
@@ -1122,10 +1143,28 @@ const MenuPermissionManagement: React.FC = () => {
 
   /** admin은 root가 부여한 메뉴만 전송 (범위 밖 메뉴는 서버에서 유지) */
   const buildPermissionPayload = (targetUserId: number) => {
+    const allowMinsubOnly = isMinsubCompanyName(
+      users.find((u) => u.id === targetUserId)?.company || permissionTargetCompanyName
+    );
+    const findMenuRoute = (menus: Menu[], id: number): string | null => {
+      for (const m of menus) {
+        if (Number(m.id) === id) return m.route || null;
+        if (m.children?.length) {
+          const nested = findMenuRoute(m.children, id);
+          if (nested) return nested;
+        }
+      }
+      return null;
+    };
     return Object.keys(permissions)
       .filter((menuId) => {
         if (user?.role !== 'admin') return true;
         return Boolean(adminPermissions[menuId]);
+      })
+      .filter((menuId) => {
+        if (allowMinsubOnly) return true;
+        const route = findMenuRoute(menuList, parseInt(menuId, 10));
+        return !isMinsubOnlyMenuRoute(route);
       })
       .map((menuId) => {
         const current = permissions[menuId] || {
@@ -1894,7 +1933,7 @@ const MenuPermissionManagement: React.FC = () => {
                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8, flex: 1 }}>
                   <CircularProgress />
                 </Box>
-              ) : menuList.length > 0 && (selectedUserId || selectedCompanyId) ? (
+              ) : visibleMenuList.length > 0 && (selectedUserId || selectedCompanyId) ? (
                 <Box
                   sx={{
                     flex: 1,
@@ -1955,7 +1994,7 @@ const MenuPermissionManagement: React.FC = () => {
                         {t('menuPermissionManagement.permissions')}
                       </Typography>
                     </Box>
-                    {renderMenuTree(menuList)}
+                    {renderMenuTree(visibleMenuList)}
                   </Box>
                 </Box>
               ) : (

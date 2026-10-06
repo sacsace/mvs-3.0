@@ -94,7 +94,11 @@ import {
   moveWorkAssigneeItem,
   getMyAssignedClientScope,
 } from '../controllers/workAssigneeListController';
-import { authenticateToken, restrictAuditToReadOnly } from '../middleware/auth';
+import {
+  authenticateToken,
+  restrictAuditToReadOnly,
+  requireRootOrMinsubEmployee,
+} from '../middleware/auth';
 import { requireMenuPermission, requireMenuPermissionAny } from '../middleware/menuPermission';
 
 /** DB `menus.route` 값과 동일 (프론트 App 라우트 기준) */
@@ -520,53 +524,66 @@ router.put(
   upsertRoomTypeRoom
 );
 
-// 업무 담당 리스트 (엑셀형 담당자 컬럼 + 담당 회사)
+// 업무 담당 리스트 (Minsub Ventures 전용 — 엑셀형 담당자 컬럼 + 담당 회사)
 router.get('/assignee-list/my-scope', getMyAssignedClientScope);
-router.get('/assignee-list', requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_view'), getWorkAssigneeList);
+router.get(
+  '/assignee-list',
+  requireRootOrMinsubEmployee,
+  requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_view'),
+  getWorkAssigneeList
+);
 router.post(
   '/assignee-list/assignees',
+  requireRootOrMinsubEmployee,
   restrictAuditToReadOnly,
   requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_create'),
   createWorkAssignee
 );
 router.put(
   '/assignee-list/assignees/:id',
+  requireRootOrMinsubEmployee,
   restrictAuditToReadOnly,
   requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_edit'),
   updateWorkAssignee
 );
 router.delete(
   '/assignee-list/assignees/:id',
+  requireRootOrMinsubEmployee,
   restrictAuditToReadOnly,
   requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_delete'),
   deleteWorkAssignee
 );
 router.post(
   '/assignee-list/assignees/:id/move',
+  requireRootOrMinsubEmployee,
   restrictAuditToReadOnly,
   requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_edit'),
   moveWorkAssignee
 );
 router.post(
   '/assignee-list/assignees/:assigneeId/items',
+  requireRootOrMinsubEmployee,
   restrictAuditToReadOnly,
   requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_create'),
   createWorkAssigneeItem
 );
 router.put(
   '/assignee-list/items/:id',
+  requireRootOrMinsubEmployee,
   restrictAuditToReadOnly,
   requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_edit'),
   updateWorkAssigneeItem
 );
 router.delete(
   '/assignee-list/items/:id',
+  requireRootOrMinsubEmployee,
   restrictAuditToReadOnly,
   requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_delete'),
   deleteWorkAssigneeItem
 );
 router.post(
   '/assignee-list/items/:id/move',
+  requireRootOrMinsubEmployee,
   restrictAuditToReadOnly,
   requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_edit'),
   moveWorkAssigneeItem
