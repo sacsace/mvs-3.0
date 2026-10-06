@@ -10172,8 +10172,8 @@ const ExpenseApproval: React.FC = () => {
                       </Typography>
                     )}
                   </TableCell>
-                  <TableCell sx={{ width: 148, minWidth: 148, maxWidth: 148 }}>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5 }}>
+                  <TableCell sx={{ width: 148, minWidth: 148, maxWidth: 148, whiteSpace: 'nowrap' }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 0.5, flexWrap: 'nowrap', minWidth: 0 }}>
                       {listTab === 'transfer'
                         ? getTransferStatusChip(expense)
                         : getStatusChip(resolveDisplayStatus(expense))}
@@ -10182,12 +10182,25 @@ const ExpenseApproval: React.FC = () => {
                         (expense.ccUserIds || []).includes(Number(user.id)) &&
                         !canUserApproveExpense(expense) &&
                         !isDesignatedApprover(expense) && (
-                          <Chip
-                            label={t('expenseApproval.cc.badge')}
-                            size="small"
-                            variant="outlined"
-                            sx={{ borderRadius: 0, height: 22, fontWeight: 600 }}
-                          />
+                          <Box
+                            component="span"
+                            sx={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              flexShrink: 0,
+                              height: 22,
+                              px: 0.5,
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              lineHeight: 1,
+                              border: '1px solid #B4B4B4',
+                              bgcolor: '#FFFFFF',
+                              color: 'text.secondary',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {t('expenseApproval.cc.badge')}
+                          </Box>
                         )}
                     </Box>
                   </TableCell>
