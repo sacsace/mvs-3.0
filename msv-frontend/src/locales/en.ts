@@ -1930,6 +1930,29 @@ export default {
         invalidColumnFormula: 'Invalid formula. Use n, numbers, and + - * / ( ) only.'
       }
     },
+    organizationChart: {
+      title: 'Organization Chart',
+      description:
+        'Peers with the same title are placed side by side; different titles stack vertically. Drag nodes to rearrange, and filter by department to review.',
+      resetLayout: 'Reset layout',
+      refresh: 'Refresh',
+      totalEmployees: 'Total employees',
+      departmentCount: 'Departments',
+      reviewByDepartment: 'Review by department',
+      all: 'All',
+      company: 'Company',
+      department: 'Department',
+      employeeCount: 'Employees',
+      unassigned: 'Unassigned',
+      reviewDeptSummary: '{{dept}} · {{count}} employees',
+      reviewEmpty:
+        'No employees to show in this department. (CEO and Vice President stay fixed at the top.)',
+      loading: 'Loading organization chart…',
+      emptyTitle: 'No users to display.',
+      emptyHint: 'Register employees, titles, and departments in User Management, then refresh.',
+      noCompany: 'Your company is not set, so the organization chart cannot be shown.',
+      loadFailed: 'Failed to load organization chart data.',
+    },
     departmentManagement: {
       title: 'Departments',
       description: 'Manage departments per company for user registration and HR information.',

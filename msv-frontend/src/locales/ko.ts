@@ -1982,6 +1982,29 @@ export default {
         invalidColumnFormula: '산술식이 올바르지 않습니다. n과 숫자, + - * / ( ) 만 사용할 수 있습니다.'
       }
     },
+    organizationChart: {
+      title: '조직도 관리',
+      description:
+        '같은 직책은 가로로, 직책이 다르면 세로로 배치합니다. 노드는 드래그로 옮길 수 있고 부서별 검토도 가능합니다.',
+      resetLayout: '위치 초기화',
+      refresh: '새로고침',
+      totalEmployees: '총 직원 수',
+      departmentCount: '부서 수',
+      reviewByDepartment: '부서별 검토',
+      all: '전체',
+      company: '회사',
+      department: '부서',
+      employeeCount: '직원 수',
+      unassigned: '미지정',
+      reviewDeptSummary: '{{dept}} · 직원 {{count}}명',
+      reviewEmpty:
+        '이 부서에 표시할 직원이 없습니다. (대표이사·부사장은 상단 고정)',
+      loading: '조직도 데이터를 불러오는 중...',
+      emptyTitle: '표시할 사용자 정보가 없습니다.',
+      emptyHint: '사용자 관리에서 직원·직책·부서를 등록한 뒤 새로고침해 주세요.',
+      noCompany: '소속 회사 정보가 없어 조직도를 표시할 수 없습니다.',
+      loadFailed: '조직도 데이터를 불러오는데 실패했습니다.',
+    },
     departmentManagement: {
       title: '부서 관리',
       description: '회사별로 사용자 등록·인사 정보에 사용할 부서를 관리합니다.',

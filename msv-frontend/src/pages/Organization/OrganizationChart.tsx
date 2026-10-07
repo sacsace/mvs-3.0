@@ -137,6 +137,8 @@ const ORG_LAYER_GAP = 48;
 const ORG_COL_GAP = 80;
 /** 동일 직책 동료를 가로로 배치할 때 간격 */
 const ORG_PEER_GAP = 40;
+/** 부서 미지정 내부 키 (표시는 i18n) */
+const UNASSIGNED_DEPT = '__unassigned__';
 
 function groupUsersBySamePosition(deptUsers: any[]): { key: string; users: any[] }[] {
   const groups: { key: string; users: any[] }[] = [];
@@ -305,7 +307,13 @@ const PersonNode = ({ data }: { data: any }) => {
   );
 };
 
-const DepartmentNode = ({ data }: { data: any }) => (
+const DepartmentNode = ({ data }: { data: any }) => {
+  const { t } = useTranslation();
+  const displayName =
+    data.name === UNASSIGNED_DEPT || data.name === '미지정'
+      ? t('organizationChart.unassigned')
+      : data.name;
+  return (
   <Card
     sx={{
       ...orgCardSx,
@@ -327,25 +335,28 @@ const DepartmentNode = ({ data }: { data: any }) => (
         </Avatar>
         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
           <Typography variant="subtitle1" fontWeight="bold" noWrap>
-            {data.name}
+            {displayName}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            부서
+            {t('organizationChart.department')}
           </Typography>
         </Box>
       </Box>
       <Divider sx={{ my: 1 }} />
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="caption" color="text.secondary">
-          직원 수
+          {t('organizationChart.employeeCount')}
         </Typography>
         <Chip label={data.employeeCount || 0} size="small" color="secondary" />
       </Box>
     </CardContent>
   </Card>
-);
+  );
+};
 
-const CompanyNode = ({ data }: { data: any }) => (
+const CompanyNode = ({ data }: { data: any }) => {
+  const { t } = useTranslation();
+  return (
   <Card
     sx={{
       ...orgCardSx,
@@ -369,20 +380,21 @@ const CompanyNode = ({ data }: { data: any }) => (
             {data.name}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            회사
+            {t('organizationChart.company')}
           </Typography>
         </Box>
       </Box>
       <Divider sx={{ my: 1.5 }} />
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="body2" color="text.secondary">
-          총 직원 수
+          {t('organizationChart.totalEmployees')}
         </Typography>
         <Chip label={data.employeeCount || 0} color="success" size="small" />
       </Box>
     </CardContent>
   </Card>
-);
+  );
+};
 
 const nodeTypes: NodeTypes = {
   person: PersonNode,
@@ -555,8 +567,15 @@ function buildOrgLayout(
 }
 
 const OrganizationChart: React.FC = () => {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useStore();
+  const displayDeptName = useCallback(
+    (name: string) =>
+      name === UNASSIGNED_DEPT || name === '미지정'
+        ? t('organizationChart.unassigned')
+        : name,
+    [t]
+  );
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [error, setError] = useState('');
@@ -601,7 +620,7 @@ const OrganizationChart: React.FC = () => {
         setNodes([]);
         setEdges([]);
         setDepartmentCount(0);
-        setError('소속 회사 정보가 없어 조직도를 표시할 수 없습니다.');
+        setError(t('organizationChart.noCompany'));
         return;
       }
 
@@ -654,16 +673,16 @@ const OrganizationChart: React.FC = () => {
       const departmentMap = new Map<string, any[]>();
       activeUsers.forEach((member: any) => {
         if (fixedExecIdSet.has(member.id)) return;
-        const dept = String(member.department || '').trim() || '미지정';
+        const dept = String(member.department || '').trim() || UNASSIGNED_DEPT;
         if (!departmentMap.has(dept)) departmentMap.set(dept, []);
         departmentMap.get(dept)!.push(member);
       });
 
       const sortedDeptNames = Array.from(departmentMap.keys()).sort((a, b) => {
-        const sa = deptSortByName.has(a) ? deptSortByName.get(a)! : a === '미지정' ? 9999 : 500;
-        const sb = deptSortByName.has(b) ? deptSortByName.get(b)! : b === '미지정' ? 9999 : 500;
+        const sa = deptSortByName.has(a) ? deptSortByName.get(a)! : a === UNASSIGNED_DEPT ? 9999 : 500;
+        const sb = deptSortByName.has(b) ? deptSortByName.get(b)! : b === UNASSIGNED_DEPT ? 9999 : 500;
         if (sa !== sb) return sa - sb;
-        return a.localeCompare(b, 'ko');
+        return a.localeCompare(b, i18n.language === 'en' ? 'en' : 'ko');
       });
 
       sortedDeptNames.forEach((deptName) => {
@@ -689,7 +708,7 @@ const OrganizationChart: React.FC = () => {
         departments,
       };
 
-      setDepartmentCount(sortedDeptNames.filter((d) => d !== '미지정').length);
+      setDepartmentCount(sortedDeptNames.filter((d) => d !== UNASSIGNED_DEPT).length);
       setSnapshot(nextSnapshot);
       setDeptFilter((prev) => {
         const next = prev === 'all' || sortedDeptNames.includes(prev) ? prev : 'all';
@@ -698,7 +717,7 @@ const OrganizationChart: React.FC = () => {
       });
     } catch (err: any) {
       const errorMessage =
-        err.response?.data?.message || err.message || '조직도 데이터를 불러오는데 실패했습니다.';
+        err.response?.data?.message || err.message || t('organizationChart.loadFailed');
       setError(errorMessage);
       setSnapshot(null);
       setNodes([]);
@@ -707,7 +726,7 @@ const OrganizationChart: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.company_id, setNodes, setEdges, applyLayout]);
+  }, [user?.company_id, setNodes, setEdges, applyLayout, t, i18n.language]);
 
   React.useEffect(() => {
     if (user?.company_id) {
@@ -756,8 +775,8 @@ const OrganizationChart: React.FC = () => {
   return (
     <Box sx={{ ...mvsPageRootSx, height: 'calc(100vh - 200px)' }}>
       <MvsPageHeader
-        title="조직도 관리"
-        description="같은 직책은 가로로, 직책이 다르면 세로로 배치합니다. 노드는 드래그로 옮길 수 있고 부서별 검토도 가능합니다."
+        title={t('organizationChart.title')}
+        description={t('organizationChart.description')}
         actions={
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             <Button
@@ -766,7 +785,7 @@ const OrganizationChart: React.FC = () => {
               sx={{ borderRadius: 2 }}
               disabled={loading || !snapshot}
             >
-              위치 초기화
+              {t('organizationChart.resetLayout')}
             </Button>
             <Button
               variant="outlined"
@@ -775,7 +794,7 @@ const OrganizationChart: React.FC = () => {
               sx={{ borderRadius: 2 }}
               disabled={loading}
             >
-              새로고침
+              {t('organizationChart.refresh')}
             </Button>
           </Box>
         }
@@ -792,7 +811,7 @@ const OrganizationChart: React.FC = () => {
         <Card>
           <CardContent sx={{ textAlign: 'center' }}>
             <Typography color="textSecondary" gutterBottom>
-              총 직원 수
+              {t('organizationChart.totalEmployees')}
             </Typography>
             <Typography variant="h4" color="primary.main">
               {stats.totalEmployees}
@@ -802,7 +821,7 @@ const OrganizationChart: React.FC = () => {
         <Card>
           <CardContent sx={{ textAlign: 'center' }}>
             <Typography color="textSecondary" gutterBottom>
-              부서 수
+              {t('organizationChart.departmentCount')}
             </Typography>
             <Typography variant="h4" color="secondary.main">
               {stats.totalDepartments}
@@ -813,11 +832,11 @@ const OrganizationChart: React.FC = () => {
 
       <Paper variant="outlined" sx={{ p: 1.5, mb: 2, borderRadius: 1 }}>
         <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
-          부서별 검토
+          {t('organizationChart.reviewByDepartment')}
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: deptFilter === 'all' ? 0 : 1.5 }}>
           <Chip
-            label="전체"
+            label={t('organizationChart.all')}
             color={deptFilter === 'all' ? 'primary' : 'default'}
             variant={deptFilter === 'all' ? 'filled' : 'outlined'}
             onClick={() => handleDeptFilterChange('all')}
@@ -827,7 +846,7 @@ const OrganizationChart: React.FC = () => {
           {(snapshot?.deptNames || []).map((name) => (
             <Chip
               key={name}
-              label={`${name} (${(snapshot?.departments[name] || []).length})`}
+              label={`${displayDeptName(name)} (${(snapshot?.departments[name] || []).length})`}
               color={deptFilter === name ? 'primary' : 'default'}
               variant={deptFilter === name ? 'filled' : 'outlined'}
               onClick={() => handleDeptFilterChange(name)}
@@ -839,12 +858,15 @@ const OrganizationChart: React.FC = () => {
         {deptFilter !== 'all' && (
           <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1.5 }}>
             <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
-              {deptFilter} · 직원 {reviewMembers.length}명
+              {t('organizationChart.reviewDeptSummary', {
+                dept: displayDeptName(deptFilter),
+                count: reviewMembers.length,
+              })}
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
               {reviewMembers.length === 0 ? (
                 <Typography variant="caption" color="text.secondary">
-                  이 부서에 표시할 직원이 없습니다. (대표이사·부사장은 상단 고정)
+                  {t('organizationChart.reviewEmpty')}
                 </Typography>
               ) : (
                 reviewMembers.map((member: any) => (
@@ -883,7 +905,7 @@ const OrganizationChart: React.FC = () => {
             }}
           >
             <Typography variant="h6" color="text.secondary">
-              조직도 데이터를 불러오는 중...
+              {t('organizationChart.loading')}
             </Typography>
           </Box>
         ) : nodes.length === 0 ? (
@@ -898,13 +920,13 @@ const OrganizationChart: React.FC = () => {
             }}
           >
             <Typography variant="h6" color="text.secondary">
-              표시할 사용자 정보가 없습니다.
+              {t('organizationChart.emptyTitle')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              사용자 관리에서 직원·직책·부서를 등록한 뒤 새로고침해 주세요.
+              {t('organizationChart.emptyHint')}
             </Typography>
             <Button variant="contained" startIcon={<RefreshIcon />} onClick={loadOrganizationData}>
-              새로고침
+              {t('organizationChart.refresh')}
             </Button>
           </Box>
         ) : (
