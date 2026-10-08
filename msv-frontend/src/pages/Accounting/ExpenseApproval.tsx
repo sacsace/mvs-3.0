@@ -3332,7 +3332,7 @@ const ExpenseApproval: React.FC = () => {
     if (tab === 'received' || tab === 'written' || tab === 'transfer') {
       if (tab === 'transfer' && !hasTransferAccess) return;
       setListTab(tab);
-      setStatusFilter(tab === 'transfer' ? 'transfer_pending' : '');
+      setStatusFilter('');
       if (tab === 'transfer' && isRootUser && companyFilterId === '') {
         setCompanyFilterId(resolveDefaultCompanyFilterId());
       }
@@ -3840,10 +3840,16 @@ const ExpenseApproval: React.FC = () => {
     setViewMode('create');
   };
 
-  const leaveExpenseForm = useCallback(() => {
+  const leaveExpenseForm = useCallback(async () => {
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
       autoSaveTimerRef.current = null;
+    }
+    // 제출 중이 아니면 대기 중인 초안 자동 저장을 먼저 반영
+    try {
+      await persistDraftAutoSave();
+    } catch {
+      /* 목록 복귀는 계속 진행 */
     }
     autoSaveSeqRef.current += 1;
     lastAutoSavedJsonRef.current = '';
@@ -3855,8 +3861,12 @@ const ExpenseApproval: React.FC = () => {
     submitInFlightRef.current = false;
     setHeaderStatusBanner('');
     setIsInitializingDraft(false);
+    setListTab('written');
+    setStatusFilter('');
+    setPage(1);
     setViewMode('list');
-  }, []);
+    await loadExpenseData();
+  }, [persistDraftAutoSave, loadExpenseData]);
 
   const handleSaveExpense = async (editReason?: string) => {
     if (saving || submitInFlightRef.current) return;
@@ -3918,6 +3928,7 @@ const ExpenseApproval: React.FC = () => {
       if (!response?.success) {
         throw new Error(response?.message || t('expenseApproval.errors.submitResponseFailed'));
       }
+      await leaveExpenseForm();
       setSuccess(
         isRevisionResubmitEdit
           ? t('expenseApproval.success.resubmittedAfterRevision')
@@ -3925,8 +3936,6 @@ const ExpenseApproval: React.FC = () => {
             ? t('expenseApproval.success.edited')
             : t('expenseApproval.success.submitted')
       );
-      await loadExpenseData();
-      leaveExpenseForm();
     } catch (saveError: any) {
       submitInFlightRef.current = false;
       setError(
@@ -4963,7 +4972,7 @@ const ExpenseApproval: React.FC = () => {
       setSuccess(t('expenseApproval.success.paymentCompleted'));
         setSelectedExpense(null);
         setListTab('transfer');
-        setStatusFilter('transfer_pending');
+        setStatusFilter('');
         if (isRootUser) {
           setCompanyFilterId(resolveDefaultCompanyFilterId());
         }
@@ -5685,7 +5694,11 @@ const ExpenseApproval: React.FC = () => {
                 {t('expenseApproval.voucher.autoSaveFailed')}
               </Typography>
             )}
-              <Button variant="outlined" onClick={leaveExpenseForm} sx={mvsBodyOutlinedBtnSx}>
+              <Button
+                variant="outlined"
+                onClick={() => void leaveExpenseForm()}
+                sx={mvsBodyOutlinedBtnSx}
+              >
               {t('expenseApproval.actions.backToList')}
             </Button>
           </Box>
@@ -7635,7 +7648,11 @@ const ExpenseApproval: React.FC = () => {
             )}
 
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 3 }}>
-              <Button variant="outlined" onClick={leaveExpenseForm} sx={mvsBodyOutlinedBtnSx}>
+              <Button
+                variant="outlined"
+                onClick={() => void leaveExpenseForm()}
+                sx={mvsBodyOutlinedBtnSx}
+              >
                 {t('common.cancel')}
               </Button>
               <Button
@@ -9928,7 +9945,7 @@ const ExpenseApproval: React.FC = () => {
         value={listTab}
           onChange={(_, value) => {
             setListTab(value);
-            setStatusFilter(value === 'transfer' ? 'transfer_pending' : '');
+            setStatusFilter('');
             setPage(1);
             setListSortKey(null);
             setListSortDir('asc');
@@ -10158,7 +10175,7 @@ const ExpenseApproval: React.FC = () => {
               startIcon={<FilterIcon sx={{ fontSize: 18 }} />}
                 onClick={() => {
                   setSearchTerm('');
-                  setStatusFilter(listTab === 'transfer' ? 'transfer_pending' : '');
+                  setStatusFilter('');
                   setPriorityFilter('');
                 setListSortKey(null);
                 setListSortDir('asc');
@@ -10326,13 +10343,14 @@ const ExpenseApproval: React.FC = () => {
                 </ExpenseListHeadCell>
                 <TableCell
                   sx={{
-                    width: 112,
-                    minWidth: 112,
-                    maxWidth: 112,
+                    width: 176,
+                    minWidth: 176,
+                    maxWidth: 176,
                     whiteSpace: 'nowrap',
-                    pl: 1.5,
-                    pr: 3,
+                    pl: 1,
+                    pr: 4,
                     textAlign: 'center',
+                    overflow: 'visible',
                   }}
                 >
                   {t('expenseApproval.columns.actions')}
@@ -10431,9 +10449,26 @@ const ExpenseApproval: React.FC = () => {
                   <TableCell sx={{ width: 108, minWidth: 108, maxWidth: 108 }}>{getPriorityChip(expense.priority)}</TableCell>
                   <TableCell
                     onClick={(e) => e.stopPropagation()}
-                    sx={{ width: 112, minWidth: 112, maxWidth: 112, pl: 1.5, pr: 3, textAlign: 'center' }}
+                    sx={{
+                      width: 176,
+                      minWidth: 176,
+                      maxWidth: 176,
+                      pl: 1,
+                      pr: 4,
+                      textAlign: 'center',
+                      overflow: 'visible',
+                    }}
                   >
-                    <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center', flexWrap: 'nowrap' }}>
+                    <Box
+                      sx={{
+                        display: 'inline-flex',
+                        gap: 0.25,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        flexWrap: 'nowrap',
+                        maxWidth: '100%',
+                      }}
+                    >
                       {listTab === 'transfer' && (
                         <Tooltip title={t('expenseApproval.actions.transferLog')}>
                           <IconButton
