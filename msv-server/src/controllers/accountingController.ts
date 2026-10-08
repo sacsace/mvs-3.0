@@ -3493,6 +3493,13 @@ export const deleteExpenseReport = async (req: RequestWithUser, res: Response) =
     const paymentStatus = String(expense.payment_request_status || '').toLowerCase();
     const remaining = getExpenseRemainingAmount(expense);
     const status = String(expense.status || '');
+    const total = roundMoney(Number(expense.total_amount || 0));
+    const isZeroAmount = !(total > 0);
+    // root: 0원(빈 초안/오분류 paid) 문서는 상태와 무관하게 소프트 삭제
+    if (isRoot && isZeroAmount) {
+      await expense.update({ is_active: false });
+      return res.json({ success: true });
+    }
     const isPaid =
       status === 'paid' ||
       paymentStatus === 'paid' ||

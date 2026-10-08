@@ -4788,6 +4788,13 @@ const ExpenseApproval: React.FC = () => {
   const canDeleteExpense = (expense: ExpenseApprovalItem) => {
     if (!user?.id) return false;
     if (listTab === 'transfer') return false;
+
+    const total = floorMoney(Number(expense.totalAmount || 0));
+    const isZeroAmount = total <= 0;
+
+    // root: 0원(빈 초안/오분류) 문서는 상태와 무관하게 삭제 가능
+    if (isRootUser && isZeroAmount) return true;
+
     // 목록에 '지급 완료'로 보이는 건(문서 status와 무관) 삭제 불가
     if (resolveDisplayStatus(expense) === 'paid') return false;
     if (expense.status === 'paid') return false;
