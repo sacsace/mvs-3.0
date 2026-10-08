@@ -91,12 +91,36 @@ async function ensureProjectTaskSchema(): Promise<void> {
           onUpdate: 'CASCADE',
           onDelete: 'SET NULL',
         },
+        parent_id: {
+          type: DataTypes.INTEGER,
+          allowNull: true,
+          references: { model: 'project_task_comments', key: 'id' },
+          onUpdate: 'CASCADE',
+          onDelete: 'CASCADE',
+        },
         content: { type: DataTypes.TEXT, allowNull: false },
         created_at: { type: DataTypes.DATE, allowNull: false },
         updated_at: { type: DataTypes.DATE, allowNull: false },
         deleted_at: { type: DataTypes.DATE, allowNull: true },
       });
       await qi.addIndex('project_task_comments', ['task_id', 'created_at']);
+      await qi.addIndex('project_task_comments', ['parent_id']);
+    } else {
+      const commentTable = await qi.describeTable('project_task_comments');
+      if (!commentTable.parent_id) {
+        await qi.addColumn('project_task_comments', 'parent_id', {
+          type: DataTypes.INTEGER,
+          allowNull: true,
+          references: { model: 'project_task_comments', key: 'id' },
+          onUpdate: 'CASCADE',
+          onDelete: 'CASCADE',
+        });
+        try {
+          await qi.addIndex('project_task_comments', ['parent_id']);
+        } catch {
+          /* index may already exist */
+        }
+      }
     }
   } catch (error) {
     console.warn('ensureProjectTaskSchema comments table:', error);
@@ -1036,9 +1060,32 @@ export const createProjectTaskComment = async (req: RequestWithUser, res: Respon
     const content = String(req.body.content || '').trim();
     if (!content) return res.status(400).json({ success: false, message: '댓글 내용을 입력하세요.' });
 
+    let parentId: number | null = null;
+    const rawParent = req.body.parent_id ?? req.body.parentId;
+    if (rawParent != null && String(rawParent).trim() !== '') {
+      parentId = Number(rawParent);
+      if (!Number.isInteger(parentId) || parentId <= 0) {
+        return res.status(400).json({ success: false, message: '잘못된 원댓글입니다.' });
+      }
+      const parent = await (ProjectTaskComment as any).findOne({
+        where: { id: parentId, task_id: task.id },
+      });
+      if (!parent) {
+        return res.status(404).json({ success: false, message: '원댓글을 찾을 수 없습니다.' });
+      }
+      // 1단계 답글만 허용
+      if (parent.parent_id != null) {
+        return res.status(400).json({
+          success: false,
+          message: '답글에는 다시 답글을 달 수 없습니다. 원댓글에 답글해 주세요.',
+        });
+      }
+    }
+
     const row = await (ProjectTaskComment as any).create({
       task_id: task.id,
       user_id: req.user!.id,
+      parent_id: parentId,
       content,
     });
 
@@ -1048,13 +1095,100 @@ export const createProjectTaskComment = async (req: RequestWithUser, res: Respon
       project_id: project.id,
       task_id: task.id,
       actor_id: req.user!.id,
-      event_type: 'task_comment_added',
-      metadata: { title: task.title },
+      event_type: parentId ? 'task_comment_reply_added' : 'task_comment_added',
+      metadata: { title: task.title, parent_id: parentId },
     });
 
     const loaded = await (ProjectTaskComment as any).findByPk(row.id, {
       include: [{ model: User, as: 'user', attributes: userAttrs }],
     });
+
+    try {
+      const actorName =
+        String((req.user as any)?.username || (req.user as any)?.userid || 'Someone').trim() ||
+        'Someone';
+      const taskTitle = String(task.title || 'Task');
+      const projectName = String(project.name || '');
+      const href = `/work/project-management/${project.id}`;
+      const preview = content.replace(/\s+/g, ' ').trim().slice(0, 100);
+      const notifyIds = new Set<number>();
+
+      if (parentId) {
+        const parent = await (ProjectTaskComment as any).findByPk(parentId, {
+          attributes: ['id', 'user_id'],
+        });
+        const parentAuthorId = parent?.user_id != null ? Number(parent.user_id) : null;
+        if (parentAuthorId && parentAuthorId !== Number(req.user!.id)) {
+          notifyIds.add(parentAuthorId);
+          pushNotification(
+            {
+              title: '프로젝트 댓글 답글',
+              message: `${actorName}님이 "${taskTitle}" 댓글에 답글을 남겼습니다.`,
+              type: 'info',
+              target_type: 'user',
+              target_id: parentAuthorId,
+              tenant_id: project.tenant_id,
+              company_id: project.company_id,
+              sender_user_id: req.user!.id,
+              data: {
+                feature: 'project_task_comment_reply',
+                project_id: project.id,
+                task_id: task.id,
+                comment_id: row.id,
+                parent_comment_id: parentId,
+                actor_name: actorName,
+                href,
+                title_en: 'Project task comment reply',
+                message_en: `${actorName} replied to your comment on "${taskTitle}"${
+                  projectName ? ` (${projectName})` : ''
+                }.${preview ? `\n"${preview}"` : ''}`,
+              },
+            },
+            (req as any).socketService
+          );
+        }
+      }
+
+      const assignees = await (ProjectTaskAssignee as any).findAll({
+        where: { task_id: task.id },
+        attributes: ['user_id'],
+      });
+      for (const a of assignees) {
+        const uid = Number(a.user_id);
+        if (!Number.isFinite(uid) || uid <= 0) continue;
+        if (uid === Number(req.user!.id)) continue;
+        if (notifyIds.has(uid)) continue;
+        notifyIds.add(uid);
+        pushNotification(
+          {
+            title: '프로젝트 댓글',
+            message: `${actorName}님이 "${taskTitle}"에 댓글을 남겼습니다.`,
+            type: 'info',
+            target_type: 'user',
+            target_id: uid,
+            tenant_id: project.tenant_id,
+            company_id: project.company_id,
+            sender_user_id: req.user!.id,
+            data: {
+              feature: 'project_task_comment',
+              project_id: project.id,
+              task_id: task.id,
+              comment_id: row.id,
+              actor_name: actorName,
+              href,
+              title_en: 'Project task comment',
+              message_en: `${actorName} commented on "${taskTitle}"${
+                projectName ? ` (${projectName})` : ''
+              }.${preview ? `\n"${preview}"` : ''}`,
+            },
+          },
+          (req as any).socketService
+        );
+      }
+    } catch (notifyErr) {
+      console.error('project task comment notify:', (notifyErr as Error)?.message || notifyErr);
+    }
+
     res.status(201).json({ success: true, data: loaded });
   } catch (error: any) {
     const status = error?.status || 500;
@@ -1089,6 +1223,12 @@ export const deleteProjectTaskComment = async (req: RequestWithUser, res: Respon
       return res.status(403).json({ success: false, message: '본인 댓글만 삭제할 수 있습니다.' });
     }
 
+    // 원댓글 삭제 시 답글도 소프트 삭제
+    if (comment.parent_id == null) {
+      await (ProjectTaskComment as any).destroy({
+        where: { parent_id: comment.id, task_id: task.id },
+      });
+    }
     await comment.destroy();
     res.json({ success: true, message: '댓글이 삭제되었습니다.' });
   } catch (error: any) {

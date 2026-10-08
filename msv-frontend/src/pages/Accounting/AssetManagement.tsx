@@ -251,7 +251,7 @@ const AssetManagement: React.FC = () => {
   const [scheduleSummary, setScheduleSummary] = useState<DepreciationSummary | null>(null);
   const [exporting, setExporting] = useState(false);
 
-  const itemsPerPage = 10;
+  const itemsPerPage = 15;
 
   const formPreview = useMemo(
     () =>

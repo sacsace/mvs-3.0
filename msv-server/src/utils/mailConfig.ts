@@ -143,11 +143,46 @@ export function getResolvedMailTransportOptions(
   company: { settings?: unknown } | null | undefined,
   user?: { settings?: unknown; email?: string | null; username?: string | null } | null | undefined
 ): MailTransportResolved | null {
-  const fromCompany = mailServerFromSettingsBlob(company?.settings);
-  if (fromCompany) return fromCompany;
+  const candidates = listMailTransportCandidates(company, user ? [user] : []);
+  return candidates[0] || null;
+}
 
-  const fromUser = mailServerFromSettingsBlob(user?.settings);
-  if (fromUser) return fromUser;
+function transportKey(t: MailTransportResolved): string {
+  return `${t.host}|${t.port}|${t.auth.user}|${t.from}`.toLowerCase();
+}
 
-  return getSystemMailTransportOptions(null);
+/**
+ * 회사 → 사용자(들) 개인 SMTP → 환경변수 순 후보 목록 (중복 제거).
+ * 인증 실패 시 다음 후보로 넘어갈 때 사용.
+ */
+export function listMailTransportCandidates(
+  company: { settings?: unknown } | null | undefined,
+  users: Array<{ settings?: unknown } | null | undefined> = []
+): MailTransportResolved[] {
+  const out: MailTransportResolved[] = [];
+  const seen = new Set<string>();
+  const push = (t: MailTransportResolved | null) => {
+    if (!t) return;
+    const key = transportKey(t);
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(t);
+  };
+
+  push(mailServerFromSettingsBlob(company?.settings));
+  for (const u of users) {
+    push(mailServerFromSettingsBlob(u?.settings));
+  }
+  // 회사 SMTP가 있어도 env는 마지막 폴백으로 포함 (회사 비번 오류 대비)
+  if (env.EMAIL_HOST && env.EMAIL_USER && env.EMAIL_PASS) {
+    const port = env.EMAIL_PORT || 587;
+    push({
+      host: env.EMAIL_HOST,
+      port,
+      secure: resolveSmtpSecure(port, undefined),
+      auth: { user: env.EMAIL_USER, pass: normalizeSmtpPassword(env.EMAIL_PASS) },
+      from: env.EMAIL_USER,
+    });
+  }
+  return out;
 }

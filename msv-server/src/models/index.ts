@@ -254,6 +254,14 @@ UserPermission.belongsTo(Menu, { foreignKey: 'menu_id', as: 'menu' });
 (ProjectTaskComment as any).belongsTo(ProjectTask, { foreignKey: 'task_id', as: 'task' });
 (ProjectTaskComment as any).belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 (User as any).hasMany(ProjectTaskComment, { foreignKey: 'user_id', as: 'projectTaskComments' });
+(ProjectTaskComment as any).belongsTo(ProjectTaskComment, {
+  foreignKey: 'parent_id',
+  as: 'parent',
+});
+(ProjectTaskComment as any).hasMany(ProjectTaskComment, {
+  foreignKey: 'parent_id',
+  as: 'replies',
+});
 
 (Project as any).hasMany(ProjectActivity, { foreignKey: 'project_id', as: 'activities' });
 (ProjectActivity as any).belongsTo(Project, { foreignKey: 'project_id', as: 'project' });

@@ -30,6 +30,10 @@ export type UserUiPreferencesPayload = {
     expense?: boolean;
     workReport?: boolean;
     workBoard?: boolean;
+    /** 업무 보드·프로젝트 Task 댓글/답글 */
+    comments?: boolean;
+    /** 미읽음 알림·대기 지출·미답변 댓글 일일 리마인드 */
+    unreadReminder?: boolean;
     emailDigest?: 'realtime' | 'daily' | 'weekly' | 'immediate';
   };
   notificationTemplates?: Array<{

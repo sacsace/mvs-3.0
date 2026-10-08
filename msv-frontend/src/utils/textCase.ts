@@ -83,7 +83,7 @@ export function shouldApplyProperCaseToInput(
   }
   const name = `${el.name || ''} ${el.id || ''} ${el.getAttribute('autocomplete') || ''}`.toLowerCase();
   if (
-    /password|email|otp|pin|ifsc|gst|pan|aadhaar|aadhar|cin|token|secret|userid|user_id|login/.test(
+    /password|email|otp|pin|ifsc|gst|pan|aadhaar|aadhar|cin|token|secret|userid|user_id|login|bank[_-]?name|\bbank\b|account[_-]?number|accountnumber|phone|tel/.test(
       name
     )
   ) {

@@ -1,9 +1,12 @@
-MVS Notifier (Windows tray)
-===========================
+MVS Notifier v1.2 (Windows tray)
+================================
 
 Lightweight tray notifier for Minsub Ventures System (MVS).
 - Shows Windows balloon tips for new MVS notifications
 - Runs in system tray (no browser required while running)
+- Separate from web session: logging in on the web elsewhere
+  will NOT sign out this notifier
+- Auto-refreshes auth token while running
 - Does NOT enable Startup by default
 - Does NOT modify OS system settings
 

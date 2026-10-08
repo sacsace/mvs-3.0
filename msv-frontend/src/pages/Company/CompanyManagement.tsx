@@ -91,7 +91,7 @@ function formatCompanyNameWhileTyping(raw: string): string {
 }
 
 const COMPANY_MENU_ROUTES = ['/basic-info/company', '/basic-info'] as const;
-const COMPANIES_PER_PAGE = 10;
+const COMPANIES_PER_PAGE = 15;
 
 type ListViewMode = 'page' | 'all';
 

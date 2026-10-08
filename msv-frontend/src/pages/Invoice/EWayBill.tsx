@@ -315,7 +315,7 @@ const EWayBillComponent: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [supplyTypeFilter, setSupplyTypeFilter] = useState('');
   const [page, setPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(15);
   const [allEwayBills, setAllEwayBills] = useState<EWayBill[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);

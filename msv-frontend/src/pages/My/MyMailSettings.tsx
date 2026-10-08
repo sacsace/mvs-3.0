@@ -20,6 +20,7 @@ import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import SmtpServerForm from '../../components/Mail/SmtpServerForm';
 import {
   mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
   mvsBodyPrimaryBtnSx,
   mvsPageRootSx,
 } from '../../theme/mvsLayout';
@@ -30,7 +31,9 @@ import {
 } from '../../services/api';
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
-  NotificationSettings,
+  NOTIFICATION_CATEGORY_I18N,
+  NOTIFICATION_CATEGORY_KEYS,
+  type NotificationSettings,
 } from '../../constants/notificationSettings';
 import { EMPTY_MAIL_SERVER, MailServerForm } from '../../utils/mailServerForm';
 import { showErrorPopup, showSuccessPopup } from '../../utils/errorHandler';
@@ -294,53 +297,109 @@ const MyMailSettings: React.FC = () => {
           </Grid>
 
           {settings.email ? (
-            <FormControl fullWidth size="small" sx={{ mt: 2, maxWidth: 280 }}>
-              <InputLabel>{t('notificationManagement.emailDigest')}</InputLabel>
-              <Select
-                label={t('notificationManagement.emailDigest')}
-                value={settings.emailDigest || 'immediate'}
-                onChange={(e) =>
-                  setSettings((prev) => ({
-                    ...prev,
-                    emailDigest: e.target.value as NotificationSettings['emailDigest'],
-                  }))
-                }
-              >
-                <MenuItem value="immediate">{t('notificationManagement.digestImmediate')}</MenuItem>
-                <MenuItem value="daily">{t('notificationManagement.digestDaily')}</MenuItem>
-                <MenuItem value="weekly">{t('notificationManagement.digestWeekly')}</MenuItem>
-              </Select>
-            </FormControl>
+            <Box sx={{ mt: 2, maxWidth: 480 }}>
+              <FormControl fullWidth size="small" sx={{ maxWidth: 280 }}>
+                <InputLabel>{t('notificationManagement.emailDigest')}</InputLabel>
+                <Select
+                  label={t('notificationManagement.emailDigest')}
+                  value={settings.emailDigest || 'immediate'}
+                  onChange={(e) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      emailDigest: e.target.value as NotificationSettings['emailDigest'],
+                    }))
+                  }
+                >
+                  <MenuItem value="immediate">{t('notificationManagement.digestImmediate')}</MenuItem>
+                  <MenuItem value="daily">{t('notificationManagement.digestDaily')}</MenuItem>
+                  <MenuItem value="weekly">{t('notificationManagement.digestWeekly')}</MenuItem>
+                </Select>
+              </FormControl>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75 }}>
+                {t('notificationManagement.digestHint')}
+              </Typography>
+            </Box>
           ) : null}
 
           <Divider sx={{ my: 2 }} />
 
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-            {t('notificationManagement.categorySettings')}
-          </Typography>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 1,
+              mb: 1,
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              {t('notificationManagement.categorySettings')}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() =>
+                  setSettings((prev) => {
+                    const next = { ...prev };
+                    for (const key of NOTIFICATION_CATEGORY_KEYS) next[key] = true;
+                    return next;
+                  })
+                }
+                sx={mvsBodyOutlinedBtnSx}
+              >
+                {t('notificationManagement.categoryEnableAll')}
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() =>
+                  setSettings((prev) => {
+                    const next = { ...prev };
+                    for (const key of NOTIFICATION_CATEGORY_KEYS) next[key] = false;
+                    return next;
+                  })
+                }
+                sx={mvsBodyOutlinedBtnSx}
+              >
+                {t('notificationManagement.categoryDisableAll')}
+              </Button>
+            </Box>
+          </Box>
           <Grid container spacing={1}>
-            {(
-              [
-                ['system', t('notificationManagement.catSystem')],
-                ['approval', t('notificationManagement.catApproval')],
-                ['vacation', t('notificationManagement.catVacation')],
-                ['expense', t('notificationManagement.catExpense')],
-                ['workReport', t('notificationManagement.catWorkReport')],
-                ['workBoard', t('notificationManagement.catWorkBoard')],
-              ] as const
-            ).map(([key, label]) => (
-              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={key}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={Boolean(settings[key])}
-                      onChange={(e) => setSettings((prev) => ({ ...prev, [key]: e.target.checked }))}
-                    />
-                  }
-                  label={label}
-                />
-              </Grid>
-            ))}
+            {NOTIFICATION_CATEGORY_KEYS.map((key) => {
+              const label = t(`notificationManagement.${NOTIFICATION_CATEGORY_I18N[key]}`);
+              const hintKey =
+                key === 'comments'
+                  ? 'catCommentsHint'
+                  : key === 'unreadReminder'
+                    ? 'catUnreadReminderHint'
+                    : null;
+              return (
+                <Grid size={{ xs: 12, sm: 6, md: 4 }} key={key}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={settings[key] !== false}
+                        onChange={(e) => setSettings((prev) => ({ ...prev, [key]: e.target.checked }))}
+                      />
+                    }
+                    label={label}
+                  />
+                  {hintKey ? (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      display="block"
+                      sx={{ pl: 6, mt: -0.5, mb: 0.5 }}
+                    >
+                      {t(`notificationManagement.${hintKey}`)}
+                    </Typography>
+                  ) : null}
+                </Grid>
+              );
+            })}
           </Grid>
 
           <Box sx={{ mt: 2.5 }}>

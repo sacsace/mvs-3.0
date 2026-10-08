@@ -47,7 +47,7 @@ import {
 } from '../../theme/mvsLayout';
 import { type SxProps, type Theme } from '@mui/material/styles';
 
-const LOGS_PER_PAGE = 10;
+const LOGS_PER_PAGE = 15;
 const LOGIN_FILTER_OUTLINED = mvsOutlinedLabelProps;
 const loginFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
 

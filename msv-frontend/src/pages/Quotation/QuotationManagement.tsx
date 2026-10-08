@@ -295,7 +295,7 @@ const QuotationManagement: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [customerFilter, setCustomerFilter] = useState('');
   const [page, setPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(15);
   const [listTab, setListTab] = useState<'requested' | 'pending'>('requested');
   const [companyUsers, setCompanyUsers] = useState<Array<{ id: number; username: string; email: string }>>([]);
   const [pdfSaving, setPdfSaving] = useState(false);

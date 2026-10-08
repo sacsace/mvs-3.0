@@ -5,8 +5,8 @@ export const APP_CONSTANTS = {
   RETRY_ATTEMPTS: 3,
   
   // 페이지네이션
-  DEFAULT_PAGE_SIZE: 10,
-  PAGE_SIZE_OPTIONS: [10, 25, 50, 100],
+  DEFAULT_PAGE_SIZE: 15,
+  PAGE_SIZE_OPTIONS: [15, 25, 50, 100],
   
   // 지연 시간 (ms)
   LOADING_DELAY: 1000,

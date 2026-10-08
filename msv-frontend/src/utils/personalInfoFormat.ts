@@ -7,24 +7,26 @@ export function hasDetailValue(value: unknown): boolean {
   return text.length > 0 && text !== '-' && text !== '—';
 }
 
+/** 전화: 숫자만 (인도 시외번호+국번 등 최대 15자리) */
 export function normalizePhoneDigits(raw: string): string {
   return String(raw ?? '')
-    .replace(/\s/g, '')
     .replace(/\D/g, '')
-    .slice(0, 10);
+    .slice(0, 15);
 }
 
+/** 표시: 3자리 공백 4자리 공백 나머지 (예: 020 6719 1900) */
 export function formatPhoneDisplay(digitsOnly: string): string {
   const d = normalizePhoneDigits(digitsOnly);
   if (!d) return '';
-  if (d.length <= 5) return d;
-  return `${d.slice(0, 5)} ${d.slice(5)}`;
+  if (d.length <= 3) return d;
+  if (d.length <= 7) return `${d.slice(0, 3)} ${d.slice(3)}`;
+  return `${d.slice(0, 3)} ${d.slice(3, 7)} ${d.slice(7)}`;
 }
 
 export function normalizeBankAccountDigits(raw: string): string {
   return String(raw ?? '')
-    .replace(/\s/g, '')
-    .replace(/\D/g, '');
+    .replace(/\D/g, '')
+    .slice(0, 20);
 }
 
 export function formatBankAccountDisplay(digitsOnly: string): string {
@@ -33,6 +35,15 @@ export function formatBankAccountDisplay(digitsOnly: string): string {
   const parts: string[] = [];
   for (let i = 0; i < d.length; i += 4) parts.push(d.slice(i, i + 4));
   return parts.join(' ');
+}
+
+/** 입력값에 숫자·공백 외 문자가 있는지 (붙여넣기/스크립트 검증용) */
+export function hasNonDigitInput(raw: string): boolean {
+  return /[^\d\s]/.test(String(raw ?? ''));
+}
+
+export function normalizeEmailLower(raw: string): string {
+  return String(raw ?? '').trim().toLowerCase();
 }
 
 export function normalizeIfsc(raw: string): string {

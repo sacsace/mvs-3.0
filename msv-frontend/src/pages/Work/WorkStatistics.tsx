@@ -674,7 +674,7 @@ const WorkStatistics: React.FC = () => {
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [periodFilter, setPeriodFilter] = useState('');
   const [page, setPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(15);
   const [listViewMode, setListViewMode] = useState<ListViewMode>('page');
   const [assigneeSortBy, setAssigneeSortBy] = useState<AssigneeSortKey>('employeeName');
   const [assigneeSortDir, setAssigneeSortDir] = useState<SortDir>('asc');

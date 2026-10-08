@@ -13,9 +13,12 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   expense: true,
   workReport: true,
   workBoard: true,
+  comments: true,
+  unreadReminder: true,
   emailDigest: 'immediate',
 };
 
+/** 메일·인앱 유형 토글 순서 */
 export const NOTIFICATION_CATEGORY_KEYS = [
   'system',
   'approval',
@@ -23,6 +26,20 @@ export const NOTIFICATION_CATEGORY_KEYS = [
   'expense',
   'workReport',
   'workBoard',
+  'comments',
+  'unreadReminder',
 ] as const;
 
 export type NotificationCategoryKey = (typeof NOTIFICATION_CATEGORY_KEYS)[number];
+
+/** i18n key suffix under notificationManagement */
+export const NOTIFICATION_CATEGORY_I18N: Record<NotificationCategoryKey, string> = {
+  system: 'catSystem',
+  approval: 'catApproval',
+  vacation: 'catVacation',
+  expense: 'catExpense',
+  workReport: 'catWorkReport',
+  workBoard: 'catWorkBoard',
+  comments: 'catComments',
+  unreadReminder: 'catUnreadReminder',
+};

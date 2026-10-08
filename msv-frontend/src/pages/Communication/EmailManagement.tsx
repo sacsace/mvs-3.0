@@ -92,7 +92,7 @@ const EmailManagement: React.FC = () => {
   const [priorityFilter, setPriorityFilter] = useState('');
   const [folderFilter, setFolderFilter] = useState('inbox');
   const [page, setPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(15);
 
   // 샘플 데이터
   const sampleEmails: Email[] = [

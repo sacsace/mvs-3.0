@@ -4,6 +4,7 @@ import { Product, InventoryTransaction, ProductCategory, ProductUnit, InventoryL
 import { Op, Sequelize } from 'sequelize';
 import sequelize from '../config/database';
 import * as XLSX from 'xlsx';
+import { resolveCompanyId } from '../utils/companyScope';
 
 /** DB 스키마가 초기 마이그레이션만 적용된 경우 company_id / unit_price 등 누락 보정 */
 const ensureInventoryTransactionColumns = async () => {
@@ -122,7 +123,7 @@ const ensureInventoryTransactionColumns = async () => {
 export const getProducts = async (req: RequestWithUser, res: Response) => {
   try {
     const tenant_id = req.user?.tenant_id;
-    const company_id = req.user?.company_id;
+    const company_id = resolveCompanyId(req);
     
     if (!tenant_id || !company_id) {
       return res.status(400).json({ 
@@ -208,7 +209,7 @@ export const getProduct = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
     const tenant_id = req.user?.tenant_id;
-    const company_id = req.user?.company_id;
+    const company_id = resolveCompanyId(req);
 
     if (!tenant_id || !company_id) {
       return res.status(400).json({ 
@@ -240,7 +241,7 @@ export const getProduct = async (req: RequestWithUser, res: Response) => {
 export const createProduct = async (req: RequestWithUser, res: Response) => {
   try {
     const tenant_id = req.user?.tenant_id;
-    const company_id = req.user?.company_id;
+    const company_id = resolveCompanyId(req);
     const user_id = req.user?.id;
 
     if (!tenant_id || !company_id || !user_id) {
@@ -291,7 +292,7 @@ export const updateProduct = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
     const tenant_id = req.user?.tenant_id;
-    const company_id = req.user?.company_id;
+    const company_id = resolveCompanyId(req);
 
     if (!tenant_id || !company_id) {
       return res.status(400).json({ 
@@ -341,7 +342,8 @@ export const updateProduct = async (req: RequestWithUser, res: Response) => {
 export const deleteProduct = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id } = req.user;
+    const tenant_id = req.user.tenant_id;
+    const company_id = resolveCompanyId(req);
 
     if (!tenant_id || !company_id) {
       return res.status(400).json({ 
@@ -376,7 +378,8 @@ export const deleteProduct = async (req: RequestWithUser, res: Response) => {
 export const getInventoryTransactions = async (req: RequestWithUser, res: Response) => {
   try {
     await ensureInventoryTransactionColumns();
-    const { tenant_id, company_id } = req.user;
+    const tenant_id = req.user.tenant_id;
+    const company_id = resolveCompanyId(req);
     const { page = 1, limit = 10, product_id = '', transaction_type = '' } = req.query;
 
     const whereClause: any = { tenant_id, company_id };
@@ -429,7 +432,9 @@ export const getInventoryTransactions = async (req: RequestWithUser, res: Respon
 export const stockIn = async (req: RequestWithUser, res: Response) => {
   try {
     await ensureInventoryTransactionColumns();
-    const { tenant_id, company_id, id: user_id } = req.user;
+    const tenant_id = req.user.tenant_id;
+    const company_id = resolveCompanyId(req);
+    const user_id = req.user.id;
     const { product_id, quantity, notes } = req.body;
 
     const product = await (Product as any).findOne({
@@ -479,7 +484,9 @@ export const stockIn = async (req: RequestWithUser, res: Response) => {
 export const stockOut = async (req: RequestWithUser, res: Response) => {
   try {
     await ensureInventoryTransactionColumns();
-    const { tenant_id, company_id, id: user_id } = req.user;
+    const tenant_id = req.user.tenant_id;
+    const company_id = resolveCompanyId(req);
+    const user_id = req.user.id;
     const { product_id, quantity, notes } = req.body;
 
     const product = await (Product as any).findOne({
@@ -530,7 +537,9 @@ export const stockOut = async (req: RequestWithUser, res: Response) => {
 export const adjustStock = async (req: RequestWithUser, res: Response) => {
   try {
     await ensureInventoryTransactionColumns();
-    const { tenant_id, company_id, id: user_id } = req.user;
+    const tenant_id = req.user.tenant_id;
+    const company_id = resolveCompanyId(req);
+    const user_id = req.user.id;
     const { product_id, new_quantity, notes } = req.body;
 
     const product = await (Product as any).findOne({
@@ -577,7 +586,8 @@ export const adjustStock = async (req: RequestWithUser, res: Response) => {
 export const getInventoryReport = async (req: RequestWithUser, res: Response) => {
   try {
     await ensureInventoryTransactionColumns();
-    const { tenant_id, company_id } = req.user;
+    const tenant_id = req.user.tenant_id;
+    const company_id = resolveCompanyId(req);
     
     if (!tenant_id || !company_id) {
       return res.status(400).json({ 
@@ -732,7 +742,7 @@ export const bulkUpdateProductsFromExcel = async (req: RequestWithUser, res: Res
     }
 
     const tenant_id = req.user?.tenant_id;
-    const company_id = req.user?.company_id;
+    const company_id = resolveCompanyId(req);
     const user_id = req.user?.id;
 
     if (!tenant_id || !company_id || !user_id) {
@@ -922,7 +932,7 @@ export const getProductExcelSample = async (_req: RequestWithUser, res: Response
 export const getProductCategories = async (req: RequestWithUser, res: Response) => {
   try {
     const tenant_id = req.user?.tenant_id;
-    const company_id = req.user?.company_id;
+    const company_id = resolveCompanyId(req);
     if (!tenant_id || !company_id) {
       return res.status(400).json({ success: false, message: '사용자 정보가 올바르지 않습니다.' });
     }
@@ -940,7 +950,7 @@ export const getProductCategories = async (req: RequestWithUser, res: Response) 
 export const createProductCategory = async (req: RequestWithUser, res: Response) => {
   try {
     const tenant_id = req.user?.tenant_id;
-    const company_id = req.user?.company_id;
+    const company_id = resolveCompanyId(req);
     const name = String(req.body?.name || '').trim();
     if (!tenant_id || !company_id || !name) {
       return res.status(400).json({ success: false, message: '카테고리명을 입력하세요.' });
@@ -960,7 +970,7 @@ export const updateProductCategory = async (req: RequestWithUser, res: Response)
   try {
     const { id } = req.params;
     const tenant_id = req.user?.tenant_id;
-    const company_id = req.user?.company_id;
+    const company_id = resolveCompanyId(req);
     const name = String(req.body?.name || '').trim();
     if (!tenant_id || !company_id || !name) {
       return res.status(400).json({ success: false, message: '카테고리명을 입력하세요.' });
@@ -982,7 +992,7 @@ export const deleteProductCategory = async (req: RequestWithUser, res: Response)
   try {
     const { id } = req.params;
     const tenant_id = req.user?.tenant_id;
-    const company_id = req.user?.company_id;
+    const company_id = resolveCompanyId(req);
     if (!tenant_id || !company_id) {
       return res.status(400).json({ success: false, message: '사용자 정보가 올바르지 않습니다.' });
     }
@@ -999,7 +1009,7 @@ export const deleteProductCategory = async (req: RequestWithUser, res: Response)
 export const getInventoryLocations = async (req: RequestWithUser, res: Response) => {
   try {
     const tenant_id = req.user?.tenant_id;
-    const company_id = req.user?.company_id;
+    const company_id = resolveCompanyId(req);
     if (!tenant_id || !company_id) {
       return res.status(400).json({ success: false, message: '사용자 정보가 올바르지 않습니다.' });
     }
@@ -1017,7 +1027,7 @@ export const getInventoryLocations = async (req: RequestWithUser, res: Response)
 export const createInventoryLocation = async (req: RequestWithUser, res: Response) => {
   try {
     const tenant_id = req.user?.tenant_id;
-    const company_id = req.user?.company_id;
+    const company_id = resolveCompanyId(req);
     const name = String(req.body?.name || '').trim();
     if (!tenant_id || !company_id || !name) {
       return res.status(400).json({ success: false, message: '위치명을 입력하세요.' });
@@ -1037,7 +1047,7 @@ export const updateInventoryLocation = async (req: RequestWithUser, res: Respons
   try {
     const { id } = req.params;
     const tenant_id = req.user?.tenant_id;
-    const company_id = req.user?.company_id;
+    const company_id = resolveCompanyId(req);
     const name = String(req.body?.name || '').trim();
     if (!tenant_id || !company_id || !name) {
       return res.status(400).json({ success: false, message: '위치명을 입력하세요.' });
@@ -1059,7 +1069,7 @@ export const deleteInventoryLocation = async (req: RequestWithUser, res: Respons
   try {
     const { id } = req.params;
     const tenant_id = req.user?.tenant_id;
-    const company_id = req.user?.company_id;
+    const company_id = resolveCompanyId(req);
     if (!tenant_id || !company_id) {
       return res.status(400).json({ success: false, message: '사용자 정보가 올바르지 않습니다.' });
     }
@@ -1076,7 +1086,7 @@ export const deleteInventoryLocation = async (req: RequestWithUser, res: Respons
 export const getProductUnits = async (req: RequestWithUser, res: Response) => {
   try {
     const tenant_id = req.user?.tenant_id;
-    const company_id = req.user?.company_id;
+    const company_id = resolveCompanyId(req);
     if (!tenant_id || !company_id) {
       return res.status(400).json({ success: false, message: '사용자 정보가 올바르지 않습니다.' });
     }
@@ -1094,7 +1104,7 @@ export const getProductUnits = async (req: RequestWithUser, res: Response) => {
 export const createProductUnit = async (req: RequestWithUser, res: Response) => {
   try {
     const tenant_id = req.user?.tenant_id;
-    const company_id = req.user?.company_id;
+    const company_id = resolveCompanyId(req);
     const name = String(req.body?.name || '').trim();
     if (!tenant_id || !company_id || !name) {
       return res.status(400).json({ success: false, message: '단위명을 입력하세요.' });
@@ -1114,7 +1124,7 @@ export const updateProductUnit = async (req: RequestWithUser, res: Response) => 
   try {
     const { id } = req.params;
     const tenant_id = req.user?.tenant_id;
-    const company_id = req.user?.company_id;
+    const company_id = resolveCompanyId(req);
     const name = String(req.body?.name || '').trim();
     if (!tenant_id || !company_id || !name) {
       return res.status(400).json({ success: false, message: '단위명을 입력하세요.' });
@@ -1136,7 +1146,7 @@ export const deleteProductUnit = async (req: RequestWithUser, res: Response) => 
   try {
     const { id } = req.params;
     const tenant_id = req.user?.tenant_id;
-    const company_id = req.user?.company_id;
+    const company_id = resolveCompanyId(req);
     if (!tenant_id || !company_id) {
       return res.status(400).json({ success: false, message: '사용자 정보가 올바르지 않습니다.' });
     }

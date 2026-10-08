@@ -106,7 +106,7 @@ const ProformaInvoice: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [page, setPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(15);
 
   // 샘플 데이터
   const sampleData: ProformaInvoice[] = [

@@ -124,8 +124,16 @@ export const projectService = {
     return response.data;
   },
 
-  createTaskComment: async (projectId: number, taskId: number, content: string) => {
-    const response = await api.post(`/projects/${projectId}/tasks/${taskId}/comments`, { content });
+  createTaskComment: async (
+    projectId: number,
+    taskId: number,
+    content: string,
+    parentId?: number | null
+  ) => {
+    const response = await api.post(`/projects/${projectId}/tasks/${taskId}/comments`, {
+      content,
+      ...(parentId != null && Number(parentId) > 0 ? { parent_id: Number(parentId) } : {}),
+    });
     return response.data;
   },
 

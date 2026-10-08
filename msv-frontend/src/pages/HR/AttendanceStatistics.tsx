@@ -320,7 +320,7 @@ function displayClockCell(
   }
 }
 
-const ATTENDANCE_USERS_PER_PAGE = 10;
+const ATTENDANCE_USERS_PER_PAGE = 15;
 const ATTENDANCE_FILTER_OUTLINED = mvsOutlinedLabelProps;
 const attendanceFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
 const matrixNoColWidth = 42;

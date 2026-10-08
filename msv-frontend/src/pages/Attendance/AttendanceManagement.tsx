@@ -53,7 +53,7 @@ import { useMenuActionGuard } from '../../hooks/useMenuActionGuard';
 
 const ATTENDANCE_MENU_ROUTES = ['/hr/attendance', '/my/attendance', '/hr'] as const;
 
-const ATTENDANCE_PER_PAGE = 10;
+const ATTENDANCE_PER_PAGE = 15;
 const ATTENDANCE_FILTER_OUTLINED = mvsOutlinedLabelProps;
 const attendanceFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
 

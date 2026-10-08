@@ -28,6 +28,26 @@ function isNotificationForUser(notification: NotificationRecord, userId: number 
   return Number(notification.target_id) === Number(userId);
 }
 
+/** 일일 리마인드용 — 사용자별 미읽음 인앱 알림 */
+export function listUnreadNotificationsForUser(userId: number, limit = 30): NotificationRecord[] {
+  const uid = Number(userId);
+  if (!Number.isFinite(uid) || uid <= 0) return [];
+  return notificationsStore
+    .filter((n) => !n.read && isNotificationForUser(n, uid))
+    .slice(0, Math.max(1, limit));
+}
+
+/** 미읽음 알림이 있는 user id 집합 */
+export function listUserIdsWithUnreadNotifications(): number[] {
+  const ids = new Set<number>();
+  for (const n of notificationsStore) {
+    if (n.read || n.target_type !== 'user' || n.target_id == null) continue;
+    const uid = Number(n.target_id);
+    if (Number.isFinite(uid) && uid > 0) ids.add(uid);
+  }
+  return [...ids];
+}
+
 const parseExpenseItemsMeta = (itemsValue: any) => {
   if (!itemsValue) return {};
   if (typeof itemsValue === 'string') {

@@ -59,6 +59,16 @@ import {
 import { useTranslation } from 'react-i18next';
 import { api, companyService, partnerService } from '../../services/api';
 import { useStore } from '../../store';
+import {
+  formatBankAccountDisplay,
+  formatPhoneDisplay,
+  hasNonDigitInput,
+  normalizeBankAccountDigits,
+  normalizeEmailLower,
+  normalizeIfsc,
+  normalizePhoneDigits,
+} from '../../utils/personalInfoFormat';
+import { showErrorPopup } from '../../utils/errorHandler';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
@@ -90,7 +100,7 @@ import {
 const PARTNER_MENU_ROUTES = ['/basic-info/partners', '/basic-info', '/customers/info', '/customers'] as const;
 /** Avoid ID collisions when merging customers into the partners list UI */
 const CUSTOMER_LIST_ID_OFFSET = 2_000_000_000;
-const PARTNERS_PER_PAGE = 10;
+const PARTNERS_PER_PAGE = 15;
 
 type ListViewMode = 'page' | 'all';
 type PartnerSortKey =
@@ -310,6 +320,17 @@ interface Partner {
 
 const PartnerManagement: React.FC = () => {
   const { t } = useTranslation();
+  const warnDigitsOnlyField = useCallback(
+    (raw: string, fieldLabelKey: string) => {
+      if (!hasNonDigitInput(raw)) return;
+      showErrorPopup(
+        t('errors.digitsOnlyField', { field: t(fieldLabelKey) }),
+        undefined,
+        'warning'
+      );
+    },
+    [t]
+  );
   const user = useStore((s) => s.user);
   const isRoot = user?.role === 'root';
   const canSelectCompany = isRoot || user?.role === 'audit';
@@ -400,12 +421,12 @@ const PartnerManagement: React.FC = () => {
       businessType: p.business_type,
       industry: p.industry || '',
       address: p.address || '',
-      phone: p.phone || '',
-      email: p.email,
+      phone: normalizePhoneDigits(p.phone || ''),
+      email: normalizeEmailLower(p.email || ''),
       website: p.website || '',
       bankName: p.bank_name || '',
-      accountNumber: p.account_number || '',
-      ifsc: p.bank_ifsc || '',
+      accountNumber: normalizeBankAccountDigits(p.account_number || ''),
+      ifsc: normalizeIfsc(p.bank_ifsc || ''),
       accountHolder: p.account_holder || '',
       contractStartDate: p.contract_start_date ? p.contract_start_date.split('T')[0] : '',
       contractEndDate: p.contract_end_date ? p.contract_end_date.split('T')[0] : '',
@@ -2041,10 +2062,14 @@ const PartnerManagement: React.FC = () => {
                       size="small"
                       label={t('partnerManagement.phone')}
                       {...PARTNER_FORM_OUTLINED}
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      value={formatPhoneDisplay(formData.phone)}
+                      onChange={(e) => {
+                        warnDigitsOnlyField(e.target.value, 'partnerManagement.phone');
+                        setFormData({ ...formData, phone: normalizePhoneDigits(e.target.value) });
+                      }}
                       placeholder={t('partnerManagement.placeholderPhone')}
                       disabled={dialogMode === 'view'}
+                      inputProps={{ inputMode: 'numeric', 'data-skip-proper-case': '1' }}
                     />
                     <TextField
                       fullWidth
@@ -2052,9 +2077,12 @@ const PartnerManagement: React.FC = () => {
                       label={t('partnerManagement.email')}
                       {...PARTNER_FORM_OUTLINED}
                       value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, email: normalizeEmailLower(e.target.value) })
+                      }
                       placeholder={t('partnerManagement.placeholderEmail')}
                       disabled={dialogMode === 'view'}
+                      inputProps={{ inputMode: 'email', 'data-skip-proper-case': '1' }}
                     />
                   </Box>
                 </Box>
@@ -2079,16 +2107,24 @@ const PartnerManagement: React.FC = () => {
                       onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
                       placeholder={t('partnerManagement.placeholderBankName')}
                       disabled={dialogMode === 'view'}
+                      inputProps={{ 'data-skip-proper-case': '1', name: 'bank_name' }}
                     />
                     <TextField
                       fullWidth
                       size="small"
                       label={t('partnerManagement.accountNumber')}
                       {...PARTNER_FORM_OUTLINED}
-                      value={formData.accountNumber}
-                      onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
+                      value={formatBankAccountDisplay(formData.accountNumber)}
+                      onChange={(e) => {
+                        warnDigitsOnlyField(e.target.value, 'partnerManagement.accountNumber');
+                        setFormData({
+                          ...formData,
+                          accountNumber: normalizeBankAccountDigits(e.target.value),
+                        });
+                      }}
                       placeholder={t('partnerManagement.placeholderAccountNumber')}
                       disabled={dialogMode === 'view'}
+                      inputProps={{ inputMode: 'numeric', 'data-skip-proper-case': '1' }}
                     />
                   </Box>
                   <Box sx={{ display: 'flex', gap: 1.5, flexDirection: { xs: 'column', sm: 'row' } }}>
@@ -2098,9 +2134,16 @@ const PartnerManagement: React.FC = () => {
                       label={t('partnerManagement.ifsc')}
                       {...PARTNER_FORM_OUTLINED}
                       value={formData.ifsc}
-                      onChange={(e) => setFormData({ ...formData, ifsc: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, ifsc: normalizeIfsc(e.target.value) })
+                      }
                       placeholder={t('partnerManagement.placeholderIfsc')}
                       disabled={dialogMode === 'view'}
+                      inputProps={{
+                        'data-skip-proper-case': '1',
+                        name: 'ifsc',
+                        style: { textTransform: 'uppercase' },
+                      }}
                     />
                     <TextField
                       fullWidth

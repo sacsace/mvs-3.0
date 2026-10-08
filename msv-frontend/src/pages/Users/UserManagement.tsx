@@ -107,7 +107,7 @@ import {
 } from '../../utils/companyDisplayName';
 
 const USER_MGMT_MENU_ROUTES = ['/hr/users', '/users'];
-const USERS_PER_PAGE = 10;
+const USERS_PER_PAGE = 15;
 
 function matchMasterIdByName(
   name: string | undefined | null,
@@ -639,6 +639,8 @@ const UserManagement: React.FC = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  /** 퇴사(inactive) 사용자 목록·검색 포함 */
+  const [includeInactive, setIncludeInactive] = useState(false);
   /** root: 로그인 사용자 소속 회사를 기본 선택 */
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>(() => {
     const u = useStore.getState().user;
@@ -1286,6 +1288,7 @@ const UserManagement: React.FC = () => {
       const params: any = {};
       if (searchTerm) params.search = searchTerm;
       if (selectedCompanyId) params.company_id = selectedCompanyId;
+      if (includeInactive) params.include_inactive = '1';
 
       const response = await api.get('/users/excel/export', {
         params,
@@ -1768,23 +1771,26 @@ const UserManagement: React.FC = () => {
 
   // 필터링된 사용자 목록 계산
   const filteredUsers = React.useMemo(() => {
-    const filtered = users.filter(user => {
-      if (user.status === 'inactive') {
+    const filtered = users.filter((rowUser) => {
+      if (!includeInactive && rowUser.status === 'inactive') {
         return false;
       }
 
       // 검색어 필터링
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
+        const employeeNo = String((rowUser as any).employee_number || '').toLowerCase();
         return (
-          user.username.toLowerCase().includes(searchLower) ||
-          user.userid.toLowerCase().includes(searchLower) ||
-          user.email.toLowerCase().includes(searchLower) ||
-          (user.department && user.department.toLowerCase().includes(searchLower)) ||
-          (user.position && user.position.toLowerCase().includes(searchLower))
+          rowUser.username.toLowerCase().includes(searchLower) ||
+          rowUser.userid.toLowerCase().includes(searchLower) ||
+          rowUser.email.toLowerCase().includes(searchLower) ||
+          (employeeNo && employeeNo.includes(searchLower)) ||
+          (rowUser.department && rowUser.department.toLowerCase().includes(searchLower)) ||
+          (rowUser.position && rowUser.position.toLowerCase().includes(searchLower)) ||
+          getStatusLabel(rowUser.status).toLowerCase().includes(searchLower)
         );
       }
-      
+
       return true;
     });
 
@@ -1793,28 +1799,30 @@ const UserManagement: React.FC = () => {
       return [...filtered].sort((a, b) => {
         let aValue: any = a[orderBy as keyof User];
         let bValue: any = b[orderBy as keyof User];
-        
+
         if (typeof aValue === 'string') {
           aValue = aValue.toLowerCase();
           bValue = (bValue || '').toLowerCase();
         }
-        
+
         if (aValue < bValue) return order === 'asc' ? -1 : 1;
         if (aValue > bValue) return order === 'asc' ? 1 : -1;
         return 0;
       });
     }
-    
+
     return filtered;
-  }, [users, searchTerm, orderBy, order]);
+  }, [users, searchTerm, orderBy, order, includeInactive, t]);
 
   const userStats = useMemo(() => {
-    const visibleUsers = users.filter((u) => u.status !== 'inactive');
+    const inactiveCount = users.filter((u) => u.status === 'inactive').length;
+    const activeCount = users.filter((u) => u.status === 'active').length;
     return {
-      total: visibleUsers.length,
-      active: visibleUsers.filter((u) => u.status === 'active').length,
+      total: includeInactive ? users.length : users.filter((u) => u.status !== 'inactive').length,
+      active: activeCount,
+      inactive: inactiveCount,
     };
-  }, [users]);
+  }, [users, includeInactive]);
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PER_PAGE));
 
@@ -1837,7 +1845,7 @@ const UserManagement: React.FC = () => {
   useEffect(() => {
     setPage(1);
     setSelectedUsers([]);
-  }, [searchTerm, selectedCompanyId]);
+  }, [searchTerm, selectedCompanyId, includeInactive]);
 
   useEffect(() => {
     if (page > totalPages) {
@@ -1850,6 +1858,7 @@ const UserManagement: React.FC = () => {
 
   const hasActiveFilters = Boolean(
     searchTerm.trim() ||
+      includeInactive ||
       (user?.role === 'root'
         ? selectedCompanyId !== rootDefaultCompanyId
         : Boolean(selectedCompanyId))
@@ -1857,6 +1866,7 @@ const UserManagement: React.FC = () => {
 
   const handleResetFilters = () => {
     setSearchTerm('');
+    setIncludeInactive(false);
     setSelectedCompanyId(rootDefaultCompanyId === '' ? '' : rootDefaultCompanyId);
   };
 
@@ -2001,7 +2011,10 @@ const UserManagement: React.FC = () => {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: includeInactive ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)',
+              },
               gap: 2.5,
               mb: 3,
             }}
@@ -2009,6 +2022,15 @@ const UserManagement: React.FC = () => {
             {[
               { key: 'total', label: t('userManagement.stats.totalUsers'), value: userStats.total },
               { key: 'active', label: t('userManagement.stats.activeUsers'), value: userStats.active },
+              ...(includeInactive
+                ? [
+                    {
+                      key: 'inactive',
+                      label: t('userManagement.stats.inactiveUsers'),
+                      value: userStats.inactive,
+                    },
+                  ]
+                : []),
             ].map((item) => (
               <Card key={item.key} elevation={0} sx={mvsKpiCardSx}>
                 <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
@@ -2201,8 +2223,8 @@ const UserManagement: React.FC = () => {
                   sm: user?.role === 'root' ? 'repeat(2, minmax(0, 1fr))' : '1fr',
                   lg:
                     user?.role === 'root'
-                      ? 'minmax(0, 2fr) minmax(0, 1fr) auto auto'
-                      : 'minmax(0, 2fr) auto auto',
+                      ? 'minmax(0, 2fr) minmax(0, 1fr) auto auto auto'
+                      : 'minmax(0, 2fr) auto auto auto',
                 },
                 gap: 2,
                 alignItems: 'flex-end',
@@ -2240,6 +2262,31 @@ const UserManagement: React.FC = () => {
                   textFieldSx={userFilterFieldSx}
                 />
               )}
+              <FormControlLabel
+                sx={{
+                  m: 0,
+                  height: 40,
+                  alignItems: 'center',
+                  whiteSpace: 'nowrap',
+                  mr: 0.5,
+                }}
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={includeInactive}
+                    onChange={(e) => {
+                      setIncludeInactive(e.target.checked);
+                      setPage(1);
+                    }}
+                    disabled={menusLoading || !menuFlags.canRead}
+                  />
+                }
+                label={
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {t('userManagement.includeInactive')}
+                  </Typography>
+                }
+              />
               <Button
                 variant="outlined"
                 size="small"
@@ -2275,7 +2322,9 @@ const UserManagement: React.FC = () => {
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
                   {hasActiveFilters
-                    ? t('userManagement.empty.noResultsHint')
+                    ? !includeInactive
+                      ? t('userManagement.noUsersIncludeInactive')
+                      : t('userManagement.empty.noResultsHint')
                     : t('userManagement.empty.noItemsHint')}
                 </Typography>
                 {hasActiveFilters ? (

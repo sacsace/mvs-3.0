@@ -3485,17 +3485,30 @@ export const deleteExpenseReport = async (req: RequestWithUser, res: Response) =
       return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
     }
 
-    if (Number(expense.requester_id) !== Number(req.user.id)) {
+    const isRoot = String(req.user?.role || '') === 'root';
+    const isOwner = Number(expense.requester_id) === Number(req.user.id);
+    if (!isRoot && !isOwner) {
       return res.status(403).json({ success: false, message: '작성자만 삭제할 수 있습니다.' });
     }
     const paymentStatus = String(expense.payment_request_status || '').toLowerCase();
     const remaining = getExpenseRemainingAmount(expense);
+    const status = String(expense.status || '');
     const isPaid =
-      String(expense.status) === 'paid' ||
+      status === 'paid' ||
       paymentStatus === 'paid' ||
       (Number(expense.paid_amount || 0) > 0 && remaining <= 0);
-    if (isPaid || ['submitted', 'in_review', 'approved', 'paid'].includes(String(expense.status))) {
-      return res.status(400).json({ success: false, message: '검토 중이거나 지급 완료된 문서는 삭제할 수 없습니다.' });
+    if (isPaid || status === 'approved' || status === 'paid') {
+      return res.status(400).json({
+        success: false,
+        message: '승인·지급 완료된 문서는 삭제할 수 없습니다.',
+      });
+    }
+    // 일반 작성자: 제출/검토 중 삭제 불가. root는 작성중·승인 전 건 삭제 가능
+    if (!isRoot && ['submitted', 'in_review'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: '검토 중이거나 지급 완료된 문서는 삭제할 수 없습니다.',
+      });
     }
 
     await expense.update({ is_active: false });

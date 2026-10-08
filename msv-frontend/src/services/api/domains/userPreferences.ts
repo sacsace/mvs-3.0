@@ -25,6 +25,10 @@ export type UserUiPreferencesData = {
     expense?: boolean;
     workReport?: boolean;
     workBoard?: boolean;
+    /** 댓글·답글 (업무 보드 / 프로젝트 Task) */
+    comments?: boolean;
+    /** 읽지 않은 알림·대기 지출·미답변 댓글 일일 리마인드 */
+    unreadReminder?: boolean;
     emailDigest?: 'immediate' | 'daily' | 'weekly';
   };
   notificationTemplates?: Array<{

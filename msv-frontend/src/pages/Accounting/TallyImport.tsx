@@ -41,7 +41,7 @@ import {
   mvsTableHeadHighlightSx,
 } from '../../theme/mvsLayout';
 
-const ROWS_PER_PAGE = 10;
+const ROWS_PER_PAGE = 15;
 /** Keep in sync with server default `TALLY_IMPORT_MAX_MB` (2048 = 2GB) */
 const TALLY_IMPORT_MAX_BYTES = 2048 * 1024 * 1024;
 const SUPPORTED_EXTENSIONS = ['xml', 'json', 'txt'];

@@ -44,6 +44,8 @@ import { ensureUploadRoot } from './utils/uploadPath';
 import { requestProfiler } from './middleware/requestProfiler';
 import { activityLogMiddleware } from './middleware/activityLogMiddleware';
 import { startLoginLogRetentionScheduler } from './services/loginLogRetentionService';
+import { startProjectTaskCommentReminderScheduler } from './services/projectTaskCommentReminderService';
+import { startUnreadReminderScheduler } from './services/unreadReminderService';
 import {
   blockSensitivePaths,
   buildApiContentSecurityPolicy,
@@ -95,6 +97,8 @@ connectDB()
     void initRedisCache();
     startAttendanceAutoCheckoutScheduler();
     startLoginLogRetentionScheduler();
+    startProjectTaskCommentReminderScheduler();
+    startUnreadReminderScheduler();
   })
   .catch((error) => {
     console.error('Database connection error:', error);

@@ -131,7 +131,7 @@ const SMSManagement: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [page, setPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(15);
 
   const loadData = useCallback(async () => {
     setLoading(true);

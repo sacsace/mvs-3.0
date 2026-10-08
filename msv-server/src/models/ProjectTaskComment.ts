@@ -5,6 +5,7 @@ interface ProjectTaskCommentAttributes {
   id: number;
   task_id: number;
   user_id?: number | null;
+  parent_id?: number | null;
   content: string;
   created_at?: Date;
   updated_at?: Date;
@@ -13,7 +14,7 @@ interface ProjectTaskCommentAttributes {
 
 type Creation = Optional<
   ProjectTaskCommentAttributes,
-  'id' | 'user_id' | 'created_at' | 'updated_at' | 'deleted_at'
+  'id' | 'user_id' | 'parent_id' | 'created_at' | 'updated_at' | 'deleted_at'
 >;
 
 class ProjectTaskComment
@@ -23,6 +24,7 @@ class ProjectTaskComment
   public id!: number;
   public task_id!: number;
   public user_id?: number | null;
+  public parent_id?: number | null;
   public content!: string;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
@@ -34,6 +36,7 @@ ProjectTaskComment.init(
     id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
     task_id: { type: DataTypes.INTEGER, allowNull: false },
     user_id: { type: DataTypes.INTEGER, allowNull: true },
+    parent_id: { type: DataTypes.INTEGER, allowNull: true },
     content: { type: DataTypes.TEXT, allowNull: false },
     deleted_at: { type: DataTypes.DATE, allowNull: true },
   },

@@ -1,4 +1,4 @@
-/** 모든 시스템 메일의 한글·영문 병기 헬퍼 */
+/** 시스템 메일 — 영문 전용 (호환을 위해 bilingual* 함수명 유지) */
 
 export function escapeHtml(text: string): string {
   return String(text || '')
@@ -8,12 +8,11 @@ export function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
+/** 제목: 영문만 사용 (ko는 무시, en 없으면 ko 폴백) */
 export function bilingualSubject(ko: string, en: string): string {
-  const k = String(ko || '').trim();
   const e = String(en || '').trim();
-  if (!k) return e || '[MVS]';
-  if (!e || k === e) return k;
-  return `${k} / ${e}`;
+  const k = String(ko || '').trim();
+  return e || k || '[MVS]';
 }
 
 export type BilingualMailContent = {
@@ -21,7 +20,7 @@ export type BilingualMailContent = {
   titleEn: string;
   bodyKo: string;
   bodyEn: string;
-  /** 이미 HTML인 본문(표 등). 있으면 bodyKo/bodyEn 대신 섹션에 삽입 */
+  /** 이미 HTML인 본문(표 등). 있으면 bodyEn 대신 삽입 */
   bodyHtmlKo?: string;
   bodyHtmlEn?: string;
   linkUrl?: string;
@@ -31,33 +30,32 @@ export type BilingualMailContent = {
   footerEn?: string;
 };
 
-const DEFAULT_FOOTER_KO = '본 메일은 MVS 알림입니다.';
 const DEFAULT_FOOTER_EN = 'This is an MVS notification.';
-const DEFAULT_LINK_KO = '시스템에서 확인';
 const DEFAULT_LINK_EN = 'View in system';
 
 function nlToBr(text: string): string {
   return escapeHtml(text).replace(/\n/g, '<br/>');
 }
 
-/** plain text 본문 (한글 + 영문) */
+function pickEn(en: string, ko: string): string {
+  const e = String(en || '').trim();
+  const k = String(ko || '').trim();
+  return e || k;
+}
+
+/** plain text 본문 (영문만) */
 export function buildBilingualText(content: BilingualMailContent): string {
-  const linkKo = content.linkLabelKo || DEFAULT_LINK_KO;
   const linkEn = content.linkLabelEn || DEFAULT_LINK_EN;
-  const footerKo = content.footerKo || DEFAULT_FOOTER_KO;
   const footerEn = content.footerEn || DEFAULT_FOOTER_EN;
+  const title = pickEn(content.titleEn, content.titleKo);
+  const body = pickEn(content.bodyEn, content.bodyKo);
 
   const lines = [
-    '[KO]',
-    content.titleKo,
-    content.bodyKo,
+    title,
+    body,
+    content.linkUrl ? `\n${linkEn}: ${content.linkUrl}` : '',
     '',
-    '[EN]',
-    content.titleEn,
-    content.bodyEn,
-    content.linkUrl ? `\n${linkKo} / ${linkEn}: ${content.linkUrl}` : '',
-    '',
-    `${footerKo} / ${footerEn}`
+    footerEn,
   ];
 
   return lines
@@ -65,30 +63,24 @@ export function buildBilingualText(content: BilingualMailContent): string {
     .join('\n');
 }
 
-/** HTML 본문 (한글 + 영문 섹션) */
+/** HTML 본문 (영문만) */
 export function buildBilingualHtml(content: BilingualMailContent): string {
-  const linkKo = content.linkLabelKo || DEFAULT_LINK_KO;
   const linkEn = content.linkLabelEn || DEFAULT_LINK_EN;
-  const footerKo = content.footerKo || DEFAULT_FOOTER_KO;
   const footerEn = content.footerEn || DEFAULT_FOOTER_EN;
-
-  const bodyKo = content.bodyHtmlKo ?? `<p style="margin:0 0 16px;">${nlToBr(content.bodyKo)}</p>`;
-  const bodyEn = content.bodyHtmlEn ?? `<p style="margin:0 0 16px;">${nlToBr(content.bodyEn)}</p>`;
+  const title = pickEn(content.titleEn, content.titleKo);
+  const bodyEn =
+    content.bodyHtmlEn ??
+    `<p style="margin:0 0 16px;">${nlToBr(pickEn(content.bodyEn, content.bodyKo))}</p>`;
   const linkHtml = content.linkUrl
-    ? `<p><a href="${escapeHtml(content.linkUrl)}" style="color:#007a83;">${escapeHtml(linkKo)} / ${escapeHtml(linkEn)}</a></p>`
+    ? `<p><a href="${escapeHtml(content.linkUrl)}" style="color:#007a83;">${escapeHtml(linkEn)}</a></p>`
     : '';
 
   return `
-    <div style="font-family:Segoe UI,Malgun Gothic,sans-serif;font-size:14px;color:#111827;line-height:1.55;max-width:640px;">
-      <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#6b7280;letter-spacing:0.02em;">한국어</p>
-      <p style="margin:0 0 4px;font-weight:700;">${escapeHtml(content.titleKo)}</p>
-      ${bodyKo}
-      <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
-      <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#6b7280;letter-spacing:0.02em;">English</p>
-      <p style="margin:0 0 4px;font-weight:700;">${escapeHtml(content.titleEn)}</p>
+    <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#111827;line-height:1.55;max-width:640px;">
+      <p style="margin:0 0 4px;font-weight:700;">${escapeHtml(title)}</p>
       ${bodyEn}
       ${linkHtml}
-      <p style="margin-top:20px;font-size:12px;color:#9ca3af;">${escapeHtml(footerKo)} / ${escapeHtml(footerEn)}</p>
+      <p style="margin-top:20px;font-size:12px;color:#9ca3af;">${escapeHtml(footerEn)}</p>
     </div>
   `.trim();
 }

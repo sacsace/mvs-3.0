@@ -165,7 +165,7 @@ const LEAVE_BALANCE_TYPE_KEYS: LeaveBalanceTypeKey[] = [
 ];
 
 const VACATION_MENU_ROUTES = ['/hr/leave', '/my/leave'];
-const VACATIONS_PER_PAGE = 10;
+const VACATIONS_PER_PAGE = 15;
 const VACATION_FILTER_OUTLINED = mvsOutlinedLabelProps;
 const vacationFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
 

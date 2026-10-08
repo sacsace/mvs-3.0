@@ -266,7 +266,7 @@ const NoticeManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(15);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [noticeToDelete, setNoticeToDelete] = useState<Notice | null>(null);
   const [totalPages, setTotalPages] = useState(1);

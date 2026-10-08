@@ -220,7 +220,7 @@ const accountingStatsFilterFieldSx = {
   ...(mvsSearchFieldSx as Record<string, unknown>),
   ...mvsFilterFieldHeightSx } as const;
 
-const LIST_PAGE_SIZE = 10;
+const LIST_PAGE_SIZE = 15;
 
 type ListViewMode = 'page' | 'all';
 

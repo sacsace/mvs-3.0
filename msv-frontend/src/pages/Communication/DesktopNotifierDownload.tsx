@@ -42,8 +42,8 @@ const DesktopNotifierDownload: React.FC = () => {
         <CardContent sx={{ p: 2.5 }}>
           <Alert severity="info" sx={{ mb: 2, borderRadius: 0 }}>
             {txt(
-              '가볍고 OS 설정을 바꾸지 않습니다. 시작 프로그램 자동 등록은 기본 꺼짐입니다. 알람 앱 로그인은 웹과 별도라 중복 로그인으로 웹이 끊기지 않습니다. 설치 후 트레이에서 다시 로그인하세요.',
-              'Lightweight; startup is off by default. Alarm-app login is separate from web, so it will not kick your web session. Re-login in the tray after install.'
+              'v1.2: 웹에서 다른 기기로 로그인해도 알람 앱은 로그아웃되지 않습니다. 토큰을 자동 갱신합니다. 시작 프로그램 자동 등록은 기본 꺼짐입니다. 설치 후 트레이에서 다시 로그인하세요.',
+              'v1.2: Signing in on the web elsewhere will not sign out this app. Tokens refresh automatically. Startup is off by default. Re-login in the tray after install.'
             )}
           </Alert>
 
@@ -55,6 +55,15 @@ const DesktopNotifierDownload: React.FC = () => {
               <ListItemText
                 primary={txt('Windows 트레이 상주', 'Windows tray resident')}
                 secondary={txt('풍선 알림으로 새 알림 표시', 'Balloon tips for new alerts')}
+              />
+            </ListItem>
+            <ListItem disableGutters>
+              <ListItemText
+                primary={txt('웹과 독립 세션', 'Independent of web session')}
+                secondary={txt(
+                  '다른 곳 웹 로그인·중복 로그인에 영향받지 않음',
+                  'Unaffected by web login on another device'
+                )}
               />
             </ListItem>
             <ListItem disableGutters>

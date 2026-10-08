@@ -356,7 +356,7 @@ const LoginInfoExcelGrid = forwardRef<LoginInfoExcelGridHandle, Props>(function 
   const [addColumnDialogOpen, setAddColumnDialogOpen] = useState(false);
   const [newColumnLabel, setNewColumnLabel] = useState('');
   const [listViewMode, setListViewMode] = useState<'page' | 'all'>('page');
-  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
+  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 15 });
 
   const handleRemoveColumnEntry = useCallback(
     async (entry: LoginInfoColumnSchema['columns'][0]) => {
@@ -489,7 +489,7 @@ const LoginInfoExcelGrid = forwardRef<LoginInfoExcelGridHandle, Props>(function 
     if (listViewMode === 'all') {
       setPaginationModel({ page: 0, pageSize: Math.max(rows.length, 1) });
     } else {
-      setPaginationModel({ page: 0, pageSize: 10 });
+      setPaginationModel({ page: 0, pageSize: 15 });
     }
   }, [listViewMode, rows.length]);
 
@@ -1082,7 +1082,7 @@ const LoginInfoExcelGrid = forwardRef<LoginInfoExcelGridHandle, Props>(function 
         disableColumnMenu
         disableRowSelectionOnClick
         pagination
-        pageSizeOptions={listViewMode === 'page' ? [10] : [Math.max(rows.length, 1)]}
+        pageSizeOptions={listViewMode === 'page' ? [15] : [Math.max(rows.length, 1)]}
         paginationModel={paginationModel}
         onPaginationModelChange={(model) => {
           if (listViewMode === 'page') {

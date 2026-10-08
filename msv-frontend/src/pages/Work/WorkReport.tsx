@@ -401,7 +401,7 @@ const WorkReport: React.FC = () => {
   /** 상세 진입 시 탭: 받은 보고서에서는 작성자용 제출/수정 숨김 */
   const [detailOpenedFrom, setDetailOpenedFrom] = useState<'authored' | 'received'>('authored');
   const [page, setPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(15);
   const [saving, setSaving] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackReportId, setFeedbackReportId] = useState<number | null>(null);

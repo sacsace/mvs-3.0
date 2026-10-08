@@ -84,7 +84,7 @@ import {
 
 const EMPLOYMENT_CONTRACT_MENU_ROUTES = ['/hr/employment-contracts', '/hr'] as const;
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 15;
 const CONTRACT_FILTER_OUTLINED = mvsOutlinedLabelProps;
 const contractFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
 const WIZARD_STEP_KEYS = ['step1', 'step2', 'step3', 'step4', 'step5', 'step6'] as const;

@@ -714,12 +714,12 @@ const RegularInvoice: React.FC = () => {
   }, [filteredInvoices, listSubTab, user?.id]);
 
   const pagedInvoices = useMemo(() => {
-    const perPage = 10;
+    const perPage = 15;
     return displayInvoices.slice((page - 1) * perPage, page * perPage);
   }, [displayInvoices, page]);
 
   useEffect(() => {
-    setTotalPages(Math.max(1, Math.ceil(displayInvoices.length / 10)));
+    setTotalPages(Math.max(1, Math.ceil(displayInvoices.length / 15)));
   }, [displayInvoices.length]);
 
   useEffect(() => {

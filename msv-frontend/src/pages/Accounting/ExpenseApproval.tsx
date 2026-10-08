@@ -102,6 +102,16 @@ import {
 import { buildDocumentDownloadFilename } from '../../utils/pdf';
 import { normalizePartnerCompanyName } from '../../utils/partnerCompanyName';
 import { formatEnglishSentenceLabel } from '../../utils/textCase';
+import {
+  formatBankAccountDisplay,
+  formatPhoneDisplay,
+  hasNonDigitInput,
+  normalizeBankAccountDigits,
+  normalizeEmailLower,
+  normalizeIfsc,
+  normalizePhoneDigits,
+} from '../../utils/personalInfoFormat';
+import { showErrorPopup } from '../../utils/errorHandler';
 import { usePageMenuPermission } from '../../context/MenuPermissionContext';
 import { useMenuActionGuard } from '../../hooks/useMenuActionGuard';
 
@@ -2112,6 +2122,17 @@ const ExpenseApproval: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
+  const warnDigitsOnlyField = useCallback(
+    (raw: string, fieldLabelKey: string) => {
+      if (!hasNonDigitInput(raw)) return;
+      showErrorPopup(
+        t('errors.digitsOnlyField', { field: t(fieldLabelKey) }),
+        undefined,
+        'warning'
+      );
+    },
+    [t]
+  );
   /** '' | draftCreated — render with t() for i18n */
   const [headerStatusBanner, setHeaderStatusBanner] = useState<'' | 'draftCreated'>('');
   /** 작성·초안 수정 중 자동 저장 상태 */
@@ -2151,7 +2172,7 @@ const ExpenseApproval: React.FC = () => {
   const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc');
   const [listViewMode, setListViewMode] = useState<'page' | 'all'>('page');
   const [page, setPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(15);
   const [companyLogo, setCompanyLogo] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [companyAddress, setCompanyAddress] = useState('');
@@ -2553,10 +2574,12 @@ const ExpenseApproval: React.FC = () => {
   }, [t, canViewAllCompanies, companyFilterId]);
 
   const getTransferFilterKey = useCallback((expense: ExpenseApprovalItem) => {
+    const total = floorMoney(Number(expense.totalAmount || 0));
+    // 지급 금액이 없으면 송금 완료로 보지 않음 (0원 문서 오분류 방지)
+    if (total <= 0) return 'transfer_pending';
     if (expenseIsPrepaid(expense)) {
       return 'transfer_completed';
     }
-    const total = floorMoney(Number(expense.totalAmount || 0));
     const paid = floorMoney(Number(expense.paidAmount || 0));
     const remaining = Math.max(0, total - paid);
     if (String(expense.bankTransferStatus || '').toLowerCase() === 'failed') {
@@ -2576,10 +2599,11 @@ const ExpenseApproval: React.FC = () => {
     return 'transfer_pending';
   }, []);
 
-  /** 목록에서 '지급 완료'로 취급 (택스 인보이스 대기 건은 제외) */
+  /** 목록에서 '지급 완료'로 취급 (택스 인보이스 대기 건·0원 문서 제외) */
   const isExpensePaidForList = useCallback((expense: ExpenseApprovalItem) => {
     if (expenseIsAwaitingTaxInvoice(expense)) return false;
     const total = floorMoney(Number(expense.totalAmount || 0));
+    if (total <= 0) return false;
     const paid = floorMoney(Number(expense.paidAmount || 0));
     const remaining = Math.max(0, total - paid);
     const paymentPaid = String(expense.paymentRequestStatus || '').toLowerCase() === 'paid';
@@ -3464,20 +3488,26 @@ const ExpenseApproval: React.FC = () => {
     );
   };
 
-  /** 목록/상세 상태: 전액 송금 + Tax Invoice 있을 때만 지급 완료 */
+  /** 목록/상세 상태: 실지급 금액이 있고 잔액 0일 때만 지급 완료 (0원 문서는 제외) */
   const resolveDisplayStatus = useCallback(
     (expense: ExpenseApprovalItem): ExpenseApprovalItem['status'] | string => {
       if (expenseIsAwaitingTaxInvoice(expense)) return 'awaiting_tax';
+      const total = floorMoney(Number(expense.totalAmount || 0));
       const remaining = getExpenseRemainingAmount(expense);
       const paymentPaid = String(expense.paymentRequestStatus || '').toLowerCase() === 'paid';
       const fullyRemitted =
-        paymentPaid ||
-        expense.status === 'paid' ||
-        (Number(expense.paidAmount || 0) > 0 && remaining <= 0 && ['approved', 'paid'].includes(expense.status));
+        total > 0 &&
+        (paymentPaid ||
+          expense.status === 'paid' ||
+          (Number(expense.paidAmount || 0) > 0 &&
+            remaining <= 0 &&
+            ['approved', 'paid'].includes(expense.status)));
       if (fullyRemitted) return 'paid';
       if (expense.status === 'rejected' && expense.itemMeta?.revisionRejected === true) {
         return 'revision_rejected';
       }
+      // DB status가 paid여도 금액 0이면 승인됨으로 표시 (오분류 방지)
+      if (expense.status === 'paid' && total <= 0) return 'approved';
       return expense.status;
     },
     [getExpenseRemainingAmount]
@@ -3671,13 +3701,15 @@ const ExpenseApproval: React.FC = () => {
       voucherDate: formatLocalYmd(meta.voucherDate) || todayDate,
       partnerRepresentative: meta.partnerRepresentative || linkedPartner?.representative || '',
       partnerAddress: meta.partnerAddress || linkedPartner?.address || '',
-      partnerPhone: meta.partnerPhone || linkedPartner?.phone || '',
-      partnerEmail: meta.partnerEmail || linkedPartner?.email || '',
+      partnerPhone: normalizePhoneDigits(meta.partnerPhone || linkedPartner?.phone || ''),
+      partnerEmail: normalizeEmailLower(meta.partnerEmail || linkedPartner?.email || ''),
       partnerPan: meta.partnerPan || linkedPartner?.pan_number || '',
       acHolder: meta.acHolder || linkedPartner?.account_holder || '',
       bank: meta.bank || linkedPartner?.bank_name || '',
-      accountNumber: meta.accountNumber || linkedPartner?.account_number || '',
-      ifsc: meta.ifsc || linkedPartner?.bank_ifsc || '',
+      accountNumber: normalizeBankAccountDigits(
+        meta.accountNumber || linkedPartner?.account_number || ''
+      ),
+      ifsc: normalizeIfsc(meta.ifsc || linkedPartner?.bank_ifsc || ''),
       paymentDate: formatLocalYmd(meta.paymentDate) || '',
       paymentStatus: meta.paymentStatus || '',
       amountInWords: meta.amountInWords || '',
@@ -4695,6 +4727,8 @@ const ExpenseApproval: React.FC = () => {
   };
 
   const isExpensePaymentCompleted = (expense: ExpenseApprovalItem) => {
+    const total = floorMoney(Number(expense.totalAmount || 0));
+    if (total <= 0) return false;
     const remaining = getExpenseRemainingAmount(expense);
     const paymentPaid = String(expense.paymentRequestStatus || '').toLowerCase() === 'paid';
     return (
@@ -4749,10 +4783,18 @@ const ExpenseApproval: React.FC = () => {
   const canDeleteExpense = (expense: ExpenseApprovalItem) => {
     if (!user?.id) return false;
     if (listTab === 'transfer') return false;
-    if (!isSameUserId(expense.requesterId, user.id)) return false;
     // 목록에 '지급 완료'로 보이는 건(문서 status와 무관) 삭제 불가
     if (resolveDisplayStatus(expense) === 'paid') return false;
-    if (['submitted', 'in_review', 'approved', 'paid'].includes(expense.status)) return false;
+    if (['approved', 'paid'].includes(expense.status)) return false;
+
+    // root: 타인이 작성 중(초안)·승인 전(제출/검토)·반려 건도 삭제 가능
+    if (isRootUser) {
+      return ['draft', 'submitted', 'in_review', 'rejected'].includes(expense.status);
+    }
+
+    if (!isSameUserId(expense.requesterId, user.id)) return false;
+    // 일반 작성자: 초안·반려만 (제출/검토 중은 삭제 불가)
+    if (['submitted', 'in_review'].includes(expense.status)) return false;
     return true;
   };
 
@@ -6187,12 +6229,12 @@ const ExpenseApproval: React.FC = () => {
                         gstNumber,
                       partnerRepresentative: value.representative || '',
                       partnerAddress: value.address || '',
-                      partnerPhone: value.phone || '',
-                      partnerEmail: value.email || '',
+                      partnerPhone: normalizePhoneDigits(value.phone || ''),
+                      partnerEmail: normalizeEmailLower(value.email || ''),
                       partnerPan: value.pan_number || '',
                         bank: value.bank_name || '',
-                        accountNumber: value.account_number || '',
-                        ifsc: value.bank_ifsc || '',
+                        accountNumber: normalizeBankAccountDigits(value.account_number || ''),
+                        ifsc: normalizeIfsc(value.bank_ifsc || ''),
                       acHolder: value.account_holder || value.representative || value.company_name || '',
                       });
                     }}
@@ -6278,18 +6320,31 @@ const ExpenseApproval: React.FC = () => {
                 />
                 <TextField
                   label={t('expenseApproval.voucher.labelPartnerPhone')}
-                  value={voucherData.partnerPhone}
-                  onChange={(e) => setVoucherData({ ...voucherData, partnerPhone: e.target.value })}
+                  value={formatPhoneDisplay(voucherData.partnerPhone)}
+                  onChange={(e) => {
+                    warnDigitsOnlyField(e.target.value, 'expenseApproval.voucher.labelPartnerPhone');
+                    setVoucherData({
+                      ...voucherData,
+                      partnerPhone: normalizePhoneDigits(e.target.value),
+                    });
+                  }}
                   fullWidth
                   size="small"
+                  inputProps={{ inputMode: 'numeric', 'data-skip-proper-case': '1' }}
                   sx={softFieldSx}
                 />
                 <TextField
                   label={t('expenseApproval.voucher.labelPartnerEmail')}
                   value={voucherData.partnerEmail}
-                  onChange={(e) => setVoucherData({ ...voucherData, partnerEmail: e.target.value })}
+                  onChange={(e) =>
+                    setVoucherData({
+                      ...voucherData,
+                      partnerEmail: normalizeEmailLower(e.target.value),
+                    })
+                  }
                   fullWidth
                   size="small"
+                  inputProps={{ inputMode: 'email', 'data-skip-proper-case': '1' }}
                   sx={softFieldSx}
                 />
               </Box>
@@ -6324,22 +6379,33 @@ const ExpenseApproval: React.FC = () => {
                     onChange={(e) => setVoucherData({ ...voucherData, bank: e.target.value })}
                     fullWidth
                   size="small"
+                  inputProps={{ 'data-skip-proper-case': '1', name: 'bank_name' }}
                   sx={softFieldSx}
                   />
                   <TextField
                   label={t('expenseApproval.voucher.labelAccountNumber')}
-                    value={voucherData.accountNumber}
-                    onChange={(e) => setVoucherData({ ...voucherData, accountNumber: e.target.value })}
+                    value={formatBankAccountDisplay(voucherData.accountNumber)}
+                    onChange={(e) => {
+                      warnDigitsOnlyField(e.target.value, 'expenseApproval.voucher.labelAccountNumber');
+                      setVoucherData({
+                        ...voucherData,
+                        accountNumber: normalizeBankAccountDigits(e.target.value),
+                      });
+                    }}
                     fullWidth
                   size="small"
+                  inputProps={{ inputMode: 'numeric', 'data-skip-proper-case': '1' }}
                   sx={softFieldSx}
                   />
                   <TextField
                   label={t('expenseApproval.voucher.labelIfsc')}
                     value={voucherData.ifsc}
-                    onChange={(e) => setVoucherData({ ...voucherData, ifsc: e.target.value })}
+                    onChange={(e) =>
+                      setVoucherData({ ...voucherData, ifsc: normalizeIfsc(e.target.value) })
+                    }
                     fullWidth
                   size="small"
+                  inputProps={{ 'data-skip-proper-case': '1', name: 'ifsc', style: { textTransform: 'uppercase' } }}
                   sx={softFieldSx}
                   />
                 </Box>
@@ -8481,12 +8547,24 @@ const ExpenseApproval: React.FC = () => {
                     <TableRow>
                       <TableCell className="expense-pdf-kv-label" sx={vendorKvLabelCellSx}>{t('expenseApproval.voucher.labelPartnerPhone')}</TableCell>
                       <TableCell sx={{ fontWeight: 400, ...wrapCellSx }}>
-                        <ClampText>{partnerDetail.partnerPhone}</ClampText>
+                        <ClampText>
+                          {normalizePhoneDigits(partnerDetail.partnerPhone)
+                            ? formatPhoneDisplay(partnerDetail.partnerPhone)
+                            : '-'}
+                        </ClampText>
                       </TableCell>
                       <TableCell className="expense-pdf-kv-label" sx={vendorKvLabelCellSx}>{t('expenseApproval.voucher.labelPartnerEmail')}</TableCell>
                       <TableCell sx={{ fontWeight: 400, ...wrapCellSx }}>
-                        <ClampText title={formatEnglishSentenceLabel(partnerDetail.partnerEmail)}>
-                          {formatEnglishSentenceLabel(partnerDetail.partnerEmail) || '-'}
+                        <ClampText
+                          title={
+                            partnerDetail.partnerEmail && partnerDetail.partnerEmail !== '-'
+                              ? normalizeEmailLower(partnerDetail.partnerEmail)
+                              : ''
+                          }
+                        >
+                          {partnerDetail.partnerEmail && partnerDetail.partnerEmail !== '-'
+                            ? normalizeEmailLower(partnerDetail.partnerEmail)
+                            : '-'}
                         </ClampText>
                       </TableCell>
                     </TableRow>
@@ -8509,15 +8587,19 @@ const ExpenseApproval: React.FC = () => {
                       </TableCell>
                       <TableCell className="expense-pdf-kv-label" sx={vendorKvLabelCellSx}>{t('expenseApproval.voucher.labelBankName')}</TableCell>
                       <TableCell sx={{ fontWeight: 400, ...wrapCellSx }}>
-                        <ClampText title={formatEnglishSentenceLabel(partnerDetail.bank)}>
-                          {formatEnglishSentenceLabel(partnerDetail.bank) || '-'}
+                        <ClampText title={partnerDetail.bank || ''}>
+                          {partnerDetail.bank || '-'}
                         </ClampText>
                       </TableCell>
                     </TableRow>
                     <TableRow>
                       <TableCell className="expense-pdf-kv-label" sx={vendorKvLabelCellSx}>{t('expenseApproval.voucher.labelAccountNumber')}</TableCell>
                       <TableCell sx={{ fontWeight: 400, ...wrapCellSx }}>
-                        <ClampText>{partnerDetail.accountNumber}</ClampText>
+                        <ClampText>
+                          {normalizeBankAccountDigits(partnerDetail.accountNumber)
+                            ? formatBankAccountDisplay(partnerDetail.accountNumber)
+                            : '-'}
+                        </ClampText>
                       </TableCell>
                       <TableCell className="expense-pdf-kv-label" sx={vendorKvLabelCellSx}>{t('expenseApproval.voucher.labelIfsc')}</TableCell>
                       <TableCell sx={{ fontWeight: 400, ...wrapCellSx }}>

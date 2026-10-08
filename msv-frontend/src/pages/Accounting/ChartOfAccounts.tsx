@@ -79,7 +79,7 @@ type GlAccount = {
   is_system?: boolean;
 };
 
-const ACCOUNTS_PER_PAGE = 10;
+const ACCOUNTS_PER_PAGE = 15;
 
 const chartFilterFieldSx = {
   ...(mvsSearchFieldSx as Record<string, unknown>),

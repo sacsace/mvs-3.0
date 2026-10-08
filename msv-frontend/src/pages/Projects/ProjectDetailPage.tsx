@@ -34,6 +34,7 @@ import {
   KeyboardArrowUp as ArrowUpIcon,
   PersonAddOutlined as PersonAddIcon,
   Refresh as RefreshIcon,
+  Reply as ReplyIcon,
   Timelapse as TimelapseIcon,
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -176,6 +177,7 @@ type TaskRow = {
     content: string;
     created_at: string;
     user_id?: number;
+    parent_id?: number | null;
     user?: { id: number; username?: string };
   }>;
 };
@@ -250,6 +252,7 @@ const ProjectDetailPage: React.FC = () => {
     assignee_ids: [] as number[],
   });
   const [commentText, setCommentText] = useState('');
+  const [replyParentId, setReplyParentId] = useState<number | null>(null);
   const [savingPopup, setSavingPopup] = useState(false);
   const [postingComment, setPostingComment] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -438,6 +441,7 @@ const ProjectDetailPage: React.FC = () => {
         assignee_ids: (full.assignees || []).map((a) => Number(a.user_id)).filter((n) => n > 0),
       });
       setCommentText('');
+      setReplyParentId(null);
       setPopupOpen(true);
     } catch (e: any) {
       showErrorPopup(e, t('projectManagement.errors.taskTitle'));
@@ -517,12 +521,18 @@ const ProjectDetailPage: React.FC = () => {
     if (!popupTask || !commentText.trim() || !canEditWorkspace) return;
     setPostingComment(true);
     try {
-      const res = await projectService.createTaskComment(id, popupTask.id, commentText.trim());
+      const res = await projectService.createTaskComment(
+        id,
+        popupTask.id,
+        commentText.trim(),
+        replyParentId
+      );
       if (!res.success) {
         showErrorPopup(res.message || t('projectManagement.errors.taskTitle'), t('projectManagement.errors.taskTitle'));
         return;
       }
       setCommentText('');
+      setReplyParentId(null);
       const refreshed = await projectService.getTask(id, popupTask.id);
       if (refreshed.success) setPopupTask(refreshed.data);
     } catch (e: any) {
@@ -541,12 +551,42 @@ const ProjectDetailPage: React.FC = () => {
         return;
       }
       setPopupTask((prev) =>
-        prev ? { ...prev, comments: (prev.comments || []).filter((c) => c.id !== commentId) } : prev
+        prev
+          ? {
+              ...prev,
+              comments: (prev.comments || []).filter(
+                (c) => c.id !== commentId && Number(c.parent_id) !== commentId
+              ),
+            }
+          : prev
       );
+      if (replyParentId === commentId) setReplyParentId(null);
     } catch (e: any) {
       showErrorPopup(e, t('projectManagement.errors.taskTitle'));
     }
   };
+
+  const commentThreads = useMemo(() => {
+    const all = popupTask?.comments || [];
+    const roots = all.filter((c) => c.parent_id == null || !Number(c.parent_id));
+    const repliesByParent = new Map<number, typeof all>();
+    all.forEach((c) => {
+      const pid = c.parent_id != null ? Number(c.parent_id) : NaN;
+      if (!Number.isFinite(pid) || pid <= 0) return;
+      const list = repliesByParent.get(pid) || [];
+      list.push(c);
+      repliesByParent.set(pid, list);
+    });
+    return { roots, repliesByParent };
+  }, [popupTask?.comments]);
+
+  const replyParentComment = useMemo(
+    () =>
+      replyParentId != null
+        ? (popupTask?.comments || []).find((c) => c.id === replyParentId) || null
+        : null,
+    [popupTask?.comments, replyParentId]
+  );
 
   const uploadFiles = async (files: FileList | null) => {
     if (!popupTask || !files?.length || !canEditWorkspace) return;
@@ -1763,61 +1803,131 @@ const ProjectDetailPage: React.FC = () => {
               </Typography>
               <Box
                 sx={{
-                  maxHeight: 180,
+                  maxHeight: 220,
                   overflow: 'auto',
                   border: '1px solid #B4B4B4',
                   mb: 1,
                   px: 1,
                 }}
               >
-                {(popupTask?.comments || []).length === 0 ? (
+                {commentThreads.roots.length === 0 ? (
                   <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', py: 1 }}>
                     {t('projectManagement.detail.noComments')}
                   </Typography>
                 ) : (
-                  (popupTask?.comments || []).map((c) => (
-                    <Box key={c.id} sx={{ py: 0.75, borderBottom: '1px solid #E8E8E8' }}>
-                      <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-                        <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                          {c.user?.username || '-'} ·{' '}
-                          {c.created_at ? new Date(c.created_at).toLocaleString() : ''}
+                  commentThreads.roots.map((c) => {
+                    const replies = commentThreads.repliesByParent.get(c.id) || [];
+                    return (
+                      <Box key={c.id} sx={{ py: 0.75, borderBottom: '1px solid #E8E8E8' }}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                          <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                            {c.user?.username || '-'} ·{' '}
+                            {c.created_at ? new Date(c.created_at).toLocaleString() : ''}
+                          </Typography>
+                          <Stack direction="row" spacing={0.25}>
+                            {canEditWorkspace && (
+                              <Tooltip title={t('projectManagement.detail.reply')}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => {
+                                    setReplyParentId(c.id);
+                                    setCommentText('');
+                                  }}
+                                >
+                                  <ReplyIcon sx={{ fontSize: 14 }} />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            {canEditWorkspace && (
+                              <IconButton size="small" onClick={() => void removeComment(c.id)}>
+                                <DeleteIcon sx={{ fontSize: 14 }} />
+                              </IconButton>
+                            )}
+                          </Stack>
+                        </Stack>
+                        <Typography sx={{ fontSize: '0.8125rem', whiteSpace: 'pre-wrap' }}>
+                          {c.content}
                         </Typography>
-                        {canEditWorkspace && (
-                          <IconButton size="small" onClick={() => void removeComment(c.id)}>
-                            <DeleteIcon sx={{ fontSize: 14 }} />
-                          </IconButton>
-                        )}
-                      </Stack>
-                      <Typography sx={{ fontSize: '0.8125rem', whiteSpace: 'pre-wrap' }}>{c.content}</Typography>
-                    </Box>
-                  ))
+                        {replies.map((r) => (
+                          <Box
+                            key={r.id}
+                            sx={{
+                              mt: 0.75,
+                              ml: 1.5,
+                              pl: 1,
+                              borderLeft: '2px solid #CBD5E1',
+                            }}
+                          >
+                            <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                              <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                                {r.user?.username || '-'} ·{' '}
+                                {r.created_at ? new Date(r.created_at).toLocaleString() : ''}
+                              </Typography>
+                              {canEditWorkspace && (
+                                <IconButton size="small" onClick={() => void removeComment(r.id)}>
+                                  <DeleteIcon sx={{ fontSize: 14 }} />
+                                </IconButton>
+                              )}
+                            </Stack>
+                            <Typography sx={{ fontSize: '0.8125rem', whiteSpace: 'pre-wrap' }}>
+                              {r.content}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    );
+                  })
                 )}
               </Box>
               {canEditWorkspace && (
-                <Stack direction="row" spacing={1}>
-                  <TextField
-                    size="small"
-                    fullWidth
-                    placeholder={t('projectManagement.detail.commentPlaceholder')}
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                        e.preventDefault();
-                        if (!postingComment && commentText.trim()) void postComment();
+                <Stack spacing={0.75}>
+                  {replyParentComment ? (
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <Typography sx={{ fontSize: '0.75rem', color: 'primary.main' }}>
+                        {t('projectManagement.detail.replyingTo', {
+                          name: replyParentComment.user?.username || '-',
+                        })}
+                      </Typography>
+                      <Button
+                        size="small"
+                        onClick={() => setReplyParentId(null)}
+                        sx={{ ...mvsBodyOutlinedBtnSx, minWidth: 0, px: 1, py: 0.25, fontSize: '0.75rem' }}
+                      >
+                        {t('projectManagement.detail.cancelReply')}
+                      </Button>
+                    </Stack>
+                  ) : null}
+                  <Stack direction="row" spacing={1}>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      placeholder={
+                        replyParentId
+                          ? t('projectManagement.detail.replyPlaceholder')
+                          : t('projectManagement.detail.commentPlaceholder')
                       }
-                    }}
-                    sx={mvsSearchFieldSx}
-                  />
-                  <Button
-                    variant="contained"
-                    disableElevation
-                    disabled={postingComment || !commentText.trim()}
-                    onClick={() => void postComment()}
-                    sx={mvsBodyPrimaryBtnSx}
-                  >
-                    {t('projectManagement.detail.postComment')}
-                  </Button>
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                          e.preventDefault();
+                          if (!postingComment && commentText.trim()) void postComment();
+                        }
+                      }}
+                      sx={mvsSearchFieldSx}
+                    />
+                    <Button
+                      variant="contained"
+                      disableElevation
+                      disabled={postingComment || !commentText.trim()}
+                      onClick={() => void postComment()}
+                      sx={mvsBodyPrimaryBtnSx}
+                    >
+                      {replyParentId
+                        ? t('projectManagement.detail.reply')
+                        : t('projectManagement.detail.postComment')}
+                    </Button>
+                  </Stack>
                 </Stack>
               )}
             </Box>

@@ -721,11 +721,12 @@ router.get('/', async (req, res) => {
       });
       companyIdsForSearch = matchingCompanies.map((c: any) => c.id);
       
-      // 사용자 이름·이메일·사용자 ID 또는 회사 ID로 검색
+      // 사용자 이름·이메일·사용자 ID·사원번호 또는 회사 ID로 검색
       const searchConditions: any[] = [
         { username: { [Op.iLike]: `%${searchText}%` } },
         { email: { [Op.iLike]: `%${searchText}%` } },
-        { userid: { [Op.iLike]: `%${searchText}%` } }
+        { userid: { [Op.iLike]: `%${searchText}%` } },
+        { employee_number: { [Op.iLike]: `%${searchText}%` } },
       ];
       
       // 회사명으로 검색된 회사 ID가 있으면 추가
@@ -1947,7 +1948,7 @@ router.get(
     const tenantId = (req as any).user.tenant_id;
     const companyId = (req as any).user.company_id;
     const userRole = (req as any).user.role;
-    const { search, company_id } = req.query;
+    const { search, company_id, include_inactive } = req.query;
 
     // 사용자 목록 조회 (목록 조회와 동일한 로직)
     const whereClause: any = {};
@@ -1968,7 +1969,14 @@ router.get(
       ];
     }
 
-    whereClause.status = { [Op.ne]: 'inactive' };
+    const includeInactive =
+      include_inactive === '1' ||
+      include_inactive === 'true' ||
+      String(include_inactive || '').toLowerCase() === 'yes';
+    // 일반 user 역할은 퇴사자 내보내기 불가
+    if (!includeInactive || userRole === 'user') {
+      whereClause.status = { [Op.ne]: 'inactive' };
+    }
 
     const users = await (User as any).findAll({
       where: whereClause,

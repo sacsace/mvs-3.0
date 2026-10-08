@@ -69,13 +69,18 @@ import {
   Close as CloseIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { alpha, useTheme } from '@mui/material/styles';
-import { inventoryService } from '../../services/api';
+import { companyService, inventoryService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { resolveMediaUrl } from '../../utils/uploadUrl';
-import { useMenuStore } from '../../store';
+import { useMenuStore, useStore } from '../../store';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import {
+  companySelectListboxSlotProps,
+  companySelectNowrapSx,
+  shortCompanyName,
+} from '../../utils/companyDisplayName';
 
 function escapeHtml(s: string): string {
   return s
@@ -221,7 +226,19 @@ const InventoryManagement: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
   const { loading: menusLoading } = useMenuStore();
+  const user = useStore((s) => s.user);
+  const isRootUser = user?.role === 'root';
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>(() =>
+    user?.company_id != null && Number(user.company_id) > 0 ? Number(user.company_id) : ''
+  );
+  const [companyOptions, setCompanyOptions] = useState<Array<{ id: number; name: string }>>([]);
+  const effectiveCompanyId = useMemo(() => {
+    if (!isRootUser) return undefined;
+    return typeof selectedCompanyId === 'number' && selectedCompanyId > 0
+      ? selectedCompanyId
+      : undefined;
+  }, [isRootUser, selectedCompanyId]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
   const [inventoryStats, setInventoryStats] = useState<InventoryStats>({
@@ -244,7 +261,7 @@ const InventoryManagement: React.FC = () => {
   const [warehouseFilter, setWarehouseFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(15);
   const [listViewMode, setListViewMode] = useState<ListViewMode>('page');
   const [totalPages, setTotalPages] = useState(1);
   const [, setTotalItems] = useState(0);
@@ -274,6 +291,46 @@ const InventoryManagement: React.FC = () => {
 
   const menuFlags = useMenuRoutePermissionFlags(INVENTORY_BASIC_MENU_ROUTES);
 
+  useEffect(() => {
+    if (!isRootUser) {
+      setCompanyOptions([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await companyService.getCompanies();
+        const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+        if (cancelled) return;
+        const list: Array<{ id: number; name: string }> = rows
+          .map((c: any) => ({
+            id: Number(c.id),
+            name:
+              shortCompanyName(c.name || c.company_name) ||
+              String(c.name || c.company_name || '').trim(),
+          }))
+          .filter((c: { id: number; name: string }) => Number.isFinite(c.id) && c.id > 0 && c.name)
+          .sort((a: { id: number; name: string }, b: { id: number; name: string }) =>
+            a.name.localeCompare(b.name)
+          );
+        setCompanyOptions(list);
+        setSelectedCompanyId((prev) => {
+          if (typeof prev === 'number' && list.some((c) => c.id === prev)) return prev;
+          const loginId = Number(user?.company_id);
+          if (Number.isFinite(loginId) && loginId > 0 && list.some((c) => c.id === loginId)) {
+            return loginId;
+          }
+          return list[0]?.id ?? '';
+        });
+      } catch {
+        if (!cancelled) setCompanyOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isRootUser, user?.company_id]);
+
   const loadInventoryData = useCallback(async () => {
     setLoading(true);
     try {
@@ -283,9 +340,10 @@ const InventoryManagement: React.FC = () => {
           limit: listViewMode === 'all' ? INVENTORY_VIEW_ALL_LIMIT : itemsPerPage,
           search: searchTerm,
           category: categoryFilter,
-          ...(warehouseFilter.trim() ? { location: warehouseFilter.trim() } : {})
+          ...(warehouseFilter.trim() ? { location: warehouseFilter.trim() } : {}),
+          ...(effectiveCompanyId ? { company_id: effectiveCompanyId } : {}),
         }),
-        inventoryService.getInventoryReport()
+        inventoryService.getInventoryReport(effectiveCompanyId)
       ]);
       
       if (productsResponse.success && productsResponse.data) {
@@ -370,7 +428,16 @@ const InventoryManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, searchTerm, categoryFilter, warehouseFilter, listViewMode, itemsPerPage, t]);
+  }, [
+    page,
+    searchTerm,
+    categoryFilter,
+    warehouseFilter,
+    listViewMode,
+    itemsPerPage,
+    effectiveCompanyId,
+    t,
+  ]);
 
   useEffect(() => {
     if (menusLoading || !menuFlags.canRead) return;
@@ -380,7 +447,7 @@ const InventoryManagement: React.FC = () => {
   useEffect(() => {
     if (menusLoading || !menuFlags.canRead) return;
     void loadWarehouseManageList();
-  }, [menusLoading, menuFlags.canRead]);
+  }, [menusLoading, menuFlags.canRead, effectiveCompanyId]);
 
   const filterItems = useCallback(() => {
     // 검색과 카테고리는 API에서 처리되므로, 상태 필터만 클라이언트에서 처리
@@ -439,7 +506,7 @@ const InventoryManagement: React.FC = () => {
   const loadCategoryManageList = async () => {
     setCategoryManageLoading(true);
     try {
-      const res = await inventoryService.getProductCategories();
+      const res = await inventoryService.getProductCategories(effectiveCompanyId);
       if (res?.success && Array.isArray(res.data)) {
         setCategoryManageList(
           res.data.map((r: { id: number; name: string }) => ({ id: r.id, name: r.name }))
@@ -457,7 +524,7 @@ const InventoryManagement: React.FC = () => {
   const loadWarehouseManageList = async () => {
     setWarehouseManageLoading(true);
     try {
-      const res = await inventoryService.getInventoryLocations();
+      const res = await inventoryService.getInventoryLocations(effectiveCompanyId);
       if (res?.success && Array.isArray(res.data)) {
         setWarehouseManageList(
           res.data.map((r: { id: number; name: string }) => ({ id: r.id, name: r.name }))
@@ -478,7 +545,7 @@ const InventoryManagement: React.FC = () => {
     setMasterDialogSaving(true);
     setError('');
     try {
-      const res = await inventoryService.createProductCategory(name);
+      const res = await inventoryService.createProductCategory(name, effectiveCompanyId);
       if (res?.success) {
         setNewCategoryInput('');
         setSuccess(t('inventoryManagement.messages.masterCategorySaved'));
@@ -499,7 +566,11 @@ const InventoryManagement: React.FC = () => {
     setMasterDialogSaving(true);
     setError('');
     try {
-      const res = await inventoryService.updateProductCategory(editingCategory.id, name);
+      const res = await inventoryService.updateProductCategory(
+        editingCategory.id,
+        name,
+        effectiveCompanyId
+      );
       if (res?.success) {
         setEditingCategory(null);
         setSuccess(t('inventoryManagement.messages.masterCategoryUpdated'));
@@ -521,7 +592,7 @@ const InventoryManagement: React.FC = () => {
           setMasterDialogSaving(true);
           setError('');
           try {
-            const res = await inventoryService.deleteProductCategory(row.id);
+            const res = await inventoryService.deleteProductCategory(row.id, effectiveCompanyId);
             if (res?.success) {
               setSuccess(t('inventoryManagement.messages.masterCategoryDeleted'));
               await loadCategoryManageList();
@@ -549,7 +620,7 @@ const InventoryManagement: React.FC = () => {
     setMasterDialogSaving(true);
     setError('');
     try {
-      const res = await inventoryService.createInventoryLocation(name);
+      const res = await inventoryService.createInventoryLocation(name, effectiveCompanyId);
       if (res?.success) {
         setNewWarehouseInput('');
         setSuccess(t('inventoryManagement.messages.masterWarehouseSaved'));
@@ -570,7 +641,11 @@ const InventoryManagement: React.FC = () => {
     setMasterDialogSaving(true);
     setError('');
     try {
-      const res = await inventoryService.updateInventoryLocation(editingWarehouse.id, name);
+      const res = await inventoryService.updateInventoryLocation(
+        editingWarehouse.id,
+        name,
+        effectiveCompanyId
+      );
       if (res?.success) {
         setEditingWarehouse(null);
         setSuccess(t('inventoryManagement.messages.masterWarehouseUpdated'));
@@ -592,7 +667,7 @@ const InventoryManagement: React.FC = () => {
           setMasterDialogSaving(true);
           setError('');
           try {
-            const res = await inventoryService.deleteInventoryLocation(row.id);
+            const res = await inventoryService.deleteInventoryLocation(row.id, effectiveCompanyId);
             if (res?.success) {
               setSuccess(t('inventoryManagement.messages.masterWarehouseDeleted'));
               await loadWarehouseManageList();
@@ -617,7 +692,7 @@ const InventoryManagement: React.FC = () => {
   const loadUnitManageList = async () => {
     setUnitManageLoading(true);
     try {
-      const res = await inventoryService.getProductUnits();
+      const res = await inventoryService.getProductUnits(effectiveCompanyId);
       if (res?.success && Array.isArray(res.data)) {
         setUnitManageList(res.data.map((r: { id: number; name: string }) => ({ id: r.id, name: r.name })));
       } else {
@@ -636,7 +711,7 @@ const InventoryManagement: React.FC = () => {
     setMasterDialogSaving(true);
     setError('');
     try {
-      const res = await inventoryService.createProductUnit(name);
+      const res = await inventoryService.createProductUnit(name, effectiveCompanyId);
       if (res?.success) {
         setNewUnitInput('');
         setSuccess(t('inventoryManagement.messages.masterUnitSaved'));
@@ -657,7 +732,11 @@ const InventoryManagement: React.FC = () => {
     setMasterDialogSaving(true);
     setError('');
     try {
-      const res = await inventoryService.updateProductUnit(editingUnit.id, name);
+      const res = await inventoryService.updateProductUnit(
+        editingUnit.id,
+        name,
+        effectiveCompanyId
+      );
       if (res?.success) {
         setEditingUnit(null);
         setSuccess(t('inventoryManagement.messages.masterUnitUpdated'));
@@ -679,7 +758,7 @@ const InventoryManagement: React.FC = () => {
           setMasterDialogSaving(true);
           setError('');
           try {
-            const res = await inventoryService.deleteProductUnit(row.id);
+            const res = await inventoryService.deleteProductUnit(row.id, effectiveCompanyId);
             if (res?.success) {
               setSuccess(t('inventoryManagement.messages.masterUnitDeleted'));
               await loadUnitManageList();
@@ -707,7 +786,7 @@ const InventoryManagement: React.FC = () => {
       return;
     }
     try {
-      const blob = await inventoryService.downloadProductExcelSample();
+      const blob = await inventoryService.downloadProductExcelSample(effectiveCompanyId);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -735,7 +814,7 @@ const InventoryManagement: React.FC = () => {
     setExcelUploading(true);
     setError('');
     try {
-      const res = await inventoryService.bulkUpdateProductsFromExcel(file);
+      const res = await inventoryService.bulkUpdateProductsFromExcel(file, effectiveCompanyId);
       if (res.success) {
         let msg = res.message || t('inventoryManagement.messages.excelApplyDone');
         const failed = res.data?.failed as { row: number; error: string }[] | undefined;
@@ -766,7 +845,7 @@ const InventoryManagement: React.FC = () => {
       () => {
         void (async () => {
           try {
-            await inventoryService.deleteProduct(id);
+            await inventoryService.deleteProduct(id, effectiveCompanyId);
             setSuccess(t('inventoryManagement.messages.deleteSuccess'));
             setSelectedItemIds((prev) => prev.filter((itemId) => itemId !== id));
             loadInventoryData();
@@ -817,7 +896,11 @@ const InventoryManagement: React.FC = () => {
 
       if (selectedItem) {
         // 수정
-        const response = await inventoryService.updateProduct(selectedItem.id, productData);
+        const response = await inventoryService.updateProduct(
+          selectedItem.id,
+          productData,
+          effectiveCompanyId
+        );
         if (response.success) {
           setSuccess(t('inventoryManagement.messages.updateSuccess'));
           handleCloseInventoryDialog();
@@ -825,7 +908,7 @@ const InventoryManagement: React.FC = () => {
         }
       } else {
         // 추가
-        const response = await inventoryService.createProduct(productData);
+        const response = await inventoryService.createProduct(productData, effectiveCompanyId);
         if (response.success) {
           setSuccess(t('inventoryManagement.messages.addSuccess'));
           handleCloseInventoryDialog();
@@ -912,7 +995,9 @@ const InventoryManagement: React.FC = () => {
       () => {
         void (async () => {
           try {
-            await Promise.all(selectedItemIds.map((id) => inventoryService.deleteProduct(id)));
+            await Promise.all(
+              selectedItemIds.map((id) => inventoryService.deleteProduct(id, effectiveCompanyId))
+            );
             setSuccess(
               t('inventoryManagement.messages.deleteSelectedSuccess', { count: selectedItemIds.length })
             );
@@ -1089,7 +1174,51 @@ const InventoryManagement: React.FC = () => {
         onChange={handleInventoryExcelSelected}
       />
 
-      <MvsPageHeader title={t('inventoryManagement.pageTitle')} />
+      <MvsPageHeader
+        title={t('inventoryManagement.pageTitle')}
+        actions={
+          isRootUser ? (
+            <Autocomplete
+              options={companyOptions}
+              value={
+                typeof selectedCompanyId === 'number'
+                  ? companyOptions.find((c) => c.id === selectedCompanyId) ?? null
+                  : null
+              }
+              onChange={(_, next) => {
+                setSelectedCompanyId(next?.id && next.id > 0 ? next.id : '');
+                setPage(1);
+                setSelectedItemIds([]);
+                setWarehouseFilter('');
+                setCategoryFilter('');
+              }}
+              getOptionLabel={(option) => option.name}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              disableClearable={Boolean(
+                typeof selectedCompanyId === 'number' &&
+                  companyOptions.some((c) => c.id === selectedCompanyId)
+              )}
+              slotProps={companySelectListboxSlotProps}
+              sx={{
+                minWidth: 220,
+                maxWidth: 320,
+                ...inventoryFilterFieldSx,
+                ...companySelectNowrapSx,
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label={t('inventoryManagement.company')}
+                  placeholder={t('inventoryManagement.searchCompany')}
+                  {...FILTER_OUTLINED}
+                  sx={{ ...companySelectNowrapSx }}
+                />
+              )}
+            />
+          ) : null
+        }
+      />
 
       {menusLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -1833,6 +1962,7 @@ const InventoryManagement: React.FC = () => {
               canCreate={menuFlags.canCreate}
               canEdit={menuFlags.canEdit}
               canMutate={menuFlags.canMutate}
+              companyId={effectiveCompanyId}
               onPreviewImage={openProductImagePreview}
               onCancel={() => {
                 if (selectedItem) {
@@ -2723,6 +2853,7 @@ interface InventoryFormProps {
   canCreate: boolean;
   canEdit: boolean;
   canMutate: boolean;
+  companyId?: number;
   onPreviewImage?: (imageUrl?: string | null, label?: string) => void;
 }
 
@@ -2735,6 +2866,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
   canCreate,
   canEdit,
   canMutate,
+  companyId,
   onPreviewImage }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -2778,10 +2910,10 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
   const loadMasters = useCallback(async () => {
     try {
       const [catRes, unitRes, locRes, partRes] = await Promise.all([
-        inventoryService.getProductCategories(),
-        inventoryService.getProductUnits(),
-        inventoryService.getInventoryLocations(),
-        useReferenceDataStore.getState().fetchPartners().then((data) => ({ success: true, data })),
+        inventoryService.getProductCategories(companyId),
+        inventoryService.getProductUnits(companyId),
+        inventoryService.getInventoryLocations(companyId),
+        useReferenceDataStore.getState().fetchPartners(true).then((data) => ({ success: true, data })),
       ]);
       if (catRes?.success && Array.isArray(catRes.data)) {
         setProductCategories(catRes.data.map((r: { id: number; name: string }) => ({ id: r.id, name: r.name })));
@@ -2800,7 +2932,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [companyId]);
 
   useEffect(() => {
     loadMasters();
@@ -2912,7 +3044,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
     if (!file || !canMutate) return;
     setImageUploading(true);
     try {
-      const res = await inventoryService.uploadProductImage(file);
+      const res = await inventoryService.uploadProductImage(file, companyId);
       if (res?.success && res.data?.url) {
         setFormData((prev) => ({ ...prev, imageUrl: res.data.url }));
       }
@@ -2956,7 +3088,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
     if (!name) return;
     setMasterSaving(true);
     try {
-      const res = await inventoryService.createProductCategory(name);
+      const res = await inventoryService.createProductCategory(name, companyId);
       if (res?.success && res.data) {
         await loadMasters();
         setFormData((prev) => ({ ...prev, category: (res.data as { name: string }).name }));
@@ -2976,7 +3108,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
     if (!name) return;
     setMasterSaving(true);
     try {
-      const res = await inventoryService.createInventoryLocation(name);
+      const res = await inventoryService.createInventoryLocation(name, companyId);
       if (res?.success && res.data) {
         await loadMasters();
         setFormData((prev) => ({ ...prev, location: (res.data as { name: string }).name }));
@@ -2996,7 +3128,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
     if (!name) return;
     setMasterSaving(true);
     try {
-      const res = await inventoryService.createProductUnit(name);
+      const res = await inventoryService.createProductUnit(name, companyId);
       if (res?.success && res.data) {
         await loadMasters();
         setFormData((prev) => ({ ...prev, unit: (res.data as { name: string }).name }));

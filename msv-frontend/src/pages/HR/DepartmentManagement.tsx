@@ -56,7 +56,7 @@ import {
 } from '../../theme/mvsLayout';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 
-const DEPTS_PER_PAGE = 10;
+const DEPTS_PER_PAGE = 15;
 const DEPT_FORM_FIELD_SX = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
 
 type ListViewMode = 'page' | 'all';
