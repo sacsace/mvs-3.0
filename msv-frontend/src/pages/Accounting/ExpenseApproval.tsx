@@ -2995,7 +2995,11 @@ const ExpenseApproval: React.FC = () => {
           (expense) => !isExpensePaidForList(expense) && expense.status === statusFilter
         );
       } else {
+        // 전체: 지급완료 제외. 내가 작성한 목록은 승인됨도 기본 숨김(상태 필터로만 조회)
         filtered = filtered.filter((expense) => !isExpensePaidForList(expense));
+        if (listTab === 'written') {
+          filtered = filtered.filter((expense) => expense.status !== 'approved');
+        }
       }
     }
 
@@ -3328,6 +3332,7 @@ const ExpenseApproval: React.FC = () => {
     if (tab === 'received' || tab === 'written' || tab === 'transfer') {
       if (tab === 'transfer' && !hasTransferAccess) return;
       setListTab(tab);
+      setStatusFilter(tab === 'transfer' ? 'transfer_pending' : '');
       if (tab === 'transfer' && isRootUser && companyFilterId === '') {
         setCompanyFilterId(resolveDefaultCompanyFilterId());
       }
@@ -4785,13 +4790,14 @@ const ExpenseApproval: React.FC = () => {
     if (listTab === 'transfer') return false;
     // 목록에 '지급 완료'로 보이는 건(문서 status와 무관) 삭제 불가
     if (resolveDisplayStatus(expense) === 'paid') return false;
-    if (['approved', 'paid'].includes(expense.status)) return false;
+    if (expense.status === 'paid') return false;
 
-    // root: 타인이 작성 중(초안)·승인 전(제출/검토)·반려 건도 삭제 가능
+    // root: 지급 완료 전까지(승인 포함) 삭제 가능
     if (isRootUser) {
-      return ['draft', 'submitted', 'in_review', 'rejected'].includes(expense.status);
+      return ['draft', 'submitted', 'in_review', 'rejected', 'approved'].includes(expense.status);
     }
 
+    if (['approved', 'paid'].includes(expense.status)) return false;
     if (!isSameUserId(expense.requesterId, user.id)) return false;
     // 일반 작성자: 초안·반려만 (제출/검토 중은 삭제 불가)
     if (['submitted', 'in_review'].includes(expense.status)) return false;
@@ -4950,6 +4956,7 @@ const ExpenseApproval: React.FC = () => {
       setSuccess(t('expenseApproval.success.paymentCompleted'));
         setSelectedExpense(null);
         setListTab('transfer');
+        setStatusFilter('transfer_pending');
         if (isRootUser) {
           setCompanyFilterId(resolveDefaultCompanyFilterId());
         }
@@ -9914,7 +9921,7 @@ const ExpenseApproval: React.FC = () => {
         value={listTab}
           onChange={(_, value) => {
             setListTab(value);
-            setStatusFilter('');
+            setStatusFilter(value === 'transfer' ? 'transfer_pending' : '');
             setPage(1);
             setListSortKey(null);
             setListSortDir('asc');
@@ -10144,7 +10151,7 @@ const ExpenseApproval: React.FC = () => {
               startIcon={<FilterIcon sx={{ fontSize: 18 }} />}
                 onClick={() => {
                   setSearchTerm('');
-                  setStatusFilter('');
+                  setStatusFilter(listTab === 'transfer' ? 'transfer_pending' : '');
                   setPriorityFilter('');
                 setListSortKey(null);
                 setListSortDir('asc');

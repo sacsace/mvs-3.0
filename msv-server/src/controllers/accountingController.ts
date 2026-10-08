@@ -3497,17 +3497,20 @@ export const deleteExpenseReport = async (req: RequestWithUser, res: Response) =
       status === 'paid' ||
       paymentStatus === 'paid' ||
       (Number(expense.paid_amount || 0) > 0 && remaining <= 0);
-    if (isPaid || status === 'approved' || status === 'paid') {
+    if (isPaid || status === 'paid') {
       return res.status(400).json({
         success: false,
-        message: '승인·지급 완료된 문서는 삭제할 수 없습니다.',
+        message: '지급 완료된 문서는 삭제할 수 없습니다.',
       });
     }
-    // 일반 작성자: 제출/검토 중 삭제 불가. root는 작성중·승인 전 건 삭제 가능
-    if (!isRoot && ['submitted', 'in_review'].includes(status)) {
+    // 일반 작성자: 승인·제출/검토 중 삭제 불가. root는 지급 완료 전(승인 포함) 삭제 가능
+    if (!isRoot && (status === 'approved' || ['submitted', 'in_review'].includes(status))) {
       return res.status(400).json({
         success: false,
-        message: '검토 중이거나 지급 완료된 문서는 삭제할 수 없습니다.',
+        message:
+          status === 'approved'
+            ? '승인된 문서는 삭제할 수 없습니다.'
+            : '검토 중이거나 지급 완료된 문서는 삭제할 수 없습니다.',
       });
     }
 
