@@ -778,12 +778,15 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     return gridRows.filter((r) => idSet.has(r.id));
   }, [gridRows, selectedPayslipRowIds]);
 
-  const payslipDownloadDisabled =
-    menuFlags.menusLoading || !menuFlags.canRead || loading || payslipDownloading || gridRows.length === 0;
-
   const handleDownloadPayslips = useCallback(
     async (mode: 'selected' | 'all') => {
       if (menuFlags.menusLoading || !menuFlags.canRead || payslipDownloading) return;
+      const periodLocked =
+        !!periodKey && lockedPeriods.has(periodKey);
+      if (!periodLocked) {
+        setError(t('payrollManagement.payslip.downloadRequiresComplete'));
+        return;
+      }
       const targetRows = mode === 'selected' ? selectedPayslipRows : gridRows;
       if (!targetRows.length) {
         setError(
@@ -830,6 +833,8 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
       menuFlags.menusLoading,
       menuFlags.canRead,
       payslipDownloading,
+      periodKey,
+      lockedPeriods,
       selectedPayslipRows,
       gridRows,
       effectiveCompanyId,
@@ -915,6 +920,31 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
           ? t('payrollManagement.payslip.sendRequiresComplete')
           : t('payrollManagement.payslip.sendNoRowsForPayMonth')
     : '';
+
+  const payslipDownloadDisabled =
+    menuFlags.menusLoading ||
+    !menuFlags.canRead ||
+    loading ||
+    payslipDownloading ||
+    !selectedPeriodPayrollComplete ||
+    gridRows.length === 0;
+
+  const payslipDownloadTooltip = payslipDownloading
+    ? payslipDownloadProgress.total > 0
+      ? t('payrollManagement.payslip.downloadProgress', {
+          done: payslipDownloadProgress.done,
+          total: payslipDownloadProgress.total,
+        })
+      : ''
+    : payslipDownloadDisabled
+      ? loading || menuFlags.menusLoading
+        ? ''
+        : !menuFlags.canRead
+          ? t('common.menuNoView')
+          : !selectedPeriodPayrollComplete
+            ? t('payrollManagement.payslip.downloadRequiresComplete')
+            : t('payrollManagement.payslip.downloadNoRows')
+      : '';
 
   const bankBulkEligibleCount = useMemo(
     () => countEligiblePayrollBankRows(gridRows),
@@ -1276,17 +1306,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
                 </Button>
               </span>
             </Tooltip>
-            <Tooltip
-              title={
-                payslipDownloading && payslipDownloadProgress.total > 0
-                  ? t('payrollManagement.payslip.downloadProgress', {
-                      done: payslipDownloadProgress.done,
-                      total: payslipDownloadProgress.total,
-                    })
-                  : ''
-              }
-              disableHoverListener={!payslipDownloading}
-            >
+            <Tooltip title={payslipDownloadTooltip} disableHoverListener={!payslipDownloadTooltip}>
               <span style={{ display: 'inline-flex' }}>
                 <Button
                   variant="outlined"

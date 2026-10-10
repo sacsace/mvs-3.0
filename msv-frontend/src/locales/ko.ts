@@ -1776,6 +1776,8 @@ export default {
         downloadAllCount: '목록 {{count}}명',
         downloadNoSelection: '다운로드할 직원을 표에서 선택하세요.',
         downloadNoRows: '다운로드할 급여 행이 없습니다.',
+        downloadRequiresComplete:
+          '「급여 생성 완료」로 해당 월을 확정한 뒤에 명세서를 다운로드할 수 있습니다.',
         downloadProgress: '명세서 생성 중 {{done}}/{{total}}',
         sendTitle: '급여 명세서 보내기',
         sendRequiresComplete:

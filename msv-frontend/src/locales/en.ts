@@ -1726,6 +1726,8 @@ export default {
         downloadAllCount: '{{count}} in list',
         downloadNoSelection: 'Select employees in the grid to download.',
         downloadNoRows: 'No payroll rows to download.',
+        downloadRequiresComplete:
+          'Finalize the pay month with 「Finalize payroll」 before downloading payslips.',
         downloadProgress: 'Generating payslips {{done}}/{{total}}',
         sendTitle: 'Send payslips',
         sendRequiresComplete:
