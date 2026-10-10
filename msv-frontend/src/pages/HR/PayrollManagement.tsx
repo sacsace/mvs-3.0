@@ -7,6 +7,7 @@ import {
   Button,
   TextField,
   MenuItem,
+  Menu,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -18,6 +19,8 @@ import {
   CircularProgress,
   Autocomplete,
   Chip,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -43,6 +46,9 @@ import {
   FileDownload as FileDownloadIcon,
   AccountBalance as BankTransferIcon,
   Send as SendIcon,
+  PictureAsPdf as PictureAsPdfIcon,
+  CheckBox as CheckBoxIcon,
+  SelectAll as SelectAllIcon,
 } from '@mui/icons-material';
 import { payrollService, companyService, userService } from '../../services/api';
 import { useStore } from '../../store';
@@ -60,6 +66,9 @@ import {
   exportPayrollBankBulkTransfer,
   type PayrollBulkBankId,
 } from './payroll/exportPayrollBankBulkTransfer';
+import { downloadPayslipsPdfBatch } from './payrollPayslipPdf';
+import { toPayslipCompanyInfo } from './PayslipContent';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { syncPayrollGridSettingsFromServer } from './payroll/payrollGridSettingsSync';
 import { resolveRegisteredStateCodeFromCompanyLike } from './payroll/indianProfessionalTax';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
@@ -190,6 +199,10 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
   const [bankBulkBankId, setBankBulkBankId] = useState<PayrollBulkBankId>('icici');
   const [bankBulkDebitAccount, setBankBulkDebitAccount] = useState('');
   const [bankBulkExporting, setBankBulkExporting] = useState(false);
+  const [selectedPayslipRowIds, setSelectedPayslipRowIds] = useState<number[]>([]);
+  const [payslipDownloadAnchor, setPayslipDownloadAnchor] = useState<null | HTMLElement>(null);
+  const [payslipDownloading, setPayslipDownloading] = useState(false);
+  const [payslipDownloadProgress, setPayslipDownloadProgress] = useState({ done: 0, total: 0 });
   /** 서버 급여 그리드 설정 동기화 후 행 재계산 트리거 */
   const [gridSettingsTick, setGridSettingsTick] = useState(0);
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>(() =>
@@ -483,6 +496,10 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     return list;
   }, [payrollRecordsForSelectedMonth, searchTerm, departmentFilter]);
 
+  useEffect(() => {
+    setSelectedPayslipRowIds([]);
+  }, [periodKey, effectiveCompanyId, searchTerm, departmentFilter]);
+
   const gridRows = useMemo(() => {
     const ctx = {
       ...payrollRecalcContext,
@@ -754,6 +771,72 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
       }
     })();
   }, [gridRows, menuFlags.canRead, menuFlags.menusLoading, t, effectiveCompanyId]);
+
+  const selectedPayslipRows = useMemo(() => {
+    if (!selectedPayslipRowIds.length) return [];
+    const idSet = new Set(selectedPayslipRowIds);
+    return gridRows.filter((r) => idSet.has(r.id));
+  }, [gridRows, selectedPayslipRowIds]);
+
+  const payslipDownloadDisabled =
+    menuFlags.menusLoading || !menuFlags.canRead || loading || payslipDownloading || gridRows.length === 0;
+
+  const handleDownloadPayslips = useCallback(
+    async (mode: 'selected' | 'all') => {
+      if (menuFlags.menusLoading || !menuFlags.canRead || payslipDownloading) return;
+      const targetRows = mode === 'selected' ? selectedPayslipRows : gridRows;
+      if (!targetRows.length) {
+        setError(
+          mode === 'selected'
+            ? t('payrollManagement.payslip.downloadNoSelection')
+            : t('payrollManagement.payslip.downloadNoRows')
+        );
+        return;
+      }
+      setPayslipDownloadAnchor(null);
+      setPayslipDownloading(true);
+      setPayslipDownloadProgress({ done: 0, total: targetRows.length });
+      setError('');
+      try {
+        let companyInfo = null;
+        if (effectiveCompanyId != null) {
+          try {
+            const company = await useReferenceDataStore
+              .getState()
+              .fetchCompanyById(effectiveCompanyId);
+            companyInfo = toPayslipCompanyInfo(company);
+          } catch {
+            companyInfo = null;
+          }
+        }
+        const result = await downloadPayslipsPdfBatch(targetRows, companyInfo, {
+          locale: 'en',
+          headerLayout: payslipHeaderLayout,
+          companyId: effectiveCompanyId,
+          purpose: 'download',
+          onProgress: (done, total) => setPayslipDownloadProgress({ done, total }),
+        });
+        setSuccess(
+          t('payrollManagement.success.payslipsDownloaded', { count: result.count })
+        );
+      } catch {
+        setError(t('payrollManagement.errors.payslipDownloadFailed'));
+      } finally {
+        setPayslipDownloading(false);
+        setPayslipDownloadProgress({ done: 0, total: 0 });
+      }
+    },
+    [
+      menuFlags.menusLoading,
+      menuFlags.canRead,
+      payslipDownloading,
+      selectedPayslipRows,
+      gridRows,
+      effectiveCompanyId,
+      payslipHeaderLayout,
+      t,
+    ]
+  );
 
   const openBankBulkDialog = useCallback(() => {
     setBankBulkDebitAccount(companyDebitAccount);
@@ -1193,6 +1276,76 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
                 </Button>
               </span>
             </Tooltip>
+            <Tooltip
+              title={
+                payslipDownloading && payslipDownloadProgress.total > 0
+                  ? t('payrollManagement.payslip.downloadProgress', {
+                      done: payslipDownloadProgress.done,
+                      total: payslipDownloadProgress.total,
+                    })
+                  : ''
+              }
+              disableHoverListener={!payslipDownloading}
+            >
+              <span style={{ display: 'inline-flex' }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={
+                    payslipDownloading ? (
+                      <CircularProgress size={16} color="inherit" />
+                    ) : (
+                      <PictureAsPdfIcon fontSize="small" />
+                    )
+                  }
+                  disabled={payslipDownloadDisabled}
+                  onClick={(e) => setPayslipDownloadAnchor(e.currentTarget)}
+                  sx={mvsBodyOutlinedBtnSx}
+                >
+                  {t('payrollManagement.payslip.downloadTitle')}
+                </Button>
+              </span>
+            </Tooltip>
+            <Menu
+              anchorEl={payslipDownloadAnchor}
+              open={Boolean(payslipDownloadAnchor)}
+              onClose={() => setPayslipDownloadAnchor(null)}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+            >
+              <MenuItem
+                disabled={selectedPayslipRows.length === 0 || payslipDownloading}
+                onClick={() => void handleDownloadPayslips('selected')}
+              >
+                <ListItemIcon>
+                  <CheckBoxIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText
+                  primary={t('payrollManagement.payslip.downloadSelected')}
+                  secondary={
+                    selectedPayslipRows.length > 0
+                      ? t('payrollManagement.payslip.downloadSelectedCount', {
+                          count: selectedPayslipRows.length,
+                        })
+                      : t('payrollManagement.payslip.downloadNoSelection')
+                  }
+                />
+              </MenuItem>
+              <MenuItem
+                disabled={gridRows.length === 0 || payslipDownloading}
+                onClick={() => void handleDownloadPayslips('all')}
+              >
+                <ListItemIcon>
+                  <SelectAllIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText
+                  primary={t('payrollManagement.payslip.downloadAll')}
+                  secondary={t('payrollManagement.payslip.downloadAllCount', {
+                    count: gridRows.length,
+                  })}
+                />
+              </MenuItem>
+            </Menu>
             {!payslipSendOnly && (
               <Tooltip title={bankBulkTooltip} disableHoverListener={!bankBulkTooltip}>
                 <span style={{ display: 'inline-flex' }}>
@@ -1533,6 +1686,9 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
                 companyStateCode={companyRegisteredStateCode}
                 payrollMonth={payrollRecalcContext.payrollMonth}
                 payrollEmployeeCount={payrollRecordsForSelectedMonth.length}
+                enableRowSelection
+                selectedRowIds={selectedPayslipRowIds}
+                onSelectedRowIdsChange={setSelectedPayslipRowIds}
               />
             </Box>
           </Box>

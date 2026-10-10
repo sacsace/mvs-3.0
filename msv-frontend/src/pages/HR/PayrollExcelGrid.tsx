@@ -1,5 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DataGrid, GridCellParams, GridRowModel, useGridApiRef } from '@mui/x-data-grid';
+import {
+  DataGrid,
+  GridCellParams,
+  GridRowModel,
+  GridRowSelectionModel,
+  useGridApiRef,
+} from '@mui/x-data-grid';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@mui/material/styles';
 import Box from '@mui/material/Box';
@@ -113,6 +119,10 @@ type Props = {
   payrollMonth?: string | null;
   /** 해당 급여월 기본 직원 수(검색 필터 전). ESIC 10명 초과 여부 판단 */
   payrollEmployeeCount?: number | null;
+  /** 행 선택(체크박스) — 명세서 다운로드 등 */
+  selectedRowIds?: number[];
+  onSelectedRowIdsChange?: (ids: number[]) => void;
+  enableRowSelection?: boolean;
 };
 
 const PayrollExcelGrid: React.FC<Props> = ({
@@ -132,6 +142,9 @@ const PayrollExcelGrid: React.FC<Props> = ({
   companyStateCode = null,
   payrollMonth = null,
   payrollEmployeeCount = null,
+  selectedRowIds,
+  onSelectedRowIdsChange,
+  enableRowSelection = false,
 }) => {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
@@ -494,7 +507,10 @@ const PayrollExcelGrid: React.FC<Props> = ({
     [baseColumns, rows]
   );
 
-  const gridMinWidth = useMemo(() => sumPayrollGridWidth(columns), [columns]);
+  const gridMinWidth = useMemo(
+    () => sumPayrollGridWidth(columns) + (enableRowSelection ? 42 : 0),
+    [columns, enableRowSelection]
+  );
 
   const orderedFieldsForDialog = useMemo(() => {
     const fields = columns.map((c) => c.field);
@@ -860,6 +876,36 @@ const PayrollExcelGrid: React.FC<Props> = ({
         editMode="cell"
           onCellClick={handleCellClick}
         disableRowSelectionOnClick
+          checkboxSelection={enableRowSelection}
+          rowSelectionModel={
+            enableRowSelection
+              ? {
+                  type: 'include',
+                  ids: new Set(selectedRowIds ?? []),
+                }
+              : undefined
+          }
+          onRowSelectionModelChange={
+            enableRowSelection && onSelectedRowIdsChange
+              ? (model: GridRowSelectionModel) => {
+                  if (model.type === 'include') {
+                    onSelectedRowIdsChange(
+                      Array.from(model.ids)
+                        .map((id) => Number(id))
+                        .filter((id) => Number.isFinite(id) && id > 0)
+                    );
+                    return;
+                  }
+                  // exclude: 전체에서 제외분 뺀 나머지
+                  const excluded = model.ids;
+                  onSelectedRowIdsChange(
+                    rows
+                      .map((r) => r.id)
+                      .filter((id) => !excluded.has(id))
+                  );
+                }
+              : undefined
+          }
           disableColumnMenu
           sortingOrder={['asc', 'desc', null]}
           showCellVerticalBorder
@@ -877,6 +923,16 @@ const PayrollExcelGrid: React.FC<Props> = ({
             minHeight: gridBodyHeight,
             maxHeight: gridBodyHeight,
           border: 'none',
+            ...(enableRowSelection
+              ? {
+                  '& .MuiDataGrid-cellCheckbox, & .MuiDataGrid-columnHeaderCheckbox': {
+                    minWidth: '42px !important',
+                    maxWidth: '42px !important',
+                    width: '42px !important',
+                    p: 0,
+                  },
+                }
+              : {}),
           }}
         />
       </Box>

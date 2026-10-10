@@ -127,17 +127,19 @@ function fitImageToPrintArea(
   return { widthMm, heightMm };
 }
 
-export async function generatePayslipPdfBlob(
+type PayslipPdfOptions = {
+  locale?: 'en' | 'ko';
+  headerLayout?: PayslipHeaderLayout;
+  companyId?: string | number | null;
+  /** download: 고해상도 / email: 첨부 용량 완화 (기본 download) */
+  purpose?: 'download' | 'email';
+};
+
+async function capturePayslipCanvas(
   row: PayrollGridRow,
-  companyInfo?: PayslipCompanyInfo | null,
-  options?: {
-    locale?: 'en' | 'ko';
-    headerLayout?: PayslipHeaderLayout;
-    companyId?: string | number | null;
-    /** download: 고해상도 / email: 첨부 용량 완화 (기본 download) */
-    purpose?: 'download' | 'email';
-  }
-): Promise<Blob> {
+  companyInfo: PayslipCompanyInfo | null | undefined,
+  options?: PayslipPdfOptions
+): Promise<HTMLCanvasElement> {
   const labels = buildPayslipLabels(options?.locale);
   const purpose = options?.purpose ?? 'download';
   const isEmail = purpose === 'email';
@@ -165,7 +167,6 @@ export async function generatePayslipPdfBlob(
   );
 
   await document.fonts.ready;
-  // 레이아웃 안정화 — 고정 600ms 대기 대신 프레임 2회 + 짧은 여유
   await new Promise<void>((resolve) => {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -175,12 +176,12 @@ export async function generatePayslipPdfBlob(
   });
 
   try {
-    const [{ default: html2canvas }, { jsPDF }] = await loadPdfLibs();
+    const [{ default: html2canvas }] = await loadPdfLibs();
     const target = document.getElementById(rootId) as HTMLElement | null;
     if (!target) {
       throw new Error('Payslip PDF capture root not found');
     }
-    const canvas = await html2canvas(target, {
+    return await html2canvas(target, {
       scale: captureScale,
       useCORS: true,
       logging: false,
@@ -189,41 +190,103 @@ export async function generatePayslipPdfBlob(
       windowWidth: PDF_CAPTURE_WIDTH_PX,
       scrollX: 0,
       scrollY: 0,
-      // 글자 단위 렌더 — 작은 라벨의 가장자리 뭉개짐을 완화
       letterRendering: true,
       onclone: (clonedDoc: Document) => {
         injectPayslipCaptureCss(clonedDoc, rootId);
       },
     });
-
-    const pdf = new jsPDF({
-      unit: 'mm',
-      format: 'a4',
-      orientation: 'portrait',
-      compress: true
-    });
-    const margins = PAYSLIP_PDF_MARGINS_MM;
-    const printWidthMm = A4_WIDTH_MM - margins.left - margins.right;
-    const printHeightMm = A4_HEIGHT_MM - margins.top - margins.bottom;
-    const { widthMm, heightMm } = fitImageToPrintArea(canvas.width, canvas.height, printWidthMm, printHeightMm);
-    const x = margins.left + (printWidthMm - widthMm) / 2;
-    const y = margins.top;
-
-    // 다운로드: PNG(무손실) — JPEG 블록 노이즈가 글자를 흐리게 만드는 주원인
-    // 메일: JPEG로 용량 완화
-    if (isEmail) {
-      const imgData = canvas.toDataURL('image/jpeg', PDF_EMAIL_JPEG_QUALITY);
-      pdf.addImage(imgData, 'JPEG', x, y, widthMm, heightMm, undefined, 'FAST');
-    } else {
-      const imgData = canvas.toDataURL('image/png');
-      pdf.addImage(imgData, 'PNG', x, y, widthMm, heightMm, undefined, 'FAST');
-    }
-
-    return pdf.output('blob');
   } finally {
     root.unmount();
     document.body.removeChild(container);
   }
+}
+
+function addPayslipCanvasToPdf(
+  pdf: { addImage: (...args: any[]) => unknown },
+  canvas: HTMLCanvasElement,
+  purpose: 'download' | 'email'
+) {
+  const margins = PAYSLIP_PDF_MARGINS_MM;
+  const printWidthMm = A4_WIDTH_MM - margins.left - margins.right;
+  const printHeightMm = A4_HEIGHT_MM - margins.top - margins.bottom;
+  const { widthMm, heightMm } = fitImageToPrintArea(
+    canvas.width,
+    canvas.height,
+    printWidthMm,
+    printHeightMm
+  );
+  const x = margins.left + (printWidthMm - widthMm) / 2;
+  const y = margins.top;
+  if (purpose === 'email') {
+    const imgData = canvas.toDataURL('image/jpeg', PDF_EMAIL_JPEG_QUALITY);
+    pdf.addImage(imgData, 'JPEG', x, y, widthMm, heightMm, undefined, 'FAST');
+  } else {
+    const imgData = canvas.toDataURL('image/png');
+    pdf.addImage(imgData, 'PNG', x, y, widthMm, heightMm, undefined, 'FAST');
+  }
+}
+
+export async function generatePayslipPdfBlob(
+  row: PayrollGridRow,
+  companyInfo?: PayslipCompanyInfo | null,
+  options?: PayslipPdfOptions
+): Promise<Blob> {
+  const purpose = options?.purpose ?? 'download';
+  const [{}, { jsPDF }] = await loadPdfLibs();
+  const canvas = await capturePayslipCanvas(row, companyInfo, options);
+  const pdf = new jsPDF({
+    unit: 'mm',
+    format: 'a4',
+    orientation: 'portrait',
+    compress: true,
+  });
+  addPayslipCanvasToPdf(pdf, canvas, purpose);
+  return pdf.output('blob');
+}
+
+/** 여러 직원 명세서를 한 PDF(직원당 1페이지)로 만들어 다운로드. 1명이면 개별 파일명. */
+export async function downloadPayslipsPdfBatch(
+  rows: PayrollGridRow[],
+  companyInfo?: PayslipCompanyInfo | null,
+  options?: PayslipPdfOptions & { onProgress?: (done: number, total: number) => void }
+): Promise<{ count: number }> {
+  const list = Array.isArray(rows) ? rows.filter(Boolean) : [];
+  if (list.length === 0) return { count: 0 };
+
+  const purpose = options?.purpose ?? 'download';
+  const onProgress = options?.onProgress;
+
+  if (list.length === 1) {
+    const row = list[0];
+    const blob = await generatePayslipPdfBlob(row, companyInfo, options);
+    downloadPayslipPdf(blob, buildPayslipPdfFilename(row.working_month, row.employee_name));
+    onProgress?.(1, 1);
+    return { count: 1 };
+  }
+
+  const [{}, { jsPDF }] = await loadPdfLibs();
+  const pdf = new jsPDF({
+    unit: 'mm',
+    format: 'a4',
+    orientation: 'portrait',
+    compress: true,
+  });
+
+  for (let i = 0; i < list.length; i += 1) {
+    if (i > 0) pdf.addPage();
+    const canvas = await capturePayslipCanvas(list[i], companyInfo, options);
+    addPayslipCanvasToPdf(pdf, canvas, purpose);
+    onProgress?.(i + 1, list.length);
+  }
+
+  const period =
+    list.find((r) => String(r.working_month || '').trim())?.working_month ||
+    list[0].working_month ||
+    'Unknown';
+  const month = String(period).trim() || 'Unknown';
+  const filename = `Payslips (${month}) (${list.length}).pdf`.replace(/[\\/:*?"<>|]/g, '_');
+  downloadPayslipPdf(pdf.output('blob'), filename);
+  return { count: list.length };
 }
 
 export function buildPayslipPdfFilename(

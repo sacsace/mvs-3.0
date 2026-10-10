@@ -1769,6 +1769,14 @@ export default {
         companyName: '회사명',
         companyContact: '회사 연락처',
         downloadPdf: 'PDF 다운로드',
+        downloadTitle: '급여 명세서 다운로드',
+        downloadSelected: '선택 다운로드',
+        downloadSelectedCount: '{{count}}명 선택됨',
+        downloadAll: '전체 다운로드',
+        downloadAllCount: '목록 {{count}}명',
+        downloadNoSelection: '다운로드할 직원을 표에서 선택하세요.',
+        downloadNoRows: '다운로드할 급여 행이 없습니다.',
+        downloadProgress: '명세서 생성 중 {{done}}/{{total}}',
         sendTitle: '급여 명세서 보내기',
         sendRequiresComplete:
           '선택한 급여월에 대해「급여 생성 완료」를 먼저 진행한 뒤 발송할 수 있습니다. (급여 생성 대화상자의 급여월 기준)',
@@ -1980,6 +1988,7 @@ export default {
         paid: '급여가 지급되었습니다.',
         periodCompleted: '급여 월이 확정되었습니다.',
         approvalRequested: '급여 확정 결재를 요청했습니다.',
+        payslipsDownloaded: '급여 명세서 PDF {{count}}건을 다운로드했습니다.',
       },
       approval: {
         statusRequired: '결재 필요',
@@ -2030,6 +2039,7 @@ export default {
         payFailed: '급여 지급에 실패했습니다.',
         payError: '급여 지급 중 오류가 발생했습니다.',
         exportFailed: '엑셀 내보내기에 실패했습니다.',
+        payslipDownloadFailed: '급여 명세서 PDF 다운로드에 실패했습니다.',
         bankBulkExportFailed: '은행 대량송금 엑셀 다운로드에 실패했습니다.',
         bankBulkNoEligible:
           '송금 가능한 행이 없습니다. 계좌번호·IFSC·실수령액(0 초과)을 확인하세요.',

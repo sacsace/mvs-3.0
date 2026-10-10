@@ -1719,6 +1719,14 @@ export default {
         companyName: 'Company',
         companyContact: 'Company contact',
         downloadPdf: 'Download PDF',
+        downloadTitle: 'Download payslips',
+        downloadSelected: 'Download selected',
+        downloadSelectedCount: '{{count}} selected',
+        downloadAll: 'Download all',
+        downloadAllCount: '{{count}} in list',
+        downloadNoSelection: 'Select employees in the grid to download.',
+        downloadNoRows: 'No payroll rows to download.',
+        downloadProgress: 'Generating payslips {{done}}/{{total}}',
         sendTitle: 'Send payslips',
         sendRequiresComplete:
           'Complete “Payroll generation” for the selected pay month before sending. (Uses the pay month in the payroll dialogs.)',
@@ -1930,6 +1938,7 @@ export default {
         paid: 'Payroll paid successfully.',
         periodCompleted: 'Payroll month finalized.',
         approvalRequested: 'Payroll finalization approval requested.',
+        payslipsDownloaded: 'Downloaded {{count}} payslip PDF(s).',
       },
       approval: {
         statusRequired: 'Approval required',
@@ -1980,6 +1989,7 @@ export default {
         payFailed: 'Failed to pay payroll.',
         payError: 'An error occurred while paying payroll.',
         exportFailed: 'Failed to export Excel.',
+        payslipDownloadFailed: 'Failed to download payslip PDF.',
         bankBulkExportFailed: 'Failed to download bank bulk transfer Excel.',
         bankBulkNoEligible:
           'No eligible rows. Check account number, IFSC, and net pay (must be greater than 0).',
