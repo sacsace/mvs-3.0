@@ -59,7 +59,6 @@ import PayrollExcelGrid, {
 } from './PayrollExcelGrid';
 import PayrollPayslipDialog from './PayrollPayslipDialog';
 import PayrollSendPayslipsDialog from './PayrollSendPayslipsDialog';
-import type { PayslipHeaderLayout } from './PayslipContent';
 import { exportPayrollGridToExcel } from './payroll/exportPayrollGridToExcel';
 import {
   countEligiblePayrollBankRows,
@@ -174,10 +173,6 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
   const [creating, setCreating] = useState(false);
   const [payslipOpen, setPayslipOpen] = useState(false);
   const [payslipRow, setPayslipRow] = useState<PayrollGridRow | null>(null);
-  const [payslipHeaderLayout, setPayslipHeaderLayout] = useState<PayslipHeaderLayout>(() => {
-    const saved = localStorage.getItem('mvs.payslipHeaderLayout');
-    return saved === 'compact' || saved === 'companyFirst' ? saved : 'standard';
-  });
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
   const [lockedPeriods, setLockedPeriods] = useState<Set<string>>(new Set());
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
@@ -814,7 +809,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
         }
         const result = await downloadPayslipsPdfBatch(targetRows, companyInfo, {
           locale: 'en',
-          headerLayout: payslipHeaderLayout,
+          headerLayout: 'standard',
           companyId: effectiveCompanyId,
           purpose: 'download',
           onProgress: (done, total) => setPayslipDownloadProgress({ done, total }),
@@ -838,7 +833,6 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
       selectedPayslipRows,
       gridRows,
       effectiveCompanyId,
-      payslipHeaderLayout,
       t,
     ]
   );
@@ -1382,23 +1376,6 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
                 </span>
               </Tooltip>
             )}
-            <TextField
-              select
-              size="small"
-              label="명세서 헤더"
-              value={payslipHeaderLayout}
-              onChange={(event) => {
-                const layout = event.target.value as PayslipHeaderLayout;
-                setPayslipHeaderLayout(layout);
-                localStorage.setItem('mvs.payslipHeaderLayout', layout);
-              }}
-              sx={{ minWidth: 150 }}
-              SelectProps={{ native: false }}
-            >
-              <MenuItem value="standard">기본형</MenuItem>
-              <MenuItem value="compact">간단형</MenuItem>
-              <MenuItem value="companyFirst">회사 우선형</MenuItem>
-            </TextField>
             {!payslipSendOnly && approvalStatusChip && (
               <Chip
                 size="small"
@@ -1722,7 +1699,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
           setPayslipOpen(false);
           setPayslipRow(null);
         }}
-        headerLayout={payslipHeaderLayout}
+        headerLayout="standard"
         companyIdOverride={effectiveCompanyId}
       />
 
@@ -1730,7 +1707,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
         open={sendDialogOpen}
         rows={gridRowsForPayslipSend}
         autoSend={sendAutomatically}
-        headerLayout={payslipHeaderLayout}
+        headerLayout="standard"
         companyId={effectiveCompanyId}
         onClose={() => {
           setSendDialogOpen(false);
