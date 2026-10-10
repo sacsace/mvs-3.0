@@ -17,6 +17,7 @@ import {
   Tooltip,
   CircularProgress,
   Autocomplete,
+  Chip,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -39,9 +40,11 @@ import {
   AttachMoney as MoneyIcon,
   Email as EmailIcon,
   TaskAlt as TaskAltIcon,
-  FileDownload as FileDownloadIcon
+  FileDownload as FileDownloadIcon,
+  AccountBalance as BankTransferIcon,
+  Send as SendIcon,
 } from '@mui/icons-material';
-import { payrollService, companyService } from '../../services/api';
+import { payrollService, companyService, userService } from '../../services/api';
 import { useStore } from '../../store';
 import PayrollExcelGrid, {
   payrollRecordToGridRow,
@@ -52,10 +55,21 @@ import PayrollPayslipDialog from './PayrollPayslipDialog';
 import PayrollSendPayslipsDialog from './PayrollSendPayslipsDialog';
 import type { PayslipHeaderLayout } from './PayslipContent';
 import { exportPayrollGridToExcel } from './payroll/exportPayrollGridToExcel';
+import {
+  countEligiblePayrollBankRows,
+  exportPayrollBankBulkTransfer,
+  type PayrollBulkBankId,
+} from './payroll/exportPayrollBankBulkTransfer';
 import { syncPayrollGridSettingsFromServer } from './payroll/payrollGridSettingsSync';
 import { resolveRegisteredStateCodeFromCompanyLike } from './payroll/indianProfessionalTax';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
-import { normalizePayMonth, isPayMonthAfterCurrent } from '../../utils/payMonth';
+import {
+  normalizePayMonth,
+  isPayMonthAfterCurrent,
+  currentPayMonthYm as getCurrentPayMonthYm,
+  shiftPayMonthYm,
+} from '../../utils/payMonth';
+import { subscribeApprovalStatusChanged } from '../../utils/approvalStatusSync';
 import {
   companySelectListboxSlotProps,
   companySelectNowrapSx,
@@ -111,6 +125,19 @@ type PayrollBulkPreviewPayload = {
   attendance: PayrollBulkPreviewAttendance | null;
 };
 
+type PayrollPeriodApprovalInfo = {
+  id: number;
+  status: string;
+  title?: string;
+  requester_id?: number;
+  current_approver_id?: number | null;
+  requester?: { id: number; username?: string } | null;
+  currentApprover?: { id: number; username?: string } | null;
+  amount?: number | null;
+};
+
+type ApproverOption = { id: number; username: string; department?: string; position?: string };
+
 type PayrollManagementProps = {
   /** 급여 생성·수정 없이 확정된 급여 목록에서 명세서를 메일 발송하는 전용 화면 */
   payslipSendOnly?: boolean;
@@ -148,10 +175,21 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
   const [sendAfterCompleteOpen, setSendAfterCompleteOpen] = useState(false);
   const [sendAutomatically, setSendAutomatically] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [periodApproval, setPeriodApproval] = useState<PayrollPeriodApprovalInfo | null>(null);
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  const [approverOptions, setApproverOptions] = useState<ApproverOption[]>([]);
+  const [selectedApprover, setSelectedApprover] = useState<ApproverOption | null>(null);
+  const [requestingApproval, setRequestingApproval] = useState(false);
+  const [loadingApprovers, setLoadingApprovers] = useState(false);
   const [payrollPreviewOpen, setPayrollPreviewOpen] = useState(false);
   const [payrollPreviewPayload, setPayrollPreviewPayload] = useState<PayrollBulkPreviewPayload | null>(null);
   const [previewAttendanceLoading, setPreviewAttendanceLoading] = useState(false);
   const [companyRegisteredStateCode, setCompanyRegisteredStateCode] = useState<string | null>(null);
+  const [companyDebitAccount, setCompanyDebitAccount] = useState('');
+  const [bankBulkDialogOpen, setBankBulkDialogOpen] = useState(false);
+  const [bankBulkBankId, setBankBulkBankId] = useState<PayrollBulkBankId>('icici');
+  const [bankBulkDebitAccount, setBankBulkDebitAccount] = useState('');
+  const [bankBulkExporting, setBankBulkExporting] = useState(false);
   /** 서버 급여 그리드 설정 동기화 후 행 재계산 트리거 */
   const [gridSettingsTick, setGridSettingsTick] = useState(0);
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>(() =>
@@ -213,13 +251,19 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     const loadCompanyState = async () => {
       const companyId = effectiveCompanyId;
       if (!companyId) {
-        if (!cancelled) setCompanyRegisteredStateCode(null);
+        if (!cancelled) {
+          setCompanyRegisteredStateCode(null);
+          setCompanyDebitAccount('');
+        }
         return;
       }
       try {
         const response = await companyService.getCompany(Number(companyId));
         if (!response.success || !response.data) {
-          if (!cancelled) setCompanyRegisteredStateCode(null);
+          if (!cancelled) {
+            setCompanyRegisteredStateCode(null);
+            setCompanyDebitAccount('');
+          }
           return;
         }
         const data = response.data;
@@ -238,9 +282,18 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
           business_number: data.business_number || data.businessNumber,
           gst_numbers: gstNumbers
         });
-        if (!cancelled) setCompanyRegisteredStateCode(code);
+        const debit = String(
+          data.account_number || data.accountNumber || data.bank_account || ''
+        ).trim();
+        if (!cancelled) {
+          setCompanyRegisteredStateCode(code);
+          setCompanyDebitAccount(debit);
+        }
       } catch {
-        if (!cancelled) setCompanyRegisteredStateCode(null);
+        if (!cancelled) {
+          setCompanyRegisteredStateCode(null);
+          setCompanyDebitAccount('');
+        }
       }
     };
     void loadCompanyState();
@@ -319,11 +372,79 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
 
   const periodTrim = payrollPeriod.trim();
   const periodKey = normalizePayMonth(periodTrim);
+
+  const loadPeriodApproval = useCallback(async () => {
+    if (
+      payslipSendOnly ||
+      menuFlags.menusLoading ||
+      !menuFlags.canRead ||
+      effectiveCompanyId == null ||
+      !periodKey
+    ) {
+      setPeriodApproval(null);
+      return;
+    }
+    try {
+      const res = await payrollService.getPayrollPeriodApproval({
+        payroll_period: periodKey,
+        company_id: effectiveCompanyId,
+      });
+      if (res?.success) {
+        setPeriodApproval((res.data?.approval as PayrollPeriodApprovalInfo) || null);
+      } else {
+        setPeriodApproval(null);
+      }
+    } catch {
+      setPeriodApproval(null);
+    }
+  }, [
+    payslipSendOnly,
+    menuFlags.menusLoading,
+    menuFlags.canRead,
+    effectiveCompanyId,
+    periodKey,
+  ]);
+
+  useEffect(() => {
+    void loadPeriodApproval();
+  }, [loadPeriodApproval]);
+
+  /** 전자결재 승인/반려 후·탭 복귀 시 결재 상태 즉시 동기화 */
+  useEffect(() => {
+    if (payslipSendOnly) return;
+    return subscribeApprovalStatusChanged(() => {
+      void loadPeriodApproval();
+    });
+  }, [payslipSendOnly, loadPeriodApproval]);
+
+  /** 결재 진행 중이면 주기적으로 상태 재조회 (승인자가 다른 화면에서 처리한 경우) */
+  useEffect(() => {
+    if (payslipSendOnly) return;
+    const status = String(periodApproval?.status || '');
+    if (status !== 'submitted' && status !== 'in_review') return;
+    const timer = window.setInterval(() => {
+      void loadPeriodApproval();
+    }, 8000);
+    return () => window.clearInterval(timer);
+  }, [payslipSendOnly, periodApproval?.status, loadPeriodApproval]);
+
   const isFuturePayMonth = !!periodKey && isPayMonthAfterCurrent(periodKey);
-  const maxSelectablePayMonth = (() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  })();
+  const currentPayMonthYm = getCurrentPayMonthYm();
+  const maxSelectablePayMonth = currentPayMonthYm;
+  const isThisMonthSelected = periodKey === currentPayMonthYm;
+  /** 이번 달이 아니면「지난달」을 강조(연속으로 이전달 이동하는 버튼) */
+  const isLastMonthNavActive = !!periodKey && !isThisMonthSelected;
+
+  const selectPayMonth = useCallback((ym: string) => {
+    const normalized = normalizePayMonth(ym) || ym;
+    setPayrollPeriod(normalized);
+  }, []);
+
+  const goToPreviousPayMonth = useCallback(() => {
+    const base = periodKey || normalizePayMonth(payrollPeriod) || currentPayMonthYm;
+    const prev = shiftPayMonthYm(base, -1);
+    if (prev) setPayrollPeriod(prev);
+  }, [periodKey, payrollPeriod, currentPayMonthYm]);
 
   /** 목록·요약: 선택 급여월(정규화)과 일치하는 활성 급여만 */
   const payrollRecordsForSelectedMonth = useMemo(() => {
@@ -481,6 +602,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
         setPayrollPreviewOpen(false);
         setPayrollPreviewPayload(null);
         await loadPayrollData();
+        await loadPeriodApproval();
       } else {
         setError((res as any).message || t('payrollManagement.errors.bulkCreateFailed'));
       }
@@ -492,6 +614,77 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
       else setError(msg || t('payrollManagement.errors.bulkCreateFailed'));
     } finally {
       setCreating(false);
+    }
+  };
+
+  const openApprovalRequestDialog = useCallback(async () => {
+    if (menuFlags.menusLoading || !menuFlags.canMutate || effectiveCompanyId == null) return;
+    setApprovalDialogOpen(true);
+    setSelectedApprover(null);
+    setLoadingApprovers(true);
+    try {
+      const res = await userService.getUsers({ company_id: effectiveCompanyId });
+      const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+      const myId = user?.id != null ? Number(user.id) : null;
+      const activeList: ApproverOption[] = rows
+        .filter((u: any) => {
+          const id = Number(u.id);
+          const st = String(u.status || 'active').toLowerCase();
+          if (!Number.isFinite(id) || id <= 0) return false;
+          if (myId != null && id === myId) return false;
+          if (st === 'inactive' || st === 'resigned' || st === 'deleted') return false;
+          return Boolean(String(u.username || u.name || '').trim());
+        })
+        .map((u: any) => ({
+          id: Number(u.id),
+          username: String(u.username || u.name || '').trim(),
+          department: String(u.department || ''),
+          position: String(u.position || ''),
+        }))
+        .sort((a: ApproverOption, b: ApproverOption) => a.username.localeCompare(b.username));
+      setApproverOptions(activeList);
+    } catch {
+      setApproverOptions([]);
+    } finally {
+      setLoadingApprovers(false);
+    }
+  }, [menuFlags.menusLoading, menuFlags.canMutate, effectiveCompanyId, user?.id]);
+
+  const handleRequestPayrollApproval = async () => {
+    if (menuFlags.menusLoading || !menuFlags.canMutate) return;
+    const period = periodKey || periodTrim;
+    if (!period) {
+      setError(t('payrollManagement.errors.periodRequired'));
+      return;
+    }
+    if (!selectedApprover?.id) {
+      setError(t('payrollManagement.errors.approverRequired'));
+      return;
+    }
+    if (effectiveCompanyId == null) {
+      setError(t('payrollManagement.selectCompanyRequired'));
+      return;
+    }
+    setRequestingApproval(true);
+    setError('');
+    try {
+      const res = await payrollService.requestPayrollPeriodApproval({
+        payroll_period: period,
+        approver_id: selectedApprover.id,
+        company_id: effectiveCompanyId,
+      });
+      if (res?.success) {
+        setSuccess((res as any).message || t('payrollManagement.success.approvalRequested'));
+        setApprovalDialogOpen(false);
+        setSelectedApprover(null);
+        await loadPeriodApproval();
+      } else {
+        setError((res as any).message || t('payrollManagement.errors.approvalRequestFailed'));
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || t('payrollManagement.errors.approvalRequestFailed'));
+    } finally {
+      setRequestingApproval(false);
     }
   };
 
@@ -511,6 +704,11 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
       setCompleteDialogOpen(false);
       return;
     }
+    if (String(periodApproval?.status || '') !== 'approved') {
+      setError(t('payrollManagement.errors.approvalRequired'));
+      setCompleteDialogOpen(false);
+      return;
+    }
     setCompleting(true);
     setError('');
     try {
@@ -524,6 +722,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
         setCompleteDialogOpen(false);
         await loadLocks();
         await loadPayrollData();
+        await loadPeriodApproval();
         setSendAfterCompleteOpen(true);
       } else {
         setError((res as any).message || t('payrollManagement.errors.periodCompleteFailed'));
@@ -556,6 +755,60 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     })();
   }, [gridRows, menuFlags.canRead, menuFlags.menusLoading, t, effectiveCompanyId]);
 
+  const openBankBulkDialog = useCallback(() => {
+    setBankBulkDebitAccount(companyDebitAccount);
+    setBankBulkDialogOpen(true);
+  }, [companyDebitAccount]);
+
+  const handleExportBankBulk = useCallback(() => {
+    if (menuFlags.menusLoading || !menuFlags.canRead || !gridRows.length) return;
+    void (async () => {
+      setBankBulkExporting(true);
+      setError('');
+      try {
+        const bankLabel = t(`payrollManagement.bankBulk.banks.${bankBulkBankId}`);
+        const result = await exportPayrollBankBulkTransfer(gridRows, {
+          bankId: bankBulkBankId,
+          debitAccount: bankBulkDebitAccount,
+          payrollPeriod: periodKey || periodTrim,
+          bankLabel,
+        });
+        setBankBulkDialogOpen(false);
+        if (result.exported <= 0) {
+          setError(t('payrollManagement.errors.bankBulkNoEligible'));
+        } else if (result.skipped > 0) {
+          setSuccess(
+            t('payrollManagement.success.bankBulkExportedPartial', {
+              count: result.exported,
+              skipped: result.skipped,
+              bank: bankLabel,
+            })
+          );
+        } else {
+          setSuccess(
+            t('payrollManagement.success.bankBulkExported', {
+              count: result.exported,
+              bank: bankLabel,
+            })
+          );
+        }
+      } catch {
+        setError(t('payrollManagement.errors.bankBulkExportFailed'));
+      } finally {
+        setBankBulkExporting(false);
+      }
+    })();
+  }, [
+    menuFlags.menusLoading,
+    menuFlags.canRead,
+    gridRows,
+    bankBulkBankId,
+    bankBulkDebitAccount,
+    periodKey,
+    periodTrim,
+    t,
+  ]);
+
   /** 급여 생성 완료(잠금)된 월 — 명세서 발송 허용·「급여 생성 완료」재실행 비활성 */
   const selectedPeriodPayrollComplete = !!periodKey && lockedPeriods.has(periodKey);
   /** 확정된 월만 상단·대화상자에서 일괄 생성 차단(미생성 월은 미리보기 후 생성) */
@@ -578,6 +831,26 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
         : !selectedPeriodPayrollComplete
           ? t('payrollManagement.payslip.sendRequiresComplete')
           : t('payrollManagement.payslip.sendNoRowsForPayMonth')
+    : '';
+
+  const bankBulkEligibleCount = useMemo(
+    () => countEligiblePayrollBankRows(gridRows),
+    [gridRows]
+  );
+  const bankBulkDisabled =
+    menuFlags.menusLoading ||
+    !menuFlags.canRead ||
+    loading ||
+    !selectedPeriodPayrollComplete ||
+    gridRows.length === 0;
+  const bankBulkTooltip = bankBulkDisabled
+    ? loading || menuFlags.menusLoading
+      ? ''
+      : !menuFlags.canRead
+        ? t('common.menuNoView')
+        : !selectedPeriodPayrollComplete
+          ? t('payrollManagement.bankBulk.requiresComplete')
+          : t('payrollManagement.bankBulk.noRows')
     : '';
 
   /** 상단「+ 급여 생성」: 확정(생성 완료)된 월은 열 수 없음 */
@@ -617,6 +890,80 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
           : ''
     : '';
 
+  const approvalStatus = String(periodApproval?.status || '');
+  const payrollApprovalApproved = approvalStatus === 'approved';
+  const payrollApprovalInProgress =
+    approvalStatus === 'submitted' || approvalStatus === 'in_review';
+  const payrollApprovalRejected = approvalStatus === 'rejected' || approvalStatus === 'cancelled';
+
+  const approvalStatusChip = useMemo(() => {
+    if (payslipSendOnly || !periodKey || selectedPeriodPayrollComplete) return null;
+    if (payrollApprovalApproved) {
+      return {
+        label: t('payrollManagement.approval.statusApproved'),
+        color: 'success' as const,
+      };
+    }
+    if (payrollApprovalInProgress) {
+      const name = periodApproval?.currentApprover?.username;
+      return {
+        label: name
+          ? t('payrollManagement.approval.statusInProgressWithApprover', { name })
+          : t('payrollManagement.approval.statusInProgress'),
+        color: 'warning' as const,
+      };
+    }
+    if (payrollApprovalRejected) {
+      return {
+        label: t('payrollManagement.approval.statusRejected'),
+        color: 'error' as const,
+      };
+    }
+    return {
+      label: t('payrollManagement.approval.statusRequired'),
+      color: 'default' as const,
+    };
+  }, [
+    payslipSendOnly,
+    periodKey,
+    selectedPeriodPayrollComplete,
+    payrollApprovalApproved,
+    payrollApprovalInProgress,
+    payrollApprovalRejected,
+    periodApproval?.currentApprover?.username,
+    t,
+  ]);
+
+  const requestApprovalDisabled =
+    menuFlags.menusLoading ||
+    !menuFlags.canMutate ||
+    requestingApproval ||
+    !periodKey ||
+    payrollRecordsForSelectedMonth.length === 0 ||
+    selectedPeriodPayrollComplete ||
+    isFuturePayMonth ||
+    payrollApprovalApproved ||
+    payrollApprovalInProgress;
+  const requestApprovalTooltip = requestApprovalDisabled
+    ? requestingApproval || menuFlags.menusLoading
+      ? ''
+      : !menuFlags.canMutate
+        ? t('common.menuNoMutate')
+        : !periodKey
+          ? t('payrollManagement.errors.periodRequired')
+          : payrollRecordsForSelectedMonth.length === 0
+            ? t('payrollManagement.errors.createPayrollFirst')
+            : isFuturePayMonth
+              ? t('payrollManagement.errors.futurePayMonthNotAllowed')
+              : selectedPeriodPayrollComplete
+                ? t('payrollManagement.errors.periodAlreadyFinalized')
+                : payrollApprovalApproved
+                  ? t('payrollManagement.approval.alreadyApproved')
+                  : payrollApprovalInProgress
+                    ? t('payrollManagement.approval.alreadyInProgress')
+                    : ''
+    : '';
+
   const completePayrollToolbarDisabled =
     menuFlags.menusLoading ||
     !menuFlags.canMutate ||
@@ -624,7 +971,8 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     !periodKey ||
     payrollRecordsForSelectedMonth.length === 0 ||
     selectedPeriodPayrollComplete ||
-    isFuturePayMonth;
+    isFuturePayMonth ||
+    !payrollApprovalApproved;
   const completePayrollToolbarTooltip = completePayrollToolbarDisabled
     ? completing || menuFlags.menusLoading
       ? ''
@@ -633,12 +981,16 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
         : !periodKey
           ? t('payrollManagement.errors.periodRequired')
           : payrollRecordsForSelectedMonth.length === 0
-            ? '먼저 해당 급여월의 급여를 생성하세요.'
+            ? t('payrollManagement.errors.createPayrollFirst')
           : isFuturePayMonth
             ? t('payrollManagement.errors.futurePayMonthNotAllowed')
             : selectedPeriodPayrollComplete
               ? t('payrollManagement.errors.periodAlreadyFinalized')
-              : ''
+              : !payrollApprovalApproved
+                ? payrollApprovalInProgress
+                  ? t('payrollManagement.approval.waitForApproval')
+                  : t('payrollManagement.errors.approvalRequired')
+                : ''
     : '';
 
   const completeDialogConfirmDisabled =
@@ -648,7 +1000,8 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     !periodKey ||
     payrollRecordsForSelectedMonth.length === 0 ||
     lockedPeriods.has(periodKey) ||
-    isFuturePayMonth;
+    isFuturePayMonth ||
+    !payrollApprovalApproved;
   const completeDialogConfirmTooltip = completeDialogConfirmDisabled
     ? completing || menuFlags.menusLoading
       ? ''
@@ -657,12 +1010,16 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
         : !periodKey
           ? t('payrollManagement.errors.periodRequired')
           : payrollRecordsForSelectedMonth.length === 0
-            ? '먼저 해당 급여월의 급여를 생성하세요.'
+            ? t('payrollManagement.errors.createPayrollFirst')
           : isFuturePayMonth
             ? t('payrollManagement.errors.futurePayMonthNotAllowed')
             : lockedPeriods.has(periodKey)
               ? t('payrollManagement.errors.periodAlreadyFinalized')
-              : ''
+              : !payrollApprovalApproved
+                ? payrollApprovalInProgress
+                  ? t('payrollManagement.approval.waitForApproval')
+                  : t('payrollManagement.errors.approvalRequired')
+                : ''
     : '';
 
   const listStateBoxSx = {
@@ -836,6 +1193,22 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
                 </Button>
               </span>
             </Tooltip>
+            {!payslipSendOnly && (
+              <Tooltip title={bankBulkTooltip} disableHoverListener={!bankBulkTooltip}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<BankTransferIcon fontSize="small" />}
+                    disabled={bankBulkDisabled}
+                    onClick={openBankBulkDialog}
+                    sx={mvsBodyOutlinedBtnSx}
+                  >
+                    {t('payrollManagement.actions.bankBulkDownload')}
+                  </Button>
+                </span>
+              </Tooltip>
+            )}
             <TextField
               select
               size="small"
@@ -853,6 +1226,31 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
               <MenuItem value="compact">간단형</MenuItem>
               <MenuItem value="companyFirst">회사 우선형</MenuItem>
             </TextField>
+            {!payslipSendOnly && approvalStatusChip && (
+              <Chip
+                size="small"
+                label={approvalStatusChip.label}
+                color={approvalStatusChip.color}
+                variant={approvalStatusChip.color === 'default' ? 'outlined' : 'filled'}
+                sx={{ height: 28, fontWeight: 600 }}
+              />
+            )}
+            {!payslipSendOnly && (
+              <Tooltip title={requestApprovalTooltip} disableHoverListener={!requestApprovalTooltip}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<SendIcon fontSize="small" />}
+                    onClick={() => void openApprovalRequestDialog()}
+                    disabled={requestApprovalDisabled}
+                    sx={mvsBodyOutlinedBtnSx}
+                  >
+                    {t('payrollManagement.actions.requestApproval')}
+                  </Button>
+                </span>
+              </Tooltip>
+            )}
             {!payslipSendOnly && (
               <Tooltip title={completePayrollToolbarTooltip} disableHoverListener={!completePayrollToolbarTooltip}>
                 <span style={{ display: 'inline-flex' }}>
@@ -922,25 +1320,72 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
             gridTemplateColumns: {
               xs: '1fr',
               sm: 'repeat(2, minmax(0, 1fr))',
-              lg: 'minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr) auto',
+              lg: 'minmax(320px, 1.4fr) minmax(0, 1.5fr) minmax(0, 1fr) auto',
             },
             gap: 2,
             alignItems: 'flex-end',
           }}
         >
-          <TextField
-            fullWidth
-            size="small"
-            type="month"
-            label={t('payrollManagement.searchPayMonthLabel')}
-            {...PAYROLL_FILTER_OUTLINED}
-            value={payrollPeriod}
-            onChange={(e) => setPayrollPeriod(e.target.value)}
-            onClick={openMonthPickerFromFieldContainer}
-            inputProps={{ max: maxSelectablePayMonth }}
-            disabled={menuFlags.menusLoading || !menuFlags.canRead}
-            sx={{ ...payrollFilterFieldSx, cursor: menuFlags.menusLoading || !menuFlags.canRead ? undefined : 'pointer' }}
-          />
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'flex-end',
+              gap: 0.75,
+              minWidth: 0,
+            }}
+          >
+            <TextField
+              key={`pay-month-${periodKey || payrollPeriod}`}
+              size="small"
+              type="month"
+              label={t('payrollManagement.searchPayMonthLabel')}
+              {...PAYROLL_FILTER_OUTLINED}
+              value={periodKey || payrollPeriod}
+              onChange={(e) => selectPayMonth(e.target.value)}
+              onClick={openMonthPickerFromFieldContainer}
+              inputProps={{ max: maxSelectablePayMonth }}
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
+              sx={{
+                ...payrollFilterFieldSx,
+                flex: '1 1 140px',
+                minWidth: 140,
+                cursor: menuFlags.menusLoading || !menuFlags.canRead ? undefined : 'pointer',
+              }}
+            />
+            <Button
+              variant={isThisMonthSelected ? 'contained' : 'outlined'}
+              size="small"
+              disableElevation
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
+              onClick={() => selectPayMonth(currentPayMonthYm)}
+              sx={{
+                ...(isThisMonthSelected ? mvsBodyPrimaryBtnSx : mvsBodyOutlinedBtnSx),
+                height: 40,
+                minWidth: 64,
+                px: 1.25,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {t('payrollManagement.thisMonth')}
+            </Button>
+            <Button
+              variant={isLastMonthNavActive ? 'contained' : 'outlined'}
+              size="small"
+              disableElevation
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
+              onClick={goToPreviousPayMonth}
+              sx={{
+                ...(isLastMonthNavActive ? mvsBodyPrimaryBtnSx : mvsBodyOutlinedBtnSx),
+                height: 40,
+                minWidth: 64,
+                px: 1.25,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {t('payrollManagement.lastMonth')}
+            </Button>
+          </Box>
           <TextField
             fullWidth
             size="small"
@@ -1119,6 +1564,69 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
         onError={(msg) => setError(msg)}
       />
 
+      <Dialog
+        open={bankBulkDialogOpen}
+        onClose={() => {
+          if (!bankBulkExporting) setBankBulkDialogOpen(false);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{t('payrollManagement.bankBulk.dialogTitle')}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 1.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              {t('payrollManagement.bankBulk.dialogHint', {
+                period: periodKey || periodTrim || '—',
+                total: gridRows.length,
+                eligible: bankBulkEligibleCount,
+              })}
+            </Typography>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label={t('payrollManagement.bankBulk.bankLabel')}
+              value={bankBulkBankId}
+              onChange={(e) => setBankBulkBankId(e.target.value as PayrollBulkBankId)}
+              disabled={bankBulkExporting}
+            >
+              <MenuItem value="hana">{t('payrollManagement.bankBulk.banks.hana')}</MenuItem>
+              <MenuItem value="shinhan">{t('payrollManagement.bankBulk.banks.shinhan')}</MenuItem>
+              <MenuItem value="kotak">{t('payrollManagement.bankBulk.banks.kotak')}</MenuItem>
+              <MenuItem value="icici">{t('payrollManagement.bankBulk.banks.icici')}</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              label={t('payrollManagement.bankBulk.debitAccountLabel')}
+              value={bankBulkDebitAccount}
+              onChange={(e) => setBankBulkDebitAccount(e.target.value)}
+              helperText={t('payrollManagement.bankBulk.debitAccountHelper')}
+              disabled={bankBulkExporting}
+              InputLabelProps={{ shrink: true }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBankBulkDialogOpen(false)} disabled={bankBulkExporting}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            disableElevation
+            onClick={handleExportBankBulk}
+            disabled={bankBulkExporting || bankBulkEligibleCount <= 0}
+            startIcon={
+              bankBulkExporting ? <CircularProgress size={16} color="inherit" /> : <FileDownloadIcon fontSize="small" />
+            }
+            sx={mvsBodyPrimaryBtnSx}
+          >
+            {t('payrollManagement.bankBulk.download')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{t('payrollManagement.dialog.createTitle')}</DialogTitle>
         <DialogContent>
@@ -1270,8 +1778,13 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
               disabled={menuFlags.menusLoading || !menuFlags.canMutate}
             />
             <Alert severity="warning" sx={{ mb: 1.5 }}>
-              확정 후에는 해당 급여월의 내용을 수정할 수 없습니다.
+              {t('payrollManagement.dialog.completeLockWarning')}
             </Alert>
+            {!payrollApprovalApproved && (
+              <Alert severity="info" sx={{ mb: 1.5 }}>
+                {t('payrollManagement.errors.approvalRequired')}
+              </Alert>
+            )}
             <Typography variant="body2" color="text.secondary">
               {t('payrollManagement.dialog.completeMessage', {
                 period: payrollPeriod.trim() || '—'
@@ -1295,6 +1808,83 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
               </Button>
             </span>
           </Tooltip>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={approvalDialogOpen}
+        onClose={() => {
+          if (!requestingApproval) {
+            setApprovalDialogOpen(false);
+            setSelectedApprover(null);
+          }
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{t('payrollManagement.dialog.approvalTitle')}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 1.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              {t('payrollManagement.dialog.approvalHint', {
+                period: periodKey || periodTrim || '—',
+                count: payrollRecordsForSelectedMonth.length,
+              })}
+            </Typography>
+            <Autocomplete
+              options={approverOptions}
+              loading={loadingApprovers}
+              value={selectedApprover}
+              onChange={(_e, value) => setSelectedApprover(value)}
+              getOptionLabel={(opt) =>
+                opt.department || opt.position
+                  ? `${opt.username} (${[opt.department, opt.position].filter(Boolean).join(' · ')})`
+                  : opt.username
+              }
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              disabled={requestingApproval}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label={t('payrollManagement.dialog.approverLabel')}
+                  size="small"
+                  required
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {loadingApprovers ? <CircularProgress color="inherit" size={16} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setApprovalDialogOpen(false);
+              setSelectedApprover(null);
+            }}
+            disabled={requestingApproval}
+          >
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            disableElevation
+            onClick={() => void handleRequestPayrollApproval()}
+            disabled={requestingApproval || !selectedApprover || loadingApprovers}
+            startIcon={
+              requestingApproval ? <CircularProgress size={16} color="inherit" /> : <SendIcon fontSize="small" />
+            }
+            sx={mvsBodyPrimaryBtnSx}
+          >
+            {t('payrollManagement.actions.requestApproval')}
+          </Button>
         </DialogActions>
       </Dialog>
 

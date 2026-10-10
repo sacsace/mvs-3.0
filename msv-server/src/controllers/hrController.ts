@@ -1,13 +1,25 @@
 import { Request, Response } from 'express';
 import nodemailer from 'nodemailer';
 import { RequestWithUser } from '../types';
-import { Payroll, User, PayrollPeriodLock, Company, CompanyGstNumber, PayslipDelivery } from '../models';
+import {
+  Payroll,
+  User,
+  PayrollPeriodLock,
+  Company,
+  CompanyGstNumber,
+  PayslipDelivery,
+  Approval,
+} from '../models';
 import { Op, Sequelize } from 'sequelize';
 import sequelize from '../config/database';
 import fs from 'fs';
 import path from 'path';
 import { ensureUploadSubdir, resolveStoredUploadFile } from '../utils/uploadPath';
 import { buildNodemailerTransportOptions, getResolvedMailTransportOptions } from '../utils/mailConfig';
+import { pushNotification } from './notificationController';
+import SocketService from '../services/socketService';
+import ApprovalType, { DEFAULT_APPROVAL_TYPES } from '../models/ApprovalType';
+import { buildAndStorePayrollListExcelAttachment } from '../services/payrollApprovalExcel';
 import {
   parsePayrollPeriod,
   normalizePayrollPeriodInput,
@@ -862,7 +874,324 @@ export const getPayrollPeriodLocks = async (req: RequestWithUser, res: Response)
   }
 };
 
-/** 선택한 근무월 급여 확정 — 일반 사용자는 이후 해당 월 데이터 수정 불가 (root 제외) */
+function payrollApprovalDocumentId(companyId: number, period: string): string {
+  return `PAYROLL-${companyId}-${period}`;
+}
+
+async function ensurePayrollApprovalType(tenantId: number, companyId: number) {
+  const def = DEFAULT_APPROVAL_TYPES.find((d) => d.code === 'payroll');
+  if (!def) return;
+  const existing = await (ApprovalType as any).findOne({
+    where: { tenant_id: tenantId, company_id: companyId, code: 'payroll' },
+  });
+  if (!existing) {
+    await (ApprovalType as any).create({
+      tenant_id: tenantId,
+      company_id: companyId,
+      code: def.code,
+      name: def.name,
+      sort_order: def.sort_order,
+      is_system: true,
+      is_active: true,
+    });
+    return;
+  }
+  if (!existing.is_active || !existing.is_system) {
+    await existing.update({ is_active: true, is_system: true });
+  }
+}
+
+async function findPayrollPeriodApproval(tenantId: number, companyId: number, period: string) {
+  const documentId = payrollApprovalDocumentId(companyId, period);
+  return (Approval as any).findOne({
+    where: {
+      tenant_id: tenantId,
+      company_id: companyId,
+      document_id: documentId,
+      is_active: true,
+    },
+    include: [
+      {
+        model: User,
+        as: 'requester',
+        attributes: ['id', 'username', 'email', 'department', 'position'],
+        required: false,
+      },
+      {
+        model: User,
+        as: 'currentApprover',
+        attributes: ['id', 'username'],
+        required: false,
+      },
+    ],
+  });
+}
+
+/** 급여월 결재 상태 조회 */
+export const getPayrollPeriodApproval = async (req: RequestWithUser, res: Response) => {
+  try {
+    const payroll_period = normalizePayrollPeriodInput(String(req.query?.payroll_period || '').trim());
+    if (!payroll_period || !parsePayrollPeriod(payroll_period)) {
+      return res.status(400).json({
+        success: false,
+        message: '급여 기간은 YYYY-MM 형식이어야 합니다.',
+      });
+    }
+    const scope = requirePayrollCompanyScope(req, res);
+    if (!scope) return;
+    const { tenant_id, company_id } = scope;
+    const approval = await findPayrollPeriodApproval(tenant_id, company_id, payroll_period);
+    const locked = await isPayrollPeriodLocked(tenant_id, company_id, payroll_period);
+    res.json({
+      success: true,
+      data: {
+        payroll_period,
+        document_id: payrollApprovalDocumentId(company_id, payroll_period),
+        locked,
+        approval: approval
+          ? {
+              id: approval.id,
+              status: approval.status,
+              title: approval.title,
+              requester_id: approval.requester_id,
+              current_approver_id: approval.current_approver_id,
+              requester: approval.requester || null,
+              currentApprover: approval.currentApprover || null,
+              amount: approval.amount != null ? Number(approval.amount) : null,
+              updated_at: approval.updated_at,
+            }
+          : null,
+      },
+    });
+  } catch (error) {
+    console.error('급여 월 결재 상태 조회 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/** 급여월 결재 요청 (전자결재 제출) — 급여 생성 완료 전 필수 */
+export const requestPayrollPeriodApproval = async (req: RequestWithUser, res: Response) => {
+  try {
+    const payroll_period = normalizePayrollPeriodInput(String(req.body?.payroll_period || '').trim());
+    const approverId = Number(req.body?.approver_id);
+    if (!payroll_period || !parsePayrollPeriod(payroll_period)) {
+      return res.status(400).json({
+        success: false,
+        message: '급여 기간은 YYYY-MM 형식이어야 합니다.',
+      });
+    }
+    if (!Number.isFinite(approverId) || approverId <= 0) {
+      return res.status(400).json({ success: false, message: '승인자를 선택해주세요.' });
+    }
+    if (isPayrollPeriodAfterCurrentMonth(payroll_period)) {
+      return res.status(400).json({
+        success: false,
+        message: '아직 도래하지 않은 급여 월은 결재 요청할 수 없습니다.',
+      });
+    }
+    const scope = requirePayrollCompanyScope(req, res);
+    if (!scope) return;
+    const { tenant_id, company_id, user_id } = scope;
+
+    if (Number(approverId) === Number(user_id)) {
+      return res.status(400).json({
+        success: false,
+        message: '본인을 승인자로 지정할 수 없습니다.',
+      });
+    }
+
+    if (await isPayrollPeriodLocked(tenant_id, company_id, payroll_period)) {
+      return res.status(400).json({
+        success: false,
+        message: '이미 확정된 급여 월입니다.',
+      });
+    }
+
+    const payrollCount = await (Payroll as any).count({
+      where: {
+        tenant_id,
+        company_id,
+        is_active: true,
+        ...sameMonthPayrollPeriodWhere(payroll_period),
+      },
+    });
+    if (!(payrollCount > 0)) {
+      return res.status(400).json({
+        success: false,
+        message: '해당 급여월에 생성된 급여가 없습니다. 먼저 급여를 생성하세요.',
+      });
+    }
+
+    const totalNet =
+      (await (Payroll as any).sum('net_salary', {
+        where: {
+          tenant_id,
+          company_id,
+          is_active: true,
+          ...sameMonthPayrollPeriodWhere(payroll_period),
+        },
+      })) || 0;
+
+    const approver = await (User as any).findOne({
+      where: {
+        id: approverId,
+        tenant_id,
+        company_id,
+        status: 'active',
+      },
+      attributes: ['id', 'username', 'department', 'position', 'email'],
+    });
+    if (!approver) {
+      return res.status(400).json({
+        success: false,
+        message: '선택한 승인자를 찾을 수 없습니다.',
+      });
+    }
+
+    await ensurePayrollApprovalType(tenant_id, company_id);
+
+    const documentId = payrollApprovalDocumentId(company_id, payroll_period);
+    const existing = await findPayrollPeriodApproval(tenant_id, company_id, payroll_period);
+    if (existing && String(existing.status) === 'approved') {
+      return res.status(400).json({
+        success: false,
+        message: '이미 결재 완료된 급여 월입니다.',
+        data: { approval_id: existing.id, status: existing.status },
+      });
+    }
+    if (existing && ['submitted', 'in_review'].includes(String(existing.status))) {
+      return res.status(400).json({
+        success: false,
+        message: '이미 결재 진행 중인 급여 월입니다.',
+        data: { approval_id: existing.id, status: existing.status },
+      });
+    }
+
+    const title = `급여 확정 결재 (${payroll_period})`;
+    const description = [
+      `급여월: ${payroll_period}`,
+      `대상 인원: ${payrollCount}명`,
+      `실수령액 합계: INR ${Math.floor(Number(totalNet) || 0).toLocaleString('en-IN')}`,
+      '',
+      '급여 생성 완료(확정) 전 승인 요청입니다.',
+      '첨부: 급여 리스트 엑셀',
+    ].join('\n');
+
+    const excelAttachment = await buildAndStorePayrollListExcelAttachment({
+      tenantId: tenant_id,
+      companyId: company_id,
+      payrollPeriod: payroll_period,
+    });
+    const attachments = excelAttachment ? [excelAttachment] : null;
+
+    const approvalFlow = [
+      {
+        step: 1,
+        approverId: Number(approver.id),
+        approverName: String(approver.username || ''),
+        approverDepartment: String(approver.department || '-'),
+        approverPosition: String(approver.position || '-'),
+        status: 'pending',
+        comment: null,
+        approvedAt: null,
+      },
+    ];
+
+    let approval: any;
+    if (existing) {
+      await existing.update({
+        title,
+        type: 'payroll',
+        category: 'payroll',
+        amount: Math.floor(Number(totalNet) || 0),
+        requester_id: user_id,
+        description,
+        attachments,
+        status: 'submitted',
+        priority: 'high',
+        current_approver_id: Number(approver.id),
+        approval_flow: approvalFlow,
+        is_active: true,
+      });
+      approval = existing;
+    } else {
+      approval = await (Approval as any).create({
+        tenant_id,
+        company_id,
+        document_id: documentId,
+        title,
+        type: 'payroll',
+        category: 'payroll',
+        amount: Math.floor(Number(totalNet) || 0),
+        requester_id: user_id,
+        description,
+        attachments,
+        status: 'submitted',
+        priority: 'high',
+        current_approver_id: Number(approver.id),
+        approval_flow: approvalFlow,
+        due_date: null,
+        is_active: true,
+      });
+    }
+
+    const socketService = (req as any).socketService as SocketService | undefined;
+    const requesterName = req.user?.username || '요청자';
+    pushNotification(
+      {
+        title: '급여 확정 결재 요청',
+        message: `${requesterName}님이 "${title}" 결재를 요청했습니다.`,
+        type: 'info',
+        target_type: 'user',
+        target_id: Number(approver.id),
+        tenant_id,
+        company_id,
+        sender_user_id: user_id,
+        data: {
+          feature: 'approval',
+          approval_id: approval.id,
+          document_id: documentId,
+          approval_title: title,
+          href: '/work/approval',
+        },
+      },
+      socketService
+    );
+
+    const refreshed = await findPayrollPeriodApproval(tenant_id, company_id, payroll_period);
+    res.json({
+      success: true,
+      message: '급여 확정 결재를 요청했습니다.',
+      data: {
+        payroll_period,
+        document_id: documentId,
+        approval: refreshed
+          ? {
+              id: refreshed.id,
+              status: refreshed.status,
+              title: refreshed.title,
+              requester_id: refreshed.requester_id,
+              current_approver_id: refreshed.current_approver_id,
+              requester: refreshed.requester || null,
+              currentApprover: refreshed.currentApprover || null,
+              amount: refreshed.amount != null ? Number(refreshed.amount) : null,
+            }
+          : null,
+      },
+    });
+  } catch (error: any) {
+    console.error('급여 월 결재 요청 오류:', error);
+    if (error?.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({
+        success: false,
+        message: '이미 동일한 급여월 결재 문서가 있습니다.',
+      });
+    }
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/** 선택한 근무월 급여 확정 — 결재 승인 후만 가능. 일반 사용자는 이후 해당 월 수정 불가 (root 제외) */
 export const completePayrollPeriod = async (req: RequestWithUser, res: Response) => {
   try {
     const payroll_period = normalizePayrollPeriodInput(String(req.body?.payroll_period || '').trim());
@@ -881,6 +1210,24 @@ export const completePayrollPeriod = async (req: RequestWithUser, res: Response)
     const scope = requirePayrollCompanyScope(req, res);
     if (!scope) return;
     const { tenant_id, company_id, user_id } = scope;
+
+    const approval = await findPayrollPeriodApproval(tenant_id, company_id, payroll_period);
+    if (!approval || String(approval.status) !== 'approved') {
+      const status = approval ? String(approval.status) : 'none';
+      return res.status(400).json({
+        success: false,
+        message:
+          status === 'submitted' || status === 'in_review'
+            ? '결재가 진행 중입니다. 승인 완료 후 급여 생성 완료를 진행하세요.'
+            : '급여 생성 완료 전에 결재 승인이 필요합니다. 먼저 결재를 요청하세요.',
+        data: {
+          payroll_period,
+          approval_status: status,
+          approval_id: approval?.id ?? null,
+        },
+      });
+    }
+
     const [row, created] = await (PayrollPeriodLock as any).findOrCreate({
       where: { tenant_id, company_id, payroll_period },
       defaults: { locked_at: new Date(), locked_by: user_id }

@@ -107,6 +107,7 @@ import PromptDialog from '../../components/Common/PromptDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { usePromptDialog } from '../../hooks/usePromptDialog';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+import { notifyApprovalStatusChanged } from '../../utils/approvalStatusSync';
 
 const WORK_APPROVAL_MENU_ROUTES = ['/work/approval', '/work'] as const;
 
@@ -1079,21 +1080,29 @@ const ElectronicApproval: React.FC = () => {
     [user?.id]
   );
 
+  /** 받은 결재: 현재 대기 중이거나 결재 흐름에 승인자로 참여한 문서(승인/반려 포함) */
+  const isReceivedApproverDocument = useCallback(
+    (doc: ApprovalDocument, uid: number) => {
+      if (isSameUserId(doc.currentApproverId, uid)) return true;
+      return (doc.approvalFlow || []).some((step) => Number(step.approverId) === uid);
+    },
+    []
+  );
+
   const filterDocuments = useCallback(() => {
     let filtered = documents;
     const uid = user?.id != null ? Number(user.id) : null;
 
-    // ?? ?? / ?? ??? ?? ? ??? ???? ?? ???? ??
     if (activeTab === 1) {
-      // ?? ??? ??
+      // 내가 요청한 결재
       filtered = filtered.filter((doc) => uid != null && Number(doc.requesterId) === uid);
     } else if (activeTab === 0) {
-      // ?? ??: ?? ?? ??? ? ?? ??
+      // 받은 결재: 내가 승인자인 문서 (대기·승인·반려 모두)
       filtered = filtered.filter(
         (doc) =>
           uid != null &&
           Number(doc.requesterId) !== uid &&
-          canApproveDocument(doc)
+          isReceivedApproverDocument(doc, uid)
       );
     }
 
@@ -1149,7 +1158,18 @@ const ElectronicApproval: React.FC = () => {
     }
 
     setFilteredDocuments(filtered);
-  }, [documents, searchTerm, statusFilter, typeFilter, priorityFilter, activeTab, user?.id, orderBy, order, canApproveDocument]);
+  }, [
+    documents,
+    searchTerm,
+    statusFilter,
+    typeFilter,
+    priorityFilter,
+    activeTab,
+    user?.id,
+    orderBy,
+    order,
+    isReceivedApproverDocument,
+  ]);
 
   useEffect(() => {
     usersRef.current = users;
@@ -1314,6 +1334,8 @@ const ElectronicApproval: React.FC = () => {
         return t('approval.contract');
       case 'business_trip':
         return t('approval.businessTrip');
+      case 'payroll':
+        return t('approval.payroll');
       case 'other':
         return t('approval.other');
       default:
@@ -1333,6 +1355,8 @@ const ElectronicApproval: React.FC = () => {
         return pillChip(getTypeLabel(type), 'teal');
       case 'vacation':
         return pillChip(getTypeLabel(type), 'teal');
+      case 'payroll':
+        return pillChip(getTypeLabel(type), 'warn');
       case 'other':
       default:
         return pillChip(getTypeLabel(type), 'neutral');
@@ -1879,10 +1903,17 @@ const ElectronicApproval: React.FC = () => {
       const response = await approvalService.approveApproval(id);
       if (response.success) {
         setSuccess(t('approval.toast.documentApproved'));
-        loadApprovalData();
-        if (detailDialogOpen && selectedDocument?.id === id) {
-          setDetailDialogOpen(false);
+        const approved = response.data;
+        notifyApprovalStatusChanged({
+          approvalId: Number(approved?.id ?? id),
+          documentId: String(approved?.document_id || selectedDocument?.documentId || ''),
+          status: String(approved?.status || 'approved'),
+          type: String(approved?.type || selectedDocument?.type || ''),
+        });
+        if (detailDialogOpen && selectedDocument?.id === id && approved) {
+          setSelectedDocument(mapApprovalFromApi(approved, users, { normalizeDescription: true }));
         }
+        loadApprovalData();
         if (viewMode === 'view' && selectedDocument?.id === id) {
           setViewMode('list');
         }
@@ -1903,10 +1934,17 @@ const ElectronicApproval: React.FC = () => {
             const response = await approvalService.rejectApproval(id, comment);
             if (response.success) {
               setSuccess(t('approval.toast.documentRejected'));
-              loadApprovalData();
-              if (detailDialogOpen && selectedDocument?.id === id) {
-                setDetailDialogOpen(false);
+              const rejected = response.data;
+              notifyApprovalStatusChanged({
+                approvalId: Number(rejected?.id ?? id),
+                documentId: String(rejected?.document_id || selectedDocument?.documentId || ''),
+                status: String(rejected?.status || 'rejected'),
+                type: String(rejected?.type || selectedDocument?.type || ''),
+              });
+              if (detailDialogOpen && selectedDocument?.id === id && rejected) {
+                setSelectedDocument(mapApprovalFromApi(rejected, users, { normalizeDescription: true }));
               }
+              loadApprovalData();
               if (viewMode === 'view' && selectedDocument?.id === id) {
                 setViewMode('list');
               }
@@ -1952,6 +1990,19 @@ const ElectronicApproval: React.FC = () => {
         const updated = await approvalService.getApproval(selectedDocument.id);
         if (updated.success) {
           setSelectedDocument(mapApprovalFromApi(updated.data, users));
+          notifyApprovalStatusChanged({
+            approvalId: Number(updated.data?.id ?? selectedDocument.id),
+            documentId: String(updated.data?.document_id || selectedDocument.documentId || ''),
+            status: String(updated.data?.status || 'in_review'),
+            type: String(updated.data?.type || selectedDocument.type || ''),
+          });
+        } else {
+          notifyApprovalStatusChanged({
+            approvalId: selectedDocument.id,
+            documentId: selectedDocument.documentId,
+            status: 'in_review',
+            type: selectedDocument.type,
+          });
         }
         loadApprovalData();
         setEscalateTo(null);
@@ -2096,8 +2147,18 @@ const ElectronicApproval: React.FC = () => {
           setSuccess(t('approval.toast.documentApproved'));
           setSignatureDialogOpen(false);
           setSigningStepId(null);
+          const approved = response.data;
+          notifyApprovalStatusChanged({
+            approvalId: Number(approved?.id ?? selectedDocument.id),
+            documentId: String(approved?.document_id || selectedDocument.documentId || ''),
+            status: String(approved?.status || 'approved'),
+            type: String(approved?.type || selectedDocument.type || ''),
+          });
+          if (approved) {
+            setSelectedDocument(mapApprovalFromApi(approved, users, { normalizeDescription: true }));
+          }
           loadApprovalData();
-          if (viewMode === 'view' && selectedDocument?.id === selectedDocument.id) {
+          if (viewMode === 'view') {
             setViewMode('list');
           }
         } else {

@@ -836,13 +836,29 @@ export const payrollService = {
     return response.data;
   },
 
-  /** ?�정??급여 근무??YYYY-MM) 목록 */
+  /** 확정된 급여 근무월(YYYY-MM) 목록 */
   getPayrollPeriodLocks: async (params?: { company_id?: number }) => {
     const response = await api.get('/hr/payroll-period-locks', { params });
     return response.data;
   },
 
-  /** ?�택??근무??급여 ?�정(?�금) ???�반 ?�용?�는 ?�후 ?�당 ???�정 불�? */
+  /** 급여월 결재 상태 */
+  getPayrollPeriodApproval: async (params: { payroll_period: string; company_id?: number }) => {
+    const response = await api.get('/hr/payroll-period-approval', { params });
+    return response.data;
+  },
+
+  /** 급여월 결재 요청 */
+  requestPayrollPeriodApproval: async (data: {
+    payroll_period: string;
+    approver_id: number;
+    company_id?: number;
+  }) => {
+    const response = await api.post('/hr/payroll-period-approval/request', data);
+    return response.data;
+  },
+
+  /** 선택한 근무월 급여 확정(잠금) — 결재 승인 후 */
   completePayrollPeriod: async (payroll_period: string, opts?: { company_id?: number }) => {
     const response = await api.post('/hr/payroll-periods/complete', {
       payroll_period,

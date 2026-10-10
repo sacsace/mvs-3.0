@@ -17,11 +17,34 @@ export function normalizePayMonth(period: string | null | undefined): string | n
   return `${year}-${String(month).padStart(2, '0')}`;
 }
 
+/** 오늘 기준 이번 달 `YYYY-MM` */
+export function currentPayMonthYm(now: Date = new Date()): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** 오늘 기준 지난 달 `YYYY-MM` */
+export function lastPayMonthYm(now: Date = new Date()): string {
+  const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** `YYYY-MM`을 deltaMonths만큼 이동 (예: -1 → 이전달) */
+export function shiftPayMonthYm(
+  ym: string | null | undefined,
+  deltaMonths: number
+): string | null {
+  const n = normalizePayMonth(ym);
+  if (!n) return null;
+  const year = parseInt(n.slice(0, 4), 10);
+  const month = parseInt(n.slice(5, 7), 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return null;
+  const d = new Date(year, month - 1 + deltaMonths, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
 /** `YYYY-MM`이 오늘 기준 이번 달보다 이후(미래 월)이면 true */
 export function isPayMonthAfterCurrent(ym: string | null | undefined): boolean {
   const n = normalizePayMonth(ym);
   if (!n) return false;
-  const d = new Date();
-  const cur = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  return n > cur;
+  return n > currentPayMonthYm();
 }

@@ -1,9 +1,32 @@
 import { Response } from 'express';
 import { RequestWithUser } from '../types';
 import { Approval, User } from '../models';
-import { Op } from 'sequelize';
+import { Op, literal } from 'sequelize';
 import { pushNotification } from './notificationController';
 import SocketService from '../services/socketService';
+import { ensurePayrollApprovalExcelAttachment } from '../services/payrollApprovalExcel';
+
+/** 결재 흐름에 승인자로 포함된 문서 (승인 완료 후에도 조회되도록) */
+function approvalFlowContainsApprover(userId: number) {
+  const id = Math.trunc(Number(userId));
+  if (!Number.isFinite(id) || id <= 0) {
+    return literal('FALSE');
+  }
+  return literal(
+    `EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements(
+        CASE
+          WHEN "Approval"."approval_flow" IS NULL THEN '[]'::jsonb
+          WHEN jsonb_typeof("Approval"."approval_flow") = 'array' THEN "Approval"."approval_flow"
+          ELSE '[]'::jsonb
+        END
+      ) AS elem
+      WHERE COALESCE(elem->>'approverId', elem->>'approver_id') ~ '^[0-9]+$'
+        AND COALESCE(elem->>'approverId', elem->>'approver_id')::int = ${id}
+    )`
+  );
+}
 
 const parseJsonArray = (value: unknown): any[] => {
   if (value == null) return [];
@@ -99,16 +122,20 @@ export const getApprovals = async (req: RequestWithUser, res: Response) => {
     const rid = parseQueryInt(requester_id);
     const curAppr = parseQueryInt(current_approver_id);
 
-    // 일반 사용자: 본인이 요청한 건 + 본인에게 온 결재 건
+    // 일반 사용자: 본인 요청 + 현재 대기 + 결재 흐름에 승인자로 참여한 건(승인/반려 포함)
     if (userRole === 'user' && userId != null) {
       if (curAppr != null && curAppr === userId && (rid == null || rid !== userId)) {
-        whereClause.current_approver_id = userId;
+        whereClause[Op.or] = [
+          { current_approver_id: userId },
+          approvalFlowContainsApprover(userId),
+        ];
       } else if (rid != null && rid === userId && (curAppr == null || curAppr !== userId)) {
         whereClause.requester_id = userId;
       } else {
         whereClause[Op.or] = [
           { requester_id: userId },
           { current_approver_id: userId },
+          approvalFlowContainsApprover(userId),
         ];
       }
     } else {
@@ -193,7 +220,11 @@ export const getApproval = async (req: RequestWithUser, res: Response) => {
       whereClause.company_id = companyId;
       
       if (userRole === 'user' && userId != null) {
-        whereClause[Op.or] = [{ requester_id: userId }, { current_approver_id: userId }];
+        whereClause[Op.or] = [
+          { requester_id: userId },
+          { current_approver_id: userId },
+          approvalFlowContainsApprover(userId),
+        ];
       }
     }
 
@@ -222,6 +253,27 @@ export const getApproval = async (req: RequestWithUser, res: Response) => {
         success: false, 
         message: '전자 결제를 찾을 수 없습니다.' 
       });
+    }
+
+    try {
+      await ensurePayrollApprovalExcelAttachment(approval);
+      await approval.reload({
+        include: [
+          {
+            model: User,
+            as: 'requester',
+            attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number'],
+          },
+          {
+            model: User,
+            as: 'currentApprover',
+            attributes: ['id', 'username'],
+            required: false,
+          },
+        ],
+      });
+    } catch (attachErr) {
+      console.error('급여 결재 엑셀 첨부 보강 오류:', attachErr);
     }
 
     res.json({ success: true, data: approval });

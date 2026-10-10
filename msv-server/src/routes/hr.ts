@@ -14,6 +14,8 @@ import {
   getMyPayslips,
   downloadMyPayslip,
   getPayrollPeriodLocks,
+  getPayrollPeriodApproval,
+  requestPayrollPeriodApproval,
   completePayrollPeriod,
   getPayrollGridSettings,
   updatePayrollGridSettings,
@@ -142,6 +144,17 @@ router.delete(
 );
 
 router.get('/payroll-period-locks', getPayrollPeriodLocks);
+router.get('/payroll-period-approval', getPayrollPeriodApproval);
+router.post(
+  '/payroll-period-approval/request',
+  restrictAuditToReadOnly,
+  validateBody({
+    payroll_period: { required: true, type: 'string', minLength: 7, maxLength: 20 },
+    approver_id: { required: true, type: 'number' },
+    company_id: { type: 'number' },
+  }),
+  requestPayrollPeriodApproval
+);
 router.get('/payroll-grid-settings', getPayrollGridSettings);
 router.put('/payroll-grid-settings', restrictAuditToReadOnly, updatePayrollGridSettings);
 router.post(

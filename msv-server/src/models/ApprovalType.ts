@@ -63,13 +63,14 @@ ApprovalType.init(
 
 export default ApprovalType;
 
-/** 회사별 기본 5종 결재 유형 */
+/** 회사별 기본 결재 유형 */
 export const DEFAULT_APPROVAL_TYPES: { code: string; name: string; sort_order: number }[] = [
   { code: 'expense', name: '지출신청', sort_order: 0 },
   { code: 'purchase', name: '구매신청', sort_order: 1 },
   { code: 'contract', name: '계약신청', sort_order: 2 },
   { code: 'business_trip', name: '출장신청', sort_order: 3 },
-  { code: 'other', name: '기타', sort_order: 4 },
+  { code: 'payroll', name: '급여확정', sort_order: 4 },
+  { code: 'other', name: '기타', sort_order: 5 },
 ];
 
 /** 기본에서 제외된 구 코드 (휴가신청 → 기타로 대체) */
