@@ -19,6 +19,8 @@ const NUMERIC_FIELDS = new Set([
   'house_rent_allowance',
   'other_allowance',
   'pf_employee',
+  'esic_employee',
+  'esic_employer',
   'tds',
   'pt',
 ]);
@@ -39,8 +41,6 @@ export function isPayrollGridCellEditable(
     field === 'days_worked' ||
     field === 'sum_total' ||
     field === 'net_salary_payable' ||
-    field === 'esic_employee' ||
-    field === 'esic_employer' ||
     field === 'emp_id' ||
     field === 'employee_email' ||
     field === 'working_month' ||
@@ -146,6 +146,20 @@ export function patchPayrollRowField(
     const n = Math.max(0, Math.floor(typeof value === 'number' ? value : Number(value) || 0));
     next.pf_employee = String(n);
     next.pf_manual = true;
+    return next;
+  }
+
+  if (field === 'esic_employee') {
+    const n = Math.max(0, Math.floor(typeof value === 'number' ? value : Number(value) || 0));
+    next.esic_employee = String(n);
+    next.esic_manual = true;
+    return next;
+  }
+
+  if (field === 'esic_employer') {
+    const n = Math.max(0, Math.floor(typeof value === 'number' ? value : Number(value) || 0));
+    next.esic_employer = String(n);
+    next.esic_manual = true;
     return next;
   }
 

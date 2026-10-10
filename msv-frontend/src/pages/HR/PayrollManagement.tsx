@@ -363,9 +363,18 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
   }, [payrollRecordsForSelectedMonth, searchTerm, departmentFilter]);
 
   const gridRows = useMemo(() => {
-    const rows = filteredRecords.map((p, i) => payrollRecordToGridRow(p, i, payrollRecalcContext));
+    const ctx = {
+      ...payrollRecalcContext,
+      payrollEmployeeCount: payrollRecordsForSelectedMonth.length,
+    };
+    const rows = filteredRecords.map((p, i) => payrollRecordToGridRow(p, i, ctx));
     return sortPayrollGridRowsDefault(rows);
-  }, [filteredRecords, payrollRecalcContext, gridSettingsTick]);
+  }, [
+    filteredRecords,
+    payrollRecalcContext,
+    payrollRecordsForSelectedMonth.length,
+    gridSettingsTick,
+  ]);
 
   const departments = useMemo(
     () =>
@@ -1078,6 +1087,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
                 settingsRevision={gridSettingsTick}
                 companyStateCode={companyRegisteredStateCode}
                 payrollMonth={payrollRecalcContext.payrollMonth}
+                payrollEmployeeCount={payrollRecordsForSelectedMonth.length}
               />
             </Box>
           </Box>

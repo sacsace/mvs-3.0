@@ -111,6 +111,8 @@ type Props = {
   settingsRevision?: number;
   companyStateCode?: string | null;
   payrollMonth?: string | null;
+  /** 해당 급여월 기본 직원 수(검색 필터 전). ESIC 10명 초과 여부 판단 */
+  payrollEmployeeCount?: number | null;
 };
 
 const PayrollExcelGrid: React.FC<Props> = ({
@@ -128,7 +130,8 @@ const PayrollExcelGrid: React.FC<Props> = ({
   companyId = null,
   settingsRevision = 0,
   companyStateCode = null,
-  payrollMonth = null
+  payrollMonth = null,
+  payrollEmployeeCount = null,
 }) => {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
@@ -174,8 +177,12 @@ const PayrollExcelGrid: React.FC<Props> = ({
       payrollMonth,
       companyId,
       salaryRatios,
+      payrollEmployeeCount:
+        payrollEmployeeCount != null && Number.isFinite(Number(payrollEmployeeCount))
+          ? Number(payrollEmployeeCount)
+          : rows.length,
     }),
-    [companyId, companyStateCode, payrollMonth, salaryRatios]
+    [companyId, companyStateCode, payrollMonth, salaryRatios, payrollEmployeeCount, rows.length]
   );
 
   useEffect(() => {
@@ -253,6 +260,14 @@ const PayrollExcelGrid: React.FC<Props> = ({
       if (Math.floor(Number(prev.pf_employee) || 0) !== Math.floor(Number(next.pf_employee) || 0)) {
         next.pf_manual = true;
         next.pf_employee = String(Math.max(0, Math.floor(Number(next.pf_employee) || 0)));
+      }
+      if (
+        Math.floor(Number(prev.esic_employee) || 0) !== Math.floor(Number(next.esic_employee) || 0) ||
+        Math.floor(Number(prev.esic_employer) || 0) !== Math.floor(Number(next.esic_employer) || 0)
+      ) {
+        next.esic_manual = true;
+        next.esic_employee = String(Math.max(0, Math.floor(Number(next.esic_employee) || 0)));
+        next.esic_employer = String(Math.max(0, Math.floor(Number(next.esic_employer) || 0)));
       }
       if (Math.floor(Number(prev.tds) || 0) !== Math.floor(Number(next.tds) || 0)) {
         next.tds_manual = true;

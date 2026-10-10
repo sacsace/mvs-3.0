@@ -8,7 +8,8 @@
  * - gross_6pct: Sum Total × 6% = 직원·고용주 각각
  * - epf_12pct_half: Gross×50%×12%, 상한(PF_CAP_INR=3000) 옵션
  *
- * ESI: 지급합계(Q)>21,000 이면 면제. 직원 Q×0.75% / 사업주 Q×3.25%.
+ * ESI: 기본 직원 수 >10 이고 지급합계(Q)≤21,000 일 때 적용.
+ *      직원 Q×0.75% / 사업주 Q×3.25%. 인원·상한 미충족 시 0.
  * PT: Gross≥25,000 → 200(설정 가능).
  * TDS: 구 세제 간이 추정(그리드에서 수정 가능).
  */
@@ -32,6 +33,8 @@ export type IndianStatutoryOptions = {
   totalSalary?: number;
   /** ESI: 지급합계(Q)가 이 금액을 초과하면 면제. 기본 21000 */
   esiBasicCeiling?: number;
+  /** ESI: 기본 직원 수. 이 값이 있으면 10명 초과일 때만 ESI 적용 */
+  esiEmployeeCount?: number;
   /** @deprecated 주별 PT 사용 — registeredStateCode 권장 */
   ptGrossThreshold?: number;
   /** @deprecated 주별 PT 사용 — registeredStateCode 권장 */
@@ -165,14 +168,32 @@ export function computePfSixPercentOfGross(gross: number): { pf_employee: number
   return { pf_employee: x, pf_employer: x };
 }
 
-/** ESIC 직원 = IF(Q>21,000, 0, Q×0.75%) */
-export function computeEsiEmployee(gross: number, esiSumCeiling = 21000): number {
+/** ESI 자동 적용 최소 인원(초과해야 적용) */
+export const ESI_MIN_EMPLOYEE_COUNT = 10;
+
+export function isEsiApplicableByHeadcount(employeeCount?: number | null): boolean {
+  if (employeeCount == null || !Number.isFinite(Number(employeeCount))) return true;
+  return Number(employeeCount) > ESI_MIN_EMPLOYEE_COUNT;
+}
+
+/** ESIC 직원 = IF(인원≤10 또는 Q>21,000, 0, Q×0.75%) */
+export function computeEsiEmployee(
+  gross: number,
+  esiSumCeiling = 21000,
+  employeeCount?: number | null
+): number {
+  if (!isEsiApplicableByHeadcount(employeeCount)) return 0;
   if (gross > esiSumCeiling) return 0;
   return rupee(gross * 0.0075);
 }
 
-/** ESIC 사업주 = IF(Q>21,000, 0, Q×3.25%) */
-export function computeEsiEmployer(gross: number, esiSumCeiling = 21000): number {
+/** ESIC 사업주 = IF(인원≤10 또는 Q>21,000, 0, Q×3.25%) */
+export function computeEsiEmployer(
+  gross: number,
+  esiSumCeiling = 21000,
+  employeeCount?: number | null
+): number {
+  if (!isEsiApplicableByHeadcount(employeeCount)) return 0;
   if (gross > esiSumCeiling) return 0;
   return rupee(gross * 0.0325);
 }
@@ -299,8 +320,8 @@ export function computeIndianStatutoryPayroll(
       pf_employee = computePfEmployeeEpfHalf(gross, o.pfCapAt1800);
       pf_employer = computePfEmployerMatchEmployee(pf_employee);
     }
-    esic_employee = computeEsiEmployee(gross, o.esiBasicCeiling);
-    esic_employer = computeEsiEmployer(gross, o.esiBasicCeiling);
+    esic_employee = computeEsiEmployee(gross, o.esiBasicCeiling, o.esiEmployeeCount);
+    esic_employer = computeEsiEmployer(gross, o.esiBasicCeiling, o.esiEmployeeCount);
     if (o.ptEligible !== false) {
       pt = computeProfessionalTaxByState({
         grossMonthly: gross,

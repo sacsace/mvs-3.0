@@ -423,10 +423,11 @@ export function buildPayrollGridColumns({
       field: 'esic_employer',
       headerName: t('payrollManagement.gridColumns.esicEmployer'),
       minWidth: 64,
-      editable: false,
+      editable: allowCellEdit,
       headerClassName: 'payroll-col-employer payroll-col-employer-start',
-      cellClassName: 'payroll-col-employer payroll-col-employer-start payroll-col-center',
-      valueFormatter: (value: unknown) => formatMaybeNumericString(value)
+      cellClassName:
+        'payroll-col-employer payroll-col-employer-start payroll-col-user-input payroll-col-center',
+      ...numberEditProps
     }),
     colDef({
       field: 'pf_employer',
@@ -441,10 +442,11 @@ export function buildPayrollGridColumns({
       field: 'esic_employee',
       headerName: t('payrollManagement.gridColumns.esicEmployee'),
       minWidth: 64,
-      editable: false,
+      editable: allowCellEdit,
       headerClassName: 'payroll-col-employee payroll-col-employee-start',
-      cellClassName: 'payroll-col-employee payroll-col-employee-start payroll-col-center',
-      valueFormatter: (value: unknown) => formatMaybeNumericString(value)
+      cellClassName:
+        'payroll-col-employee payroll-col-employee-start payroll-col-user-input payroll-col-center',
+      ...numberEditProps
     }),
     colDef({
       field: 'pf_employee',

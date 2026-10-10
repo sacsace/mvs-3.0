@@ -426,6 +426,7 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
         Company,
         CompanyGstNumber
       });
+      const esiEmployeeCount = employees.length;
 
       for (const emp of employees) {
         const contract = await findEffectiveEmploymentContract(tenant_id, company_id, emp.id, bounds);
@@ -520,6 +521,7 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
           registeredStateCode,
           payrollMonth: payroll_period,
           ptEligible,
+          esiEmployeeCount,
         });
         const statExtra = breakdownToExtraFields(stat);
 

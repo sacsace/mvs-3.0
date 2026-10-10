@@ -28,18 +28,29 @@ export type PayrollRecalcContext = {
   companyId?: string | number | null;
   /** 적용 중인 상수 % (있으면 localStorage보다 우선) */
   salaryRatios?: PayrollSalaryRatios;
+  /** 해당 급여월 기본 직원 수 — 10명 초과일 때만 ESIC 자동 적용 */
+  payrollEmployeeCount?: number | null;
 };
 
 /** ESIC: 지급합계(Q) ≤ 21,000 이면 Q×0.75% / Q×3.25%, 초과 시 0 */
 export const ESIC_SUM_CEILING_INR = 21000;
 export const ESIC_EMPLOYEE_RATE = 0.0075;
 export const ESIC_EMPLOYER_RATE = 0.0325;
+/** 기본 직원이 이 인원을 넘어야(>10) ESIC 자동 적용 */
+export const ESIC_MIN_EMPLOYEE_COUNT = 10;
+
+export function isEsicApplicableByHeadcount(employeeCount?: number | null): boolean {
+  if (employeeCount == null || !Number.isFinite(Number(employeeCount))) return true;
+  return Number(employeeCount) > ESIC_MIN_EMPLOYEE_COUNT;
+}
 
 /** ESIC 직원 = IF(지급합계>21,000, 0, 지급합계×0.75%) — 엑셀 Q4 */
 export function computeEsicEmployeeFromSumTotal(
   sumTotal: number,
-  ceiling = ESIC_SUM_CEILING_INR
+  ceiling = ESIC_SUM_CEILING_INR,
+  employeeCount?: number | null
 ): number {
+  if (!isEsicApplicableByHeadcount(employeeCount)) return 0;
   const gross = Math.max(0, num(sumTotal));
   if (gross > ceiling) return 0;
   return roundInr(gross * ESIC_EMPLOYEE_RATE);
@@ -47,8 +58,12 @@ export function computeEsicEmployeeFromSumTotal(
 
 export function computeEsicContributions(
   sumTotal: number,
-  ceiling = ESIC_SUM_CEILING_INR
+  ceiling = ESIC_SUM_CEILING_INR,
+  employeeCount?: number | null
 ): { esic_employee: number; esic_employer: number; applicable: boolean } {
+  if (!isEsicApplicableByHeadcount(employeeCount)) {
+    return { esic_employee: 0, esic_employer: 0, applicable: false };
+  }
   const gross = Math.max(0, num(sumTotal));
   if (gross > ceiling) {
     return { esic_employee: 0, esic_employer: 0, applicable: false };
@@ -712,9 +727,17 @@ export function recalculatePayrollRow(
     pfEmployerStr = String(pf.pf_employer);
   }
 
-  const esic = computeEsicContributions(sum_total);
-  const esicEmployeeStr = String(esic.esic_employee);
-  const esicEmployerStr = String(esic.esic_employer);
+  const esicManual = Boolean(row.esic_manual);
+  let esicEmployeeStr: string;
+  let esicEmployerStr: string;
+  if (esicManual) {
+    esicEmployeeStr = String(Math.max(0, Math.floor(num(row.esic_employee))));
+    esicEmployerStr = String(Math.max(0, Math.floor(num(row.esic_employer))));
+  } else {
+    const esic = computeEsicContributions(sum_total, ESIC_SUM_CEILING_INR, ctx.payrollEmployeeCount);
+    esicEmployeeStr = String(esic.esic_employee);
+    esicEmployerStr = String(esic.esic_employer);
+  }
 
   const esicE = num(esicEmployeeStr);
   const tdsManual = Boolean(row.tds_manual);
@@ -760,6 +783,7 @@ export function recalculatePayrollRow(
     pf_manual: pfManual,
     pf_employee: pfEmployeeStr,
     pf_employer: pfEmployerStr,
+    esic_manual: esicManual,
     esic_employee: esicEmployeeStr,
     esic_employer: esicEmployerStr,
     tds_manual: tdsManual,
@@ -974,6 +998,7 @@ export function payrollRecordToGridRow(
   const pfManual = isManualOverrideFlag(x, 'pf_manual');
   const tdsManual = isManualOverrideFlag(x, 'tds_manual');
   const ptManual = isManualOverrideFlag(x, 'pt_manual');
+  const esicManual = isManualOverrideFlag(x, 'esic_manual');
   const pfCalcMode = resolvePfCalcMode(x, emp);
   const { ot_rate: otRateInitial, day_ot_hour: dayOtHour } = resolveOtInputsFromExtra(
     x,
@@ -1036,6 +1061,7 @@ export function payrollRecordToGridRow(
     pf_manual: pfManual,
     tds_manual: tdsManual,
     pt_manual: ptManual,
+    esic_manual: esicManual,
     transport_allowance: transport,
     overtime: 0,
     sum_total: num(p.gross_salary),
@@ -1043,8 +1069,8 @@ export function payrollRecordToGridRow(
     pf_calc_mode: pfCalcMode,
     pf_employee: ex(x, 'pf_employee'),
     pf_employer: ex(x, 'pf_employer'),
-    esic_employee: '',
-    esic_employer: '',
+    esic_employee: ex(x, 'esic_employee'),
+    esic_employer: ex(x, 'esic_employer'),
     tds: num(p.tax_amount),
     pt: ex(x, 'pt'),
     deduct_this_month: advance,
@@ -1097,6 +1123,7 @@ export function gridRowToPayload(
     pf_manual: Boolean(recalculated.pf_manual),
     tds_manual: Boolean(recalculated.tds_manual),
     pt_manual: Boolean(recalculated.pt_manual),
+    esic_manual: Boolean(recalculated.esic_manual),
     pf_calc_mode: recalculated.pf_calc_mode ?? 'cap_1800',
     day_ot: otPay.day_ot_pay,
     night_ot: 0,
