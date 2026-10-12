@@ -24,6 +24,7 @@ import {
   FormControlLabel,
   Slider,
   Pagination,
+  Tooltip,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -38,7 +39,6 @@ import {
   mvsBodyListZoneSx,
   mvsBodyListTableSx,
   mvsTableHeadHighlightSx,
-  mvsTableBodyRowSx,
   mvsBodyPaginationSx,
   mvsInnerCardSx,
 } from '../../theme/mvsLayout';
@@ -323,7 +323,35 @@ function displayClockCell(
 const ATTENDANCE_USERS_PER_PAGE = 15;
 const ATTENDANCE_FILTER_OUTLINED = mvsOutlinedLabelProps;
 const attendanceFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
-const matrixNoColWidth = 42;
+const matrixNoColWidth = 36;
+/** 출근 매트릭스 — MVS / Apple: 여백·헤어라인·상태 도트, 가로 스크롤 없이 균등 분배 */
+const MATRIX_LINE = '#E8E8ED';
+const MATRIX_HEADER_BG = '#F5F5F7';
+/** 휴일(주말) 영역 — 아주 연한 하이라이트 + 세로 라인 */
+const MATRIX_HOLIDAY_LINE = '#F0DADA';
+const MATRIX_HOLIDAY_BG = '#FFFCFC';
+const MATRIX_HOLIDAY_HEADER_BG = '#FFFAFA';
+/** 상세 목록 — 미출근일 하이라이트 */
+const DETAIL_MISSING_BG = '#FFF2F2';
+/** 상태 표시 — 솔리드 원 + 흰 마크 (파스텔 배경 제거) */
+const MATRIX_STATUS = {
+  complete: { fill: '#1F8A3B', glyph: '✓' },
+  partial: { fill: '#E86B00', glyph: '◑' },
+  absent: { fill: '#D70015', glyph: '✕' },
+  empty: { fill: 'transparent', glyph: '' },
+} as const;
+
+function matrixHolidayColSx(dayColumns: string[], index: number) {
+  const ymd = dayColumns[index];
+  if (!ymd || !isWeekendYmd(ymd)) return {};
+  const prevWeekend = index > 0 && isWeekendYmd(dayColumns[index - 1]!);
+  const nextWeekend = index < dayColumns.length - 1 && isWeekendYmd(dayColumns[index + 1]!);
+  return {
+    borderLeft: prevWeekend ? 'none' : `1px solid ${MATRIX_HOLIDAY_LINE}`,
+    borderRight: nextWeekend ? 'none' : `1px solid ${MATRIX_HOLIDAY_LINE}`,
+    bgcolor: MATRIX_HOLIDAY_BG,
+  } as const;
+}
 const thEllipsisSx = {
   overflow: 'hidden',
   textOverflow: 'ellipsis',
@@ -354,18 +382,6 @@ const listViewModeBtnSx = {
   whiteSpace: 'nowrap' as const,
 };
 
-const attendanceTableBodyRowSx: SxProps<Theme> = (theme) => {
-  const base = typeof mvsTableBodyRowSx === 'function' ? mvsTableBodyRowSx(theme) : mvsTableBodyRowSx;
-  const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
-  const hoverBg = theme.palette.mode === 'light' ? '#EFF6FF' : theme.palette.action.hover;
-  return {
-    ...(base as object),
-    '& .MuiTableRow-root:nth-of-type(odd)': { bgcolor: rowBg },
-    '& .MuiTableRow-root:nth-of-type(even)': { bgcolor: rowBg },
-    '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
-  };
-};
-
 const detailDialogTableBodySx: SxProps<Theme> = (theme) => {
   const border = theme.palette.mode === 'light' ? '#D1DAE4' : theme.palette.divider;
   const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
@@ -378,8 +394,20 @@ const detailDialogTableBodySx: SxProps<Theme> = (theme) => {
       lineHeight: 1.3,
       borderBottom: `1px solid ${border}`,
     },
-    '& .MuiTableRow-root': { bgcolor: rowBg },
-    '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
+    '& .MuiTableRow-root:not([data-missing="1"]):not([data-holiday-empty="1"])': {
+      bgcolor: rowBg,
+    },
+    '& .MuiTableRow-root:not([data-missing="1"]):not([data-holiday-empty="1"]):hover': {
+      bgcolor: hoverBg,
+    },
+    '& .MuiTableRow-root[data-missing="1"]': { bgcolor: DETAIL_MISSING_BG },
+    '& .MuiTableRow-root[data-missing="1"] .MuiTableCell-body': { bgcolor: DETAIL_MISSING_BG },
+    '& .MuiTableRow-root[data-missing="1"]:hover': { bgcolor: '#FFECEC' },
+    '& .MuiTableRow-root[data-missing="1"]:hover .MuiTableCell-body': { bgcolor: '#FFECEC' },
+    '& .MuiTableRow-root[data-holiday-empty="1"]': { bgcolor: MATRIX_HOLIDAY_BG },
+    '& .MuiTableRow-root[data-holiday-empty="1"] .MuiTableCell-body': { bgcolor: MATRIX_HOLIDAY_BG },
+    '& .MuiTableRow-root[data-holiday-empty="1"]:hover': { bgcolor: '#FFECEC' },
+    '& .MuiTableRow-root[data-holiday-empty="1"]:hover .MuiTableCell-body': { bgcolor: '#FFECEC' },
     '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
       borderBottom: 'none',
     },
@@ -434,10 +462,10 @@ const AttendanceStatistics: React.FC = () => {
   const [page, setPage] = useState(1);
   const [listViewMode, setListViewMode] = useState<ListViewMode>('page');
   const [nameColumnWidth, setNameColumnWidth] = useState<number>(() => {
-    if (typeof window === 'undefined') return 110;
-    const saved = Number(window.localStorage.getItem('attendanceStats.nameColumnWidth') || 110);
-    if (!Number.isFinite(saved)) return 110;
-    return Math.min(220, Math.max(90, saved));
+    if (typeof window === 'undefined') return 100;
+    const saved = Number(window.localStorage.getItem('attendanceStats.nameColumnWidth') || 100);
+    if (!Number.isFinite(saved)) return 100;
+    return Math.min(160, Math.max(80, saved));
   });
 
   const detailRows = useMemo(() => {
@@ -446,6 +474,33 @@ const AttendanceStatistics: React.FC = () => {
       .filter((r) => r.user_id === detailUserId)
       .sort((a, b) => rowDateYmd(b.date).localeCompare(rowDateYmd(a.date)));
   }, [rows, detailUserId]);
+
+  /** 조회 시작일~오늘(또는 endDate 중 더 이른 날)까지 채움 — 미래일 제외, 미출근 하이라이트 */
+  const detailCalendarRows = useMemo(() => {
+    if (detailUserId == null) return [];
+    const byDate = new Map<string, AttendanceRow>();
+    for (const r of detailRows) {
+      const ymd = rowDateYmd(r.date);
+      if (!ymd || byDate.has(ymd)) continue;
+      byDate.set(ymd, r);
+    }
+    const todayYmd = formatYmd(new Date());
+    const calendarEnd = endDate < todayYmd ? endDate : todayYmd;
+    if (startDate > calendarEnd) return [];
+    const days = enumerateYmdRange(startDate, calendarEnd);
+    return [...days].reverse().map((ymd) => {
+      const row = byDate.get(ymd) ?? null;
+      const holiday = isWeekendYmd(ymd);
+      return {
+        key: ymd,
+        ymd,
+        row,
+        holiday,
+        /** 평일인데 기록 없음 → 미출근 하이라이트 (휴일은 별도) */
+        missing: row == null && !holiday,
+      };
+    });
+  }, [detailRows, detailUserId, startDate, endDate]);
 
   const detailSummary = useMemo(() => computeAttendanceDetailSummary(detailRows), [detailRows]);
 
@@ -779,17 +834,18 @@ const AttendanceStatistics: React.FC = () => {
 
   const dayColumns = useMemo(() => enumerateYmdRange(startDate, endDate), [startDate, endDate]);
 
-  const matrixDayColSx = useMemo(() => {
-    const count = Math.max(dayColumns.length, 1);
-    return {
-      width: `calc((100% - ${matrixNoColWidth}px - ${nameColumnWidth}px) / ${count})`,
+  /** 남은 너비를 일자 열에 균등 분배 (가로 스크롤 방지) */
+  const matrixDayColSx = useMemo(
+    () => ({
+      width: 'auto',
       minWidth: 0,
-      maxWidth: `calc((100% - ${matrixNoColWidth}px - ${nameColumnWidth}px) / ${count})`,
+      maxWidth: 'none',
       overflow: 'hidden',
       px: 0,
       boxSizing: 'border-box' as const,
-    };
-  }, [dayColumns.length, nameColumnWidth]);
+    }),
+    []
+  );
 
   const unregisteredAttendanceRows = useMemo(() => {
     const records = Array.isArray(heresnowStatus?.unregisteredAttendanceRecords)
@@ -1273,7 +1329,16 @@ const AttendanceStatistics: React.FC = () => {
           <Box
             sx={{
               ...mvsBodyListTableSx,
+              width: '100%',
+              maxWidth: '100%',
+              minWidth: 0,
               overflow: 'hidden',
+              overflowX: 'hidden',
+              overflowY: 'hidden',
+              borderRadius: '12px',
+              border: `1px solid ${MATRIX_LINE}`,
+              boxShadow: 'none',
+              WebkitOverflowScrolling: 'auto',
               '& .MuiTableHead-root .MuiTableRow-root .MuiTableCell-head:first-of-type': {
                 borderTopLeftRadius: 0,
               },
@@ -1282,80 +1347,181 @@ const AttendanceStatistics: React.FC = () => {
               },
             }}
           >
-            <Box sx={{ px: { xs: 2, sm: 2.5 }, pt: 2, pb: 1 }}>
-              <Box sx={listViewModeBarSx}>
-                <Button
-                  size="small"
-                  disableElevation
-                  variant={listViewMode === 'all' ? 'contained' : 'outlined'}
-                  onClick={() => setListViewMode('all')}
+            <Box sx={{ px: { xs: 1.5, sm: 2 }, pt: 1.75, pb: 1.25 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: 1.25,
+                  rowGap: 1,
+                }}
+              >
+                <Box sx={{ ...listViewModeBarSx, mb: 0 }}>
+                  <Button
+                    size="small"
+                    disableElevation
+                    variant={listViewMode === 'all' ? 'contained' : 'outlined'}
+                    onClick={() => setListViewMode('all')}
+                    sx={{
+                      ...listViewModeBtnSx,
+                      ...(listViewMode === 'all'
+                        ? { bgcolor: '#1D1D1F', color: '#fff', '&:hover': { bgcolor: '#000' } }
+                        : { borderColor: '#D2D2D7', color: '#6E6E73', bgcolor: 'transparent' }),
+                    }}
+                  >
+                    {t('attendanceStatistics.listView.viewAll')}
+                  </Button>
+                  <Button
+                    size="small"
+                    disableElevation
+                    variant={listViewMode === 'page' ? 'contained' : 'outlined'}
+                    onClick={() => setListViewMode('page')}
+                    sx={{
+                      ...listViewModeBtnSx,
+                      ...(listViewMode === 'page'
+                        ? { bgcolor: '#1D1D1F', color: '#fff', '&:hover': { bgcolor: '#000' } }
+                        : { borderColor: '#D2D2D7', color: '#6E6E73', bgcolor: 'transparent' }),
+                    }}
+                  >
+                    {t('attendanceStatistics.listView.viewPages')}
+                  </Button>
+                </Box>
+                <Box
                   sx={{
-                    ...listViewModeBtnSx,
-                    ...(listViewMode === 'all'
-                      ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
-                      : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: { xs: 1.25, sm: 1.75 },
+                    ml: { sm: 0.5 },
                   }}
                 >
-                  {t('attendanceStatistics.listView.viewAll')}
-                </Button>
-                <Button
-                  size="small"
-                  disableElevation
-                  variant={listViewMode === 'page' ? 'contained' : 'outlined'}
-                  onClick={() => setListViewMode('page')}
-                  sx={{
-                    ...listViewModeBtnSx,
-                    ...(listViewMode === 'page'
-                      ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
-                      : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
-                  }}
-                >
-                  {t('attendanceStatistics.listView.viewPages')}
-                </Button>
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
-                <Typography variant="body2" sx={{ color: labelColor, fontWeight: 600 }}>
-                  {t('attendanceStatistics.matrix.legendTitle')}
-                </Typography>
-                <Chip size="small" label={`✓ ${t('attendanceStatistics.matrix.complete')} ${matrixLegend.complete}`} color="success" variant="outlined" />
-                <Chip size="small" label={`◐ ${t('attendanceStatistics.matrix.partial')} ${matrixLegend.partial}`} color="warning" variant="outlined" />
-                <Chip size="small" label={`✕ ${t('attendanceStatistics.matrix.absent')} ${matrixLegend.absent}`} color="error" variant="outlined" />
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: { xs: 0, md: 1 } }}>
-                  <Typography variant="caption" sx={{ color: labelColor, whiteSpace: 'nowrap', fontWeight: 600 }}>
+                  {(
+                    [
+                      ['complete', matrixLegend.complete],
+                      ['partial', matrixLegend.partial],
+                      ['absent', matrixLegend.absent],
+                    ] as const
+                  ).map(([key, count]) => {
+                    const st = MATRIX_STATUS[key];
+                    return (
+                      <Box
+                        key={key}
+                        sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.55 }}
+                      >
+                        <Box
+                          sx={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: '50%',
+                            bgcolor: st.fill,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <Typography
+                          component="span"
+                          sx={{
+                            color: '#1D1D1F',
+                            fontWeight: 500,
+                            fontSize: '0.8125rem',
+                            letterSpacing: '-0.01em',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {t(`attendanceStatistics.matrix.${key}`)}
+                        </Typography>
+                        <Typography
+                          component="span"
+                          sx={{ color: '#86868B', fontWeight: 500, fontSize: '0.8125rem' }}
+                        >
+                          {count}
+                        </Typography>
+                      </Box>
+                    );
+                  })}
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 'auto' }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: '#86868B', whiteSpace: 'nowrap', fontWeight: 500, fontSize: '0.75rem' }}
+                  >
                     {t('attendanceStatistics.matrix.nameColumnWidth')}
                   </Typography>
                   <Slider
                     size="small"
-                    min={90}
-                    max={220}
+                    min={80}
+                    max={160}
                     step={2}
                     value={nameColumnWidth}
                     onChange={(_, v) => setNameColumnWidth(Number(v))}
-                    sx={{ width: 120 }}
+                    sx={{
+                      width: 100,
+                      color: '#1D1D1F',
+                      '& .MuiSlider-thumb': { width: 14, height: 14 },
+                      '& .MuiSlider-rail': { opacity: 0.25 },
+                    }}
                   />
                 </Box>
               </Box>
             </Box>
-            <TableContainer sx={{ width: '100%', overflow: 'hidden' }}>
+            <TableContainer
+              sx={{
+                width: '100%',
+                maxWidth: '100%',
+                overflow: 'hidden',
+                overflowX: 'hidden',
+                overflowY: 'hidden',
+                borderTop: `1px solid ${MATRIX_LINE}`,
+              }}
+            >
               <Table
                 size="small"
                 sx={{
                   tableLayout: 'fixed',
                   width: '100%',
-                  borderCollapse: 'collapse',
-                  bgcolor: 'transparent',
+                  maxWidth: '100%',
+                  borderCollapse: 'separate',
+                  borderSpacing: 0,
+                  bgcolor: '#FFFFFF',
                   '& .MuiTableCell-root': {
+                    borderBottom: `1px solid ${MATRIX_LINE}`,
+                    borderTop: 'none',
+                    boxSizing: 'border-box',
+                    overflow: 'hidden',
+                  },
+                  '& .MuiTableCell-root:not([data-holiday="1"])': {
                     borderLeft: 'none',
                     borderRight: 'none',
-                    borderTop: 'none',
                   },
                 }}
               >
-                <TableHead sx={mvsTableHeadHighlightSx}>
+                <colgroup>
+                  <col style={{ width: matrixNoColWidth }} />
+                  <col style={{ width: nameColumnWidth }} />
+                  {dayColumns.map((ymd) => (
+                    <col
+                      key={`col-${ymd}`}
+                      style={{
+                        width: `calc((100% - ${matrixNoColWidth + nameColumnWidth}px) / ${dayColumns.length || 1})`,
+                      }}
+                    />
+                  ))}
+                </colgroup>
+                <TableHead>
                   <TableRow>
                     <TableCell
                       align="center"
-                      sx={{ width: matrixNoColWidth, minWidth: matrixNoColWidth, maxWidth: matrixNoColWidth, px: 0.5, overflow: 'hidden' }}
+                      sx={{
+                        width: matrixNoColWidth,
+                        px: 0.25,
+                        py: 0.5,
+                        bgcolor: MATRIX_HEADER_BG,
+                        fontWeight: 600,
+                        fontSize: '0.6875rem',
+                        color: '#86868B',
+                        letterSpacing: '-0.01em',
+                        overflow: 'hidden',
+                      }}
                     >
                       <Box component="span" sx={thEllipsisSx} title="No.">
                         No.
@@ -1363,10 +1529,14 @@ const AttendanceStatistics: React.FC = () => {
                     </TableCell>
                     <TableCell
                       sx={{
-                        width: `${nameColumnWidth}px`,
-                        minWidth: `${nameColumnWidth}px`,
-                        maxWidth: `${nameColumnWidth}px`,
-                        px: 0.75,
+                        width: nameColumnWidth,
+                        px: 1,
+                        py: 0.5,
+                        bgcolor: MATRIX_HEADER_BG,
+                        fontWeight: 600,
+                        fontSize: '0.6875rem',
+                        color: '#86868B',
+                        letterSpacing: '-0.01em',
                         overflow: 'hidden',
                       }}
                     >
@@ -1374,48 +1544,75 @@ const AttendanceStatistics: React.FC = () => {
                         {t('attendanceStatistics.table.name')}
                       </Box>
                     </TableCell>
-                    {dayColumns.map((ymd) => (
-                      <TableCell key={ymd} align="center" sx={{ ...matrixDayColSx, fontSize: '0.6875rem' }}>
-                        <Box component="span" sx={thEllipsisSx} title={ymd}>
-                          {Number(ymd.slice(8, 10))}
-                        </Box>
-                      </TableCell>
-                    ))}
+                    {dayColumns.map((ymd, dayIndex) => {
+                      const weekend = isWeekendYmd(ymd);
+                      return (
+                        <TableCell
+                          key={ymd}
+                          align="center"
+                          data-holiday={weekend ? '1' : undefined}
+                          sx={{
+                            ...matrixDayColSx,
+                            ...matrixHolidayColSx(dayColumns, dayIndex),
+                            py: 0.5,
+                            px: 0,
+                            bgcolor: weekend ? MATRIX_HOLIDAY_HEADER_BG : MATRIX_HEADER_BG,
+                            fontWeight: 600,
+                            fontSize: '0.5625rem',
+                            color: weekend ? '#C48A8A' : '#6E6E73',
+                            letterSpacing: '-0.02em',
+                          }}
+                        >
+                          <Box component="span" sx={thEllipsisSx} title={ymd}>
+                            {Number(ymd.slice(8, 10))}
+                          </Box>
+                        </TableCell>
+                      );
+                    })}
                   </TableRow>
                 </TableHead>
-                <TableBody sx={attendanceTableBodyRowSx}>
+                <TableBody>
                   {visibleMatrixUsers.map((u, index) => (
-                    <TableRow key={u.key}>
+                    <TableRow
+                      key={u.key}
+                      hover={false}
+                      sx={{
+                        '&:hover .MuiTableCell-root:not([data-holiday="1"])': {
+                          bgcolor: '#FAFAFC',
+                        },
+                        '&:hover .MuiTableCell-root[data-holiday="1"]': {
+                          bgcolor: '#FFF6F6',
+                        },
+                      }}
+                    >
                       <TableCell
                         align="center"
                         sx={{
-                          py: 1.1,
-                          px: 0.5,
+                          py: 0.3,
+                          px: 0.25,
                           width: matrixNoColWidth,
-                          minWidth: matrixNoColWidth,
-                          maxWidth: matrixNoColWidth,
-                          color: 'text.secondary',
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
+                          color: '#AEAEB2',
+                          fontSize: '0.6875rem',
+                          fontWeight: 500,
                           overflow: 'hidden',
+                          bgcolor: '#FFFFFF',
                         }}
                       >
                         {(showAllUsers ? 0 : (page - 1) * ATTENDANCE_USERS_PER_PAGE) + index + 1}
                       </TableCell>
                       <TableCell
                         sx={{
-                          py: 1.1,
-                          px: 0.75,
-                          width: `${nameColumnWidth}px`,
-                          minWidth: `${nameColumnWidth}px`,
-                          maxWidth: `${nameColumnWidth}px`,
+                          py: 0.3,
+                          px: 1,
+                          width: nameColumnWidth,
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
+                          bgcolor: '#FFFFFF',
                         }}
                       >
                         {u.isUnregistered ? (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, minWidth: 0 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
                             <Link
                               component="button"
                               type="button"
@@ -1425,14 +1622,16 @@ const AttendanceStatistics: React.FC = () => {
                                 navigate(`/hr/users?prefill_email=${encodeURIComponent(u.prefillEmail)}`);
                               }}
                               sx={{
-                                fontWeight: 600,
-                                color: 'text.primary',
+                                fontWeight: 500,
+                                color: '#1D1D1F',
+                                fontSize: '0.8125rem',
+                                letterSpacing: '-0.01em',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
                                 textDecoration: 'none',
                                 cursor: u.prefillEmail ? 'pointer' : 'default',
-                                '&:hover': u.prefillEmail ? { textDecoration: 'underline' } : undefined,
+                                '&:hover': u.prefillEmail ? { opacity: 0.7 } : undefined,
                               }}
                             >
                               {u.name}
@@ -1440,9 +1639,18 @@ const AttendanceStatistics: React.FC = () => {
                             <Chip
                               size="small"
                               label={t('attendanceStatistics.matrix.unregistered')}
-                              color="warning"
-                              variant="outlined"
-                              sx={{ height: 20, '& .MuiChip-label': { px: 0.8, fontSize: '0.66rem', fontWeight: 700 } }}
+                              sx={{
+                                height: 18,
+                                bgcolor: 'rgba(255, 149, 0, 0.12)',
+                                color: '#C93400',
+                                border: 'none',
+                                '& .MuiChip-label': {
+                                  px: 0.7,
+                                  fontSize: '0.625rem',
+                                  fontWeight: 600,
+                                  letterSpacing: '-0.01em',
+                                },
+                              }}
                             />
                           </Box>
                         ) : (
@@ -1464,61 +1672,75 @@ const AttendanceStatistics: React.FC = () => {
                             }
                             sx={{
                               cursor: 'pointer',
-                              fontWeight: 600,
-                              color: 'text.primary',
+                              fontWeight: 500,
+                              fontSize: '0.8125rem',
+                              letterSpacing: '-0.01em',
+                              color: '#1D1D1F',
                               textDecoration: 'none',
-                              '&:hover': { textDecoration: 'underline' },
+                              '&:hover': { opacity: 0.65 },
                             }}
                           >
                             {u.name}
                           </Link>
                         )}
                       </TableCell>
-                      {dayColumns.map((ymd) => {
+                      {dayColumns.map((ymd, dayIndex) => {
                         const row = matrixMap.get(`${u.key}:${ymd}`);
                         const type = getMatrixCellType(row);
-                        const text = type === 'complete' ? '✓' : type === 'partial' ? '◐' : type === 'absent' ? '✕' : '·';
-                        const color =
+                        const weekend = isWeekendYmd(ymd);
+                        const st = type === 'empty' ? MATRIX_STATUS.empty : MATRIX_STATUS[type];
+                        const statusLabel =
                           type === 'complete'
-                            ? 'success.main'
+                            ? t('attendanceStatistics.matrix.complete')
                             : type === 'partial'
-                              ? 'warning.main'
+                              ? t('attendanceStatistics.matrix.partial')
                               : type === 'absent'
-                                ? 'error.main'
-                                : 'text.disabled';
+                                ? t('attendanceStatistics.matrix.absent')
+                                : '—';
+                        const tip =
+                          weekend && type !== 'empty'
+                            ? `${ymd} · ${statusLabel} · ${t('attendanceStatistics.matrix.holidayWork')}`
+                            : `${ymd} · ${statusLabel}`;
                         return (
-                          <TableCell key={`${u.key}-${ymd}`} align="center" sx={{ ...matrixDayColSx, py: 0.6 }}>
-                            <Box
+                          <Tooltip key={`${u.key}-${ymd}`} title={tip} enterDelay={350}>
+                            <TableCell
+                              align="center"
+                              data-holiday={weekend ? '1' : undefined}
                               sx={{
-                                width: '100%',
-                                maxWidth: 16,
-                                height: 16,
-                                mx: 'auto',
-                                borderRadius: '5px',
-                                border: '1px solid',
-                                borderColor:
-                                  type === 'empty'
-                                    ? theme.palette.mode === 'light'
-                                      ? 'rgba(15,23,42,0.08)'
-                                      : 'rgba(255,255,255,0.12)'
-                                    : 'transparent',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '0.58rem',
-                                fontWeight: 700,
-                                color,
-                                bgcolor:
-                                  type === 'empty'
-                                    ? 'transparent'
-                                    : theme.palette.mode === 'light'
-                                      ? 'rgba(15,23,42,0.04)'
-                                      : 'rgba(255,255,255,0.06)',
+                                ...matrixDayColSx,
+                                ...matrixHolidayColSx(dayColumns, dayIndex),
+                                py: 0.2,
+                                height: 26,
+                                bgcolor: weekend ? MATRIX_HOLIDAY_BG : '#FFFFFF',
+                                userSelect: 'none',
                               }}
                             >
-                              {text}
-                            </Box>
-                          </TableCell>
+                              {type === 'empty' ? null : (
+                                <Box
+                                  sx={{
+                                    width: 13,
+                                    height: 13,
+                                    mx: 'auto',
+                                    borderRadius: '50%',
+                                    bgcolor: st.fill,
+                                    color: '#FFFFFF',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: type === 'complete' ? '0.58rem' : '0.52rem',
+                                    fontWeight: 700,
+                                    lineHeight: 1,
+                                    boxShadow:
+                                      type === 'complete'
+                                        ? 'inset 0 0 0 1px rgba(0,0,0,0.06)'
+                                        : 'none',
+                                  }}
+                                >
+                                  {st.glyph}
+                                </Box>
+                              )}
+                            </TableCell>
+                          </Tooltip>
                         );
                       })}
                     </TableRow>
@@ -1553,7 +1775,7 @@ const AttendanceStatistics: React.FC = () => {
           {t('attendanceStatistics.detail.dialogTitle', { name: detailUserName || '—' })}
         </DialogTitle>
         <DialogContent dividers>
-          {detailRows.length === 0 ? (
+          {detailCalendarRows.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
               {t('attendanceStatistics.detail.empty')}
             </Typography>
@@ -1623,21 +1845,35 @@ const AttendanceStatistics: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody sx={detailDialogTableBodySx}>
-                  {detailRows.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>{rowDateYmd(row.date)}</TableCell>
-                      <TableCell>
-                        {displayClockCell(row.check_in_display, row.check_in_local, row.check_in ?? null)}
-                      </TableCell>
-                      <TableCell>
-                        {displayClockCell(row.check_out_display, row.check_out_local, row.check_out ?? null)}
-                      </TableCell>
-                      <TableCell align="right">
-                        {row.work_hours != null ? Number(row.work_hours).toFixed(2) : '—'}
-                      </TableCell>
-                      <TableCell>{detailStatusLabel(row)}</TableCell>
-                    </TableRow>
-                  ))}
+                  {detailCalendarRows.map((day) => {
+                    const row = day.row;
+                    const emptyStatus = day.holiday
+                      ? t('attendanceStatistics.detail.holiday')
+                      : t('attendanceStatistics.detail.noAttendance');
+                    return (
+                      <TableRow
+                        key={day.key}
+                        data-missing={day.missing ? '1' : undefined}
+                        data-holiday-empty={row == null && day.holiday ? '1' : undefined}
+                      >
+                        <TableCell>{day.ymd}</TableCell>
+                        <TableCell>
+                          {row
+                            ? displayClockCell(row.check_in_display, row.check_in_local, row.check_in ?? null)
+                            : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {row
+                            ? displayClockCell(row.check_out_display, row.check_out_local, row.check_out ?? null)
+                            : '—'}
+                        </TableCell>
+                        <TableCell align="right">
+                          {row && row.work_hours != null ? Number(row.work_hours).toFixed(2) : '—'}
+                        </TableCell>
+                        <TableCell>{row ? detailStatusLabel(row) : emptyStatus}</TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>

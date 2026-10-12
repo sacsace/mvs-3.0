@@ -5776,6 +5776,7 @@ export default {
         complete: 'Complete',
         partial: 'Partial',
         absent: 'Absent',
+        holidayWork: 'Holiday work',
         unregistered: 'Unregistered',
         nameColumnWidth: 'Name width'
       },
@@ -5803,6 +5804,8 @@ export default {
         checkOut: 'Check-out',
         workHours: 'Hours (h)',
         status: 'Status',
+        noAttendance: 'No attendance',
+        holiday: 'Holiday',
         empty: 'No clock in/out records to show.',
         summary: {
           otHours: 'OT hours',

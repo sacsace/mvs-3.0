@@ -5746,6 +5746,7 @@ export default {
         complete: '출퇴근 완료',
         partial: '부분 기록',
         absent: '결근',
+        holidayWork: '휴일 근무',
         unregistered: '미등록',
         nameColumnWidth: '이름 너비'
       },
@@ -5773,6 +5774,8 @@ export default {
         checkOut: '퇴근',
         workHours: '근무(h)',
         status: '상태',
+        noAttendance: '미출근',
+        holiday: '휴일',
         empty: '표시할 출퇴근 기록이 없습니다.',
         summary: {
           otHours: 'OT 시간',
