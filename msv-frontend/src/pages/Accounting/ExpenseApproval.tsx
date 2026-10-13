@@ -143,9 +143,11 @@ const isPdfReceipt = (filePath: string): boolean =>
 
 /** 작성/받은 탭 기본 상태 필터: 초안 + 제출됨 */
 const DEFAULT_LIST_STATUS_FILTER = 'draft_submitted';
+/** 송금 탭 기본 상태 필터: 송금완료 */
+const DEFAULT_TRANSFER_STATUS_FILTER = 'transfer_completed';
 
 const defaultStatusFilterForTab = (tab: string) =>
-  tab === 'transfer' ? '' : DEFAULT_LIST_STATUS_FILTER;
+  tab === 'transfer' ? DEFAULT_TRANSFER_STATUS_FILTER : DEFAULT_LIST_STATUS_FILTER;
 
 type ExpenseInvoiceType = 'tax' | 'proforma' | 'none';
 
@@ -2983,7 +2985,8 @@ const ExpenseApproval: React.FC = () => {
         filtered = filtered.filter((expense) => {
           if (expense.status !== 'approved' && expense.status !== 'paid') return false;
           const transferKey = getTransferFilterKey(expense);
-          if (!statusFilter) return transferKey !== 'transfer_completed';
+          // 전체: 송금 대상 전체 / 기본·선택값: 해당 송금 상태만
+          if (!statusFilter) return true;
           return transferKey === statusFilter;
         });
       }
@@ -3368,6 +3371,10 @@ const ExpenseApproval: React.FC = () => {
       if (tab === 'transfer' && !hasTransferAccess) return;
       setListTab(tab);
       setStatusFilter(defaultStatusFilterForTab(tab));
+      if (tab === 'transfer') {
+        setListSortKey('createdAt');
+        setListSortDir('desc');
+      }
       if (tab === 'transfer' && isRootUser && companyFilterId === '') {
         setCompanyFilterId(resolveDefaultCompanyFilterId());
       }
@@ -5050,7 +5057,9 @@ const ExpenseApproval: React.FC = () => {
       setSuccess(t('expenseApproval.success.paymentCompleted'));
         setSelectedExpense(null);
         setListTab('transfer');
-        setStatusFilter('');
+        setStatusFilter(DEFAULT_TRANSFER_STATUS_FILTER);
+        setListSortKey('createdAt');
+        setListSortDir('desc');
         if (isRootUser) {
           setCompanyFilterId(resolveDefaultCompanyFilterId());
         }
@@ -5182,6 +5191,10 @@ const ExpenseApproval: React.FC = () => {
       left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' }) * dir;
     rows.sort((a, b) => {
       if (!listSortKey) {
+        // 송금 탭: 최신 작성일이 위로
+        if (listTab === 'transfer') {
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        }
         return compareExpenseDefaultListOrder(a, b, resolveDisplayStatus);
       }
       switch (listSortKey) {
@@ -10093,8 +10106,13 @@ const ExpenseApproval: React.FC = () => {
             setListTab(value);
             setStatusFilter(defaultStatusFilterForTab(value));
             setPage(1);
-            setListSortKey(null);
-            setListSortDir('asc');
+            if (value === 'transfer') {
+              setListSortKey('createdAt');
+              setListSortDir('desc');
+            } else {
+              setListSortKey(null);
+              setListSortDir('asc');
+            }
             if (value === 'transfer' && isRootUser && companyFilterId === '') {
               const nextCompanyId = resolveDefaultCompanyFilterId();
               if (nextCompanyId) {
