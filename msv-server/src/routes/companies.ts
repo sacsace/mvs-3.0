@@ -26,6 +26,29 @@ import {
 const router = express.Router();
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * MVS 사용 종료 여부 — 로그인과 동일하게 UTC 날짜 기준,
+ * 종료일 당일까지는 유효, 그 다음날부터 만료.
+ */
+function isMvsUsagePeriodExpired(
+  loginPeriodEnd: unknown,
+  now: Date = new Date()
+): boolean {
+  if (loginPeriodEnd == null || loginPeriodEnd === '') return false;
+  const end =
+    loginPeriodEnd instanceof Date
+      ? loginPeriodEnd
+      : new Date(String(loginPeriodEnd).trim());
+  if (Number.isNaN(end.getTime())) return false;
+  const currentDateOnly = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  );
+  const endDateOnly = new Date(
+    Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate())
+  );
+  return currentDateOnly > endDateOnly;
+}
+
 /** QueryTypes.SELECT 결과는 row 배열 — destructure 여부와 무관하게 EXISTS 판정 */
 const rowExistsFlag = (rowOrRows: any): boolean => {
   if (Array.isArray(rowOrRows)) {
@@ -149,6 +172,9 @@ router.get('/', authenticateToken, async (req, res) => {
     const tenantId = (req as any).user.tenant_id;
     const userRole = (req as any).user.role;
     const userCompanyId = (req as any).user.company_id;
+    const includeExpired =
+      String(req.query.include_expired ?? '').toLowerCase() === '1' ||
+      String(req.query.include_expired ?? '').toLowerCase() === 'true';
 
     // root: 전체. audit: 같은 테넌트 전체. 그 외: 로그인한 회사만.
     const whereClause: any = {};
@@ -163,7 +189,14 @@ router.get('/', authenticateToken, async (req, res) => {
       }
     }
 
-    const cacheKey = buildReferenceCacheKey(['ref', 'companies', tenantId, userRole, userCompanyId ?? '']);
+    const cacheKey = buildReferenceCacheKey([
+      'ref',
+      'companies',
+      tenantId,
+      userRole,
+      userCompanyId ?? '',
+      includeExpired ? 'all' : 'active_usage',
+    ]);
     const cached = await referenceCacheGet(cacheKey);
     if (cached) {
       return res.json(JSON.parse(cached));
@@ -175,6 +208,17 @@ router.get('/', authenticateToken, async (req, res) => {
     });
 
     companies = await enrichCompanyList(companies);
+
+    // root/audit 회사 선택 목록: 사용 종료 회사 제외 (회사 관리는 include_expired=1)
+    // 일반 사용자는 소속 회사 1건만 보므로 기간과 무관하게 반환
+    if (
+      !includeExpired &&
+      (userRole === 'root' || userRole === 'audit')
+    ) {
+      companies = companies.filter(
+        (c: any) => !isMvsUsagePeriodExpired(c.login_period_end ?? c.mvs_end_date)
+      );
+    }
 
     const payload = { success: true, data: companies };
     await referenceCacheSet(cacheKey, JSON.stringify(payload));

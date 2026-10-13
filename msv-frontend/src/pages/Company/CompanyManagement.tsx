@@ -340,7 +340,10 @@ async function reloadCompaniesForUser(
   }
 
   if (user.role === 'root') {
-    const companiesData = await useReferenceDataStore.getState().fetchCompanies(force);
+    // 회사 관리: 사용 종료 회사도 표시(기간 연장·관리용). 선택 드롭다운은 기본 목록에서 제외됨.
+    const companiesData = await useReferenceDataStore
+      .getState()
+      .fetchCompanies(force, { includeExpired: true });
     return { companies: companiesData.map(transformCompanyFromApi) };
   }
 

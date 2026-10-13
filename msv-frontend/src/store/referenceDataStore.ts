@@ -9,12 +9,18 @@ type CacheBucket<T> = {
   promise: Promise<T> | null;
 };
 
+type FetchCompaniesOptions = {
+  /** 회사 관리: 사용 종료 회사 포함 */
+  includeExpired?: boolean;
+};
+
 interface ReferenceDataState {
   companies: CacheBucket<any[]> | null;
+  companiesAll: CacheBucket<any[]> | null;
   users: CacheBucket<any[]> | null;
   partners: CacheBucket<any[]> | null;
   companyById: Record<number, CacheBucket<any>>;
-  fetchCompanies: (force?: boolean) => Promise<any[]>;
+  fetchCompanies: (force?: boolean, options?: FetchCompaniesOptions) => Promise<any[]>;
   fetchUsers: (params?: { company_id?: number; search?: string }, force?: boolean) => Promise<any[]>;
   fetchPartners: (force?: boolean) => Promise<any[]>;
   fetchCompanyById: (id: number, force?: boolean) => Promise<any | null>;
@@ -43,12 +49,15 @@ const unwrapList = (res: any): any[] => {
 
 export const useReferenceDataStore = create<ReferenceDataState>((set, get) => ({
   companies: null,
+  companiesAll: null,
   users: null,
   partners: null,
   companyById: {},
 
-  fetchCompanies: async (force = false) => {
-    const existing = get().companies;
+  fetchCompanies: async (force = false, options) => {
+    const includeExpired = Boolean(options?.includeExpired);
+    const bucketKey = includeExpired ? 'companiesAll' : 'companies';
+    const existing = get()[bucketKey];
     // 진행 중이면 빈 캐시를 새로고침한 것처럼 반환하지 말고 같은 promise를 기다림
     if (!force && existing?.promise) return existing.promise;
     if (!force && existing && isFresh(existing) && existing.promise == null) {
@@ -56,25 +65,29 @@ export const useReferenceDataStore = create<ReferenceDataState>((set, get) => ({
     }
 
     const promise = (async () => {
-      const res = await companyService.getCompanies();
+      const res = await companyService.getCompanies(
+        includeExpired ? { include_expired: true } : undefined
+      );
       return unwrapList(res);
     })();
 
     set({
-      companies: {
+      [bucketKey]: {
         data: force ? [] : (existing?.data ?? []),
         // 완료 전에는 fresh로 취급하지 않음 (빈 배열이 캐시로 굳는 것 방지)
         fetchedAt: existing?.fetchedAt ?? 0,
         promise,
       },
-    });
+    } as Partial<ReferenceDataState>);
 
     try {
       const data = await promise;
-      set({ companies: { data, fetchedAt: Date.now(), promise: null } });
+      set({ [bucketKey]: { data, fetchedAt: Date.now(), promise: null } } as Partial<ReferenceDataState>);
       return data;
     } catch (e) {
-      set({ companies: existing?.data ? { ...existing, promise: null } : null });
+      set({
+        [bucketKey]: existing?.data ? { ...existing, promise: null } : null,
+      } as Partial<ReferenceDataState>);
       throw e;
     }
   },
@@ -180,7 +193,8 @@ export const useReferenceDataStore = create<ReferenceDataState>((set, get) => ({
     }
   },
 
-  invalidate: () => set({ companies: null, users: null, partners: null, companyById: {} }),
+  invalidate: () =>
+    set({ companies: null, companiesAll: null, users: null, partners: null, companyById: {} }),
 }));
 
 /** 회사 목록에서 현재 사용자 회사 또는 첫 회사 정보 추출 */
