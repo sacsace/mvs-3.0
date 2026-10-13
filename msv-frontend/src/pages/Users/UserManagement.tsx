@@ -93,6 +93,7 @@ import { useTranslation } from 'react-i18next';
 import { alpha, useTheme, type SxProps, type Theme } from '@mui/material/styles';
 import { DepartmentManagementPanel } from '../HR/DepartmentManagement';
 import { PositionManagementPanel } from '../HR/PositionManagement';
+import { EmploymentTypeManagementPanel } from '../HR/EmploymentTypeManagement';
 import { getUploadUrl } from '../../utils/uploadUrl';
 import { formatPositionLabel } from '../../utils/positionLabels';
 import {
@@ -243,7 +244,7 @@ interface User {
   emergency_phone?: string;
   avatar_url?: string;
   hire_date?: string;
-  employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern' | 'daily';
+  employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern' | 'daily' | 'service';
   salary?: number;
   has_salary?: boolean;
   ot_eligible?: boolean;
@@ -663,8 +664,8 @@ const UserManagement: React.FC = () => {
   const [careerCertificateFiles, setCareerCertificateFiles] = useState<Record<number, File>>({});
   const [certificateCopyFiles, setCertificateCopyFiles] = useState<Record<number, File>>({});
   const [existingAvatarUrl, setExistingAvatarUrl] = useState('');
-  /** 0: 사용자 목록, 1: 사용자 추가/수정 폼, 2: 부서 관리, 3: 직책 관리 */
-  const [pageTab, setPageTab] = useState<0 | 1 | 2 | 3>(0);
+  /** 0: 사용자 목록, 1: 사용자 추가/수정 폼, 2: 부서 관리, 3: 직책 관리, 4: 근무형태 */
+  const [pageTab, setPageTab] = useState<0 | 1 | 2 | 3 | 4>(0);
   const [formData, setFormData] = useState({
     // 기본 정보
     employee_number: '',
@@ -1067,7 +1068,7 @@ const UserManagement: React.FC = () => {
       is_payment_officer: false,
       company_id: loginUserCompanyId
     } as any);
-    setSalaryUnlocked(false);
+    setSalaryUnlocked(true);
     setSalaryPasswordForSubmit('');
     setSalaryBaseline('');
     setOriginalHasSalary(false);
@@ -1089,7 +1090,7 @@ const UserManagement: React.FC = () => {
       setViewMode('list');
       setEditingUser(null);
     }
-    if ((pageTab === 2 || pageTab === 3) && !menuFlags.canCreate) {
+    if ((pageTab === 2 || pageTab === 3 || pageTab === 4) && !menuFlags.canCreate) {
       setPageTab(0);
       setViewMode('list');
       setEditingUser(null);
@@ -1157,7 +1158,7 @@ const UserManagement: React.FC = () => {
     is_payment_officer: false,
     company_id: loginUserCompanyId
     } as any);
-    setSalaryUnlocked(false);
+    setSalaryUnlocked(true);
     setSalaryPasswordForSubmit('');
     setSalaryBaseline('');
     setOriginalHasSalary(false);
@@ -1488,7 +1489,11 @@ const UserManagement: React.FC = () => {
         return;
       }
 
-      if (salaryUnlocked) {
+      if (viewMode === 'create' || !editingUser) {
+        // 최초 등록: 급여 보안 없음 — 입력값 그대로 저장
+        const nextSalary = String(submitData.salary ?? '').trim();
+        if (!nextSalary) delete submitData.salary;
+      } else if (salaryUnlocked) {
         if (!salaryPasswordForSubmit) {
           openSalaryUnlock('edit');
           setError(t('userManagement.salaryUnlockHint'));
@@ -1650,6 +1655,7 @@ const UserManagement: React.FC = () => {
     switch (type) {
       case 'fulltime': return t('userManagement.empFulltime');
       case 'daily': return t('userManagement.empDaily');
+      case 'service': return t('userManagement.empService');
       case 'contract': return t('userManagement.empContract');
       case 'parttime': return t('userManagement.empParttime');
       case 'intern': return t('userManagement.empIntern');
@@ -1936,14 +1942,14 @@ const UserManagement: React.FC = () => {
               },
             }}
             onChange={(e, newValue) => {
-              const v = newValue as 0 | 1 | 2 | 3;
+              const v = newValue as 0 | 1 | 2 | 3 | 4;
               if (v === 0 && !menusLoading && !menuFlags.canRead) {
                 return;
               }
               if (v === 1 && !menusLoading && !menuFlags.canCreate) {
                 return;
               }
-              if ((v === 2 || v === 3) && !menusLoading && !menuFlags.canCreate) {
+              if ((v === 2 || v === 3 || v === 4) && !menusLoading && !menuFlags.canCreate) {
                 return;
               }
               if (v === 1) {
@@ -1984,6 +1990,15 @@ const UserManagement: React.FC = () => {
             />
             <Tab
               label={t('userManagement.positionTab')}
+              disabled={!menusLoading && !menuFlags.canCreate}
+              title={
+                !menusLoading && !menuFlags.canCreate
+                  ? t('userManagement.tabDisabledNoCreate')
+                  : undefined
+              }
+            />
+            <Tab
+              label={t('userManagement.employmentTypeTab')}
               disabled={!menusLoading && !menuFlags.canCreate}
               title={
                 !menusLoading && !menuFlags.canCreate
@@ -2686,6 +2701,40 @@ const UserManagement: React.FC = () => {
         </Box>
       )}
 
+      {/* 근무형태 (탭) — 회사별 급여 계산 옵션 */}
+      {pageTab === 4 && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {(user?.role === 'root' || user?.role === 'audit') && (
+            <Card elevation={0} sx={mvsBodyCardSx}>
+              <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 2, maxWidth: 420 }}>
+                <CompanySearchSelect
+                  companies={companies}
+                  value={selectedCompanyId === '' ? '' : selectedCompanyId}
+                  onChange={setSelectedCompanyId}
+                  label={t('userManagement.company')}
+                  placeholder={t('employmentTypeManagement.selectCompanyFirst')}
+                  outlinedProps={USER_FILTER_OUTLINED}
+                  textFieldSx={userFilterFieldSx}
+                />
+              </Box>
+            </Card>
+          )}
+          <EmploymentTypeManagementPanel
+            embedded
+            companyId={
+              user?.role === 'root' || user?.role === 'audit'
+                ? selectedCompanyId === ''
+                  ? null
+                  : Number(selectedCompanyId)
+                : user?.company_id != null
+                  ? Number(user.company_id)
+                  : null
+            }
+            canEdit={menuFlags.canEdit || menuFlags.canCreate}
+          />
+        </Box>
+      )}
+
       {/* 사용자 생성/편집 폼 */}
       {isFormView && (
         <>
@@ -2973,8 +3022,12 @@ const UserManagement: React.FC = () => {
                 </AccordionDetails>
               </Accordion>
 
-              {/* 인사 정보 섹션 */}
-              <Accordion sx={getAccordionFormSx(theme)}>
+              {/* 인사 정보 섹션 — 신규 등록·수정 시 기본 펼침 */}
+              <Accordion
+                key={viewMode === 'create' ? 'hr-create' : 'hr-edit'}
+                defaultExpanded={viewMode === 'create' || viewMode === 'edit'}
+                sx={getAccordionFormSx(theme)}
+              >
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography component="h3" sx={userFormSectionTitleSx}>
                     {t('userManagement.sectionHr')}
@@ -3021,59 +3074,80 @@ const UserManagement: React.FC = () => {
                     >
                       <MenuItem value="fulltime">{t('userManagement.empFulltime')}</MenuItem>
                       <MenuItem value="daily">{t('userManagement.empDaily')}</MenuItem>
+                      <MenuItem value="service">{t('userManagement.empService')}</MenuItem>
                       <MenuItem value="contract">{t('userManagement.empContract')}</MenuItem>
                       <MenuItem value="parttime">{t('userManagement.empParttime')}</MenuItem>
                       <MenuItem value="intern">{t('userManagement.empIntern')}</MenuItem>
                     </TextField>
 
-                    {/* 2행: 급여 | 부서 */}
+                    {/* 2행: 급여 | 부서 — 신규 등록은 잠금 없이 입력 */}
                     <Box sx={{ ...highlightPayrollFieldsSx, width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
-                      <TextField
-                        fullWidth
-                        size="small"
-                        type="number"
-                        label={t('userManagement.salary')}
-                        {...OUTLINED_FIELD}
-                        value={salaryUnlocked ? formData.salary : ''}
-                        onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-                        placeholder={
-                          salaryUnlocked
-                            ? t('userManagement.placeholderMonthlySalary')
-                            : originalHasSalary || formData.salary
-                              ? t('userManagement.salaryMasked')
-                              : t('userManagement.salaryLockedHint')
-                        }
-                        disabled={!salaryUnlocked}
-                        helperText={salaryUnlocked ? undefined : t('userManagement.salaryUnlockHint')}
-                        InputProps={{
-                          endAdornment: (
-                            <InputAdornment position="end">
-                              <Typography sx={{ fontSize: '0.75rem', mr: 0.5 }}>INR</Typography>
-                              <IconButton
-                                size="small"
-                                edge="end"
-                                aria-label={t('userManagement.salaryUnlock')}
-                                onClick={() => {
-                                  if (salaryUnlocked) {
-                                    setSalaryUnlocked(false);
-                                    setSalaryPasswordForSubmit('');
-                                    setSalaryBaseline('');
-                                    setFormData((prev) => ({ ...prev, salary: '' }));
-                                  } else {
-                                    openSalaryUnlock('edit');
-                                  }
-                                }}
-                              >
-                                {salaryUnlocked ? (
-                                  <VisibilityOffIcon fontSize="small" />
-                                ) : (
-                                  <LockOutlinedIcon fontSize="small" />
-                                )}
-                              </IconButton>
-                            </InputAdornment>
-                          ),
-                        }}
-                      />
+                      {viewMode === 'create' ? (
+                        <TextField
+                          fullWidth
+                          size="small"
+                          type="number"
+                          label={t('userManagement.salary')}
+                          {...OUTLINED_FIELD}
+                          value={formData.salary}
+                          onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
+                          placeholder={t('userManagement.placeholderMonthlySalary')}
+                          InputProps={{
+                            endAdornment: (
+                              <InputAdornment position="end">
+                                <Typography sx={{ fontSize: '0.75rem' }}>INR</Typography>
+                              </InputAdornment>
+                            ),
+                          }}
+                        />
+                      ) : (
+                        <TextField
+                          fullWidth
+                          size="small"
+                          type="number"
+                          label={t('userManagement.salary')}
+                          {...OUTLINED_FIELD}
+                          value={salaryUnlocked ? formData.salary : ''}
+                          onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
+                          placeholder={
+                            salaryUnlocked
+                              ? t('userManagement.placeholderMonthlySalary')
+                              : originalHasSalary || formData.salary
+                                ? t('userManagement.salaryMasked')
+                                : t('userManagement.salaryLockedHint')
+                          }
+                          disabled={!salaryUnlocked}
+                          helperText={salaryUnlocked ? undefined : t('userManagement.salaryUnlockHint')}
+                          InputProps={{
+                            endAdornment: (
+                              <InputAdornment position="end">
+                                <Typography sx={{ fontSize: '0.75rem', mr: 0.5 }}>INR</Typography>
+                                <IconButton
+                                  size="small"
+                                  edge="end"
+                                  aria-label={t('userManagement.salaryUnlock')}
+                                  onClick={() => {
+                                    if (salaryUnlocked) {
+                                      setSalaryUnlocked(false);
+                                      setSalaryPasswordForSubmit('');
+                                      setSalaryBaseline('');
+                                      setFormData((prev) => ({ ...prev, salary: '' }));
+                                    } else {
+                                      openSalaryUnlock('edit');
+                                    }
+                                  }}
+                                >
+                                  {salaryUnlocked ? (
+                                    <VisibilityOffIcon fontSize="small" />
+                                  ) : (
+                                    <LockOutlinedIcon fontSize="small" />
+                                  )}
+                                </IconButton>
+                              </InputAdornment>
+                            ),
+                          }}
+                        />
+                      )}
                     </Box>
                     <Box sx={{ width: '100%', minWidth: 0 }}>
                       <TextField

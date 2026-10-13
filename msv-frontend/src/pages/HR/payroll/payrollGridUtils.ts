@@ -103,6 +103,30 @@ export function derivedDaysWorkedFromCalendarAndUnpaid(
   return Math.min(Math.max(0, roundUnpaidLeave(raw)), calendarDays);
 }
 
+const DEFAULT_FIXED_REST_DAYS = 4;
+
+/**
+ * 서비스 직군: 정기 휴무일(기본 4일)은 항상 지급일에 가산.
+ * 근무일 표시는 다른 직군과 동일(달력−무급).
+ * 예) 무급4·근무26 → 지급30(전액) / 무급0·근무30 → 지급34(+4일)
+ */
+export function fixedRestExtraPaidDays(
+  _unpaidLeave: unknown,
+  fixedRestDays: unknown = DEFAULT_FIXED_REST_DAYS
+): number {
+  const rest = Math.floor(num(fixedRestDays) || DEFAULT_FIXED_REST_DAYS);
+  return Math.max(0, rest);
+}
+
+export function fixedRestPayDays(
+  totalDayOfMonth: unknown,
+  unpaidLeave: unknown,
+  fixedRestDays: unknown = DEFAULT_FIXED_REST_DAYS
+): number {
+  const worked = derivedDaysWorkedFromCalendarAndUnpaid(totalDayOfMonth, unpaidLeave);
+  return worked + fixedRestExtraPaidDays(unpaidLeave, fixedRestDays);
+}
+
 export function derivedDaysWorkedString(totalDayOfMonth: unknown, unpaidLeave: unknown): string {
   const n = derivedDaysWorkedFromCalendarAndUnpaid(totalDayOfMonth, unpaidLeave);
   return String(n);
@@ -693,6 +717,12 @@ export function recalculatePayrollRow(
 
   const calendarDays = Math.max(1, num(row.total_day_of_month) || 30);
   const unpaidNormalized = roundUnpaidLeave(num(row.unpaid_leave));
+  const isFixedRest = String(row.employment_salary_basis || '') === 'fixed_rest_monthly';
+  const fixedRestDays =
+    row.fixed_rest_days != null && Number.isFinite(num(row.fixed_rest_days))
+      ? Math.floor(num(row.fixed_rest_days))
+      : DEFAULT_FIXED_REST_DAYS;
+  // 서비스 직군도 표시 근무일 = 월총일 − 무급휴가
   const worked = derivedDaysWorkedFromCalendarAndUnpaid(row.total_day_of_month, unpaidNormalized);
   const days_worked = String(worked);
   const unpaid_leave = String(unpaidNormalized);
@@ -709,7 +739,11 @@ export function recalculatePayrollRow(
     day_ot_hour: dayOtHour
   });
   const transport = 0;
-  const proratedPackage = roundInr((totalSalary * worked) / calendarDays);
+  // 서비스: 무급 0이면 +4일 지급. 그 외 직군은 근무일만.
+  const payDays = isFixedRest
+    ? fixedRestPayDays(row.total_day_of_month, unpaidNormalized, fixedRestDays)
+    : worked;
+  const proratedPackage = roundInr((totalSalary * payDays) / calendarDays);
   const sum_total = roundInr(proratedPackage + overtime + transport + customSum);
 
   const pfCalcMode = row.pf_calc_mode ?? 'cap_1800';
@@ -770,6 +804,8 @@ export function recalculatePayrollRow(
     total_salary: totalSalary,
     unpaid_leave,
     days_worked,
+    employment_salary_basis: row.employment_salary_basis,
+    fixed_rest_days: isFixedRest ? fixedRestDays : row.fixed_rest_days,
     ot_rate: otRate,
     day_ot_hour: dayOtHour,
     night_ot_hour: 0,
@@ -1025,6 +1061,17 @@ export function payrollRecordToGridRow(
   }
 
   const advance = num(p.deductions);
+  const salaryBasis = String(ex(x, 'employment_salary_basis') || '').trim();
+  const isFixedRestRow = salaryBasis === 'fixed_rest_monthly';
+  const fixedRestFromExtra = Math.floor(num(ex(x, 'fixed_rest_days')));
+  const fixedRestDays =
+    Number.isFinite(fixedRestFromExtra) && fixedRestFromExtra >= 0
+      ? fixedRestFromExtra
+      : DEFAULT_FIXED_REST_DAYS;
+  const initialDaysWorked = derivedDaysWorkedString(
+    ex(x, 'total_day_of_month'),
+    ex(x, 'unpaid_leave')
+  );
 
   const row: PayrollGridRow = {
     id: p.id,
@@ -1039,6 +1086,9 @@ export function payrollRecordToGridRow(
     position: toProperCaseInput(ex(x, 'position') || str(emp.position)),
     birth_date: ex(x, 'birth_date') || (emp.birth_date ? String(emp.birth_date).split('T')[0] : ''),
     joining_date: joining,
+    employment_type: String(
+      ex(x, 'employment_type') || (emp as any).employment_type || ''
+    ).trim(),
     working_month: workingMonth,
     basic_salary: basic,
     house_rent_allowance: hra,
@@ -1050,7 +1100,9 @@ export function payrollRecordToGridRow(
     total_salary: totalSalary,
     total_day_of_month: ex(x, 'total_day_of_month'),
     unpaid_leave: ex(x, 'unpaid_leave'),
-    days_worked: derivedDaysWorkedString(ex(x, 'total_day_of_month'), ex(x, 'unpaid_leave')),
+    days_worked: initialDaysWorked,
+    employment_salary_basis: salaryBasis || undefined,
+    fixed_rest_days: isFixedRestRow ? fixedRestDays : undefined,
     ot_rate: otRateInitial,
     day_ot_hour: dayOtHour,
     night_ot_hour: 0,
@@ -1102,6 +1154,7 @@ export function gridRowToPayload(
     position: recalculated.position,
     birth_date: recalculated.birth_date,
     joining_date: recalculated.joining_date,
+    employment_type: recalculated.employment_type || '',
     working_month: recalculated.working_month,
     house_rent_allowance: recalculated.house_rent_allowance,
     other_allowance: recalculated.other_allowance,
@@ -1113,6 +1166,29 @@ export function gridRowToPayload(
     total_day_of_month: stripCommaField(recalculated.total_day_of_month),
     unpaid_leave: stripCommaField(recalculated.unpaid_leave),
     days_worked: stripCommaField(recalculated.days_worked),
+    employment_salary_basis: recalculated.employment_salary_basis || '',
+    ...(recalculated.employment_salary_basis === 'fixed_rest_monthly'
+      ? {
+          fixed_rest_days: String(
+            recalculated.fixed_rest_days != null
+              ? recalculated.fixed_rest_days
+              : DEFAULT_FIXED_REST_DAYS
+          ),
+          extra_working_days: String(
+            fixedRestExtraPaidDays(
+              recalculated.unpaid_leave,
+              recalculated.fixed_rest_days
+            )
+          ),
+          pay_days: String(
+            fixedRestPayDays(
+              recalculated.total_day_of_month,
+              recalculated.unpaid_leave,
+              recalculated.fixed_rest_days
+            )
+          ),
+        }
+      : {}),
     ot_rate: recalculated.ot_rate,
     day_ot_hour: recalculated.day_ot_hour,
     night_ot_hour: 0,

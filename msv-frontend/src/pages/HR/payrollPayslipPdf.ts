@@ -244,6 +244,52 @@ export async function generatePayslipPdfBlob(
   return pdf.output('blob');
 }
 
+/** 메일 첨부용 — 화면 명세서와 동일한 PNG 이미지 */
+export async function generatePayslipImageBlob(
+  row: PayrollGridRow,
+  companyInfo?: PayslipCompanyInfo | null,
+  options?: PayslipPdfOptions
+): Promise<Blob> {
+  const canvas = await capturePayslipCanvas(row, companyInfo, {
+    ...options,
+    purpose: options?.purpose ?? 'email',
+  });
+  const dataUrl = canvas.toDataURL('image/png');
+  const res = await fetch(dataUrl);
+  return res.blob();
+}
+
+/** 메일 발송용 — 한 번 캡처로 PDF(보관) + PNG(첨부) 생성 */
+export async function generatePayslipEmailArtifacts(
+  row: PayrollGridRow,
+  companyInfo?: PayslipCompanyInfo | null,
+  options?: PayslipPdfOptions
+): Promise<{ pdfBlob: Blob; imageBlob: Blob }> {
+  const purpose = 'email' as const;
+  const [{}, { jsPDF }] = await loadPdfLibs();
+  const canvas = await capturePayslipCanvas(row, companyInfo, { ...options, purpose });
+  const pdf = new jsPDF({
+    unit: 'mm',
+    format: 'a4',
+    orientation: 'portrait',
+    compress: true,
+  });
+  addPayslipCanvasToPdf(pdf, canvas, purpose);
+  const pdfBlob = pdf.output('blob');
+  const imageBlob = await (await fetch(canvas.toDataURL('image/png'))).blob();
+  return { pdfBlob, imageBlob };
+}
+
+export function buildPayslipImageFilename(
+  period?: string | null,
+  name?: string | null
+): string {
+  const month = String(period || '').trim() || 'Unknown';
+  const emp = String(name || '').trim() || 'Employee';
+  const base = `Payslip (${month}) (${emp})`.replace(/[\\/:*?"<>|]/g, '_');
+  return `${base}.png`;
+}
+
 /** 여러 직원 명세서를 한 PDF(직원당 1페이지)로 만들어 다운로드. 1명이면 개별 파일명. */
 export async function downloadPayslipsPdfBatch(
   rows: PayrollGridRow[],

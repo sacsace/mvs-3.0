@@ -28,7 +28,7 @@ interface UserAttributes {
   emergency_phone?: string;
   avatar_url?: string;
   hire_date?: Date;
-  employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern' | 'daily';
+  employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern' | 'daily' | 'service';
   salary?: number;
   bank_name?: string;
   bank_account?: string;
@@ -78,7 +78,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   public emergency_phone?: string;
   public avatar_url?: string;
   public hire_date?: Date;
-  public employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern' | 'daily';
+  public employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern' | 'daily' | 'service';
   public salary?: number;
   public bank_name?: string;
   public bank_account?: string;
@@ -204,7 +204,7 @@ User.init(
       allowNull: true
     },
     employment_type: {
-      type: DataTypes.ENUM('fulltime', 'contract', 'parttime', 'intern', 'daily'),
+      type: DataTypes.ENUM('fulltime', 'contract', 'parttime', 'intern', 'daily', 'service'),
       allowNull: true
     },
     salary: {

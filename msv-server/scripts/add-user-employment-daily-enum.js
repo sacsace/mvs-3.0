@@ -49,30 +49,33 @@ async function main() {
     }
 
     const safeType = String(typeName);
-    await sequelize.query(`
-      DO $$
-      DECLARE
-        typ CONSTANT text := '${safeType.replace(/'/g, "''")}';
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_enum e
-          JOIN pg_type t ON e.enumtypid = t.oid
-          JOIN pg_namespace n ON n.oid = t.typnamespace
-          WHERE n.nspname = 'public'
-            AND t.typname = typ
-            AND e.enumlabel = 'daily'
-        ) THEN
-          EXECUTE format('ALTER TYPE %I.%I ADD VALUE %L', 'public', typ, 'daily');
-          RAISE NOTICE 'Added enum value: daily to %', typ;
-        ELSE
-          RAISE NOTICE 'Enum value daily already exists on %', typ;
-        END IF;
-      END
-      $$;
-    `);
+    for (const label of ['daily', 'service']) {
+      await sequelize.query(`
+        DO $$
+        DECLARE
+          typ CONSTANT text := '${safeType.replace(/'/g, "''")}';
+          lab CONSTANT text := '${label}';
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1
+            FROM pg_enum e
+            JOIN pg_type t ON e.enumtypid = t.oid
+            JOIN pg_namespace n ON n.oid = t.typnamespace
+            WHERE n.nspname = 'public'
+              AND t.typname = typ
+              AND e.enumlabel = lab
+          ) THEN
+            EXECUTE format('ALTER TYPE %I.%I ADD VALUE %L', 'public', typ, lab);
+            RAISE NOTICE 'Added enum value: % to %', lab, typ;
+          ELSE
+            RAISE NOTICE 'Enum value % already exists on %', lab, typ;
+          END IF;
+        END
+        $$;
+      `);
+    }
 
-    console.log(`✅ ENUM "${safeType}" 에 'daily' 확인/추가 완료`);
+    console.log(`✅ ENUM "${safeType}" 에 'daily'/'service' 확인/추가 완료`);
     console.log('   (이미 있었으면 변경 없음)');
     await sequelize.close();
     process.exit(0);

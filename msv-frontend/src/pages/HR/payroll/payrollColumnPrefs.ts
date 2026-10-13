@@ -35,6 +35,7 @@ export const PAYROLL_DEFAULT_COLUMN_ORDER: string[] = [
   'employee_email',
   'department',
   'employee_name',
+  'employment_type',
   'joining_date',
   'working_month',
   'basic_salary',
@@ -129,8 +130,15 @@ export function mergeColumnOrder(
   }
   for (const f of allFields) {
     if (!result.includes(f)) {
-      // actions는 항상 끝
       if (f === 'actions') continue;
+      // 근무형태는 입사일 바로 앞
+      if (f === 'employment_type') {
+        const joinIdx = result.indexOf('joining_date');
+        if (joinIdx >= 0) {
+          result.splice(joinIdx, 0, f);
+          continue;
+        }
+      }
       const actionsIdx = result.indexOf('actions');
       if (actionsIdx >= 0) result.splice(actionsIdx, 0, f);
       else result.push(f);

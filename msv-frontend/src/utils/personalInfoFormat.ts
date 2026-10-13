@@ -81,6 +81,8 @@ export function getEmploymentTypeLabel(t: I18nTranslate, type: string | undefine
       return t('userManagement.empFulltime');
     case 'daily':
       return t('userManagement.empDaily');
+    case 'service':
+      return t('userManagement.empService');
     case 'contract':
       return t('userManagement.empContract');
     case 'parttime':

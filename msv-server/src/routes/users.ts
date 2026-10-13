@@ -59,7 +59,7 @@ const USER_EXCEL_EXPORT_COLUMNS = [
   '비상연락처',
   '비상연락처 전화번호',
   '입사일 (YYYY-MM-DD)',
-  '고용형태 (fulltime/contract/parttime/intern/daily)',
+  '고용형태 (fulltime/contract/parttime/intern/daily/service)',
   '급여',
   '은행명',
   '계좌번호',
@@ -1855,7 +1855,7 @@ router.get('/excel/sample', authenticateToken, async (req, res) => {
         '비상연락처': '홍부모',
         '비상연락처 전화번호': '010-9876-5432',
         '입사일 (YYYY-MM-DD)': '2020-01-01',
-        '고용형태 (fulltime/contract/parttime/intern/daily)': 'fulltime',
+        '고용형태 (fulltime/contract/parttime/intern/daily/service)': 'fulltime',
         '급여': '5000000',
         '은행명': 'HDFC Bank',
         '계좌번호': '12345678901234',
@@ -1878,7 +1878,7 @@ router.get('/excel/sample', authenticateToken, async (req, res) => {
         '비상연락처': '김부모',
         '비상연락처 전화번호': '010-8765-4321',
         '입사일 (YYYY-MM-DD)': '2019-06-01',
-        '고용형태 (fulltime/contract/parttime/intern/daily)': 'fulltime',
+        '고용형태 (fulltime/contract/parttime/intern/daily/service)': 'fulltime',
         '급여': '6000000',
         '은행명': 'State Bank of India',
         '계좌번호': '98765432109876',
@@ -2012,7 +2012,7 @@ router.get(
         '입사일 (YYYY-MM-DD)': userData.hire_date 
           ? new Date(userData.hire_date).toISOString().split('T')[0] 
           : '',
-        '고용형태 (fulltime/contract/parttime/intern/daily)': userData.employment_type || '',
+        '고용형태 (fulltime/contract/parttime/intern/daily/service)': userData.employment_type || '',
         '급여': (userData.salary != null && userData.salary !== '') ? '**' : '',
         '은행명': userData.bank_name || '',
         '계좌번호': userData.bank_account || '',
@@ -2328,9 +2328,16 @@ router.post(
           emergency_contact: row['비상연락처'] ? row['비상연락처'].toString().trim() : null,
           emergency_phone: row['비상연락처 전화번호'] ? row['비상연락처 전화번호'].toString().trim() : null,
           hire_date: hireDateResult.value,
-          employment_type: (row['고용형태 (fulltime/contract/parttime/intern/daily)'] && ['fulltime', 'contract', 'parttime', 'intern', 'daily'].includes(row['고용형태 (fulltime/contract/parttime/intern/daily)'].toString().toLowerCase()))
-            ? row['고용형태 (fulltime/contract/parttime/intern/daily)'].toString().toLowerCase()
-            : null,
+          employment_type: (() => {
+            const empTypeRaw =
+              row['고용형태 (fulltime/contract/parttime/intern/daily/service)'] ??
+              row['고용형태 (fulltime/contract/parttime/intern/daily)'];
+            if (!empTypeRaw) return null;
+            const v = empTypeRaw.toString().toLowerCase();
+            return ['fulltime', 'contract', 'parttime', 'intern', 'daily', 'service'].includes(v)
+              ? v
+              : null;
+          })(),
           salary: (() => {
             const raw = row['급여'];
             if (raw == null || String(raw).trim() === '' || String(raw).trim() === '**') return null;

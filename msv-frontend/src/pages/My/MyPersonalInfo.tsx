@@ -291,6 +291,8 @@ const MyPersonalInfo: React.FC = () => {
         return t('userManagement.empFulltime');
       case 'daily':
         return t('userManagement.empDaily');
+      case 'service':
+        return t('userManagement.empService');
       case 'contract':
         return t('userManagement.empContract');
       case 'parttime':

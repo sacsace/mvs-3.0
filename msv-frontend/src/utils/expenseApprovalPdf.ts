@@ -1301,7 +1301,9 @@ export async function downloadExpenseApprovalPdf(
     filename,
     margins: DOCUMENT_PDF_MARGINS_MM,
     purpose: 'download',
-    forceFitOnePage: true,
+    /** 좌우 여백 유지 + 길면 A4 다중 페이지로 분할 (한 장 강제 축소 안 함) */
+    forceFitOnePage: false,
+    fitOnePageItemThreshold: 0,
     captureRootAttr: DOCUMENT_PDF_CAPTURE_ROOT_ATTR,
     onClone: sanitizeExpenseCloneForPdf,
   });

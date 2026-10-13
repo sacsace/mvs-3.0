@@ -29,7 +29,8 @@ import { useReferenceDataStore } from '../../store/referenceDataStore';
 import PayrollPayslipDialog from './PayrollPayslipDialog';
 import type { PayrollGridRow } from './payroll/payrollGridTypes';
 import { formatOtHourDisplay } from './payroll/payrollGridUtils';
-import { generatePayslipPdfBlob, payslipBlobToBase64 } from './payrollPayslipPdf';
+import { generatePayslipEmailArtifacts, payslipBlobToBase64 } from './payrollPayslipPdf';
+import { buildPayslipEmailHtml } from './payslipEmailHtml';
 import { payrollService, companyService } from '../../services/api';
 import { shortCompanyName, type PayslipCompanyInfo, toPayslipCompanyInfo } from './PayslipContent';
 import {
@@ -673,6 +674,7 @@ const PayslipSendSystem: React.FC = () => {
   const [preview, setPreview] = useState<PayrollGridRow | null>(null);
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const cancelSendRef = useRef(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [payrollPeriod, setPayrollPeriod] = useState('');
@@ -897,6 +899,7 @@ const PayslipSendSystem: React.FC = () => {
       setError(t(`${p}.selectCompanyRequired`));
       return;
     }
+    cancelSendRef.current = false;
     setSending(true);
     setProgress({ done: 0, total: selectedRows.length });
     let ok = 0;
@@ -906,8 +909,21 @@ const PayslipSendSystem: React.FC = () => {
     let completed = 0;
 
     const sendOne = async (row: PayrollGridRow) => {
+      if (cancelSendRef.current) return;
       try {
-        const pdf = await generatePayslipPdfBlob(row, companyInfo, { locale: 'en', purpose: 'email' });
+        const { pdfBlob, imageBlob } = await generatePayslipEmailArtifacts(row, companyInfo, {
+          locale: 'en',
+          purpose: 'email',
+          companyId: effectiveCompanyId,
+        });
+        if (cancelSendRef.current) return;
+        const messageText = replaceTemplate(mail.message, row);
+        const htmlBody = buildPayslipEmailHtml(row, {
+          companyInfo,
+          companyId: effectiveCompanyId,
+          introText: messageText,
+          inlineImageCid: 'payslip@mvs',
+        });
         const result = await payrollService.sendImportedPayslip({
           to: row.employee_email,
           employee_name: row.employee_name,
@@ -915,16 +931,19 @@ const PayslipSendSystem: React.FC = () => {
           emp_id: row.emp_id,
           net_salary: row.net_salary_payable,
           subject: replaceTemplate(mail.subject, row),
-          message: replaceTemplate(mail.message, row),
-          pdf_base64: await payslipBlobToBase64(pdf),
+          message: messageText,
+          pdf_base64: await payslipBlobToBase64(pdfBlob),
+          image_base64: await payslipBlobToBase64(imageBlob),
+          html_body: htmlBody,
           company_id: effectiveCompanyId,
         });
+        if (cancelSendRef.current) return;
         if (result.success) {
           ok += 1;
           if (result.data?.saved_for_user) saved += 1;
         } else fail += 1;
       } catch {
-        fail += 1;
+        if (!cancelSendRef.current) fail += 1;
       } finally {
         completed += 1;
         setProgress({ done: completed, total: selectedRows.length });
@@ -935,6 +954,7 @@ const PayslipSendSystem: React.FC = () => {
       { length: Math.min(SEND_CONCURRENCY, selectedRows.length) },
       async () => {
         while (true) {
+          if (cancelSendRef.current) break;
           const index = cursor;
           cursor += 1;
           if (index >= selectedRows.length) break;
@@ -944,10 +964,14 @@ const PayslipSendSystem: React.FC = () => {
     );
     await Promise.all(workers);
 
+    const cancelled = cancelSendRef.current;
     setNotice(
-      t(`${p}.sendDone`, { ok, fail }) +
+      (cancelled
+        ? t(`${p}.sendCancelled`, { ok, fail })
+        : t(`${p}.sendDone`, { ok, fail })) +
         (saved ? t(`${p}.sendSaved`, { saved }) : '')
     );
+    cancelSendRef.current = false;
     setSending(false);
   };
 
@@ -1317,11 +1341,22 @@ const PayslipSendSystem: React.FC = () => {
                 {...mvsOutlinedLabelProps}
               />
               {sending && (
-                <Box sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                   <CircularProgress size={18} />
                   <Typography variant="body2" color="text.secondary">
                     {t(`${p}.sending`, { done: progress.done, total: progress.total })}
                   </Typography>
+                  <Button
+                    size="small"
+                    color="warning"
+                    variant="outlined"
+                    onClick={() => {
+                      cancelSendRef.current = true;
+                    }}
+                    sx={mvsBodyOutlinedBtnSx}
+                  >
+                    {t(`${p}.cancelSending`)}
+                  </Button>
                 </Box>
               )}
               <Button

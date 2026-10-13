@@ -18,6 +18,8 @@ export type PayrollGridRow = {
   position: string;
   birth_date: string;
   joining_date: string;
+  /** 근무형태 코드 (fulltime | daily | service | …) */
+  employment_type?: string;
   /** 급여 근무월(YYYY-MM) */
   working_month: string;
   basic_salary: number;
@@ -34,6 +36,10 @@ export type PayrollGridRow = {
   total_day_of_month: string;
   unpaid_leave: string;
   days_worked: string;
+  /** extra_fields.employment_salary_basis — monthly | daily | fixed_rest_monthly */
+  employment_salary_basis?: string;
+  /** Fixed Rest-Day 정기 휴무일 수 (기본 4) */
+  fixed_rest_days?: number;
   ot_rate: number;
   day_ot_hour: number;
   night_ot_hour: number;

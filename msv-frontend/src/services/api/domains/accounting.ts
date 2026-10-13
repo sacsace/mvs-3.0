@@ -882,6 +882,20 @@ export const payrollService = {
     return response.data;
   },
 
+  /** 회사별 근무형태 → 급여 계산 옵션 */
+  getEmploymentTypePaySettings: async (params?: { company_id?: number }) => {
+    const response = await api.get('/hr/employment-type-pay-settings', { params });
+    return response.data;
+  },
+
+  updateEmploymentTypePaySettings: async (data: {
+    company_id?: number;
+    types: unknown[];
+  }) => {
+    const response = await api.put('/hr/employment-type-pay-settings', data);
+    return response.data;
+  },
+
   /** ?�재 ?�사 ?�성 ?�용??기�? 급여 ?�괄 ?�성 (?�도 PF/ESI/PT/TDS ?�션 ?�택 가?? */
   /** ?�괄 ?�성 ?? ?�정·중복·직원�??�당 ??출퇴�?건수 ?�약 */
   previewBulkPayrollGeneration: async (
@@ -914,20 +928,22 @@ export const payrollService = {
     return response.data;
   },
 
-  /** 급여 명세??PDF(base64)�?직원 ?�메?�로 발송 */
+  /** 급여 명세서 PDF(보관) + PNG 첨부 + HTML 본문을 직원 이메일로 발송 */
   sendPayrollPayslip: async (
     id: number,
     pdf_base64: string,
-    opts?: { company_id?: number }
+    opts?: { company_id?: number; html_body?: string; image_base64?: string }
   ) => {
     const response = await api.post(`/hr/payrolls/${id}/send-payslip`, {
       pdf_base64,
       ...(opts?.company_id != null ? { company_id: opts.company_id } : {}),
+      ...(opts?.html_body ? { html_body: opts.html_body } : {}),
+      ...(opts?.image_base64 ? { image_base64: opts.image_base64 } : {}),
     });
     return response.data;
   },
 
-  /** DB 저장 없이 업로드 급여 리스트의 PDF 명세서를 지정 이메일로 발송 (MVS 사용자면 내 명세서에도 보관) */
+  /** DB 저장 없이 업로드 급여 리스트의 명세서를 지정 이메일로 발송 (MVS 사용자면 내 명세서에도 보관) */
   sendImportedPayslip: async (data: {
     to: string;
     employee_name: string;
@@ -937,6 +953,8 @@ export const payrollService = {
     subject: string;
     message: string;
     pdf_base64: string;
+    image_base64?: string;
+    html_body?: string;
     company_id?: number;
   }) => {
     const response = await api.post('/hr/payslips/send-imported', data);

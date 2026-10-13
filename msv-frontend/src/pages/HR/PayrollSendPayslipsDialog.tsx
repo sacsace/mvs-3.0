@@ -19,7 +19,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { PayrollGridRow } from './payroll/payrollGridTypes';
 import { toPayslipCompanyInfo, type PayslipCompanyInfo, type PayslipHeaderLayout } from './PayslipContent';
-import { generatePayslipPdfBlob, payslipBlobToBase64 } from './payrollPayslipPdf';
+import { generatePayslipEmailArtifacts, payslipBlobToBase64 } from './payrollPayslipPdf';
+import { buildDefaultPayslipMailIntro, buildPayslipEmailHtml } from './payslipEmailHtml';
 import { payrollService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useStore } from '../../store';
@@ -55,6 +56,7 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({
   const [companyInfo, setCompanyInfo] = useState<PayslipCompanyInfo | null>(null);
   const [companyInfoLoaded, setCompanyInfoLoaded] = useState(false);
   const autoSendStarted = useRef(false);
+  const cancelRequestedRef = useRef(false);
 
   const resolvedCompanyId = useMemo(() => {
     if (companyId != null && Number(companyId) > 0) return Number(companyId);
@@ -120,6 +122,14 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({
     }
   }, [rowsWithEmail, selected.size]);
 
+  const handleCancelSend = useCallback(() => {
+    if (sending) {
+      cancelRequestedRef.current = true;
+      return;
+    }
+    onClose();
+  }, [onClose, sending]);
+
   const handleSend = useCallback(async (sendAllWithEmail = false) => {
     const toSend = rowsWithEmail.filter(
       (x) => x.hasEmail && (sendAllWithEmail || selected.has(x.row.id))
@@ -129,39 +139,78 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({
       return;
     }
 
+    cancelRequestedRef.current = false;
     setSending(true);
     setProgress({ done: 0, total: toSend.length });
     let ok = 0;
     let fail = 0;
+    let cancelled = false;
 
     try {
       for (let i = 0; i < toSend.length; i++) {
+        if (cancelRequestedRef.current) {
+          cancelled = true;
+          break;
+        }
         const { row } = toSend[i];
         try {
-          const blob = await generatePayslipPdfBlob(row, companyInfo, {
+          const { pdfBlob, imageBlob } = await generatePayslipEmailArtifacts(row, companyInfo, {
             locale: 'en',
             headerLayout,
             companyId: resolvedCompanyId,
             purpose: 'email',
           });
-          const b64 = await payslipBlobToBase64(blob);
+          if (cancelRequestedRef.current) {
+            cancelled = true;
+            break;
+          }
+          const pdfB64 = await payslipBlobToBase64(pdfBlob);
+          const imageB64 = await payslipBlobToBase64(imageBlob);
+          const introText = buildDefaultPayslipMailIntro({
+            name: row.employee_name,
+            company: companyInfo?.name,
+            period: row.working_month,
+          });
+          const htmlBody = buildPayslipEmailHtml(row, {
+            companyInfo,
+            companyId: resolvedCompanyId,
+            introText,
+            inlineImageCid: 'payslip@mvs',
+          });
+          if (cancelRequestedRef.current) {
+            cancelled = true;
+            break;
+          }
           const res = await payrollService.sendPayrollPayslip(
             row.id,
-            b64,
-            resolvedCompanyId != null ? { company_id: resolvedCompanyId } : undefined
+            pdfB64,
+            {
+              ...(resolvedCompanyId != null ? { company_id: resolvedCompanyId } : {}),
+              html_body: htmlBody,
+              image_base64: imageB64,
+            }
           );
           if (res.success) ok += 1;
           else fail += 1;
         } catch {
+          if (cancelRequestedRef.current) {
+            cancelled = true;
+            break;
+          }
           fail += 1;
         }
         setProgress({ done: i + 1, total: toSend.length });
       }
-      onSent(t('payrollManagement.payslip.sendResult', { ok, fail }));
+      if (cancelled) {
+        onSent(t('payrollManagement.payslip.sendCancelled', { ok, fail }));
+      } else {
+        onSent(t('payrollManagement.payslip.sendResult', { ok, fail }));
+      }
       onClose();
     } catch (e: any) {
       onError(e?.message || t('payrollManagement.payslip.sendFailed'));
     } finally {
+      cancelRequestedRef.current = false;
       setSending(false);
     }
   }, [
@@ -196,6 +245,11 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({
         <Alert severity="info" sx={{ mb: 2 }}>
           {t('payrollManagement.payslip.sendEmailNote')}
         </Alert>
+        {sending ? (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            {t('payrollManagement.payslip.sendCancelHint')}
+          </Alert>
+        ) : null}
         <Table size="small">
           <TableHead>
             <TableRow>
@@ -244,8 +298,8 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={sending}>
-          {t('common.cancel')}
+        <Button onClick={handleCancelSend} color={sending ? 'warning' : 'inherit'}>
+          {sending ? t('payrollManagement.payslip.cancelSending') : t('common.cancel')}
         </Button>
         <Button
           variant="contained"

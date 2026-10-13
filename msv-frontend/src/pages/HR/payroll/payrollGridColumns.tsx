@@ -13,6 +13,7 @@ import {
   otHourEditProps,
   unpaidLeaveEditProps,
 } from './payrollGridUtils';
+import { getEmploymentTypeLabel } from '../../../utils/personalInfoFormat';
 import { evaluatePayrollColumnFormula } from './payrollColumnFormula';
 import {
   customColumnField,
@@ -52,6 +53,7 @@ const LEFT_TEXT_FIELDS = new Set([
   'employee_email',
   'department',
   'employee_name',
+  'employment_type',
 ]);
 
 const NUMERIC_STRING_FIELDS = new Set([
@@ -337,6 +339,15 @@ export function buildPayrollGridColumns({
             {params.value}
           </Typography>
         )
+    }),
+    colDef({
+      field: 'employment_type',
+      headerName: t('payrollManagement.gridColumns.employmentType'),
+      minWidth: 88,
+      editable: false,
+      valueGetter: (_value, row) => String(row?.employment_type ?? '').trim(),
+      valueFormatter: (value: unknown) =>
+        getEmploymentTypeLabel(t, String(value ?? '').trim()) || String(value ?? ''),
     }),
     colDef({
       field: 'joining_date',

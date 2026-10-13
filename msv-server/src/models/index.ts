@@ -1,5 +1,5 @@
 import sequelize from '../config/database';
-import { ensureUserEmploymentDailyEnum } from '../db/ensureUserEmploymentDailyEnum';
+import { ensureUserEmploymentTypeEnum } from '../db/ensureUserEmploymentTypeEnum';
 import User from './User';
 import Menu from './Menu';
 import UserPermission from './UserPermission';
@@ -663,7 +663,7 @@ const connectDB = async () => {
       await sequelize.authenticate();
       console.log('Database connection successful');
 
-      await ensureUserEmploymentDailyEnum(sequelize);
+      await ensureUserEmploymentTypeEnum(sequelize);
 
       return;
     } catch (error) {

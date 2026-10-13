@@ -9854,17 +9854,26 @@ const ExpenseApproval: React.FC = () => {
                 display: none !important;
               }
               .expense-pdf-root {
-                position: fixed !important;
-                inset: 0 !important;
+                position: static !important;
+                inset: auto !important;
                 margin: 0 !important;
                 padding: 0 !important;
                 border: none !important;
                 border-radius: 0 !important;
                 box-shadow: none !important;
                 width: 100% !important;
+                max-width: 100% !important;
                 background: #fff !important;
-                z-index: 9999 !important;
+                z-index: auto !important;
                 overflow: visible !important;
+                height: auto !important;
+                page-break-inside: auto !important;
+                break-inside: auto !important;
+              }
+              .expense-pdf-root .expense-pdf-items tr,
+              .expense-pdf-root .expense-pdf-items .MuiTableRow-root {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
               }
               ${EXPENSE_DOCUMENT_EXPORT_CSS}
             }

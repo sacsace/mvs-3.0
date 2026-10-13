@@ -33,8 +33,6 @@ import {
 import {
   computeIndianStatutoryPayroll,
   breakdownToExtraFields,
-  computeProratedSumTotal,
-  computeDailyWorkerSumTotal,
   normalizeUserPfCalcMode,
   type PfMode
 } from '../services/indianStatutoryPayroll';
@@ -44,6 +42,13 @@ import {
   mergePayrollGridIntoCompanySettings,
   readPayrollGridSettingsFromCompanySettings,
 } from '../utils/payrollGridSettings';
+import {
+  computeEmploymentPaySumTotal,
+  mergeEmploymentTypePayIntoCompanySettings,
+  normalizeEmploymentTypePaySettings,
+  readEmploymentTypePayFromCompanySettings,
+  resolveEmploymentTypePayConfig,
+} from '../utils/employmentTypePaySettings';
 
 const MONTH_NAMES_EN = [
   'January',
@@ -247,6 +252,7 @@ export const getPayrolls = async (req: RequestWithUser, res: Response) => {
             'employee_number',
             'birth_date',
             'hire_date',
+            'employment_type',
             'ot_eligible',
             'pt_eligible',
             'pf_calc_mode'
@@ -307,6 +313,7 @@ export const getPayroll = async (req: RequestWithUser, res: Response) => {
             'employee_number',
             'birth_date',
             'hire_date',
+            'employment_type',
             'ot_eligible',
             'pt_eligible',
             'pf_calc_mode'
@@ -396,6 +403,12 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
       });
     }
 
+    const companyForPay = await (Company as any).findOne({
+      where: { id: company_id, tenant_id },
+      attributes: ['id', 'settings'],
+    });
+    const companyPaySettings = companyForPay?.settings;
+
     // 미확정 월 재생성: 기존 활성 급여는 soft-delete 후 새로 생성
     const { created, deactivatedCount } = await sequelize.transaction(async (transaction) => {
       const [deactivated] = await (Payroll as any).update(
@@ -448,9 +461,14 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
         const useContractSalary = contract && contractSalary > 0;
         const basic_salary = useContractSalary ? contractSalary : profileSalary;
 
-        const isDaily = String((emp as any).employment_type || '').toLowerCase() === 'daily';
+        const payCfg = resolveEmploymentTypePayConfig(
+          companyPaySettings,
+          (emp as any).employment_type
+        );
+        const isDaily = payCfg.salaryBasis === 'daily';
+        const isFixedRest = payCfg.salaryBasis === 'fixed_rest_monthly';
 
-        /** 일용직: 급여 필드는 일당. 상여·연장 산정용 월 환산 = 일당 × 해당월 일수 */
+        /** 일당 기준: 상여·연장 산정용 월 환산 = 일당 × 해당월 일수 */
         const monthlyEquivForDaily = basic_salary * bounds.daysInMonth;
 
         const att = await aggregateAttendanceForPeriod(tenant_id, company_id, emp.id, bounds);
@@ -484,23 +502,20 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
           overtimeHoursForPay
         );
 
-        const pr = isDaily
-          ? computeDailyWorkerSumTotal(
-              basic_salary,
-              overtime_pay,
-              bonus,
-              bounds.daysInMonth,
-              att.daysWorked,
-              att.recordCount
-            )
-          : computeProratedSumTotal(
-              basic_salary,
-              overtime_pay,
-              bonus,
-              bounds.daysInMonth,
-              att.daysWorked,
-              att.recordCount
-            );
+        const unpaidForCompute =
+          payCfg.salaryBasis === 'daily' && att.recordCount === 0
+            ? bounds.daysInMonth
+            : att.absentDays;
+        const pr = computeEmploymentPaySumTotal(
+          payCfg,
+          basic_salary,
+          overtime_pay,
+          bonus,
+          bounds.daysInMonth,
+          att.daysWorked,
+          att.recordCount,
+          unpaidForCompute
+        );
         const gross_salary = pr.sumTotal;
 
         const bodyOpts = (req.body || {}) as Record<string, unknown>;
@@ -544,6 +559,17 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
         const bankIfsc = emp.bank_ifsc != null ? String(emp.bank_ifsc).trim() : '';
         const bankName = emp.bank_name != null ? String(emp.bank_name).trim() : '';
 
+        /** 서비스 직군 포함: 무급휴가·근무일 = 다른 직군과 동일(월총일−무급). */
+        const unpaidLeaveVal =
+          pr.unpaidLeave != null
+            ? pr.unpaidLeave
+            : isDaily && att.recordCount === 0
+              ? bounds.daysInMonth
+              : att.absentDays;
+        const daysWorkedVal = isFixedRest
+          ? Math.max(0, bounds.daysInMonth - unpaidLeaveVal)
+          : pr.effectiveDaysWorked;
+
         const extra_fields = {
           emp_id: String((emp as any).employee_number || '').trim(),
           bank_account: bankAccount,
@@ -556,19 +582,30 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
           joining_date: hire,
           working_month: payroll_period,
           total_day_of_month: String(bounds.daysInMonth),
-          unpaid_leave: String(
-            isDaily && att.recordCount === 0 ? bounds.daysInMonth : att.absentDays
-          ),
-          days_worked: String(pr.effectiveDaysWorked),
+          unpaid_leave: String(unpaidLeaveVal),
+          days_worked: String(daysWorkedVal),
           prorated_basic: String(pr.proratedBasic),
+          ...(isFixedRest
+            ? {
+                fixed_rest_days: String(pr.fixedRestDays ?? payCfg.fixedRestDays),
+                extra_working_days: String(pr.extraWorkingDays ?? 0),
+                rest_day_extra_pay: String(pr.restDayExtraPay ?? 0),
+                pay_days: String(pr.payDays ?? daysWorkedVal),
+              }
+            : {}),
           ...statExtra,
           account_cash: '',
           salary_source: isDaily
             ? 'daily_wage'
-            : useContractSalary
-              ? 'employment_contract'
-              : 'user_profile',
+            : isFixedRest
+              ? 'fixed_rest_monthly'
+              : useContractSalary
+                ? 'employment_contract'
+                : 'user_profile',
           employment_type: String((emp as any).employment_type || ''),
+          employment_salary_basis: payCfg.salaryBasis,
+          employment_no_attendance: payCfg.noAttendance,
+          employment_prorate: String(payCfg.prorateByAttendance),
           employment_contract_id: contract ? contract.id : null,
           working_days_contract: contract?.working_days ?? '',
           attendance_records: String(att.recordCount),
@@ -675,6 +712,11 @@ export const previewBulkPayrollGeneration = async (req: RequestWithUser, res: Re
       attributes: ['id', 'username', 'employment_type']
     });
 
+    const previewCompany = await (Company as any).findOne({
+      where: { id: company_id, tenant_id },
+      attributes: ['id', 'settings'],
+    });
+
     let with_attendance = 0;
     let without_attendance = 0;
     const without_attendance_usernames: string[] = [];
@@ -683,7 +725,12 @@ export const previewBulkPayrollGeneration = async (req: RequestWithUser, res: Re
     for (const emp of employees) {
       const att = await aggregateAttendanceForPeriod(tenant_id, company_id, emp.id, bounds);
       const name = String((emp as any).username || '').trim() || `user#${(emp as any).id}`;
-      const isDaily = String((emp as any).employment_type || '').toLowerCase() === 'daily';
+      const payCfg = resolveEmploymentTypePayConfig(
+        previewCompany?.settings,
+        (emp as any).employment_type
+      );
+      const isDailyZeroWithoutAtt =
+        payCfg.salaryBasis === 'daily' && payCfg.noAttendance === 'zero';
       if (att.recordCount > 0) {
         with_attendance += 1;
       } else {
@@ -691,7 +738,7 @@ export const previewBulkPayrollGeneration = async (req: RequestWithUser, res: Re
         if (without_attendance_usernames.length < 25) {
           without_attendance_usernames.push(name);
         }
-        if (isDaily && daily_without_records.length < 80) {
+        if (isDailyZeroWithoutAtt && daily_without_records.length < 80) {
           daily_without_records.push({ id: (emp as any).id, username: name });
         }
       }
@@ -1310,6 +1357,12 @@ export const sendPayrollPayslip = async (req: RequestWithUser, res: Response) =>
 
     const b64 = pdf_base64.includes(',') ? pdf_base64.split(',')[1] : pdf_base64;
     const pdfBuffer = Buffer.from(b64, 'base64');
+    const imageBase64Raw = String(req.body?.image_base64 || '').trim();
+    const imageB64 = imageBase64Raw.includes(',')
+      ? imageBase64Raw.split(',')[1]
+      : imageBase64Raw;
+    const imageBuffer =
+      imageB64 && imageB64.length > 20 ? Buffer.from(imageB64, 'base64') : null;
 
     const transporter = nodemailer.createTransport(buildNodemailerTransportOptions(mailOpts));
 
@@ -1348,24 +1401,43 @@ export const sendPayrollPayslip = async (req: RequestWithUser, res: Response) =>
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/\n/g, '<br />');
+    const htmlBodyRaw = String(req.body?.html_body || '').trim();
+    const htmlBody =
+      htmlBodyRaw.length > 100 && htmlBodyRaw.length <= 1_500_000
+        ? htmlBodyRaw
+        : `
+        <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#111827;line-height:1.55;max-width:640px;">
+          ${bodyHtml}
+        </div>
+      `;
+    const safeFileBase = `Payslip (${period || 'Unknown'}) (${uname})`.replace(
+      /[\\/:*?"<>|]/g,
+      '_'
+    );
+    /** 메일: PNG(본문 인라인) + PDF 첨부. PDF는 내 명세서에도 보관 */
+    const mailAttachments: Array<Record<string, unknown>> = [
+      {
+        filename: `${safeFileBase}.pdf`,
+        content: pdfBuffer,
+        contentType: 'application/pdf',
+      },
+    ];
+    if (imageBuffer) {
+      mailAttachments.unshift({
+        filename: `${safeFileBase}.png`,
+        content: imageBuffer,
+        contentType: 'image/png',
+        cid: 'payslip@mvs',
+      });
+    }
 
     await transporter.sendMail({
       from: mailOpts.from,
       to,
       subject,
       text: bodyText,
-      html: `
-        <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#111827;line-height:1.55;max-width:640px;">
-          ${bodyHtml}
-        </div>
-      `,
-      attachments: [
-        {
-          filename: `Payslip (${period || 'Unknown'}) (${uname})`.replace(/[\\/:*?"<>|]/g, '_') + '.pdf',
-          content: pdfBuffer,
-          contentType: 'application/pdf'
-        }
-      ]
+      html: htmlBody,
+      attachments: mailAttachments
     });
 
     // 내 급여 명세서 목록 보관 (엑셀 발송 경로와 동일)
@@ -1517,6 +1589,12 @@ export const sendImportedPayslip = async (req: RequestWithUser, res: Response) =
       .replace(/\n/g, '<br />');
     const b64 = pdfBase64.includes(',') ? pdfBase64.split(',')[1] : pdfBase64;
     const pdfBuffer = Buffer.from(b64, 'base64');
+    const imageBase64Raw = String(req.body?.image_base64 || '').trim();
+    const imageB64 = imageBase64Raw.includes(',')
+      ? imageBase64Raw.split(',')[1]
+      : imageBase64Raw;
+    const imageBuffer =
+      imageB64 && imageB64.length > 20 ? Buffer.from(imageB64, 'base64') : null;
     const filenamePart = `Payslip (${period || 'Unknown'}) (${employeeName || 'Employee'})`
       .replace(/[\\/:*?"<>|]/g, '_')
       .slice(0, 120);
@@ -1533,6 +1611,29 @@ export const sendImportedPayslip = async (req: RequestWithUser, res: Response) =
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/\n/g, '<br />');
+    const htmlBodyRaw = String(req.body?.html_body || '').trim();
+    const htmlBody =
+      htmlBodyRaw.length > 100 && htmlBodyRaw.length <= 1_500_000
+        ? htmlBodyRaw
+        : `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.6;color:#111827;">${
+            safeMessage || fallbackHtml
+          }</div>`;
+
+    const mailAttachments: Array<Record<string, unknown>> = [
+      {
+        filename: `${filenamePart}.pdf`,
+        content: pdfBuffer,
+        contentType: 'application/pdf',
+      },
+    ];
+    if (imageBuffer) {
+      mailAttachments.unshift({
+        filename: `${filenamePart}.png`,
+        content: imageBuffer,
+        contentType: 'image/png',
+        cid: 'payslip@mvs',
+      });
+    }
 
     const transporter = nodemailer.createTransport(buildNodemailerTransportOptions(mailOpts));
     await transporter.sendMail({
@@ -1540,10 +1641,8 @@ export const sendImportedPayslip = async (req: RequestWithUser, res: Response) =
       to,
       subject: subject || fallbackSubject,
       text: message || fallbackBody,
-      html: `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.6;color:#111827;">${
-        safeMessage || fallbackHtml
-      }</div>`,
-      attachments: [{ filename: `${filenamePart}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }]
+      html: htmlBody,
+      attachments: mailAttachments
     });
 
     // 저장 키 = 수신 메일 + 급여월. user_id는 있으면 보조 연결(필수 아님).
@@ -1890,6 +1989,73 @@ export const updatePayrollGridSettings = async (req: RequestWithUser, res: Respo
     res.json({ success: true, data: grid });
   } catch (error) {
     console.error('급여 그리드 설정 저장 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/** 근무형태별 급여 계산 옵션 조회 */
+export const getEmploymentTypePaySettings = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { tenantId, companyId: effectiveCompanyId, userRole } = resolvePayrollScope(req);
+    if (!tenantId) {
+      return res.status(400).json({ success: false, message: '테넌트 정보가 없습니다.' });
+    }
+    if (effectiveCompanyId == null && userRole !== 'root') {
+      return res.status(400).json({ success: false, message: '회사 정보가 없습니다.' });
+    }
+    if (effectiveCompanyId == null) {
+      return res.json({
+        success: true,
+        data: readEmploymentTypePayFromCompanySettings(null),
+      });
+    }
+
+    const company = await (Company as any).findOne({
+      where: { id: effectiveCompanyId, tenant_id: tenantId },
+      attributes: ['id', 'settings'],
+    });
+    if (!company) {
+      return res.status(404).json({ success: false, message: '회사를 찾을 수 없습니다.' });
+    }
+
+    res.json({
+      success: true,
+      data: readEmploymentTypePayFromCompanySettings(company.settings),
+    });
+  } catch (error) {
+    console.error('근무형태 급여 설정 조회 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/** 근무형태별 급여 계산 옵션 저장 */
+export const updateEmploymentTypePaySettings = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { tenantId, companyId: effectiveCompanyId, userRole } = resolvePayrollScope(req);
+    if (!tenantId) {
+      return res.status(400).json({ success: false, message: '테넌트 정보가 없습니다.' });
+    }
+    if (effectiveCompanyId == null) {
+      return res.status(400).json({ success: false, message: '회사를 지정해 주세요.' });
+    }
+
+    const company = await (Company as any).findOne({
+      where: { id: effectiveCompanyId, tenant_id: tenantId },
+    });
+    if (!company) {
+      return res.status(404).json({ success: false, message: '회사를 찾을 수 없습니다.' });
+    }
+
+    const pay = normalizeEmploymentTypePaySettings(req.body);
+    const nextSettings = mergeEmploymentTypePayIntoCompanySettings(company.settings, pay);
+    await company.update({ settings: nextSettings as any });
+
+    res.json({
+      success: true,
+      data: readEmploymentTypePayFromCompanySettings(nextSettings),
+    });
+  } catch (error) {
+    console.error('근무형태 급여 설정 저장 오류:', error);
     res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
   }
 };

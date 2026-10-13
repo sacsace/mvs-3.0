@@ -19,6 +19,8 @@ import {
   completePayrollPeriod,
   getPayrollGridSettings,
   updatePayrollGridSettings,
+  getEmploymentTypePaySettings,
+  updateEmploymentTypePaySettings,
 } from '../controllers/hrController';
 import {
   getAttendances,
@@ -157,6 +159,12 @@ router.post(
 );
 router.get('/payroll-grid-settings', getPayrollGridSettings);
 router.put('/payroll-grid-settings', restrictAuditToReadOnly, updatePayrollGridSettings);
+router.get('/employment-type-pay-settings', getEmploymentTypePaySettings);
+router.put(
+  '/employment-type-pay-settings',
+  restrictAuditToReadOnly,
+  updateEmploymentTypePaySettings
+);
 router.post(
   '/payroll-periods/complete',
   restrictAuditToReadOnly,

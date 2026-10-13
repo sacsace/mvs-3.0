@@ -4,8 +4,9 @@ import { computeTenureMonths, roundOtHour } from './payrollGridUtils';
 import { loadPayrollColumnPrefs } from './payrollColumnPrefs';
 import { loadPayrollSalaryRatios } from './payrollSalaryRatios';
 import { downloadExcelWorkbook } from '../../../utils/excelExportStyle';
+import { getEmploymentTypeLabel } from '../../../utils/personalInfoFormat';
 
-type PayrollTranslate = (key: string) => string;
+type PayrollTranslate = (key: string, opts?: Record<string, unknown>) => string;
 
 /** Excel Accounting — 정수 (소수점 없음) */
 const ACCOUNTING_INT_FMT = '_(* #,##0_);_(* (#,##0);_(* "-"??_);_(@_)';
@@ -54,6 +55,7 @@ export async function exportPayrollGridToExcel(
     t('payrollManagement.gridColumns.email'),
     t('payrollManagement.gridColumns.department'),
     t('payrollManagement.gridColumns.employeeName'),
+    t('payrollManagement.gridColumns.employmentType'),
     t('payrollManagement.gridColumns.joiningDate'),
   ]);
 
@@ -86,6 +88,8 @@ export async function exportPayrollGridToExcel(
       [t('payrollManagement.gridColumns.email')]: String(row.employee_email ?? ''),
       [t('payrollManagement.gridColumns.department')]: String(row.department ?? ''),
       [t('payrollManagement.gridColumns.employeeName')]: String(row.employee_name ?? ''),
+      [t('payrollManagement.gridColumns.employmentType')]:
+        getEmploymentTypeLabel(t, row.employment_type) || String(row.employment_type ?? ''),
       [t('payrollManagement.gridColumns.joiningDate')]: String(row.joining_date ?? ''),
       [t('payrollManagement.gridColumns.workingMonth')]: tenure,
       ...constantEntries,
