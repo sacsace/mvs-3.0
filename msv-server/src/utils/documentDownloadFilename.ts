@@ -42,11 +42,11 @@ export function formatDownloadDateToken(date?: Date | string | null): string {
   ].join('');
 }
 
-export type DocumentDownloadCode = 'PV' | 'RT' | 'RI' | 'Invoice';
+export type DocumentDownloadCode = 'PV' | 'PI' | 'RT' | 'RI' | 'Invoice';
 
 /**
  * 표준 패턴: `yyyyMMdd_{Code} (회사명) (세부사항).ext`
- * 예: `20260905_PV (Minsub Ventures) (AMC).pdf`
+ * 예: `20260905_PI (Minsub Ventures) (AMC).pdf`
  */
 export function buildDocumentDownloadFilename(options: {
   code: DocumentDownloadCode;
@@ -93,8 +93,9 @@ export function uniqueFilenameInDir(dirAbs: string, filename: string): string {
 }
 
 /**
- * multer가 저장한 임시 파일을 PV 표준명으로 개명하고,
+ * multer가 저장한 임시 파일을 표준명으로 개명하고,
  * DB에 넣을 상대경로 `expense-receipts/...` 를 반환한다.
+ * Tax Invoice → RI, Proforma / 인보이스 없음 → PI
  */
 export function finalizeExpenseReceiptFilename(options: {
   multerFilename: string;
@@ -102,6 +103,8 @@ export function finalizeExpenseReceiptFilename(options: {
   detail?: string | null;
   date?: Date | string | null;
   originalName?: string | null;
+  /** Tax Invoice면 'RI', Proforma·인보이스 없음은 'PI' */
+  code?: DocumentDownloadCode;
 }): { relativePath: string; absolutePath: string; filename: string } {
   const subdir = 'expense-receipts';
   const dirAbs = path.join(getUploadRoot(), subdir);
@@ -116,8 +119,13 @@ export function finalizeExpenseReceiptFilename(options: {
   const fromMulter = path.extname(options.multerFilename);
   const ext = (fromOriginal || fromMulter || '.bin').replace(/^\./, '').toLowerCase() || 'bin';
 
+  const code: DocumentDownloadCode =
+    options.code === 'RI' || options.code === 'PI' || options.code === 'RT' || options.code === 'Invoice'
+      ? options.code
+      : 'PI';
+
   const desired = buildDocumentDownloadFilename({
-    code: 'PV',
+    code,
     companyName: options.companyName,
     detail: options.detail,
     date: options.date,

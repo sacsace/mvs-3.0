@@ -324,20 +324,23 @@ const ATTENDANCE_USERS_PER_PAGE = 15;
 const ATTENDANCE_FILTER_OUTLINED = mvsOutlinedLabelProps;
 const attendanceFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
 const matrixNoColWidth = 36;
-/** 출근 매트릭스 — MVS / Apple: 여백·헤어라인·상태 도트, 가로 스크롤 없이 균등 분배 */
-const MATRIX_LINE = '#E8E8ED';
-const MATRIX_HEADER_BG = '#F5F5F7';
+/** 출근 매트릭스 — 급여 리스트(엑셀형)와 동일 톤: 얇은 격자·슬레이트 헤더·균등 분배 */
+const MATRIX_LINE = '#D4D4D4';
+const MATRIX_HEADER_BG = '#F1F5F9';
+const MATRIX_HEADER_FG = '#475569';
+const MATRIX_HEADER_BORDER = '#A8B4C0';
+const MATRIX_HOVER_BG = '#EAF4FC';
 /** 휴일(주말) 영역 — 아주 연한 하이라이트 + 세로 라인 */
-const MATRIX_HOLIDAY_LINE = '#F0DADA';
-const MATRIX_HOLIDAY_BG = '#FFFCFC';
-const MATRIX_HOLIDAY_HEADER_BG = '#FFFAFA';
+const MATRIX_HOLIDAY_LINE = '#E2C8C8';
+const MATRIX_HOLIDAY_BG = '#FFF8F8';
+const MATRIX_HOLIDAY_HEADER_BG = '#F5EDED';
 /** 상세 목록 — 미출근일 하이라이트 */
 const DETAIL_MISSING_BG = '#FFF2F2';
-/** 상태 표시 — 솔리드 원 + 흰 마크 (파스텔 배경 제거) */
+/** 상태 표시 — 솔리드 원 + 흰 마크 */
 const MATRIX_STATUS = {
-  complete: { fill: '#1F8A3B', glyph: '✓' },
-  partial: { fill: '#E86B00', glyph: '◑' },
-  absent: { fill: '#D70015', glyph: '✕' },
+  complete: { fill: '#217346', glyph: '✓' },
+  partial: { fill: '#C2410C', glyph: '◑' },
+  absent: { fill: '#B91C1C', glyph: '✕' },
   empty: { fill: 'transparent', glyph: '' },
 } as const;
 
@@ -377,7 +380,7 @@ const listViewModeBtnSx = {
   textTransform: 'none' as const,
   fontWeight: 600,
   fontSize: '0.75rem',
-  borderRadius: '8px',
+  borderRadius: '4px',
   boxShadow: 'none',
   whiteSpace: 'nowrap' as const,
 };
@@ -1335,19 +1338,21 @@ const AttendanceStatistics: React.FC = () => {
               overflow: 'hidden',
               overflowX: 'hidden',
               overflowY: 'hidden',
-              borderRadius: '12px',
-              border: `1px solid ${MATRIX_LINE}`,
+              borderRadius: 0,
+              border: `1px solid ${MATRIX_HEADER_BORDER}`,
               boxShadow: 'none',
               WebkitOverflowScrolling: 'auto',
-              '& .MuiTableHead-root .MuiTableRow-root .MuiTableCell-head:first-of-type': {
-                borderTopLeftRadius: 0,
-              },
-              '& .MuiTableHead-root .MuiTableRow-root .MuiTableCell-head:last-of-type': {
-                borderTopRightRadius: 0,
-              },
             }}
           >
-            <Box sx={{ px: { xs: 1.5, sm: 2 }, pt: 1.75, pb: 1.25 }}>
+            <Box
+              sx={{
+                px: { xs: 1.25, sm: 1.5 },
+                pt: 1.25,
+                pb: 1,
+                bgcolor: '#FFFFFF',
+                borderBottom: `1px solid ${MATRIX_LINE}`,
+              }}
+            >
               <Box
                 sx={{
                   display: 'flex',
@@ -1366,8 +1371,8 @@ const AttendanceStatistics: React.FC = () => {
                     sx={{
                       ...listViewModeBtnSx,
                       ...(listViewMode === 'all'
-                        ? { bgcolor: '#1D1D1F', color: '#fff', '&:hover': { bgcolor: '#000' } }
-                        : { borderColor: '#D2D2D7', color: '#6E6E73', bgcolor: 'transparent' }),
+                        ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                        : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
                     }}
                   >
                     {t('attendanceStatistics.listView.viewAll')}
@@ -1380,8 +1385,8 @@ const AttendanceStatistics: React.FC = () => {
                     sx={{
                       ...listViewModeBtnSx,
                       ...(listViewMode === 'page'
-                        ? { bgcolor: '#1D1D1F', color: '#fff', '&:hover': { bgcolor: '#000' } }
-                        : { borderColor: '#D2D2D7', color: '#6E6E73', bgcolor: 'transparent' }),
+                        ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                        : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
                     }}
                   >
                     {t('attendanceStatistics.listView.viewPages')}
@@ -1421,10 +1426,9 @@ const AttendanceStatistics: React.FC = () => {
                         <Typography
                           component="span"
                           sx={{
-                            color: '#1D1D1F',
-                            fontWeight: 500,
-                            fontSize: '0.8125rem',
-                            letterSpacing: '-0.01em',
+                            color: '#334155',
+                            fontWeight: 600,
+                            fontSize: '0.75rem',
                             whiteSpace: 'nowrap',
                           }}
                         >
@@ -1432,7 +1436,7 @@ const AttendanceStatistics: React.FC = () => {
                         </Typography>
                         <Typography
                           component="span"
-                          sx={{ color: '#86868B', fontWeight: 500, fontSize: '0.8125rem' }}
+                          sx={{ color: '#64748B', fontWeight: 600, fontSize: '0.75rem' }}
                         >
                           {count}
                         </Typography>
@@ -1443,7 +1447,7 @@ const AttendanceStatistics: React.FC = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 'auto' }}>
                   <Typography
                     variant="caption"
-                    sx={{ color: '#86868B', whiteSpace: 'nowrap', fontWeight: 500, fontSize: '0.75rem' }}
+                    sx={{ color: '#64748B', whiteSpace: 'nowrap', fontWeight: 600, fontSize: '0.75rem' }}
                   >
                     {t('attendanceStatistics.matrix.nameColumnWidth')}
                   </Typography>
@@ -1456,9 +1460,9 @@ const AttendanceStatistics: React.FC = () => {
                     onChange={(_, v) => setNameColumnWidth(Number(v))}
                     sx={{
                       width: 100,
-                      color: '#1D1D1F',
-                      '& .MuiSlider-thumb': { width: 14, height: 14 },
-                      '& .MuiSlider-rail': { opacity: 0.25 },
+                      color: 'primary.main',
+                      '& .MuiSlider-thumb': { width: 12, height: 12 },
+                      '& .MuiSlider-rail': { opacity: 0.35 },
                     }}
                   />
                 </Box>
@@ -1471,7 +1475,6 @@ const AttendanceStatistics: React.FC = () => {
                 overflow: 'hidden',
                 overflowX: 'hidden',
                 overflowY: 'hidden',
-                borderTop: `1px solid ${MATRIX_LINE}`,
               }}
             >
               <Table
@@ -1480,17 +1483,19 @@ const AttendanceStatistics: React.FC = () => {
                   tableLayout: 'fixed',
                   width: '100%',
                   maxWidth: '100%',
-                  borderCollapse: 'separate',
+                  borderCollapse: 'collapse',
                   borderSpacing: 0,
                   bgcolor: '#FFFFFF',
+                  fontSize: '0.8125rem',
                   '& .MuiTableCell-root': {
                     borderBottom: `1px solid ${MATRIX_LINE}`,
+                    borderRight: `1px solid ${MATRIX_LINE}`,
                     borderTop: 'none',
+                    borderLeft: 'none',
                     boxSizing: 'border-box',
                     overflow: 'hidden',
                   },
-                  '& .MuiTableCell-root:not([data-holiday="1"])': {
-                    borderLeft: 'none',
+                  '& .MuiTableCell-root:last-of-type': {
                     borderRight: 'none',
                   },
                 }}
@@ -1514,12 +1519,12 @@ const AttendanceStatistics: React.FC = () => {
                       sx={{
                         width: matrixNoColWidth,
                         px: 0.25,
-                        py: 0.5,
+                        py: 0.75,
                         bgcolor: MATRIX_HEADER_BG,
                         fontWeight: 600,
-                        fontSize: '0.6875rem',
-                        color: '#86868B',
-                        letterSpacing: '-0.01em',
+                        fontSize: '0.7rem',
+                        color: MATRIX_HEADER_FG,
+                        borderBottom: `1px solid ${MATRIX_HEADER_BORDER}`,
                         overflow: 'hidden',
                       }}
                     >
@@ -1531,12 +1536,12 @@ const AttendanceStatistics: React.FC = () => {
                       sx={{
                         width: nameColumnWidth,
                         px: 1,
-                        py: 0.5,
+                        py: 0.75,
                         bgcolor: MATRIX_HEADER_BG,
                         fontWeight: 600,
-                        fontSize: '0.6875rem',
-                        color: '#86868B',
-                        letterSpacing: '-0.01em',
+                        fontSize: '0.7rem',
+                        color: MATRIX_HEADER_FG,
+                        borderBottom: `1px solid ${MATRIX_HEADER_BORDER}`,
                         overflow: 'hidden',
                       }}
                     >
@@ -1554,13 +1559,13 @@ const AttendanceStatistics: React.FC = () => {
                           sx={{
                             ...matrixDayColSx,
                             ...matrixHolidayColSx(dayColumns, dayIndex),
-                            py: 0.5,
+                            py: 0.75,
                             px: 0,
                             bgcolor: weekend ? MATRIX_HOLIDAY_HEADER_BG : MATRIX_HEADER_BG,
                             fontWeight: 600,
-                            fontSize: '0.5625rem',
-                            color: weekend ? '#C48A8A' : '#6E6E73',
-                            letterSpacing: '-0.02em',
+                            fontSize: '0.7rem',
+                            color: weekend ? '#9A4A4A' : MATRIX_HEADER_FG,
+                            borderBottom: `1px solid ${MATRIX_HEADER_BORDER}`,
                           }}
                         >
                           <Box component="span" sx={thEllipsisSx} title={ymd}>
@@ -1578,21 +1583,21 @@ const AttendanceStatistics: React.FC = () => {
                       hover={false}
                       sx={{
                         '&:hover .MuiTableCell-root:not([data-holiday="1"])': {
-                          bgcolor: '#FAFAFC',
+                          bgcolor: `${MATRIX_HOVER_BG} !important`,
                         },
                         '&:hover .MuiTableCell-root[data-holiday="1"]': {
-                          bgcolor: '#FFF6F6',
+                          bgcolor: '#F5E8E8 !important',
                         },
                       }}
                     >
                       <TableCell
                         align="center"
                         sx={{
-                          py: 0.3,
+                          py: 0.25,
                           px: 0.25,
                           width: matrixNoColWidth,
-                          color: '#AEAEB2',
-                          fontSize: '0.6875rem',
+                          color: '#64748B',
+                          fontSize: '0.75rem',
                           fontWeight: 500,
                           overflow: 'hidden',
                           bgcolor: '#FFFFFF',
@@ -1602,7 +1607,7 @@ const AttendanceStatistics: React.FC = () => {
                       </TableCell>
                       <TableCell
                         sx={{
-                          py: 0.3,
+                          py: 0.25,
                           px: 1,
                           width: nameColumnWidth,
                           overflow: 'hidden',
@@ -1623,15 +1628,14 @@ const AttendanceStatistics: React.FC = () => {
                               }}
                               sx={{
                                 fontWeight: 500,
-                                color: '#1D1D1F',
+                                color: '#111827',
                                 fontSize: '0.8125rem',
-                                letterSpacing: '-0.01em',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
                                 textDecoration: 'none',
                                 cursor: u.prefillEmail ? 'pointer' : 'default',
-                                '&:hover': u.prefillEmail ? { opacity: 0.7 } : undefined,
+                                '&:hover': u.prefillEmail ? { color: 'primary.main' } : undefined,
                               }}
                             >
                               {u.name}
@@ -1641,14 +1645,14 @@ const AttendanceStatistics: React.FC = () => {
                               label={t('attendanceStatistics.matrix.unregistered')}
                               sx={{
                                 height: 18,
-                                bgcolor: 'rgba(255, 149, 0, 0.12)',
-                                color: '#C93400',
-                                border: 'none',
+                                borderRadius: '2px',
+                                bgcolor: '#FEF3C7',
+                                color: '#92400E',
+                                border: '1px solid #FCD34D',
                                 '& .MuiChip-label': {
-                                  px: 0.7,
+                                  px: 0.6,
                                   fontSize: '0.625rem',
                                   fontWeight: 600,
-                                  letterSpacing: '-0.01em',
                                 },
                               }}
                             />
@@ -1674,10 +1678,9 @@ const AttendanceStatistics: React.FC = () => {
                               cursor: 'pointer',
                               fontWeight: 500,
                               fontSize: '0.8125rem',
-                              letterSpacing: '-0.01em',
-                              color: '#1D1D1F',
+                              color: '#111827',
                               textDecoration: 'none',
-                              '&:hover': { opacity: 0.65 },
+                              '&:hover': { color: 'primary.main' },
                             }}
                           >
                             {u.name}
@@ -1709,8 +1712,8 @@ const AttendanceStatistics: React.FC = () => {
                               sx={{
                                 ...matrixDayColSx,
                                 ...matrixHolidayColSx(dayColumns, dayIndex),
-                                py: 0.2,
-                                height: 26,
+                                py: 0.15,
+                                height: 28,
                                 bgcolor: weekend ? MATRIX_HOLIDAY_BG : '#FFFFFF',
                                 userSelect: 'none',
                               }}

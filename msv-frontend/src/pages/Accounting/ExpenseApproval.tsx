@@ -125,7 +125,7 @@ const expenseApprovalFilterFieldSx = {
 const getReceiptDisplayName = (filePath: string): string => {
   const base = String(filePath || '').split(/[/\\]/).pop() || String(filePath || '');
   let display: string;
-  // 표준명 yyyyMMdd_PV|RT|RI (...) 은 그대로 표시
+  // 표준명 yyyyMMdd_PV|PI|RT|RI (...) 은 그대로 표시
   if (/^\d{8}_[A-Za-z]/.test(base)) display = base;
   // 레거시 timestamp_원본명
   else display = base.replace(/^\d+_/, '') || base;
@@ -4627,14 +4627,21 @@ const ExpenseApproval: React.FC = () => {
     try {
       setUploadingReceipts(true);
       const companyLabel =
-        String(voucherData.department || '').trim() ||
-        String(selectedExpense?.companyName || '').trim() ||
-        'Company';
+        String(
+          (voucherData as any).partnerName ||
+            voucherData.department ||
+            selectedExpense?.itemMeta?.partnerName ||
+            selectedExpense?.itemMeta?.department ||
+            selectedExpense?.companyName ||
+            ''
+        ).trim() || 'Company';
       const detailLabel =
         String(formData.title || selectedExpense?.title || '').trim() ||
         String(formData.purpose || selectedExpense?.purpose || '').trim() ||
         String(lineItems[0]?.description || '').trim() ||
-        'PV';
+        (uploadingTaxInvoice ? 'RI' : 'PI');
+      // Tax Invoice → RI / Proforma·인보이스 없음 → PI
+      const receiptCode = uploadingTaxInvoice ? 'RI' : 'PI';
       const renamed = selectedFiles.map((file) => {
         const mimeExt = String(file.type || '')
           .split('/')
@@ -4646,7 +4653,7 @@ const ExpenseApproval: React.FC = () => {
           .replace(/^msword$/, 'doc');
         const ext = getFileExtension(file.name) || mimeExt || 'bin';
         const nextName = buildDocumentDownloadFilename({
-          code: 'PV',
+          code: receiptCode,
           companyName: companyLabel,
           detail: detailLabel,
           extension: ext,

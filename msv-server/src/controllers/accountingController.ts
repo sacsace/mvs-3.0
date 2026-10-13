@@ -3898,6 +3898,7 @@ export const uploadExpenseReceiptByToken = async (req: Request, res: Response) =
         detail: naming.detail,
         date: naming.date,
         originalName: (file as any).originalname,
+        code: invoiceType === 'tax' ? 'RI' : 'PI',
       });
       relativePath = finalized.relativePath;
     } catch (renameErr: any) {
@@ -3967,6 +3968,7 @@ export const uploadExpenseReceiptById = async (req: RequestWithUser, res: Respon
           detail: naming.detail,
           date: naming.date,
           originalName: (file as any).originalname,
+          code: invoiceType === 'tax' ? 'RI' : 'PI',
         });
         newRows.push({ path: finalized.relativePath, invoiceType });
       } catch (renameErr: any) {
@@ -4094,9 +4096,16 @@ const resolveExpenseReceiptNaming = async (expense: any) => {
   const items = parseExpenseItemsList(expense?.items);
   const firstDesc = String(items[0]?.description || items[0]?.item || '').trim();
 
+  // Tax Invoice 등: 대금 받는 협력업체(거래처)명을 우선
   let companyName =
-    String(meta.department || meta.companyName || meta.company_name || '').trim() ||
-    String(expense?.company_name || '').trim();
+    String(
+      meta.partnerName ||
+        meta.partner_name ||
+        meta.department ||
+        meta.companyName ||
+        meta.company_name ||
+        ''
+    ).trim() || String(expense?.company_name || '').trim();
 
   if (!companyName && expense?.company_id) {
     try {
@@ -4114,7 +4123,7 @@ const resolveExpenseReceiptNaming = async (expense: any) => {
     String(expense?.purpose || '').trim() ||
     firstDesc ||
     String(expense?.expense_id || '').trim() ||
-    'PV';
+    'Receipt';
 
   const date =
     expense?.submitted_at ||

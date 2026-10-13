@@ -4,7 +4,8 @@ import { ensurePdfExtension, sanitizeFilenamePart } from './sanitizeFilename';
  * 문서 다운로드 파일명 접두 코드
  * - PV: 지출결의서
  * - Invoice: 발행 인보이스
- * - RI: 받은 인보이스
+ * - RI: Tax Invoice (받은 인보이스)
+ * - PI: Proforma / 인보이스 없음 첨부
  * - Quot: 발행 견적서
  * - RQuot: 받은 견적서
  * - RPO: 받은 PO (Purchase Order)
@@ -16,6 +17,7 @@ export type DocumentDownloadCode =
   | 'PV'
   | 'Invoice'
   | 'RI'
+  | 'PI'
   | 'Quot'
   | 'RQuot'
   | 'RPO'

@@ -43,7 +43,6 @@ import {
   mvsSearchFieldSx,
   mvsOutlinedLabelProps,
   mvsTableHeadHighlightSx,
-  mvsTableScrollSx,
   mvsKpiCardSx,
   mvsFilterFieldHeightSx,
   mvsBodyCardSx,
@@ -92,12 +91,12 @@ function escapeHtml(s: string): string {
 
 const resolveProductImageUrl = resolveMediaUrl;
 
-/** 재고 목록 테이블 열 비율(상대 가중치) — 합계 대비 %로 너비 분배, 뷰포트에 맞춤 */
+/** 재고 목록 테이블 열 기본 너비(px) — 헤더 드래그로 조절 가능 */
 const INV_COL_DEFAULTS: Record<string, number> = {
   select: 48,
   status: 120,
-  name: 248,
-  category: 152,
+  name: 300,
+  category: 100,
   currentStock: 136,
   unitPrice: 112,
   totalValue: 124,
@@ -106,7 +105,10 @@ const INV_COL_DEFAULTS: Record<string, number> = {
   lastUpdated: 152,
   actions: 72 };
 
-const INV_COL_TOTAL = Object.values(INV_COL_DEFAULTS).reduce((s, n) => s + n, 0);
+const INV_COL_KEYS = Object.keys(INV_COL_DEFAULTS);
+
+/** 상대 가중치 저장 — 합계 대비 %로 분배해 가로 스크롤 없이 컨테이너에 맞춤 */
+const INV_COL_WIDTHS_STORAGE_KEY = 'mvs.inventoryManagement.colWidths.v2';
 
 /** DB `menus.route` — 기본재고 등록 (`App.tsx` `/inventory/basic`) */
 const INVENTORY_BASIC_MENU_ROUTES = ['/inventory/basic', '/inventory'];
@@ -137,11 +139,6 @@ const listViewModeBtnSx = {
 type ListViewMode = 'page' | 'all';
 const INVENTORY_VIEW_ALL_LIMIT = 10000;
 
-function invColWidthPct(key: string): string {
-  const w = INV_COL_DEFAULTS[key] ?? 80;
-  return `${(w / INV_COL_TOTAL) * 100}%`;
-}
-
 /** 헤더·본문 동일 정렬 — 텍스트 좌측, 숫자·날짜 우측, 상태·작업 중앙 */
 const INV_COL_ALIGN: Record<string, 'left' | 'right' | 'center'> = {
   select: 'center',
@@ -156,15 +153,37 @@ const INV_COL_ALIGN: Record<string, 'left' | 'right' | 'center'> = {
   lastUpdated: 'right',
   actions: 'center' };
 
-/** 헤더 라벨이 잘리지 않도록 최소 너비(px) */
+/** 열 리사이즈 최소 너비(px) */
 const INV_COL_MIN_WIDTH: Record<string, number> = {
-  select: 48,
-  status: 80,
-  currentStock: 104,
-  unitPrice: 88,
-  totalValue: 96,
-  lastUpdated: 132,
-  actions: 64 };
+  select: 44,
+  status: 72,
+  name: 120,
+  category: 64,
+  currentStock: 88,
+  unitPrice: 72,
+  totalValue: 80,
+  supplier: 80,
+  location: 72,
+  lastUpdated: 100,
+  actions: 56 };
+
+const loadStoredInvColWidths = (): Record<string, number> => {
+  try {
+    const raw = localStorage.getItem(INV_COL_WIDTHS_STORAGE_KEY);
+    if (!raw) return { ...INV_COL_DEFAULTS };
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const next: Record<string, number> = { ...INV_COL_DEFAULTS };
+    for (const key of INV_COL_KEYS) {
+      const n = Number(parsed?.[key]);
+      if (Number.isFinite(n) && n > 0) {
+        next[key] = Math.max(INV_COL_MIN_WIDTH[key] ?? 48, Math.round(n));
+      }
+    }
+    return next;
+  } catch {
+    return { ...INV_COL_DEFAULTS };
+  }
+};
 
 function invColTableAlign(key: string): 'left' | 'right' | 'center' {
   return INV_COL_ALIGN[key] ?? 'left';
@@ -267,6 +286,17 @@ const InventoryManagement: React.FC = () => {
   const [, setTotalItems] = useState(0);
   const [orderBy, setOrderBy] = useState<keyof InventoryItem | ''>('');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
+  const [colWidths, setColWidths] = useState<Record<string, number>>(loadStoredInvColWidths);
+  const colResizeRef = useRef<{
+    key: string;
+    nextKey: string;
+    startX: number;
+    startW: number;
+    startNextW: number;
+    total: number;
+    containerW: number;
+  } | null>(null);
+  const tableContainerRef = useRef<HTMLDivElement | null>(null);
   const [excelUploading, setExcelUploading] = useState(false);
   const excelFileInputRef = useRef<HTMLInputElement>(null);
   const [categoryManageOpen, setCategoryManageOpen] = useState(false);
@@ -1022,6 +1052,122 @@ const InventoryManagement: React.FC = () => {
     setOrderBy(property);
   };
 
+  const colWeightTotal = useMemo(
+    () => INV_COL_KEYS.reduce((sum, key) => sum + (colWidths[key] ?? INV_COL_DEFAULTS[key] ?? 80), 0),
+    [colWidths]
+  );
+
+  const invColWidthPct = useCallback(
+    (key: string) => {
+      const w = colWidths[key] ?? INV_COL_DEFAULTS[key] ?? 80;
+      return `${(w / Math.max(colWeightTotal, 1)) * 100}%`;
+    },
+    [colWidths, colWeightTotal]
+  );
+
+  const startColResize = useCallback((key: string, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const idx = INV_COL_KEYS.indexOf(key);
+    const nextKey = idx >= 0 ? INV_COL_KEYS[idx + 1] : undefined;
+    // 마지막 열은 오른쪽 경계를 늘리면 가로 스크롤이 생기므로 인접 열과만 조절
+    if (!nextKey) return;
+
+    const containerW = Math.max(1, tableContainerRef.current?.clientWidth || 1);
+    const total = INV_COL_KEYS.reduce(
+      (sum, k) => sum + (colWidths[k] ?? INV_COL_DEFAULTS[k] ?? 80),
+      0
+    );
+    const startX = event.clientX;
+    const startW = colWidths[key] ?? INV_COL_DEFAULTS[key] ?? 80;
+    const startNextW = colWidths[nextKey] ?? INV_COL_DEFAULTS[nextKey] ?? 80;
+    colResizeRef.current = { key, nextKey, startX, startW, startNextW, total, containerW };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMove = (ev: MouseEvent) => {
+      const active = colResizeRef.current;
+      if (!active) return;
+      const deltaWeight = ((ev.clientX - active.startX) / active.containerW) * active.total;
+      const minA = ((INV_COL_MIN_WIDTH[active.key] ?? 48) / active.containerW) * active.total;
+      const minB = ((INV_COL_MIN_WIDTH[active.nextKey] ?? 48) / active.containerW) * active.total;
+      let nextA = active.startW + deltaWeight;
+      let nextB = active.startNextW - deltaWeight;
+      if (nextA < minA) {
+        nextB -= minA - nextA;
+        nextA = minA;
+      }
+      if (nextB < minB) {
+        nextA -= minB - nextB;
+        nextB = minB;
+      }
+      if (nextA < minA || nextB < minB) return;
+      setColWidths((prev) => {
+        if (prev[active.key] === nextA && prev[active.nextKey] === nextB) return prev;
+        return { ...prev, [active.key]: nextA, [active.nextKey]: nextB };
+      });
+    };
+
+    const onUp = () => {
+      colResizeRef.current = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      setColWidths((prev) => {
+        try {
+          localStorage.setItem(INV_COL_WIDTHS_STORAGE_KEY, JSON.stringify(prev));
+        } catch {
+          /* ignore */
+        }
+        return prev;
+      });
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [colWidths]);
+
+  const colResizeHandle = (key: string) => {
+    const idx = INV_COL_KEYS.indexOf(key);
+    if (idx < 0 || idx >= INV_COL_KEYS.length - 1) return null;
+    return (
+      <Box
+        component="span"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={`${key} column resize`}
+        onMouseDown={(e) => startColResize(key, e)}
+        onClick={(e) => e.stopPropagation()}
+        sx={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          width: 8,
+          height: '100%',
+          cursor: 'col-resize',
+          zIndex: 2,
+          userSelect: 'none',
+          touchAction: 'none',
+          '&::after': {
+            content: '""',
+            position: 'absolute',
+            top: 6,
+            bottom: 6,
+            right: 2,
+            width: 2,
+            borderRadius: 1,
+            bgcolor: 'transparent',
+            transition: 'background-color 0.12s ease',
+          },
+          '&:hover::after, &:active::after': {
+            bgcolor: 'primary.main',
+          },
+        }}
+      />
+    );
+  };
+
   const thLabelEllipsisSx = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
@@ -1031,10 +1177,12 @@ const InventoryManagement: React.FC = () => {
 
   const thSx = (key: string) => {
     const align = invColTableAlign(key);
+    const w = invColWidthPct(key);
     return {
-      width: invColWidthPct(key),
-      minWidth: INV_COL_MIN_WIDTH[key] ?? 0,
-      maxWidth: invColWidthPct(key),
+      position: 'relative' as const,
+      width: w,
+      minWidth: 0,
+      maxWidth: w,
       overflow: 'hidden',
       textAlign: align,
       verticalAlign: 'middle' as const,
@@ -1066,16 +1214,21 @@ const InventoryManagement: React.FC = () => {
           {label}
         </Box>
       </TableSortLabel>
+      {colResizeHandle(key)}
     </TableCell>
   );
 
-  const tdSx = (key: string) => ({
-    width: invColWidthPct(key),
-    minWidth: INV_COL_MIN_WIDTH[key] ?? 0,
-    overflow: INV_TD_ELLIPSIS_KEYS.has(key) ? ('hidden' as const) : ('visible' as const),
-    textOverflow: INV_TD_ELLIPSIS_KEYS.has(key) ? ('ellipsis' as const) : undefined,
-    verticalAlign: 'middle' as const,
-    boxSizing: 'border-box' as const });
+  const tdSx = (key: string) => {
+    const w = invColWidthPct(key);
+    return {
+      width: w,
+      minWidth: 0,
+      maxWidth: w,
+      overflow: INV_TD_ELLIPSIS_KEYS.has(key) ? ('hidden' as const) : ('visible' as const),
+      textOverflow: INV_TD_ELLIPSIS_KEYS.has(key) ? ('ellipsis' as const) : undefined,
+      verticalAlign: 'middle' as const,
+      boxSizing: 'border-box' as const };
+  };
 
   const softChipSx = (tone: 'default' | 'info' | 'warning' | 'success' | 'error' | 'primary' | 'secondary') => {
     const light = theme.palette.mode === 'light';
@@ -1706,13 +1859,21 @@ const InventoryManagement: React.FC = () => {
                 {t('inventoryManagement.listView.viewPages')}
               </Button>
             </Box>
-        <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+        <TableContainer
+          ref={tableContainerRef}
+          sx={{
+            ...mvsBodyListTableSx,
+            width: '100%',
+            maxWidth: '100%',
+            overflowX: 'hidden',
+          }}
+        >
           <Table
             size="small"
             sx={{
               tableLayout: 'fixed',
               width: '100%',
-              minWidth: 768,
+              minWidth: 0,
               borderCollapse: 'collapse',
               bgcolor: 'transparent',
               '& .MuiTableCell-root': {
@@ -1731,6 +1892,7 @@ const InventoryManagement: React.FC = () => {
                     onChange={handleSelectAll}
                     inputProps={{ 'aria-label': t('inventoryManagement.selectAll') }}
                   />
+                  {colResizeHandle('select')}
                 </TableCell>
                 {renderHeadSortCell('status', 'status', t('inventoryManagement.columns.status'))}
                 {renderHeadSortCell('name', 'name', t('inventoryManagement.columns.productName'))}
