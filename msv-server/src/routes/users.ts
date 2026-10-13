@@ -1314,14 +1314,8 @@ router.post(
     if (emergency_phone !== undefined) userData.emergency_phone = emergency_phone || null;
     if (hire_date) userData.hire_date = hire_date;
     if (employment_type) userData.employment_type = employment_type;
+    // 신규 등록: 급여는 잠금 없이 저장 (수정 시에만 로그인 비밀번호 확인)
     if (salary !== undefined && salary !== '') {
-      const verified = await verifyCurrentUserPassword(req, (req.body as any).currentPassword);
-      if (!verified.ok) {
-        return res.status(verified.status).json({
-          success: false,
-          message: verified.message || '급여 변경에는 로그인 비밀번호 확인이 필요합니다.',
-        });
-      }
       userData.salary = parseSalaryInput(salary);
     }
     if (bank_name !== undefined) userData.bank_name = bank_name || null;
