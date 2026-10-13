@@ -2989,16 +2989,31 @@ const ExpenseApproval: React.FC = () => {
 
     if (listTab !== 'transfer') {
       if (statusFilter === 'paid') {
+        // 지급 완료 = Tax Invoice까지 반영되어 업무 종료된 건만
         filtered = filtered.filter((expense) => isExpensePaidForList(expense));
+      } else if (statusFilter === 'awaiting_tax') {
+        filtered = filtered.filter((expense) => expenseIsAwaitingTaxInvoice(expense));
+      } else if (statusFilter === 'approved') {
+        // 승인됨: 결재만 끝난 건. 텍스 인보이스 대기·지급완료는 제외
+        filtered = filtered.filter(
+          (expense) =>
+            !isExpensePaidForList(expense) &&
+            expense.status === 'approved' &&
+            !expenseIsAwaitingTaxInvoice(expense)
+        );
       } else if (statusFilter) {
         filtered = filtered.filter(
           (expense) => !isExpensePaidForList(expense) && expense.status === statusFilter
         );
       } else {
-        // 전체: 지급완료 제외. 내가 작성한 목록은 승인됨도 기본 숨김(상태 필터로만 조회)
+        // 전체: 지급완료(업무 종료)만 제외.
+        // 텍스 인보이스 대기는 승인 후에도 기본 목록에 노출(업로드 필요).
         filtered = filtered.filter((expense) => !isExpensePaidForList(expense));
         if (listTab === 'written') {
-          filtered = filtered.filter((expense) => expense.status !== 'approved');
+          filtered = filtered.filter(
+            (expense) =>
+              expenseIsAwaitingTaxInvoice(expense) || expense.status !== 'approved'
+          );
         }
       }
     }
@@ -10106,8 +10121,10 @@ const ExpenseApproval: React.FC = () => {
                     submitted: t('expenseApproval.status.submitted'),
                     in_review: t('expenseApproval.status.inReview'),
                     approved: t('expenseApproval.status.approved'),
+                    awaiting_tax: t('expenseApproval.status.awaitingTaxInvoice'),
                     rejected: t('expenseApproval.status.rejected'),
-                    paid: t('expenseApproval.status.paid') };
+                    paid: t('expenseApproval.status.paid'),
+                  };
                   return statusLabels[String(selected)] ?? String(selected);
                 } }}
               sx={expenseApprovalFilterFieldSx}
@@ -10143,6 +10160,9 @@ const ExpenseApproval: React.FC = () => {
                     </MenuItem>,
                     <MenuItem key="approved" value="approved">
                       {t('expenseApproval.status.approved')}
+                    </MenuItem>,
+                    <MenuItem key="awaiting_tax" value="awaiting_tax">
+                      {t('expenseApproval.status.awaitingTaxInvoice')}
                     </MenuItem>,
                     <MenuItem key="rejected" value="rejected">
                       {t('expenseApproval.status.rejected')}
