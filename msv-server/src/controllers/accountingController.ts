@@ -2701,9 +2701,31 @@ const sanitizeExpenseForUser = (expense: any, user: any) => {
     .filter((row: { amount: number; ok: boolean }) => row.ok && Number.isFinite(row.amount) && row.amount > 0)
     .map(({ timestamp, amount }: { timestamp: string | null; amount: number }) => ({ timestamp, amount }));
   if (canManageExpenseTransfer(user)) return data;
+
+  // 작성자·조회자: 송금 확인증(파일 경로)은 볼 수 있게 하되, 송금 API 상세 로그는 숨김
+  const remittanceProofLogs = logs
+    .filter((log: any) => {
+      const status = String(log?.status || '').toLowerCase();
+      const ok = !status || ['success', 'completed', 'paid'].includes(status);
+      const proof = log?.proof || log?.payload?.proof;
+      return ok && Boolean(proof);
+    })
+    .map((log: any) => ({
+      timestamp: log?.timestamp || null,
+      amount: Number(log?.amount ?? log?.payload?.amount ?? 0) || null,
+      proof: String(log?.proof || log?.payload?.proof || ''),
+      proof_name: log?.proof_name ? String(log.proof_name) : undefined,
+      status: 'success',
+      action: log?.action || 'manual_complete',
+      payload: log?.payload?.proof
+        ? { proof: String(log.payload.proof), amount: Number(log?.payload?.amount ?? 0) || undefined }
+        : undefined,
+    }));
+
   for (const key of EXPENSE_TRANSFER_SECRET_KEYS) {
     if (key in data) data[key] = null;
   }
+  data.bank_transfer_logs = remittanceProofLogs;
   return data;
 };
 

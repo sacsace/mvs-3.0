@@ -4843,6 +4843,7 @@ export default {
         status: 'Status',
         priority: 'Priority',
         all: 'All',
+        draftAndSubmitted: 'Draft · Submitted',
         paymentApprovedOnly: 'Approved for payment only',
         company: 'Company',
         allCompanies: 'All companies'
@@ -4935,6 +4936,8 @@ export default {
           'This file type cannot be previewed. Download it or open it in a new tab.',
         awaitingTaxInvoiceHint:
           'Remittance is done, but this case is not closed without a tax invoice. Please upload a tax invoice.',
+        taxInvoiceAlreadyAttached:
+          'A tax invoice is already attached to this expense report. Additional uploads are not allowed after approval.',
         attachmentLockedOnRemittance:
           'Invoice attachments cannot be changed during remittance for Proforma-approved cases. (Upload remittance proof in Remit)',
         uploadTaxInvoiceOnly: 'Only a tax invoice can be added to close this case.',
@@ -5146,6 +5149,7 @@ export default {
         receiptAttached: 'Receipt has been attached.',
         calculationAttached: 'Calculation file has been attached.',
         receiptDeleted: 'Receipt attachment has been removed.',
+        saveCompleted: 'Save completed.',
         taxInvoiceAttached: 'Tax invoice has been attached.',
         proformaAttached: 'Proforma Invoice (Quotation) has been attached.',
         noInvoiceAttached: 'Supporting file attached as no invoice.',
@@ -5184,6 +5188,8 @@ export default {
         qrTokenFailed: 'Failed to issue QR token.',
         receiptUploadFailed: 'An error occurred while uploading receipt.',
         receiptDeleteFailed: 'An error occurred while deleting the receipt.',
+        taxInvoiceAlreadyAttached:
+          'A tax invoice is already attached. Additional uploads are not allowed after approval.',
         fileRequired: 'A file is required.',
         selectCompanyFirst: 'Please select a company first.',
         companyNotFound: 'The selected company could not be found.',

@@ -141,6 +141,12 @@ const isImageReceipt = (filePath: string): boolean =>
 const isPdfReceipt = (filePath: string): boolean =>
   /\.pdf(?:$|[?#])/i.test(String(filePath || ''));
 
+/** 작성/받은 탭 기본 상태 필터: 초안 + 제출됨 */
+const DEFAULT_LIST_STATUS_FILTER = 'draft_submitted';
+
+const defaultStatusFilterForTab = (tab: string) =>
+  tab === 'transfer' ? '' : DEFAULT_LIST_STATUS_FILTER;
+
 type ExpenseInvoiceType = 'tax' | 'proforma' | 'none';
 
 type ExpenseAttachment = {
@@ -2145,7 +2151,7 @@ const ExpenseApproval: React.FC = () => {
   const [viewMode, setViewMode] = useState<'list' | 'view' | 'create' | 'edit'>('list');
   const [listTab, setListTab] = useState<'received' | 'written' | 'transfer'>('written');
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState(DEFAULT_LIST_STATUS_FILTER);
   const [priorityFilter, setPriorityFilter] = useState('');
   const [companyFilterId, setCompanyFilterId] = useState<number | ''>(() => {
     const userCompanyId = Number(user?.company_id);
@@ -2572,6 +2578,24 @@ const ExpenseApproval: React.FC = () => {
   // mapExpense is a render-local mapper; listing it would refetch on every render
   // eslint-disable-next-line react-hooks/exhaustive-deps -- stable mapping helper
   }, [t, canViewAllCompanies, companyFilterId]);
+
+  /** 상세 화면 유지한 채 목록만 갱신 (빈 목록 깜빡임 없음) */
+  const refreshExpenseListQuietly = useCallback(async () => {
+    try {
+      const params: Record<string, number> = {};
+      if (canViewAllCompanies && companyFilterId) {
+        params.company_id = Number(companyFilterId);
+      }
+      const response = await accountingService.getExpenseReports(params);
+      if (response.success) {
+        const list = Array.isArray(response.data) ? response.data : [];
+        setExpenses(list.map((row: any) => mapExpense(row)));
+      }
+    } catch {
+      /* 기존 목록 유지 */
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- stable mapping helper
+  }, [canViewAllCompanies, companyFilterId]);
 
   const getTransferFilterKey = useCallback((expense: ExpenseApprovalItem) => {
     const total = floorMoney(Number(expense.totalAmount || 0));
@@ -3001,21 +3025,17 @@ const ExpenseApproval: React.FC = () => {
             expense.status === 'approved' &&
             !expenseIsAwaitingTaxInvoice(expense)
         );
+      } else if (statusFilter === DEFAULT_LIST_STATUS_FILTER) {
+        // 기본: 초안 + 제출됨
+        filtered = filtered.filter(
+          (expense) => expense.status === 'draft' || expense.status === 'submitted'
+        );
       } else if (statusFilter) {
         filtered = filtered.filter(
           (expense) => !isExpensePaidForList(expense) && expense.status === statusFilter
         );
-      } else {
-        // 전체: 지급완료(업무 종료)만 제외.
-        // 텍스 인보이스 대기는 승인 후에도 기본 목록에 노출(업로드 필요).
-        filtered = filtered.filter((expense) => !isExpensePaidForList(expense));
-        if (listTab === 'written') {
-          filtered = filtered.filter(
-            (expense) =>
-              expenseIsAwaitingTaxInvoice(expense) || expense.status !== 'approved'
-          );
-        }
       }
+      // statusFilter === '' → 전체: 상태 제한 없음
     }
 
     if (priorityFilter) {
@@ -3347,7 +3367,7 @@ const ExpenseApproval: React.FC = () => {
     if (tab === 'received' || tab === 'written' || tab === 'transfer') {
       if (tab === 'transfer' && !hasTransferAccess) return;
       setListTab(tab);
-      setStatusFilter('');
+      setStatusFilter(defaultStatusFilterForTab(tab));
       if (tab === 'transfer' && isRootUser && companyFilterId === '') {
         setCompanyFilterId(resolveDefaultCompanyFilterId());
       }
@@ -3626,6 +3646,8 @@ const ExpenseApproval: React.FC = () => {
         const response = await accountingService.getExpenseReport(expense.id, { skipErrorPopup: true });
         if (!response?.success || !response.data) return;
         const mapped = mapExpense(response.data);
+        // 상세 API 기준으로 첨부(프로포마/텍스 등)까지 다시 반영
+        setSelectedExpense({ ...mapped, hasUnreadComments: false });
         syncExpenseReadState(expense.id, {
           comments: mapped.comments,
           commentCount: mapped.commentCount,
@@ -3877,7 +3899,7 @@ const ExpenseApproval: React.FC = () => {
     setHeaderStatusBanner('');
     setIsInitializingDraft(false);
     setListTab('written');
-    setStatusFilter('');
+    setStatusFilter(DEFAULT_LIST_STATUS_FILTER);
     setPage(1);
     setViewMode('list');
     await loadExpenseData();
@@ -4577,6 +4599,24 @@ const ExpenseApproval: React.FC = () => {
       setError(t('expenseApproval.errors.draftNotReady'));
       return;
     }
+    const wasAwaitingTaxInvoice =
+      viewMode === 'view' &&
+      selectedExpense != null &&
+      expenseIsAwaitingTaxInvoice(selectedExpense);
+    const uploadingTaxInvoice =
+      invoiceTypeForUpload === 'tax' || activeFormType === 'gst';
+    // 승인 이후 Tax Invoice가 이미 있으면 재업로드 안내
+    if (
+      viewMode === 'view' &&
+      selectedExpense != null &&
+      uploadingTaxInvoice &&
+      (selectedExpense.status === 'approved' || selectedExpense.status === 'paid') &&
+      expenseHasTaxInvoice(selectedExpense.attachments) &&
+      !wasAwaitingTaxInvoice
+    ) {
+      setError(t('expenseApproval.errors.taxInvoiceAlreadyAttached'));
+      return;
+    }
     try {
       setUploadingReceipts(true);
       const companyLabel =
@@ -4616,8 +4656,31 @@ const ExpenseApproval: React.FC = () => {
       }
       const next = normalizeExpenseAttachments(response.data?.attachments);
       setCurrentAttachments(next);
-      if (selectedExpense && selectedExpense.id === activeExpenseId) {
-        setSelectedExpense({ ...selectedExpense, attachments: next });
+      const uploadedTaxInvoice = uploadingTaxInvoice;
+      if (response.data) {
+        const mapped = mapExpense(response.data);
+        if (selectedExpense && selectedExpense.id === activeExpenseId) {
+          setSelectedExpense(mapped);
+        }
+        setExpenses((prev) => prev.map((row) => (row.id === mapped.id ? mapped : row)));
+      } else if (selectedExpense && selectedExpense.id === activeExpenseId) {
+        const patched = {
+          ...selectedExpense,
+          attachments: next,
+          status: (response.data?.status as ExpenseApprovalItem['status']) || selectedExpense.status,
+          paymentRequestStatus:
+            response.data?.payment_request_status ?? selectedExpense.paymentRequestStatus,
+        };
+        setSelectedExpense(patched);
+        setExpenses((prev) =>
+          prev.map((row) => (row.id === activeExpenseId ? { ...row, ...patched } : row))
+        );
+      }
+      // 택스 인보이스 대기 중 업로드: 상세에 남기고 저장 완료 메시지만 표시, 목록은 백그라운드 갱신
+      if (wasAwaitingTaxInvoice && uploadedTaxInvoice) {
+        setSuccess(t('expenseApproval.success.saveCompleted'));
+        void refreshExpenseListQuietly();
+        return;
       }
       setSuccess(
         activeFormType === 'gst'
@@ -5249,6 +5312,10 @@ const ExpenseApproval: React.FC = () => {
                 commentCount,
                 lastCommentAt,
                 hasUnreadComments,
+                attachments: selectedExpense.attachments,
+                status: selectedExpense.status,
+                paymentRequestStatus: selectedExpense.paymentRequestStatus,
+                paidAmount: selectedExpense.paidAmount,
               }
             : item
         )
@@ -5260,7 +5327,8 @@ const ExpenseApproval: React.FC = () => {
     setListSortKey(null);
     setListSortDir('asc');
     setViewMode('list');
-  }, [selectedExpense]);
+    await refreshExpenseListQuietly();
+  }, [selectedExpense, refreshExpenseListQuietly]);
 
   const canEditExpenseComment = useCallback(
     (comment: ExpenseReportComment) => isSameUserId(comment.userId, user?.id),
@@ -8961,28 +9029,40 @@ const ExpenseApproval: React.FC = () => {
                   {t('expenseApproval.detail.awaitingTaxInvoiceHint')}
                 </Alert>
               )}
+              {detailFormType !== 'gst' &&
+                isRequester &&
+                isExpenseApproved &&
+                expenseHasTaxInvoice(selectedExpense.attachments) &&
+                !expenseIsAwaitingTaxInvoice(selectedExpense) && (
+                  <Alert severity="info" sx={{ mb: 1.5, py: 0.5 }}>
+                    {t('expenseApproval.detail.taxInvoiceAlreadyAttached')}
+                  </Alert>
+                )}
               {(() => {
                 // 송금 탭/송금 담당 화면에서는 인보이스 유형 선택·파일 첨부 UI를 숨김
                 // (송금 확인증은 '송금하기' 다이얼로그에서만 첨부)
                 const isRemittanceView = listTab === 'transfer';
                 const awaitingTax = expenseIsAwaitingTaxInvoice(selectedExpense);
-                const hasProforma = normalizeExpenseAttachments(selectedExpense.attachments).some(
-                  (row) => row.invoiceType === 'proforma'
-                );
-                const approvedWithProforma =
-                  isExpenseApproved && hasProforma && !expenseHasTaxInvoice(selectedExpense.attachments);
+                const attachmentRows = normalizeExpenseAttachments(selectedExpense.attachments);
+                const hasProforma = attachmentRows.some((row) => row.invoiceType === 'proforma');
+                // 프로포마 승인 후·송금 전/송금 탭: 인보이스 변경 잠금.
+                // 다만 전액 송금 후 「택스 인보이스 대기」면 Tax Invoice 업로드는 허용.
+                const approvedWithProformaLocked =
+                  isExpenseApproved &&
+                  hasProforma &&
+                  !expenseHasTaxInvoice(selectedExpense.attachments) &&
+                  !awaitingTax;
                 // 작성자만, 수정 가능하거나(초안/반려) 택스 인보이스 대기일 때 첨부 가능
-                // 프로포마로 승인된 뒤 송금 단계에서는 첨부 비활성
                 const showInvoiceUpload =
                   isRequester &&
                   !isRemittanceView &&
-                  !approvedWithProforma &&
+                  !approvedWithProformaLocked &&
                   (canEditThis || awaitingTax);
                 const taxOnlyUpload = awaitingTax;
                 const isGstForm = detailFormType === 'gst';
 
                 if (!showInvoiceUpload) {
-                  if (isRemittanceView || approvedWithProforma) {
+                  if (isRemittanceView || approvedWithProformaLocked) {
                     return (
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                         {t('expenseApproval.detail.attachmentLockedOnRemittance')}
@@ -9064,19 +9144,60 @@ const ExpenseApproval: React.FC = () => {
                       </Box>
                 );
               })()}
-              {selectedExpense.attachments.length > 0 ? (
-                renderAttachmentList(selectedExpense.attachments, {
-                  ...(detailFormType === 'gst'
+              {(() => {
+                const attachmentRows = normalizeExpenseAttachments(selectedExpense.attachments);
+                const proformaRows = attachmentRows.filter((row) => row.invoiceType === 'proforma');
+                const otherRows = attachmentRows.filter((row) => row.invoiceType !== 'proforma');
+                if (attachmentRows.length === 0) {
+                  return (
+                    <Typography variant="body2" color="text.secondary">
+                      {detailFormType === 'gst'
+                        ? t('expenseApproval.voucher.calculationNone')
+                        : t('expenseApproval.voucher.receiptNone')}
+                    </Typography>
+                  );
+                }
+                const gstTypeLabel =
+                  detailFormType === 'gst'
                     ? { typeLabel: t('expenseApproval.voucher.gstPaymentCalculationLabel') }
-                    : {}),
-                })
-              ) : (
-                      <Typography variant="body2" color="text.secondary">
-                  {detailFormType === 'gst'
-                    ? t('expenseApproval.voucher.calculationNone')
-                    : t('expenseApproval.voucher.receiptNone')}
+                    : undefined;
+                return (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {proformaRows.length > 0 ? (
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ ...sectionTitleSx, mt: 0, mb: 0.75 }}>
+                          {t('expenseApproval.voucher.invoiceTypeProforma')}
                         </Typography>
-                      )}
+                        {renderAttachmentList(proformaRows)}
+                      </Box>
+                    ) : null}
+                    {otherRows.length > 0 ? (
+                      <Box>
+                        {proformaRows.length > 0 && detailFormType !== 'gst' ? (
+                          <Typography variant="subtitle2" sx={{ ...sectionTitleSx, mt: 0, mb: 0.75 }}>
+                            {t('expenseApproval.voucher.invoiceTypeTax')}
+                          </Typography>
+                        ) : null}
+                        {renderAttachmentList(otherRows, gstTypeLabel)}
+                      </Box>
+                    ) : null}
+                  </Box>
+                );
+              })()}
+              {(() => {
+                const proofPaths = (selectedExpense.bankTransferLogs || [])
+                  .map((log) => log.proof || log.payload?.proof)
+                  .filter((p): p is string => Boolean(p));
+                if (proofPaths.length === 0) return null;
+                return (
+                  <Box sx={{ mt: 1.5 }}>
+                    <Typography variant="subtitle2" sx={{ ...sectionTitleSx, mt: 0 }}>
+                      {t('expenseApproval.detail.remittanceProofs')}
+                    </Typography>
+                    {renderAttachmentList(proofPaths)}
+                  </Box>
+                );
+              })()}
             </Box>
             )}
 
@@ -9237,21 +9358,22 @@ const ExpenseApproval: React.FC = () => {
             )}
             </Box>
 
-            {/* 송금 확인증 */}
-            {(() => {
-              const proofPaths = (selectedExpense.bankTransferLogs || [])
-                .map((log) => log.proof || log.payload?.proof)
-                .filter((p): p is string => Boolean(p));
-              if (proofPaths.length === 0) return null;
-              return (
-                <Box className="expense-pdf-plain">
-                  <Typography variant="subtitle2" sx={sectionTitleSx}>
-                    {t('expenseApproval.detail.remittanceProofs')}
-                        </Typography>
-                  {renderAttachmentList(proofPaths)}
-            </Box>
-              );
-            })()}
+            {/* 송금 확인증 — 첨부파일 영역(위)에 표시. TDS 등 첨부 영역이 없을 때만 여기 노출 */}
+            {detailFormType === 'tds' &&
+              (() => {
+                const proofPaths = (selectedExpense.bankTransferLogs || [])
+                  .map((log) => log.proof || log.payload?.proof)
+                  .filter((p): p is string => Boolean(p));
+                if (proofPaths.length === 0) return null;
+                return (
+                  <Box className="expense-pdf-plain">
+                    <Typography variant="subtitle2" sx={sectionTitleSx}>
+                      {t('expenseApproval.detail.remittanceProofs')}
+                    </Typography>
+                    {renderAttachmentList(proofPaths)}
+                  </Box>
+                );
+              })()}
 
             {/* 메모 */}
             {(selectedExpense.notes || meta.remarks) && (
@@ -9969,7 +10091,7 @@ const ExpenseApproval: React.FC = () => {
         value={listTab}
           onChange={(_, value) => {
             setListTab(value);
-            setStatusFilter('');
+            setStatusFilter(defaultStatusFilterForTab(value));
             setPage(1);
             setListSortKey(null);
             setListSortDir('asc');
@@ -10117,6 +10239,7 @@ const ExpenseApproval: React.FC = () => {
                     return transferLabels[String(selected)] ?? String(selected);
                   }
                   const statusLabels: Record<string, string> = {
+                    [DEFAULT_LIST_STATUS_FILTER]: t('expenseApproval.filters.draftAndSubmitted'),
                     draft: t('expenseApproval.status.draft'),
                     submitted: t('expenseApproval.status.submitted'),
                     in_review: t('expenseApproval.status.inReview'),
@@ -10149,6 +10272,9 @@ const ExpenseApproval: React.FC = () => {
                     </MenuItem>,
                   ]
                 : [
+                    <MenuItem key={DEFAULT_LIST_STATUS_FILTER} value={DEFAULT_LIST_STATUS_FILTER}>
+                      {t('expenseApproval.filters.draftAndSubmitted')}
+                    </MenuItem>,
                     <MenuItem key="draft" value="draft">
                       {t('expenseApproval.status.draft')}
                     </MenuItem>,
@@ -10204,7 +10330,7 @@ const ExpenseApproval: React.FC = () => {
               startIcon={<FilterIcon sx={{ fontSize: 18 }} />}
                 onClick={() => {
                   setSearchTerm('');
-                  setStatusFilter('');
+                  setStatusFilter(defaultStatusFilterForTab(listTab));
                   setPriorityFilter('');
                 setListSortKey(null);
                 setListSortDir('asc');

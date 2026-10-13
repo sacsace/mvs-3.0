@@ -4890,6 +4890,7 @@ export default {
         status: '상태',
         priority: '우선순위',
         all: '전체',
+        draftAndSubmitted: '초안 · 제출됨',
         paymentApprovedOnly: '승인됨',
         company: '회사',
         allCompanies: '전체 회사'
@@ -4982,6 +4983,8 @@ export default {
           '이 파일 형식은 미리보기를 지원하지 않습니다. 다운로드하거나 새 탭에서 열어 주세요.',
         awaitingTaxInvoiceHint:
           '송금은 완료되었지만 Tax Invoice가 없어 종료되지 않았습니다. Tax Invoice를 첨부해 주세요.',
+        taxInvoiceAlreadyAttached:
+          '이 지출결의서에는 Tax Invoice가 이미 첨부되어 있습니다. 승인 이후에는 추가로 업로드할 수 없습니다.',
         attachmentLockedOnRemittance:
           '프로포마로 승인된 건은 송금 단계에서 인보이스 첨부를 변경할 수 없습니다. (송금 확인증은 송금하기에서 첨부)',
         uploadTaxInvoiceOnly: '종료하려면 Tax Invoice만 추가 첨부할 수 있습니다.',
@@ -5191,6 +5194,7 @@ export default {
         receiptAttached: '영수증이 첨부되었습니다.',
         calculationAttached: '계산식이 첨부되었습니다.',
         receiptDeleted: '영수증 첨부가 삭제되었습니다.',
+        saveCompleted: '저장이 완료되었습니다.',
         taxInvoiceAttached: 'Tax Invoice가 첨부되었습니다.',
         proformaAttached: 'Proforma Invoice (Quotation)가 첨부되었습니다.',
         noInvoiceAttached: '인보이스 없음으로 파일이 첨부되었습니다.',
@@ -5231,6 +5235,8 @@ export default {
         qrTokenFailed: 'QR 토큰 발급에 실패했습니다.',
         receiptUploadFailed: '영수증 업로드 중 오류가 발생했습니다.',
         receiptDeleteFailed: '영수증 삭제 중 오류가 발생했습니다.',
+        taxInvoiceAlreadyAttached:
+          'Tax Invoice가 이미 첨부되어 있습니다. 승인 이후에는 추가로 업로드할 수 없습니다.',
         fileRequired: '파일이 필요합니다.',
         selectCompanyFirst: '회사를 먼저 선택해주세요.',
         companyNotFound: '선택한 회사를 찾을 수 없습니다.',
