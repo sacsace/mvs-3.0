@@ -143,8 +143,8 @@ const isPdfReceipt = (filePath: string): boolean =>
 
 /** 작성/받은 탭 기본 상태 필터: 초안 + 제출됨 */
 const DEFAULT_LIST_STATUS_FILTER = 'draft_submitted';
-/** 송금 탭 기본 상태 필터: 송금완료 */
-const DEFAULT_TRANSFER_STATUS_FILTER = 'transfer_completed';
+/** 송금 탭 기본 상태 필터: 송금대기 */
+const DEFAULT_TRANSFER_STATUS_FILTER = 'transfer_pending';
 
 const defaultStatusFilterForTab = (tab: string) =>
   tab === 'transfer' ? DEFAULT_TRANSFER_STATUS_FILTER : DEFAULT_LIST_STATUS_FILTER;
