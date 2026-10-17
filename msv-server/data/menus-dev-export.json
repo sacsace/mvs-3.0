@@ -546,7 +546,7 @@
             "icon": "psychology",
             "order": 9,
             "level": 1,
-            "is_active": true,
+            "is_active": false,
             "description": null
         },
         {
@@ -559,7 +559,7 @@
             "icon": "settings",
             "order": 11,
             "level": 1,
-            "is_active": true,
+            "is_active": false,
             "description": null
         },
         {

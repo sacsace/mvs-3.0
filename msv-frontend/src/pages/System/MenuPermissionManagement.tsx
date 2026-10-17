@@ -15,9 +15,6 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   Tooltip,
   Alert,
   FormControl,
@@ -40,8 +37,34 @@ import {
   AutoAwesome as AutoAwesomeIcon,
   VisibilityOff as VisibilityOffIcon,
   EditNote as EditNoteIcon,
-  AdminPanelSettings as AdminPanelSettingsIcon
+  AdminPanelSettings as AdminPanelSettingsIcon,
+  DragIndicator as DragIndicatorIcon,
 } from '@mui/icons-material';
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverEvent,
+  DragOverlay,
+  DragStartEvent,
+  MeasuringStrategy,
+  PointerSensor,
+  closestCenter,
+  defaultDropAnimationSideEffects,
+  useSensor,
+  useSensors,
+  type CollisionDetection,
+  type DropAnimation,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  defaultAnimateLayoutChanges,
+  useSortable,
+  verticalListSortingStrategy,
+  type AnimateLayoutChanges,
+} from '@dnd-kit/sortable';
+import { restrictToVerticalAxis, restrictToFirstScrollableAncestor } from '@dnd-kit/modifiers';
+import { CSS } from '@dnd-kit/utilities';
 import { useStore, useMenuStore } from '../../store';
 import menuService from '../../services/menuService';
 import { Menu } from '../../services/menuService';
@@ -55,6 +78,129 @@ import {
   isMinsubCompanyName,
   isMinsubOnlyMenuRoute,
 } from '../../utils/canAccessSystemLoginHistory';
+import { isRemovedNavMenuRoute } from '../../utils/isRemovedNavMenuRoute';
+
+/** 핸들 | 펼침 | 메뉴명 | 권한 — 행 높이 고정이 DnD 부드러움의 핵심 */
+const MENU_ROW_GRID_COLUMNS = '22px 22px minmax(12ch, 1fr) auto';
+const MENU_ROW_HEIGHT = 40;
+
+const filterOutRemovedMenus = (menus: Menu[]): Menu[] =>
+  menus
+    .filter((m) => !isRemovedNavMenuRoute(m.route))
+    .map((m) =>
+      m.children?.length
+        ? { ...m, children: filterOutRemovedMenus(m.children) }
+        : m
+    );
+
+const applyMenuOrderIndexes = (menus: Menu[]): Menu[] =>
+  menus.map((menu, index) => ({
+    ...menu,
+    order: index + 1,
+    children: menu.children?.length ? applyMenuOrderIndexes(menu.children) : menu.children,
+  }));
+
+const findMenuSiblingContext = (
+  menus: Menu[],
+  menuId: number,
+  parentId: number | null = null
+): { parentId: number | null; siblings: Menu[]; index: number } | null => {
+  const index = menus.findIndex((m) => m.id === menuId);
+  if (index >= 0) {
+    return { parentId, siblings: menus, index };
+  }
+  for (const menu of menus) {
+    if (menu.children?.length) {
+      const found = findMenuSiblingContext(menu.children, menuId, menu.id);
+      if (found) return found;
+    }
+  }
+  return null;
+};
+
+const replaceMenuSiblings = (
+  menus: Menu[],
+  parentId: number | null,
+  newSiblings: Menu[]
+): Menu[] => {
+  if (parentId === null) return newSiblings;
+  return menus.map((menu) => {
+    if (menu.id === parentId) {
+      return { ...menu, children: newSiblings };
+    }
+    if (menu.children?.length) {
+      return { ...menu, children: replaceMenuSiblings(menu.children, parentId, newSiblings) };
+    }
+    return menu;
+  });
+};
+
+const findMenuInTree = (menus: Menu[], menuId: number): Menu | null => {
+  for (const menu of menus) {
+    if (menu.id === menuId) return menu;
+    if (menu.children?.length) {
+      const found = findMenuInTree(menu.children, menuId);
+      if (found) return found;
+    }
+  }
+  return null;
+};
+
+const MENU_DROP_ANIMATION: DropAnimation = {
+  duration: 200,
+  easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+  sideEffects: defaultDropAnimationSideEffects({
+    styles: { active: { opacity: '0.25' } },
+  }),
+};
+
+/** 드래그 중 레이아웃 애니메이션 — 형제 행이 미끄러지듯 자리 교체 */
+const menuAnimateLayoutChanges: AnimateLayoutChanges = (args) =>
+  defaultAnimateLayoutChanges({ ...args, wasDragging: true });
+
+/** 드래그 중 커서에 붙는 미리보기 — 원본 행과 동일 높이 */
+const MenuDragOverlayRow: React.FC<{ label: string; level: number }> = ({ label, level }) => (
+  <Box
+    sx={{
+      display: 'grid',
+      gridTemplateColumns: MENU_ROW_GRID_COLUMNS,
+      columnGap: 1.5,
+      alignItems: 'center',
+      width: 'min(760px, 94vw)',
+      height: MENU_ROW_HEIGHT,
+      px: 1.25,
+      borderRadius: 0,
+      border: '1px solid',
+      borderColor: 'primary.main',
+      bgcolor: level === 0 ? '#ffffff' : '#F3F5F8',
+      boxShadow: '0 12px 32px rgba(15, 23, 42, 0.18)',
+      cursor: 'grabbing',
+      userSelect: 'none',
+      transform: 'scale(1.02)',
+      transformOrigin: 'left center',
+    }}
+  >
+    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'primary.main' }}>
+      <DragIndicatorIcon sx={{ fontSize: '1.15rem' }} />
+    </Box>
+    <Box />
+    <Typography
+      variant="body2"
+      sx={{
+        fontWeight: 600,
+        fontSize: '0.875rem',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </Typography>
+    <Typography variant="caption" sx={{ justifySelf: 'end', color: 'text.disabled', pr: 0.5 }}>
+      ···
+    </Typography>
+  </Box>
+);
 
 interface User {
   id: number;
@@ -108,6 +254,8 @@ interface MenuPermissionItemProps {
   menu: Menu;
   level: number;
   index: number;
+  /** 같은 부모 형제 그룹 키 — 하위 DnD 시 상위와 섞이지 않도록 */
+  parentGroupId: string;
   hasChildren: boolean;
   isExpanded: boolean;
   permission: MenuPermission;
@@ -123,386 +271,404 @@ interface MenuPermissionItemProps {
     can_edit: boolean;
     can_delete: boolean;
   };
+  /** 목록 드래그 중이면 체크박스 등 무거운 UI를 줄여 프레임 유지 */
+  listDragging: boolean;
   onToggleExpand: (menuId: number) => void;
   onPermissionChange: (menuKey: string, permissionType: keyof MenuPermission | 'all', value: boolean) => void;
   onToggleChildren: (menuId: number) => void;
-  onOrderChange: (menuId: number, newOrder: number) => void;
   onNameChange: (menuId: number, nameKo: string, nameEn: string) => void;
-  currentOrder: number;
-  totalCount: number;
-  renderMenuTree: (menuList: Menu[], level: number, parentIndex: number, isLast: boolean) => React.ReactNode;
+  renderMenuTree: (
+    menuList: Menu[],
+    level: number,
+    parentMenuId: number | null,
+    parentIndex?: number,
+    isLast?: boolean
+  ) => React.ReactNode;
 }
 
-const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
+const MenuPermissionItemInner: React.FC<MenuPermissionItemProps> = ({
   menu,
   level,
-  index,
+  parentGroupId,
   hasChildren,
   isExpanded,
   permission,
   hasAnyPermission,
   menuKey,
   language,
-  expandedMenus,
+  listDragging,
   canGrant,
   onToggleExpand,
   onPermissionChange,
-  onToggleChildren,
-  onOrderChange,
-  onNameChange,
-  currentOrder,
-  totalCount,
   renderMenuTree
 }) => {
   const { t } = useTranslation();
-  const [orderValue, setOrderValue] = useState(String(currentOrder));
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: menu.id,
+    data: { parentGroupId, menuId: menu.id, level },
+    animateLayoutChanges: menuAnimateLayoutChanges,
+  });
 
-  const handleOrderBlur = () => {
-    const newOrder = parseInt(orderValue, 10);
-    if (!isNaN(newOrder) && newOrder >= 1 && newOrder <= totalCount && newOrder !== currentOrder) {
-      onOrderChange(menu.id, newOrder);
-    } else {
-      setOrderValue(String(currentOrder));
-    }
+  const rowStyle: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    // 드래그 중인 원본은 transition 끄고, 형제만 미끄러지게
+    transition: isDragging
+      ? undefined
+      : transition ?? 'transform 180ms cubic-bezier(0.2, 0, 0, 1)',
+    position: 'relative',
+    zIndex: isDragging ? 1 : 0,
+    // GPU 합성 — 세로 이동만
+    willChange: listDragging ? 'transform' : undefined,
   };
 
-  const handleOrderKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleOrderBlur();
-    }
-  };
-
-  useEffect(() => {
-    setOrderValue(String(currentOrder));
-  }, [currentOrder]);
+  const rowBg = isDragging
+    ? alpha('#1976d2', 0.08)
+    : level === 0
+      ? '#ffffff'
+      : level === 1
+        ? '#F3F5F8'
+        : '#ECEFF3';
 
   return (
-    <Box 
-      sx={{ 
-        mb: level === 0 ? 0.448 : 0.72, // 줄 간격 20% 감소 (0.56 * 0.8 = 0.448, 0.9 * 0.8 = 0.72)
-        pl: level > 0 ? `${level * 24 + 8}px` : 0,
-        position: 'relative'
+    <Box
+      sx={{
+        mb: 0.5,
+        pl: level > 0 ? `${level * 20}px` : 0,
+        contain: 'layout style',
       }}
     >
-      <Accordion
-        expanded={isExpanded}
-        onChange={() => onToggleExpand(menu.id)}
+      <Box
+        ref={setNodeRef}
+        style={rowStyle}
         sx={{
-          '&:before': { display: 'none' },
-          boxShadow: 'none',
-          border: 'none',
+          display: 'grid',
+          gridTemplateColumns: MENU_ROW_GRID_COLUMNS,
+          columnGap: 1.5,
+          alignItems: 'center',
+          width: '100%',
+          height: MENU_ROW_HEIGHT,
+          minHeight: MENU_ROW_HEIGHT,
+          maxHeight: MENU_ROW_HEIGHT,
+          px: 1,
+          boxSizing: 'border-box',
+          bgcolor: rowBg,
           borderRadius: 0,
-          backgroundColor: 'transparent',
-          mb: level === 0 ? 0.768 : 0.72, // 줄 간격 20% 감소 (0.96 * 0.8 = 0.768, 0.9 * 0.8 = 0.72)
-          position: 'relative',
-          '&::before': level === 0 ? {
-            content: '""',
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            top: 0,
-            height: '3px',
-            backgroundColor: '#ffffff', // 기본 흰색
-            borderRadius: '4px 4px 0 0',
-            transition: 'background-color 0.2s ease'
-          } : { display: 'none' },
-          '&::after': level === 0 ? {
-            content: '""',
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: '5px',
-            backgroundColor: '#ffffff', // 기본 흰색
-            borderRadius: '4px 0 0 4px',
-            transition: 'background-color 0.2s ease'
-          } : { display: 'none' },
-          '& .MuiAccordionSummary-root': {
-            backgroundColor: '#ffffff', // 기본 흰색 배경
-            borderRadius: level === 0 ? '0 4px 4px 0' : 0,
-            borderLeft: 'none',
-            pl: level === 0 ? 2 : 0.5,
-            position: 'relative',
-            transition: 'background-color 0.2s ease',
-            '&::before': level > 0 ? {
-              content: '""',
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: '3px',
-              backgroundColor: '#ffffff',
-              borderRadius: '2px 0 0 2px',
-              transition: 'background-color 0.2s ease'
-            } : { display: 'none' },
-            '&:hover': {
-              backgroundColor: hasAnyPermission ? 'rgba(25, 118, 210, 0.15)' : 'rgba(25, 118, 210, 0.08)',
-              '&::before': level > 0 ? {
-                backgroundColor: 'primary.main'
-              } : {}
-            }
-          },
-          '&:hover': level === 0 ? {
-            '&::before': {
-              backgroundColor: 'primary.main',
-              height: '4px'
-            },
-            '&::after': {
-              backgroundColor: 'primary.main',
-              width: '6px'
-            }
-          } : {}
+          border: '1px solid',
+          borderStyle: isDragging ? 'dashed' : 'solid',
+          borderColor: isDragging
+            ? 'primary.main'
+            : level === 0
+              ? alpha('#000', 0.06)
+              : alpha('#64748B', 0.18),
+          borderLeft: level === 0 ? '4px solid' : '3px solid',
+          borderLeftColor: isDragging
+            ? 'primary.main'
+            : level === 0
+              ? hasAnyPermission
+                ? 'primary.main'
+                : alpha('#000', 0.08)
+              : hasAnyPermission
+                ? '#78909C'
+                : alpha('#64748B', 0.35),
+          // 드래그 원본: 빈 자리만 (오버레이가 실제 카드)
+          opacity: isDragging ? 0.35 : 1,
+          pointerEvents: isDragging ? 'none' : 'auto',
+          '&:hover': isDragging || listDragging
+            ? undefined
+            : {
+                bgcolor:
+                  level === 0
+                    ? hasAnyPermission
+                      ? 'rgba(211, 47, 47, 0.08)'
+                      : 'rgba(211, 47, 47, 0.04)'
+                    : hasAnyPermission
+                      ? 'rgba(211, 47, 47, 0.1)'
+                      : 'rgba(211, 47, 47, 0.06)',
+                borderColor: alpha('#D32F2F', 0.35),
+                borderLeftColor: '#D32F2F',
+              },
         }}
       >
-        <AccordionSummary
-          expandIcon={hasChildren ? <ExpandMoreIcon sx={{ fontSize: 14 }} /> : null}
-          sx={{ 
-            minHeight: level === 0 ? 5 : 5, // 박스 최소 높이 5
-            '&.Mui-expanded': { minHeight: level === 0 ? 5 : 5 },
-            py: level === 0 ? 0.064 : 0.064,
-            px: 0.5,
-            pl: level === 0 ? 2 : 0.5,
-            '& .MuiAccordionSummary-content': {
-              margin: '0 !important',
-              my: 0,
-              minWidth: 0,
-              flexGrow: 1,
-              overflow: 'visible' },
-            '& .MuiAccordionSummary-content.Mui-expanded': {
-              margin: '0 !important',
-              minWidth: 0 },
-            '& .MuiAccordionSummary-expandIconWrapper': {
-              padding: 0
-            }
-          }}
-        >
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: 'auto 76px auto',
-              columnGap: 2,
-              alignItems: 'center',
-              width: '100%',
-              minWidth: 0,
-              pr: 0.5 }}
-          >
-            {/* 1. 메뉴명 */}
+        {isDragging ? null : (
+          <>
+            {/* 드래그 핸들 — 행 전체가 아닌 핸들만 잡음 */}
+            <Box
+              {...attributes}
+              {...listeners}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                cursor: isDragging ? 'grabbing' : 'grab',
+                color: 'text.disabled',
+                touchAction: 'none',
+                flexShrink: 0,
+                '&:hover': { color: 'text.primary', bgcolor: alpha('#000', 0.04) },
+              }}
+              title={t('menuPermissionManagement.menuOrder')}
+            >
+              <DragIndicatorIcon sx={{ fontSize: '1.15rem' }} />
+            </Box>
+
+            {/* 펼침 — 상위는 메뉴명 클릭, 하위(중첩)는 화살표로 펼침 */}
+            {hasChildren ? (
+              <Box
+                onClick={() => onToggleExpand(menu.id)}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '100%',
+                  cursor: 'pointer',
+                  color: 'text.secondary',
+                  transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                  transition: 'transform 0.15s ease',
+                }}
+              >
+                <ExpandMoreIcon sx={{ fontSize: 18 }} />
+              </Box>
+            ) : (
+              <Box />
+            )}
+
+            {/* 메뉴명 — 상위: 클릭 시 펼침 / 하위: 메뉴명으로 DnD */}
             <Typography
               variant="body2"
+              {...(level > 0 ? { ...attributes, ...listeners } : {})}
+              onClick={
+                level === 0 && hasChildren ? () => onToggleExpand(menu.id) : undefined
+              }
               sx={{
-                minWidth: '12ch',
-                py: 0.35,
+                py: 0,
                 fontSize: level === 0 ? '0.875rem' : level === 1 ? '0.8125rem' : '0.75rem',
                 fontWeight: level === 0 ? 600 : level === 1 ? 500 : 400,
                 color: hasAnyPermission ? 'text.primary' : 'text.secondary',
-                maxWidth: 380,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
                 lineHeight: 1.35,
-                letterSpacing: '-0.01em' }}
+                letterSpacing: '-0.01em',
+                cursor:
+                  level > 0
+                    ? isDragging
+                      ? 'grabbing'
+                      : 'grab'
+                    : hasChildren
+                      ? 'pointer'
+                      : 'default',
+                userSelect: 'none',
+                touchAction: level > 0 ? 'none' : undefined,
+              }}
             >
               {language === 'ko' ? menu.name_ko : menu.name_en}
             </Typography>
 
-            {/* 2. 메뉴 순서 */}
-            <TextField
-              type="number"
-              value={orderValue}
-              onChange={(e) => setOrderValue(e.target.value)}
-              onBlur={handleOrderBlur}
-              onKeyDown={handleOrderKeyDown}
-              onClick={(e) => e.stopPropagation()}
-              inputProps={{
-                min: 1,
-                max: totalCount,
-                style: {
-                  textAlign: 'center',
-                  padding: '6px 4px',
-                  fontSize: '0.8125rem' } }}
-              sx={{
-                width: '100%',
-                maxWidth: 76,
-                justifySelf: 'end',
-                '& .MuiOutlinedInput-root': {
-                  height: 32,
-                  borderRadius: '10px',
-                  bgcolor: (theme) => alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.12 : 0.06),
-                  '& fieldset': {
-                    borderColor: (theme) => alpha(theme.palette.divider, 0.9) },
-                  '&:hover fieldset': {
-                    borderColor: (theme) => alpha(theme.palette.text.primary, 0.15) },
-                  '&.Mui-focused fieldset': {
-                    borderWidth: 1 },
-                  '& input': {
-                    padding: '6px 4px',
-                    fontSize: '0.8125rem',
-                    fontWeight: 600 } } }}
-            />
-
-            {/* 3. 권한 체크박스 */}
-            <Box
-              sx={{
-                display: 'flex',
-                flexWrap: 'nowrap',
-                gap: 0.5,
-                alignItems: 'center',
-                justifyContent: 'flex-end',
-                minWidth: 'min-content' }}
-            >
-              <Tooltip
-                title={
-                  canGrant.all
-                    ? t('menuPermissionManagement.toggleAll')
-                    : t('menuPermissionManagement.adminScopeBlocked')
-                }
-                arrow
+            {/* 권한 — 드래그 중에는 가벼운 플레이스홀더로 교체 (프레임 확보) */}
+            {listDragging ? (
+              <Typography
+                variant="caption"
+                sx={{ justifySelf: 'end', color: 'text.disabled', pr: 0.5, fontSize: '0.75rem' }}
               >
-                <Box
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!canGrant.all) return;
-                    const allChecked = permission.can_view && permission.can_create && permission.can_edit && permission.can_delete;
-                    onPermissionChange(menuKey, 'all', !allChecked);
-                  }}
-                  sx={{ 
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.125,
-                    p: 0.375,
-                    borderRadius: 0.5,
-                    border: '1px solid',
-                    borderColor: (permission.can_view && permission.can_create && permission.can_edit && permission.can_delete) ? 'primary.main' : 'divider',
-                    backgroundColor: (permission.can_view && permission.can_create && permission.can_edit && permission.can_delete) ? 'primary.50' : 'transparent',
-                    cursor: canGrant.all ? 'pointer' : 'not-allowed',
-                    opacity: canGrant.all ? 1 : 0.45,
-                    transition: 'all 0.15s ease',
-                    '&:hover': canGrant.all ? {
-                      borderColor: 'primary.main',
-                      backgroundColor: 'primary.50'
-                    } : undefined
-                  }}
+                ···
+              </Typography>
+            ) : (
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexWrap: 'nowrap',
+                  gap: 0.5,
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  minWidth: 'min-content',
+                }}
+              >
+                <Tooltip
+                  title={
+                    canGrant.all
+                      ? t('menuPermissionManagement.toggleAll')
+                      : t('menuPermissionManagement.adminScopeBlocked')
+                  }
+                  arrow
                 >
-                  <Checkbox
-                    checked={permission.can_view && permission.can_create && permission.can_edit && permission.can_delete}
-                    indeterminate={hasAnyPermission && !(permission.can_view && permission.can_create && permission.can_edit && permission.can_delete)}
-                    disabled={!canGrant.all}
-                    size="small"
-                    sx={{ p: 0, '& .MuiSvgIcon-root': { fontSize: 15.4 } }}
-                    onChange={(e) => {
+                  <Box
+                    onClick={(e) => {
                       e.stopPropagation();
                       if (!canGrant.all) return;
-                      onPermissionChange(menuKey, 'all', e.target.checked);
+                      const allChecked =
+                        permission.can_view &&
+                        permission.can_create &&
+                        permission.can_edit &&
+                        permission.can_delete;
+                      onPermissionChange(menuKey, 'all', !allChecked);
                     }}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <Typography variant="caption" sx={{ fontSize: '0.6875rem', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                    {t('menuPermissionManagement.all')}
-                  </Typography>
-                </Box>
-              </Tooltip>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={permission.can_view}
-                    disabled={!canGrant.can_view}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      onPermissionChange(menuKey, 'can_view', e.target.checked);
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.125,
+                      p: 0.375,
+                      borderRadius: 0.5,
+                      border: '1px solid',
+                      borderColor:
+                        permission.can_view &&
+                        permission.can_create &&
+                        permission.can_edit &&
+                        permission.can_delete
+                          ? 'primary.main'
+                          : 'divider',
+                      backgroundColor:
+                        permission.can_view &&
+                        permission.can_create &&
+                        permission.can_edit &&
+                        permission.can_delete
+                          ? 'primary.50'
+                          : 'transparent',
+                      cursor: canGrant.all ? 'pointer' : 'not-allowed',
+                      opacity: canGrant.all ? 1 : 0.45,
                     }}
-                    size="small"
-                    sx={{ '& .MuiSvgIcon-root': { fontSize: 15.4 } }}
-                  />
-                }
-                label={t('menuPermissionManagement.view')}
-                sx={{
-                  m: 0,
-                  opacity: canGrant.can_view ? 1 : 0.45,
-                  '& .MuiFormControlLabel-label': { fontSize: '0.6875rem' }
-                }}
-                onClick={(e) => e.stopPropagation()}
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={permission.can_create}
-                    disabled={!canGrant.can_create}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      onPermissionChange(menuKey, 'can_create', e.target.checked);
-                    }}
-                    size="small"
-                    sx={{ '& .MuiSvgIcon-root': { fontSize: 15.4 } }}
-                  />
-                }
-                label={t('menuPermissionManagement.create')}
-                sx={{
-                  m: 0,
-                  opacity: canGrant.can_create ? 1 : 0.45,
-                  '& .MuiFormControlLabel-label': { fontSize: '0.6875rem' }
-                }}
-                onClick={(e) => e.stopPropagation()}
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={permission.can_edit}
-                    disabled={!canGrant.can_edit}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      onPermissionChange(menuKey, 'can_edit', e.target.checked);
-                    }}
-                    size="small"
-                    sx={{ '& .MuiSvgIcon-root': { fontSize: 15.4 } }}
-                  />
-                }
-                label={t('menuPermissionManagement.edit')}
-                sx={{
-                  m: 0,
-                  opacity: canGrant.can_edit ? 1 : 0.45,
-                  '& .MuiFormControlLabel-label': { fontSize: '0.6875rem' }
-                }}
-                onClick={(e) => e.stopPropagation()}
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={permission.can_delete}
-                    disabled={!canGrant.can_delete}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      onPermissionChange(menuKey, 'can_delete', e.target.checked);
-                    }}
-                    size="small"
-                    sx={{ '& .MuiSvgIcon-root': { fontSize: 15.4 } }}
-                  />
-                }
-                label={t('menuPermissionManagement.delete')}
-                sx={{
-                  m: 0,
-                  opacity: canGrant.can_delete ? 1 : 0.45,
-                  '& .MuiFormControlLabel-label': { fontSize: '0.6875rem' }
-                }}
-                onClick={(e) => e.stopPropagation()}
-              />
-            </Box>
-          </Box>
-        </AccordionSummary>
-        {hasChildren && (
-          <AccordionDetails sx={{
-            pl: 0.5,
-            pt: 1.2, // 줄 간격 20% 감소 (1.5 * 0.8 = 1.2)
-            pb: 0,
-            backgroundColor: 'transparent',
-            ml: 0.75
-          }}>
-            {renderMenuTree(menu.children!, level + 1, index, false)}
-          </AccordionDetails>
+                  >
+                    <Checkbox
+                      checked={
+                        permission.can_view &&
+                        permission.can_create &&
+                        permission.can_edit &&
+                        permission.can_delete
+                      }
+                      indeterminate={
+                        hasAnyPermission &&
+                        !(
+                          permission.can_view &&
+                          permission.can_create &&
+                          permission.can_edit &&
+                          permission.can_delete
+                        )
+                      }
+                      disabled={!canGrant.all}
+                      size="small"
+                      sx={{ p: 0, '& .MuiSvgIcon-root': { fontSize: 15.4 } }}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        if (!canGrant.all) return;
+                        onPermissionChange(menuKey, 'all', e.target.checked);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <Typography
+                      variant="caption"
+                      sx={{ fontSize: '0.6875rem', fontWeight: 500, whiteSpace: 'nowrap' }}
+                    >
+                      {t('menuPermissionManagement.all')}
+                    </Typography>
+                  </Box>
+                </Tooltip>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={permission.can_view}
+                      disabled={!canGrant.can_view}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        onPermissionChange(menuKey, 'can_view', e.target.checked);
+                      }}
+                      size="small"
+                      sx={{ '& .MuiSvgIcon-root': { fontSize: 15.4 } }}
+                    />
+                  }
+                  label={t('menuPermissionManagement.view')}
+                  sx={{
+                    m: 0,
+                    opacity: canGrant.can_view ? 1 : 0.45,
+                    '& .MuiFormControlLabel-label': { fontSize: '0.6875rem' },
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={permission.can_create}
+                      disabled={!canGrant.can_create}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        onPermissionChange(menuKey, 'can_create', e.target.checked);
+                      }}
+                      size="small"
+                      sx={{ '& .MuiSvgIcon-root': { fontSize: 15.4 } }}
+                    />
+                  }
+                  label={t('menuPermissionManagement.create')}
+                  sx={{
+                    m: 0,
+                    opacity: canGrant.can_create ? 1 : 0.45,
+                    '& .MuiFormControlLabel-label': { fontSize: '0.6875rem' },
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={permission.can_edit}
+                      disabled={!canGrant.can_edit}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        onPermissionChange(menuKey, 'can_edit', e.target.checked);
+                      }}
+                      size="small"
+                      sx={{ '& .MuiSvgIcon-root': { fontSize: 15.4 } }}
+                    />
+                  }
+                  label={t('menuPermissionManagement.edit')}
+                  sx={{
+                    m: 0,
+                    opacity: canGrant.can_edit ? 1 : 0.45,
+                    '& .MuiFormControlLabel-label': { fontSize: '0.6875rem' },
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={permission.can_delete}
+                      disabled={!canGrant.can_delete}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        onPermissionChange(menuKey, 'can_delete', e.target.checked);
+                      }}
+                      size="small"
+                      sx={{ '& .MuiSvgIcon-root': { fontSize: 15.4 } }}
+                    />
+                  }
+                  label={t('menuPermissionManagement.delete')}
+                  sx={{
+                    m: 0,
+                    opacity: canGrant.can_delete ? 1 : 0.45,
+                    '& .MuiFormControlLabel-label': { fontSize: '0.6875rem' },
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </Box>
+            )}
+          </>
         )}
-      </Accordion>
+      </Box>
+
+      {/* 하위는 부모 행(transform) 밖에 두어 하위 DnD 시 상위가 같이 움직이지 않음 */}
+      {hasChildren && isExpanded && (
+        <Box sx={{ pt: 0.35, pb: 0.15 }}>
+          {renderMenuTree(menu.children!, level + 1, menu.id)}
+        </Box>
+      )}
     </Box>
   );
 };
+
+const MenuPermissionItem = React.memo(MenuPermissionItemInner);
 
 const MenuPermissionManagement: React.FC = () => {
   const theme = useTheme();
@@ -867,48 +1033,10 @@ const MenuPermissionManagement: React.FC = () => {
     }
   };
 
-  // 메뉴 순서 변경
-  const handleOrderChange = async (menuId: number, newOrder: number) => {
-    const reorderMenuInList = (menus: Menu[]): Menu[] => {
-      for (let i = 0; i < menus.length; i++) {
-        if (menus[i].id === menuId) {
-          // 같은 레벨에서 순서 변경
-          const currentIndex = i;
-          const targetIndex = newOrder - 1; // 1-based to 0-based
-          
-          if (currentIndex === targetIndex || targetIndex < 0 || targetIndex >= menus.length) {
-            return menus; // 변경할 필요 없음
-          }
-          
-          const newMenus = [...menus];
-          const [movedMenu] = newMenus.splice(currentIndex, 1);
-          newMenus.splice(targetIndex, 0, movedMenu);
-          return newMenus;
-        }
-        // 하위 메뉴에서 찾기
-        if (menus[i].children && menus[i].children!.length > 0) {
-          const reorderedChildren = reorderMenuInList(menus[i].children!);
-          if (reorderedChildren !== menus[i].children) {
-            return menus.map((menu, idx) => 
-              idx === i ? { ...menu, children: reorderedChildren } : menu
-            );
-          }
-        }
-      }
-      return menus;
-    };
-
-    const newMenuList = reorderMenuInList(menuList);
-    if (JSON.stringify(newMenuList) === JSON.stringify(menuList)) {
-      return; // 변경사항이 없으면 종료
-    }
-
-    await saveMenuOrder(newMenuList);
-  };
-
-  // 메뉴 순서 저장 및 사이드바 업데이트
+  // 메뉴 순서 저장 및 사이드바 업데이트 (드래그앤드롭)
   const saveMenuOrder = async (newMenuList: Menu[]) => {
-    setMenuList(newMenuList);
+    const orderedList = applyMenuOrderIndexes(newMenuList);
+    setMenuList(orderedList);
 
     // 모든 메뉴의 순서를 수집 (계층 구조를 평면화)
     const collectMenuOrders = (menus: Menu[], orders: Array<{ id: number; order: number }> = []): Array<{ id: number; order: number }> => {
@@ -921,19 +1049,130 @@ const MenuPermissionManagement: React.FC = () => {
       return orders;
     };
 
-    const menuOrders = collectMenuOrders(newMenuList);
+    const menuOrders = collectMenuOrders(orderedList);
 
     // 서버에 순서 저장
     try {
       await api.put('/menus/order', { menus: menuOrders });
       
       // 사이드바 메뉴 즉시 업데이트
-      setMenus(newMenuList);
+      setMenus(orderedList);
     } catch {
       // 실패 시 서버 상태로 복구
       void reloadAllMenus();
     }
   };
+
+  const [activeDragMenuId, setActiveDragMenuId] = useState<number | null>(null);
+  const menuListRef = useRef(menuList);
+  const menuListBeforeDragRef = useRef<Menu[] | null>(null);
+  const lastDragOverIdRef = useRef<string | number | null>(null);
+  menuListRef.current = menuList;
+  const listDragging = activeDragMenuId != null;
+
+  const menuOrderSensors = useSensors(
+    useSensor(PointerSensor, {
+      // 클릭과 구분하되 반응은 빠르게
+      activationConstraint: { distance: 4 },
+    })
+  );
+
+  /** 같은 부모 형제끼리만 충돌 — 하위 드래그 시 상위가 끌려가지 않음 */
+  const menuCollisionDetection = useCallback<CollisionDetection>((args) => {
+    const activeGroup = args.active.data.current?.parentGroupId as string | undefined;
+    const sameGroup = args.droppableContainers.filter((container) => {
+      const group = container.data.current?.parentGroupId as string | undefined;
+      return activeGroup != null && group === activeGroup;
+    });
+    return closestCenter({
+      ...args,
+      droppableContainers: sameGroup.length > 0 ? sameGroup : args.droppableContainers,
+    });
+  }, []);
+
+  const activeDragMenu = useMemo(() => {
+    if (activeDragMenuId == null) return null;
+    return findMenuInTree(menuList, activeDragMenuId);
+  }, [activeDragMenuId, menuList]);
+
+  const activeDragLevel = useMemo(() => {
+    if (activeDragMenuId == null) return 0;
+    const ctx = findMenuSiblingContext(menuList, activeDragMenuId);
+    return ctx?.parentId == null ? 0 : 1;
+  }, [activeDragMenuId, menuList]);
+
+  const handleMenuDragStart = useCallback(
+    (event: DragStartEvent) => {
+      const id = Number(event.active.id);
+      if (!Number.isFinite(id)) return;
+      setActiveDragMenuId(id);
+      menuListBeforeDragRef.current = menuListRef.current;
+      lastDragOverIdRef.current = null;
+      // 상위 드래그 시 펼쳐진 자기 하위만 접어 높이 튀김 방지 (다른 메뉴 펼침은 유지)
+      const level = event.active.data.current?.level as number | undefined;
+      if (level === 0 && expandedMenus.has(id)) {
+        const next = new Set(expandedMenus);
+        next.delete(id);
+        setExpandedMenus(next);
+      }
+      document.body.style.cursor = 'grabbing';
+    },
+    [expandedMenus]
+  );
+
+  const handleMenuDragOver = useCallback((event: DragOverEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    if (lastDragOverIdRef.current === over.id) return;
+
+    const activeGroup = active.data.current?.parentGroupId;
+    const overGroup = over.data.current?.parentGroupId;
+    if (activeGroup == null || activeGroup !== overGroup) return;
+
+    const activeId = Number(active.id);
+    const overId = Number(over.id);
+    if (!Number.isFinite(activeId) || !Number.isFinite(overId)) return;
+
+    lastDragOverIdRef.current = over.id;
+
+    setMenuList((prev) => {
+      const activeCtx = findMenuSiblingContext(prev, activeId);
+      const overCtx = findMenuSiblingContext(prev, overId);
+      if (!activeCtx || !overCtx || activeCtx.parentId !== overCtx.parentId) return prev;
+      if (activeCtx.index === overCtx.index) return prev;
+      const reordered = arrayMove(activeCtx.siblings, activeCtx.index, overCtx.index);
+      return applyMenuOrderIndexes(replaceMenuSiblings(prev, activeCtx.parentId, reordered));
+    });
+  }, []);
+
+  const handleMenuDragCancel = useCallback(() => {
+    if (menuListBeforeDragRef.current) {
+      setMenuList(menuListBeforeDragRef.current);
+      menuListBeforeDragRef.current = null;
+    }
+    lastDragOverIdRef.current = null;
+    setActiveDragMenuId(null);
+    document.body.style.cursor = '';
+  }, []);
+
+  const handleMenuDragEnd = useCallback(
+    async (_event: DragEndEvent) => {
+      document.body.style.cursor = '';
+      setActiveDragMenuId(null);
+      lastDragOverIdRef.current = null;
+
+      const snapshot = menuListBeforeDragRef.current;
+      menuListBeforeDragRef.current = null;
+      const current = menuListRef.current;
+      if (!snapshot || JSON.stringify(snapshot) === JSON.stringify(current)) {
+        return;
+      }
+      // 드래그 중 이미 순서가 반영됨 — 저장만 (UI 블로킹 최소화)
+      void saveMenuOrder(current);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   // 사용자/회사 선택 시 권한 로드
   useEffect(() => {
@@ -985,34 +1224,31 @@ const MenuPermissionManagement: React.FC = () => {
   }, [selectedUserId, selectedCompanyId, users, companies]);
 
   const visibleMenuList = useMemo(() => {
-    if (permissionTargetCompanyName == null) return menuList;
-    return filterMenusForMinsubCompany(menuList, permissionTargetCompanyName);
+    const base =
+      permissionTargetCompanyName == null
+        ? menuList
+        : filterMenusForMinsubCompany(menuList, permissionTargetCompanyName);
+    return filterOutRemovedMenus(base);
   }, [menuList, permissionTargetCompanyName]);
 
   // 메뉴 트리 렌더링
-  const renderMenuTree = (menuList: Menu[], level: number = 0, parentIndex: number = 0, isLast: boolean = false) => {
-    // 메뉴 순서 조정: 회사 정보 관리와 파트너 업체 관리 순서 바꾸기
-    const sortedMenuList = [...menuList].sort((a, b) => {
-      // 기본정보관리 하위 메뉴인 경우 (route로 확인)
-      const aIsCompany = a.route === '/basic-info/company' || a.route?.includes('/basic-info/company');
-      const bIsCompany = b.route === '/basic-info/company' || b.route?.includes('/basic-info/company');
-      const aIsPartner = a.route === '/basic-info/partners' || a.route?.includes('/basic-info/partners');
-      const bIsPartner = b.route === '/basic-info/partners' || b.route?.includes('/basic-info/partners');
-      
-      // 회사 정보 관리와 파트너 업체 관리 순서 바꾸기
-      if (aIsCompany && bIsPartner) {
-        return 1; // 회사 정보 관리를 뒤로
-      }
-      if (aIsPartner && bIsCompany) {
-        return -1; // 파트너 업체 관리를 앞으로
-      }
-      
-      // 기본 정렬은 order 필드 사용
-      return (a.order || 0) - (b.order || 0);
-    });
+  const renderMenuTree = (
+    menus: Menu[],
+    level: number = 0,
+    parentMenuId: number | null = null,
+    _parentIndex: number = 0,
+    _isLast: boolean = false
+  ) => {
+    const sortedMenuList = [...menus].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const sortableIds = sortedMenuList.map((menu) => menu.id);
+    const parentGroupId = parentMenuId == null ? 'root' : `parent-${parentMenuId}`;
 
     return (
-      <>
+      <SortableContext
+        id={parentGroupId}
+        items={sortableIds}
+        strategy={verticalListSortingStrategy}
+      >
         {sortedMenuList.map((menu, index) => {
           const hasChildren = !!(menu.children && menu.children.length > 0);
           const isExpanded = expandedMenus.has(menu.id);
@@ -1033,6 +1269,7 @@ const MenuPermissionManagement: React.FC = () => {
               menu={menu}
               level={level}
               index={index}
+              parentGroupId={parentGroupId}
               hasChildren={hasChildren}
               isExpanded={isExpanded}
               permission={permission}
@@ -1040,6 +1277,7 @@ const MenuPermissionManagement: React.FC = () => {
               menuKey={menuKey}
               language={language}
               expandedMenus={expandedMenus}
+              listDragging={listDragging}
               canGrant={canGrant}
               onToggleExpand={(menuId) => {
                 const newExpanded = new Set(expandedMenus);
@@ -1060,15 +1298,12 @@ const MenuPermissionManagement: React.FC = () => {
                 }
                 setExpandedMenus(newExpanded);
               }}
-              onOrderChange={handleOrderChange}
               onNameChange={handleNameChange}
-              currentOrder={index + 1}
-              totalCount={sortedMenuList.length}
               renderMenuTree={renderMenuTree}
             />
           );
         })}
-      </>
+      </SortableContext>
     );
   };
 
@@ -1951,35 +2186,23 @@ const MenuPermissionManagement: React.FC = () => {
                     <Box
                       sx={{
                         display: 'grid',
-                        gridTemplateColumns: 'auto 76px auto',
-                        columnGap: 2,
+                        gridTemplateColumns: MENU_ROW_GRID_COLUMNS,
+                        columnGap: 1.5,
                         alignItems: 'center',
                         width: '100%',
                         mb: 1.5,
                         pb: 1.25,
-                        pr: 0.5,
+                        px: 1,
                         borderBottom: '1px solid',
                         borderColor: alpha(theme.palette.divider, 0.75) }}
                     >
+                      <Box aria-hidden />
+                      <Box aria-hidden />
                       <Typography
                         variant="body2"
-                        sx={{ minWidth: '12ch', fontWeight: 600, fontSize: '0.8125rem', letterSpacing: '-0.01em', color: 'text.secondary' }}
+                        sx={{ fontWeight: 600, fontSize: '0.8125rem', letterSpacing: '-0.01em', color: 'text.secondary' }}
                       >
                         {t('menuPermissionManagement.menuName')}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          justifySelf: 'end',
-                          width: '100%',
-                          maxWidth: 76,
-                          textAlign: 'center',
-                          fontWeight: 600,
-                          fontSize: '0.8125rem',
-                          letterSpacing: '-0.01em',
-                          color: 'text.secondary' }}
-                      >
-                        {t('menuPermissionManagement.menuOrder')}
                       </Typography>
                       <Typography
                         variant="body2"
@@ -1994,7 +2217,54 @@ const MenuPermissionManagement: React.FC = () => {
                         {t('menuPermissionManagement.permissions')}
                       </Typography>
                     </Box>
-                    {renderMenuTree(visibleMenuList)}
+                    <DndContext
+                      sensors={menuOrderSensors}
+                      collisionDetection={menuCollisionDetection}
+                      modifiers={[restrictToVerticalAxis, restrictToFirstScrollableAncestor]}
+                      measuring={{
+                        droppable: { strategy: MeasuringStrategy.Always },
+                      }}
+                      autoScroll={{
+                        threshold: { x: 0.15, y: 0.15 },
+                        acceleration: 12,
+                        interval: 5,
+                      }}
+                      onDragStart={handleMenuDragStart}
+                      onDragOver={handleMenuDragOver}
+                      onDragEnd={handleMenuDragEnd}
+                      onDragCancel={handleMenuDragCancel}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 0,
+                          minHeight: 120,
+                          // 드래그 중 페인트 비용 절감
+                          ...(listDragging
+                            ? { contentVisibility: 'auto' as const }
+                            : null),
+                        }}
+                      >
+                        {renderMenuTree(visibleMenuList)}
+                      </Box>
+                      <DragOverlay
+                        adjustScale={false}
+                        dropAnimation={MENU_DROP_ANIMATION}
+                        zIndex={1600}
+                      >
+                        {activeDragMenu ? (
+                          <MenuDragOverlayRow
+                            level={activeDragLevel}
+                            label={
+                              language === 'ko'
+                                ? activeDragMenu.name_ko
+                                : activeDragMenu.name_en || activeDragMenu.name_ko
+                            }
+                          />
+                        ) : null}
+                      </DragOverlay>
+                    </DndContext>
                   </Box>
                 </Box>
               ) : (

@@ -76,6 +76,7 @@ import {
   isPayMonthAfterCurrent,
   currentPayMonthYm as getCurrentPayMonthYm,
   shiftPayMonthYm,
+  formatPayMonthLabel,
 } from '../../utils/payMonth';
 import { subscribeApprovalStatusChanged } from '../../utils/approvalStatusSync';
 import {
@@ -152,7 +153,9 @@ type PayrollManagementProps = {
 };
 
 const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly = false }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const payMonthLocale = i18n.language || 'en';
+  const payMonthInputLang = String(payMonthLocale).toLowerCase().startsWith('ko') ? 'ko-KR' : 'en-US';
   const user = useStore((s) => s.user);
   const isRoot = useStore((s) => s.user?.role === 'root');
   const canSelectCompany = useStore((s) => s.user?.role === 'root' || s.user?.role === 'audit');
@@ -1213,7 +1216,9 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
       ) : (
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
           {periodKey
-            ? t('payrollManagement.summary.scopeForPayMonth', { period: periodKey })
+            ? t('payrollManagement.summary.scopeForPayMonth', {
+                period: formatPayMonthLabel(periodKey, payMonthLocale),
+              })
             : t('payrollManagement.summary.scopeNoMonth')}
         </Typography>
       )}
@@ -1494,7 +1499,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
               value={periodKey || payrollPeriod}
               onChange={(e) => selectPayMonth(e.target.value)}
               onClick={openMonthPickerFromFieldContainer}
-              inputProps={{ max: maxSelectablePayMonth }}
+              inputProps={{ max: maxSelectablePayMonth, lang: payMonthInputLang }}
               disabled={menuFlags.menusLoading || !menuFlags.canRead}
               sx={{
                 ...payrollFilterFieldSx,
@@ -1658,7 +1663,10 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
             >
               <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
                 {periodKey
-                  ? t('payrollManagement.listSummary', { period: periodKey, count: gridRows.length })
+                  ? t('payrollManagement.listSummary', {
+                      period: formatPayMonthLabel(periodKey, payMonthLocale),
+                      count: gridRows.length,
+                    })
                   : t('payrollManagement.listSummaryNoMonth', { count: gridRows.length })}
               </Typography>
               <Typography variant="caption" sx={{ color: 'error.main', fontWeight: 700 }}>
@@ -1795,7 +1803,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
               onChange={(e) => setPayrollPeriod(e.target.value)}
               onClick={openMonthPickerFromFieldContainer}
               InputLabelProps={{ shrink: true }}
-              inputProps={{ max: maxSelectablePayMonth }}
+              inputProps={{ max: maxSelectablePayMonth, lang: payMonthInputLang }}
               disabled={menuFlags.menusLoading || !menuFlags.canCreate}
               sx={{ cursor: menuFlags.menusLoading || !menuFlags.canCreate ? undefined : 'pointer' }}
             />
@@ -1923,7 +1931,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
               onChange={(e) => setPayrollPeriod(e.target.value)}
               onClick={openMonthPickerFromFieldContainer}
               InputLabelProps={{ shrink: true }}
-              inputProps={{ max: maxSelectablePayMonth }}
+              inputProps={{ max: maxSelectablePayMonth, lang: payMonthInputLang }}
               sx={{
                 mb: 2,
                 cursor: menuFlags.menusLoading || !menuFlags.canMutate ? undefined : 'pointer'

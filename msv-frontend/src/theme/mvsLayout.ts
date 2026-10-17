@@ -181,6 +181,46 @@ export const mvsBodyListZoneSx: MvsStyleObject = {
   mt: { xs: 2, sm: 2.5 },
 };
 
+/**
+ * 목록형 화면 공통 탭 바 (지출결의서·견적·세금계산서 등).
+ * 카드(mvsBodyCardSx) 안에 넣고 Header → Tabs → KPI → Filter → List 순서를 맞춘다.
+ */
+export const mvsMainTabsSx: MvsStyleObject = {
+  minHeight: 48,
+  px: { xs: 1, sm: 1.5 },
+  bgcolor: '#FFFFFF',
+  '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' },
+  '& .MuiTab-root': {
+    textTransform: 'none',
+    fontWeight: 500,
+    fontSize: '0.8125rem',
+    minHeight: 48,
+    py: 1.5,
+    px: { xs: 1.25, sm: 2 },
+    letterSpacing: '-0.01em',
+    color: 'text.secondary',
+  },
+  '& .MuiTab-root.Mui-selected': { color: 'primary.main', fontWeight: 700 },
+};
+
+/** KPI 카드 4열 그리드 */
+export const mvsKpiGridSx: MvsStyleObject = {
+  display: 'grid',
+  gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+  gap: 2.5,
+  mb: 3,
+};
+
+/** 필터 바 내부 (흰 배경 + 검색/셀렉트/초기화 그리드) */
+export const mvsFilterBarInnerSx: MvsStyleObject = {
+  px: { xs: 2, sm: 2.5 },
+  py: 2,
+  bgcolor: '#FFFFFF',
+  display: 'grid',
+  gap: 2,
+  alignItems: 'flex-end',
+};
+
 /** Body 카드·리스트 공통 외곽 톤 */
 export const mvsBodyFrameBorder = '1px solid #E2E8F0';
 export const mvsBodyFrameShadow = '0 1px 2px rgba(15, 23, 42, 0.06)';

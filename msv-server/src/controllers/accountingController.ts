@@ -239,8 +239,13 @@ const resolveCustomerId = async (
 // 다음 인보이스 번호 조회 (인도 GST 권장 포맷)
 export const getNextInvoiceNumber = async (req: RequestWithUser, res: Response) => {
   try {
-    const { company_id } = req.user;
-    const invoiceNumber = await generateInvoiceNumber(company_id);
+    const { company_id, role } = req.user;
+    const queryCompanyId = req.query.company_id ? parseInt(String(req.query.company_id), 10) : NaN;
+    const targetCompanyId =
+      (role === 'root' || role === 'audit') && Number.isFinite(queryCompanyId) && queryCompanyId > 0
+        ? queryCompanyId
+        : company_id;
+    const invoiceNumber = await generateInvoiceNumber(targetCompanyId);
     res.json({ success: true, data: { invoice_number: invoiceNumber } });
   } catch (error) {
     console.error('인보이스 번호 생성 오류:', error);
@@ -253,9 +258,21 @@ export const getInvoices = async (req: RequestWithUser, res: Response) => {
   try {
     await ensureInvoiceColumns();
     const { tenant_id, company_id } = req.user;
-    const { page = 1, limit = 10, status = '', customer_id = '' } = req.query;
+    const userRole = req.user?.role;
+    const { page = 1, limit = 10, status = '', customer_id = '', company_id: queryCompanyId } = req.query;
 
-    const whereClause: any = { tenant_id, company_id };
+    const whereClause: any = {};
+
+    // root/audit는 테넌트 전체(또는 선택 회사) 조회, 그 외는 소속 회사만
+    if (userRole === 'root' || userRole === 'audit') {
+      if (tenant_id) whereClause.tenant_id = tenant_id;
+      if (queryCompanyId) {
+        whereClause.company_id = parseInt(String(queryCompanyId), 10);
+      }
+    } else {
+      whereClause.tenant_id = tenant_id;
+      whereClause.company_id = company_id;
+    }
     
     if (status) {
       whereClause.status = status;
@@ -562,6 +579,8 @@ export const sendInvoiceEmail = async (req: RequestWithUser, res: Response) => {
       companyName: String(comp.name ?? 'Company'),
       companyAddress: comp.address || undefined,
       companyGstin: comp.business_number || undefined,
+      documentTitle:
+        invPlain.invoice_category === 'proforma' ? 'PROFORMA INVOICE' : 'TAX INVOICE',
       invoice: {
         invoice_number: String(invPlain.invoice_number || ''),
         invoice_date: invPlain.invoice_date,
@@ -643,8 +662,13 @@ export const sendInvoiceEmail = async (req: RequestWithUser, res: Response) => {
 // 인보이스 생성
 export const createInvoice = async (req: RequestWithUser, res: Response) => {
   try {
-    const { tenant_id, company_id, id: user_id } = req.user;
-    const { items, approver_user_id, ...invoiceData } = req.body;
+    const { tenant_id, company_id, id: user_id, role } = req.user;
+    const { items, approver_user_id, company_id: bodyCompanyId, ...invoiceData } = req.body;
+    const requestedCompanyId = bodyCompanyId != null ? Number(bodyCompanyId) : NaN;
+    const targetCompanyId =
+      (role === 'root' || role === 'audit') && Number.isFinite(requestedCompanyId) && requestedCompanyId > 0
+        ? requestedCompanyId
+        : company_id;
 
     await ensureInvoiceColumns();
     await ensureInvoiceItemColumns();
@@ -652,24 +676,24 @@ export const createInvoice = async (req: RequestWithUser, res: Response) => {
     if (!approver_user_id) {
       return res.status(400).json({ success: false, message: '승인자를 지정해야 합니다.' });
     }
-    const okApprover = await assertUserInCompany(Number(approver_user_id), tenant_id, company_id);
+    const okApprover = await assertUserInCompany(Number(approver_user_id), tenant_id, targetCompanyId);
     if (!okApprover) {
       return res.status(400).json({ success: false, message: '승인자를 찾을 수 없거나 같은 회사 소속이 아닙니다.' });
     }
 
-    const resolvedCustomerId = await resolveCustomerId(invoiceData, tenant_id, company_id);
+    const resolvedCustomerId = await resolveCustomerId(invoiceData, tenant_id, targetCompanyId);
     if (!resolvedCustomerId) {
       return res.status(400).json({ success: false, message: '고객 정보가 올바르지 않습니다.' });
     }
     invoiceData.customer_id = resolvedCustomerId;
 
-    const invoiceNumber = await generateInvoiceNumber(company_id);
+    const invoiceNumber = await generateInvoiceNumber(targetCompanyId);
     const invoice = await (Invoice as any).create({
       ...invoiceData,
       invoice_number: invoiceNumber,
       invoice_category: 'regular',
       tenant_id,
-      company_id,
+      company_id: targetCompanyId,
       created_by: user_id,
       is_active: true,
       approver_user_id: Number(approver_user_id),
@@ -941,30 +965,42 @@ export const getProformaInvoices = async (req: RequestWithUser, res: Response) =
     await ensureInvoiceColumns();
     const { tenant_id, company_id } = req.user;
     const userRole = req.user?.role;
-    const { status = '', customer_id = '', company_id: queryCompanyId } = req.query;
+    const {
+      status = '',
+      customer_id = '',
+      company_id: queryCompanyId,
+      approval_status: queryApprovalStatus = '',
+      exclude_converted = '',
+    } = req.query;
 
     const whereClause: any = {};
     
-    // root나 audit 권한이면 모든 프로포마 인보이스 조회 가능
+    // root/audit는 테넌트 전체(또는 선택 회사) 조회, 그 외는 소속 회사만
     if (userRole === 'root' || userRole === 'audit') {
       if (tenant_id) whereClause.tenant_id = tenant_id;
-      if (userRole === 'root' && queryCompanyId) {
-        whereClause.company_id = parseInt(queryCompanyId as string);
+      if (queryCompanyId) {
+        whereClause.company_id = parseInt(String(queryCompanyId), 10);
       }
     } else {
       whereClause.tenant_id = tenant_id;
       whereClause.company_id = company_id;
     }
     
+    if (queryApprovalStatus) {
+      whereClause.approval_status = String(queryApprovalStatus);
+    }
+
     if (status) {
       whereClause.status = status;
+    } else if (String(exclude_converted) === '1' || String(exclude_converted).toLowerCase() === 'true') {
+      whereClause.status = { [Op.ne]: 'converted' };
     }
     
     if (customer_id) {
       whereClause.customer_id = customer_id;
     }
 
-    // 활성화된 프로포마 인보이스만 조회 (status가 'draft', 'sent', 'accepted', 'converted', 'cancelled'인 것들)
+    // 활성화된 프로포마 인보이스만 조회
     whereClause.is_active = true;
     whereClause.invoice_category = 'proforma';
 
@@ -975,6 +1011,12 @@ export const getProformaInvoices = async (req: RequestWithUser, res: Response) =
           model: Customer,
           as: 'customer',
           attributes: ['id', 'name', 'email', 'phone', 'address']
+        },
+        {
+          model: User,
+          as: 'approver',
+          attributes: ['id', 'username', 'email'],
+          required: false
         },
         {
           model: InvoiceItem,
@@ -999,18 +1041,46 @@ export const getProformaInvoices = async (req: RequestWithUser, res: Response) =
 export const createProformaInvoice = async (req: RequestWithUser, res: Response) => {
   try {
     await ensureInvoiceColumns();
-    const { tenant_id, company_id, id: user_id } = req.user;
-    const { items, ...invoiceData } = req.body;
+    await ensureInvoiceItemColumns();
+    const { tenant_id, company_id, id: user_id, role } = req.user;
+    const { items, company_id: bodyCompanyId, approver_user_id, ...invoiceData } = req.body;
+    const requestedCompanyId = bodyCompanyId != null ? Number(bodyCompanyId) : NaN;
+    const targetCompanyId =
+      (role === 'root' || role === 'audit') && Number.isFinite(requestedCompanyId) && requestedCompanyId > 0
+        ? requestedCompanyId
+        : company_id;
 
-    // 프로포마 인보이스 생성 (status 기본값: 'draft')
+    if (!approver_user_id) {
+      return res.status(400).json({ success: false, message: '승인자를 지정해야 합니다.' });
+    }
+    const okApprover = await assertUserInCompany(Number(approver_user_id), tenant_id, targetCompanyId);
+    if (!okApprover) {
+      return res.status(400).json({ success: false, message: '승인자를 찾을 수 없거나 같은 회사 소속이 아닙니다.' });
+    }
+
+    const resolvedCustomerId = await resolveCustomerId(invoiceData, tenant_id, targetCompanyId);
+    if (!resolvedCustomerId) {
+      return res.status(400).json({ success: false, message: '고객 정보가 올바르지 않습니다.' });
+    }
+    invoiceData.customer_id = resolvedCustomerId;
+
+    const invoiceNumber =
+      (invoiceData.invoice_number && String(invoiceData.invoice_number).trim()) ||
+      (await generateInvoiceNumber(targetCompanyId));
+
+    // 프로포마 인보이스 생성 (승인 대기)
     const invoice = await (Invoice as any).create({
       ...invoiceData,
+      invoice_number: invoiceNumber,
       invoice_category: 'proforma',
       tenant_id,
-      company_id,
+      company_id: targetCompanyId,
       created_by: user_id,
       status: invoiceData.status || 'draft',
-      is_active: true
+      is_active: true,
+      approver_user_id: Number(approver_user_id),
+      approval_status: 'pending_approval',
+      approved_at: null,
     });
 
     // 인보이스 아이템들 생성
@@ -1097,10 +1167,6 @@ export const createEInvoiceFromProforma = async (req: RequestWithUser, res: Resp
     if (!approver_user_id) {
       return res.status(400).json({ success: false, message: '승인자를 지정해야 합니다.' });
     }
-    const okApprover = await assertUserInCompany(Number(approver_user_id), tenant_id, company_id);
-    if (!okApprover) {
-      return res.status(400).json({ success: false, message: '승인자를 찾을 수 없거나 같은 회사 소속이 아닙니다.' });
-    }
 
     const whereClause: any = { id, invoice_category: 'proforma' };
     
@@ -1131,8 +1197,20 @@ export const createEInvoiceFromProforma = async (req: RequestWithUser, res: Resp
       return res.status(404).json({ success: false, message: '프로포마 인보이스를 찾을 수 없습니다.' });
     }
 
-    // 프로포마 인보이스가 'accepted' 상태인지 확인
-    if (proformaInvoice.status !== 'accepted') {
+    const okApprover = await assertUserInCompany(
+      Number(approver_user_id),
+      tenant_id,
+      Number(proformaInvoice.company_id)
+    );
+    if (!okApprover) {
+      return res.status(400).json({ success: false, message: '승인자를 찾을 수 없거나 같은 회사 소속이 아닙니다.' });
+    }
+
+    // 내부 승인(approval_status) 또는 레거시 status=accepted 허용
+    const isApproved =
+      proformaInvoice.approval_status === 'approved' ||
+      proformaInvoice.status === 'accepted';
+    if (!isApproved || proformaInvoice.status === 'converted') {
       return res.status(400).json({ 
         success: false, 
         message: '프로포마 인보이스가 승인된 상태가 아닙니다. E-Invoice를 생성하려면 프로포마 인보이스가 승인되어야 합니다.' 
@@ -4928,10 +5006,15 @@ export const approveInvoice = async (req: RequestWithUser, res: Response) => {
       return res.status(403).json({ success: false, message: '지정된 승인자만 승인할 수 있습니다.' });
     }
 
-    await invoice.update({
+    const approvePatch: any = {
       approval_status: 'approved',
-      approved_at: new Date()
-    });
+      approved_at: new Date(),
+    };
+    // 프로포마는 E-Invoice 변환 목록에 보이도록 status도 accepted로 맞춤
+    if (invoice.invoice_category === 'proforma' && invoice.status !== 'converted') {
+      approvePatch.status = 'accepted';
+    }
+    await invoice.update(approvePatch);
 
     const fresh = await (Invoice as any).findByPk(invoice.id, {
       include: [

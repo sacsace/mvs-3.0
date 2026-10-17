@@ -16,7 +16,6 @@ import {
   TextField,
   FormControl,
   FormHelperText,
-  InputLabel,
   Select,
   MenuItem,
   IconButton,
@@ -40,6 +39,10 @@ import {
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
   mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsKpiGridSx,
+  mvsMainTabsSx,
+  mvsFilterBarInnerSx,
   mvsBodyCardSx,
   mvsBodyOutlinedBtnSx,
   mvsBodyPrimaryBtnSx,
@@ -48,7 +51,6 @@ import {
   mvsBodyPaginationSx,
   mvsSearchFieldSx,
   mvsFilterFieldHeightSx,
-  mvsTableScrollSx,
   mvsTableHeadHighlightSx,
   mvsTableBodyRowSx,
 } from '../../theme/mvsLayout';
@@ -69,8 +71,13 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { useStore } from '../../store';
-import { accountingService, partnerService, companyService } from '../../services/api';
+import { api, accountingService, partnerService, companyService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
+import {
+  companySelectListboxSlotProps,
+  companySelectNowrapSx,
+  shortCompanyName,
+} from '../../utils/companyDisplayName';
 import AuthMedia from '../../components/Common/AuthMedia';
 import {
   buildDocumentDownloadFilename,
@@ -259,7 +266,29 @@ const RegularInvoice: React.FC = () => {
     pan: ''
   });
   const [companies, setCompanies] = useState<CompanyInfo[]>([]);
+  const [rootCompanies, setRootCompanies] = useState<Array<{ id: number; name: string }>>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>('');
   const [issuerCompany, setIssuerCompany] = useState<CompanyInfo | null>(null);
+  const canSelectCompany = user?.role === 'root' || user?.role === 'audit';
+  const effectiveCompanyId = useMemo(() => {
+    if (canSelectCompany && selectedCompanyId !== '') return Number(selectedCompanyId);
+    return user?.company_id != null ? Number(user.company_id) : null;
+  }, [canSelectCompany, selectedCompanyId, user?.company_id]);
+
+  const companyFilterOptions = useMemo(() => {
+    const list = rootCompanies
+      .map((c) => ({ id: Number(c.id), name: shortCompanyName(c.name) }))
+      .filter((c) => Number.isFinite(c.id) && c.id > 0 && c.name)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return [{ id: '' as number | '', name: tr('전체 회사', 'All Companies') }, ...list];
+  }, [rootCompanies, isEnglish, isInvoicePageMode]);
+
+  const selectedCompanyOption = useMemo(() => {
+    if (selectedCompanyId === '') {
+      return companyFilterOptions.find((o) => o.id === '') ?? null;
+    }
+    return companyFilterOptions.find((o) => o.id === Number(selectedCompanyId)) ?? null;
+  }, [companyFilterOptions, selectedCompanyId]);
   const [recipientCompanyId, setRecipientCompanyId] = useState<number | ''>('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [nextInvoiceNumber, setNextInvoiceNumber] = useState('');
@@ -521,12 +550,12 @@ const RegularInvoice: React.FC = () => {
 
   useEffect(() => {
     const loadIssuerCompany = async () => {
-      if (!user?.company_id) {
+      if (!effectiveCompanyId) {
         setIssuerCompany(null);
         return;
       }
       try {
-        const response = await companyService.getCompany(Number(user.company_id));
+        const response = await companyService.getCompany(Number(effectiveCompanyId));
         if (response.success && response.data) {
           const data = response.data;
           let gstNumbers = normalizeGstNumbers(
@@ -534,7 +563,7 @@ const RegularInvoice: React.FC = () => {
           );
 
           try {
-            const gstResponse = await companyService.getCompanyGstNumbers(Number(user.company_id));
+            const gstResponse = await companyService.getCompanyGstNumbers(Number(effectiveCompanyId));
             if (gstResponse?.success) {
               const directGstNumbers = normalizeGstNumbers(gstResponse.data?.gst_numbers);
               if (directGstNumbers.length > 0) {
@@ -573,7 +602,7 @@ const RegularInvoice: React.FC = () => {
     };
 
     loadIssuerCompany();
-  }, [normalizeGstNumbers, user?.company_id]);
+  }, [normalizeGstNumbers, effectiveCompanyId]);
 
   useEffect(() => {
     if (issuerGstNumbers.length > 0) {
@@ -592,13 +621,13 @@ const RegularInvoice: React.FC = () => {
 
   useEffect(() => {
     const loadUsers = async () => {
-      if (!user?.company_id) {
+      if (!effectiveCompanyId) {
         setCompanyUsers([]);
         return;
       }
       try {
         const users = await useReferenceDataStore.getState().fetchUsers({
-          company_id: Number(user.company_id),
+          company_id: Number(effectiveCompanyId),
         });
         setCompanyUsers(
           users
@@ -614,7 +643,7 @@ const RegularInvoice: React.FC = () => {
     }
     };
     void loadUsers();
-  }, [user?.company_id]);
+  }, [effectiveCompanyId]);
 
   const loadCompanies = useCallback(async () => {
     try {
@@ -664,7 +693,11 @@ const RegularInvoice: React.FC = () => {
   const loadInvoices = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await accountingService.getInvoices({ page: 1, limit: 1000 });
+      const params: { page: number; limit: number; company_id?: number } = { page: 1, limit: 1000 };
+      if (canSelectCompany && selectedCompanyId !== '') {
+        params.company_id = Number(selectedCompanyId);
+      }
+      const response = await accountingService.getInvoices(params);
       const rawList = response?.success ? (response.data || []) : [];
       const list: Invoice[] = (rawList as any[]).map((inv: any) => ({
         id: inv.id,
@@ -695,8 +728,8 @@ const RegularInvoice: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- 마운트 시 1회 로드; tr 변경마다 재요청 불필요
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- tr은 초기 로드 시점 기준
+  }, [canSelectCompany, selectedCompanyId]);
 
   const filteredInvoices = useMemo(() => applyFilters(allInvoices), [allInvoices, applyFilters]);
 
@@ -734,11 +767,30 @@ const RegularInvoice: React.FC = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [filters.payment_status, filters.search, listSubTab]);
+  }, [filters.payment_status, filters.search, listSubTab, selectedCompanyId]);
 
   useEffect(() => {
     loadCompanies();
   }, [loadCompanies]);
+
+  useEffect(() => {
+    if (!canSelectCompany) return;
+    const loadRootCompanies = async () => {
+      try {
+        const response = await api.get('/companies');
+        if (response.data?.success) {
+          const list = (response.data.data || []).map((c: any) => ({
+            id: Number(c.id),
+            name: String(c.name || c.company_name || ''),
+          }));
+          setRootCompanies(list.filter((c: { id: number; name: string }) => c.id > 0 && c.name));
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    void loadRootCompanies();
+  }, [canSelectCompany]);
 
   const showSnackbar = (message: string, severity: 'success' | 'error') => {
     setSnackbar({ open: true, message, severity });
@@ -782,7 +834,11 @@ const RegularInvoice: React.FC = () => {
     const loadNextNumber = async () => {
       if (!isCreating) return;
       try {
-        const response = await accountingService.getNextInvoiceNumber();
+        const params =
+          canSelectCompany && selectedCompanyId !== ''
+            ? { company_id: Number(selectedCompanyId) }
+            : undefined;
+        const response = await accountingService.getNextInvoiceNumber(params);
         if (response?.success) {
           setNextInvoiceNumber(response.data?.invoice_number || '');
         }
@@ -791,7 +847,7 @@ const RegularInvoice: React.FC = () => {
     }
     };
     loadNextNumber();
-  }, [isCreating]);
+  }, [isCreating, canSelectCompany, selectedCompanyId]);
 
   const addItemAndFocusName = () => {
     const nextIndex = formData.items.length;
@@ -1256,7 +1312,10 @@ const RegularInvoice: React.FC = () => {
       } else {
         await accountingService.createInvoice({
           ...payload,
-          approver_user_id: Number(approverUserId)
+          approver_user_id: Number(approverUserId),
+          ...(canSelectCompany && selectedCompanyId !== ''
+            ? { company_id: Number(selectedCompanyId) }
+            : {}),
         });
       }
 
@@ -1725,6 +1784,16 @@ const RegularInvoice: React.FC = () => {
     { key: 'actions', label: tr('작업', 'Actions'), width: '10%', align: 'center' as const, ellipsis: false },
   ] as const;
 
+  const listKpiStats = useMemo(
+    () => ({
+      total: allInvoices.length,
+      pendingPayment: allInvoices.filter((inv) => inv.payment_status === 'pending').length,
+      paid: allInvoices.filter((inv) => inv.payment_status === 'paid').length,
+      pendingApproval: allInvoices.filter((inv) => inv.approval_status === 'pending_approval').length,
+    }),
+    [allInvoices]
+  );
+
   return (
     <Box sx={{ ...mvsPageRootSx }}>
       {isInvoicePageMode && (
@@ -1740,11 +1809,58 @@ const RegularInvoice: React.FC = () => {
           </Button>
         </Box>
       )}
-      {/* ?? */}
       <MvsPageHeader
         title={tr('일반 세금계산서', 'Regular Tax Invoice')}
         description={tr('일반 세금계산서를 생성하고 관리합니다.', 'Create and manage regular invoices.')}
-        mb={!isInvoicePageMode ? 2 : 3}
+        mb={2}
+        actions={
+          !isInvoicePageMode ? (
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+              {canSelectCompany && (
+                <Autocomplete
+                  size="small"
+                  options={companyFilterOptions}
+                  value={selectedCompanyOption}
+                  onChange={(_, next) => {
+                    if (!next || next.id === '') setSelectedCompanyId('');
+                    else setSelectedCompanyId(Number(next.id));
+                  }}
+                  getOptionLabel={(option) => option.name}
+                  isOptionEqualToValue={(a, b) => a.id === b.id}
+                  disableClearable={Boolean(selectedCompanyOption)}
+                  slotProps={companySelectListboxSlotProps}
+                  sx={{
+                    ...regularInvoiceFilterFieldSx,
+                    ...companySelectNowrapSx,
+                    minWidth: { xs: 160, sm: 200 },
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label={tr('회사', 'Company')}
+                      placeholder={tr('회사 검색', 'Search company')}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  )}
+                />
+              )}
+              <Tooltip title={createGuard.tooltipTitle} disableHoverListener={!createGuard.tooltipTitle}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    variant="contained"
+                    disableElevation
+                    startIcon={<AddIcon fontSize="small" />}
+                    disabled={loading || createGuard.disabled}
+                    onClick={handleCreateInvoice}
+                    sx={mvsBodyPrimaryBtnSx}
+                  >
+                    {tr('새 인보이스', 'New Invoice')}
+                  </Button>
+                </span>
+              </Tooltip>
+            </Box>
+          ) : undefined
+        }
       />
 
       {!menuFlags.menusLoading && !menuFlags.canRead && (
@@ -1754,48 +1870,74 @@ const RegularInvoice: React.FC = () => {
       )}
 
       {!isInvoicePageMode && (
-        <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
-          <Tabs
-            value={listSubTab}
-            onChange={(_, v) => {
-              setListSubTab(v);
-              setPage(1);
-            }}
-            sx={{
-              minHeight: 40,
-              px: { xs: 1, sm: 1.5 },
-              bgcolor: '#FFFFFF',
-              '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' },
-              '& .MuiTab-root': {
-                textTransform: 'none',
-                fontWeight: 500,
-                fontSize: '0.8125rem',
-                minHeight: 40,
-                py: 0.75,
-                letterSpacing: '-0.01em',
-                color: 'text.secondary',
-              },
-              '& .MuiTab-root.Mui-selected': { color: 'primary.main', fontWeight: 700 },
-            }}
-          >
-            <Tab value="requested" label={tr('내가 요청한 인보이스', 'Invoices I requested')} />
-            <Tab value="pending" label={tr('승인 대기 인보이스', 'Pending my approval')} />
-          </Tabs>
-        </Card>
-      )}
+        <>
+          <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+            <Tabs
+              value={listSubTab}
+              onChange={(_, v) => {
+                setListSubTab(v);
+                setPage(1);
+              }}
+              sx={mvsMainTabsSx}
+            >
+              <Tab value="requested" label={tr('내가 요청한 인보이스', 'Invoices I requested')} />
+              <Tab value="pending" label={tr('승인 대기 인보이스', 'Pending my approval')} />
+            </Tabs>
+          </Card>
 
-      {!isInvoicePageMode && (
-      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
-        <Box
-          sx={{
-            px: { xs: 2, sm: 2.5 },
-            py: 2,
-            bgcolor: '#FFFFFF',
-            ...regularInvoiceFilterFieldSx,
-          }}
-        >
-          <Grid container spacing={2} alignItems="flex-end">
-            <Grid size={{ xs: 12, md: 3 }}>
+          <Box sx={mvsKpiGridSx}>
+            {[
+              {
+                label: tr('총 인보이스', 'Total Invoices'),
+                value: listKpiStats.total,
+                color: 'text.primary',
+              },
+              {
+                label: tr('결제 대기', 'Payment Pending'),
+                value: listKpiStats.pendingPayment,
+                color: 'warning.main',
+              },
+              {
+                label: tr('결제 완료', 'Paid'),
+                value: listKpiStats.paid,
+                color: 'success.main',
+              },
+              {
+                label: tr('승인 대기', 'Pending Approval'),
+                value: listKpiStats.pendingApproval,
+                color: 'warning.main',
+              },
+            ].map((item) => (
+              <Card key={item.label} elevation={0} sx={mvsKpiCardSx}>
+                <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ fontWeight: 600, letterSpacing: '0.02em' }}
+                  >
+                    {item.label}
+                  </Typography>
+                  <Typography
+                    variant="h5"
+                    sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: item.color }}
+                  >
+                    {item.value.toLocaleString()}
+                  </Typography>
+                </CardContent>
+              </Card>
+            ))}
+          </Box>
+
+          <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+            <Box
+              sx={{
+                ...mvsFilterBarInnerSx,
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: 'minmax(180px, 2fr) minmax(120px, 1fr) auto',
+                },
+              }}
+            >
               <TextField
                 fullWidth
                 size="small"
@@ -1813,56 +1955,46 @@ const RegularInvoice: React.FC = () => {
                 }}
                 sx={regularInvoiceFilterFieldSx}
               />
-            </Grid>
-            <Grid size={{ xs: 12, md: 2 }}>
-              <FormControl fullWidth size="small" sx={regularInvoiceFilterFieldSx}>
-                <InputLabel shrink>{tr('결제 상태', 'Payment Status')}</InputLabel>
-                <Select
-                  value={filters.payment_status}
-                  label={tr('결제 상태', 'Payment Status')}
-                  onChange={(e) => {
-                    const value = String(e.target.value);
-                    setFilters({ ...filters, payment_status: value.toLowerCase() === 'all' ? '' : value });
-                  }}
-                >
-                  <MenuItem value="">{tr('전체', 'All')}</MenuItem>
-                  <MenuItem value="pending">{tr('대기', 'Pending')}</MenuItem>
-                  <MenuItem value="paid">{tr('완료', 'Paid')}</MenuItem>
-                  <MenuItem value="partial">{tr('부분', 'Partial')}</MenuItem>
-                  <MenuItem value="overdue">{tr('연체', 'Overdue')}</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid size={{ xs: 12, md: 7 }}>
-              <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="wrap" useFlexGap>
-                <Button
-                  variant="outlined"
-                  startIcon={<FilterIcon sx={{ fontSize: 18 }} />}
-                  disabled={loading}
-                  onClick={() => setFilters({ payment_status: '', search: '' })}
-                  sx={mvsBodyOutlinedBtnSx}
-                >
-                  {tr('필터 초기화', 'Reset Filters')}
-                </Button>
-                <Tooltip title={createGuard.tooltipTitle} disableHoverListener={!createGuard.tooltipTitle}>
-                  <span style={{ display: 'inline-flex' }}>
-                    <Button
-                      variant="contained"
-                      disableElevation
-                      startIcon={<AddIcon />}
-                      disabled={loading || createGuard.disabled}
-                      onClick={handleCreateInvoice}
-                      sx={mvsBodyPrimaryBtnSx}
-                    >
-                      {tr('새 인보이스', 'New Invoice')}
-                    </Button>
-                  </span>
-                </Tooltip>
-              </Stack>
-            </Grid>
-          </Grid>
-        </Box>
-      </Card>
+              <TextField
+                fullWidth
+                size="small"
+                select
+                label={tr('결제 상태', 'Payment Status')}
+                value={filters.payment_status}
+                onChange={(e) => {
+                  const value = String(e.target.value);
+                  setFilters({ ...filters, payment_status: value.toLowerCase() === 'all' ? '' : value });
+                }}
+                InputLabelProps={{ shrink: true }}
+                SelectProps={{ displayEmpty: true }}
+                sx={regularInvoiceFilterFieldSx}
+              >
+                <MenuItem value="">{tr('전체', 'All')}</MenuItem>
+                <MenuItem value="pending">{tr('대기', 'Pending')}</MenuItem>
+                <MenuItem value="paid">{tr('완료', 'Paid')}</MenuItem>
+                <MenuItem value="partial">{tr('부분', 'Partial')}</MenuItem>
+                <MenuItem value="overdue">{tr('연체', 'Overdue')}</MenuItem>
+              </TextField>
+              <Button
+                variant="outlined"
+                startIcon={<FilterIcon sx={{ fontSize: 18 }} />}
+                disabled={loading}
+                onClick={() => {
+                  setFilters({ payment_status: '', search: '' });
+                  if (canSelectCompany) setSelectedCompanyId('');
+                }}
+                sx={{
+                  ...mvsBodyOutlinedBtnSx,
+                  height: 40,
+                  whiteSpace: 'nowrap',
+                  alignSelf: { xs: 'stretch', sm: 'flex-end' },
+                }}
+              >
+                {tr('초기화', 'Reset')}
+              </Button>
+            </Box>
+          </Card>
+        </>
       )}
 
       {/* ???? ??/?? ? */}
@@ -3094,7 +3226,7 @@ const RegularInvoice: React.FC = () => {
                 </Typography>
               </Box>
             ) : (
-              <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+              <TableContainer sx={mvsBodyListTableSx}>
                 <Table size="small" sx={invoiceListTableSx}>
                   <colgroup>
                     {invoiceListColumns.map((col) => (

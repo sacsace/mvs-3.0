@@ -31,10 +31,6 @@ const HEADER_LAYOUT_HEIGHT_MOBILE = HEADER_TOP_INSET_PX + 56;
 const isPersonalAccountRoute = (pathname: string): boolean =>
   pathname === '/account/settings' || pathname.startsWith('/account/settings/');
 
-/** 헤더「알림」— 메뉴 트리에 없어도 로그인 사용자는 접근 가능 */
-const isNotificationSelfServiceRoute = (pathname: string): boolean =>
-  pathname === '/notifications' || pathname.startsWith('/notifications/');
-
 /** 이용약관·개인정보·고객센터 — 메뉴 권한 없이 본문 표시 */
 const isLegalPublicRoute = (pathname: string): boolean =>
   pathname === '/legal/terms' ||
@@ -153,11 +149,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       }
 
       if (user?.id && isPersonalAccountRoute(location.pathname)) {
-        setHasAccess(true);
-        return;
-      }
-
-      if (user?.id && isNotificationSelfServiceRoute(location.pathname)) {
         setHasAccess(true);
         return;
       }
@@ -354,6 +345,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             }}
           >
             <Box
+              data-app-scroll-root={fullBleedBody ? '' : undefined}
               sx={{
                 flex: 1,
                 minHeight: 0,
@@ -362,6 +354,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 maxWidth: '100%',
                 overflowX: 'hidden',
                 overflowY: fullBleedBody ? 'auto' : 'visible',
+                overflowAnchor: 'none',
                 color: 'text.primary',
                 fontSize: { xs: '13px', sm: '13.5px' },
                 lineHeight: 1.6,

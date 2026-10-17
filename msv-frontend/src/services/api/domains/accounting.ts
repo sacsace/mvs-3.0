@@ -100,15 +100,30 @@ export const accountingService = {
     return response.data;
   },
 
-  // ?�보?�스 목록 조회
+  // 인보이스 목록 조회
   getInvoices: async (params?: any) => {
     const response = await api.get('/accounting/invoices', { params });
     return response.data;
   },
 
-  // ?�음 ?�보?�스 번호 조회
-  getNextInvoiceNumber: async () => {
-    const response = await api.get('/accounting/invoices/next-number');
+  getProformaInvoices: async (params?: any) => {
+    const response = await api.get('/accounting/proforma-invoices', { params });
+    return response.data;
+  },
+
+  createProformaInvoice: async (invoiceData: any) => {
+    const response = await api.post('/accounting/proforma-invoices', invoiceData);
+    return response.data;
+  },
+
+  updateProformaInvoiceStatus: async (id: number | string, status: string) => {
+    const response = await api.put(`/accounting/proforma-invoices/${id}/status`, { status });
+    return response.data;
+  },
+
+  // 다음 인보이스 번호 조회 (root/audit는 company_id로 타사 번호 조회)
+  getNextInvoiceNumber: async (params?: { company_id?: number }) => {
+    const response = await api.get('/accounting/invoices/next-number', { params });
     return response.data;
   },
 

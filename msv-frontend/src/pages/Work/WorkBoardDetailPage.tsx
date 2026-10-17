@@ -51,6 +51,7 @@ import {
   PhotoOutlined as PhotoOutlinedIcon,
   LibraryAddOutlined as LibraryAddOutlinedIcon,
   Search as SearchIcon,
+  SubdirectoryArrowRight as SubdirectoryArrowRightIcon,
   VisibilityOutlined as VisibilityOutlinedIcon
 } from '@mui/icons-material';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -60,21 +61,31 @@ import {
   CollisionDetection,
   DndContext,
   DragEndEvent,
+  DragOverEvent,
   DragOverlay,
   DragStartEvent,
   MeasuringStrategy,
   PointerSensor,
-  useDraggable,
+  defaultDropAnimationSideEffects,
   useDroppable,
   useSensor,
-  useSensors
+  useSensors,
+  type DropAnimation,
 } from '@dnd-kit/core';
 import { restrictToWindowEdges, snapCenterToCursor } from '@dnd-kit/modifiers';
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { workBoardService } from '../../services/api';
 import { useMenuStore, useStore } from '../../store';
 import { filterActiveCompanyUsers, useReferenceDataStore } from '../../store/referenceDataStore';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
 import { showErrorPopup, showSuccessPopup, showSuccessToast } from '../../utils/errorHandler';
+import { holdScrollPosition } from '../../utils/preserveScroll';
 import { getUploadUrl } from '../../utils/uploadUrl';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
@@ -231,10 +242,18 @@ type BoardCardComment = {
   card_id: number;
   user_id?: number | null;
   parent_id?: number | null;
+  parentId?: number | null;
   content: string;
   created_at?: string;
   createdAt?: string;
-  user?: { id: number; username?: string; userid?: string };
+  user?: { id: number; username?: string; userid?: string; avatar_url?: string | null };
+};
+
+const resolveCommentParentId = (comment: BoardCardComment): number | null => {
+  const raw = comment.parent_id ?? comment.parentId;
+  if (raw == null) return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
 };
 
 const resolveCommentCreatedAt = (
@@ -249,7 +268,7 @@ function sortBoardCardCommentsThreaded(comments: BoardCardComment[]): BoardCardC
   const list = (comments || []).slice();
   const byParent = new Map<number | null, BoardCardComment[]>();
   for (const c of list) {
-    const pid = c.parent_id != null && c.parent_id > 0 ? c.parent_id : null;
+    const pid = resolveCommentParentId(c);
     if (!byParent.has(pid)) byParent.set(pid, []);
     byParent.get(pid)!.push(c);
   }
@@ -309,7 +328,10 @@ const CARD_COLOR_PRESETS = [
   '#0288D1',
   '#C2185B',
   '#455A64',
-  '#6D4C41'
+  '#6D4C41',
+  '#F9A825',
+  '#3949AB',
+  '#558B2F',
 ];
 
 const COMPLETED_LIST_KEYWORDS = ['업무 완료', '완료', '종료', 'done', 'completed', 'closed', 'work completed'];
@@ -457,8 +479,14 @@ const formatDateTime = (value?: string | Date | null, locale: 'ko' | 'en' = 'ko'
   });
 };
 
-const DRAG_TRANSITION = 'transform 40ms ease-out';
-const DRAG_LAYOUT_TRANSITION = 'none';
+const DRAG_TRANSITION = 'transform 200ms cubic-bezier(0.25, 1, 0.5, 1)';
+const KANBAN_DROP_ANIMATION: DropAnimation = {
+  duration: 220,
+  easing: 'cubic-bezier(0.2, 0, 0, 1)',
+  sideEffects: defaultDropAnimationSideEffects({
+    styles: { active: { opacity: '0.15' } },
+  }),
+};
 
 const BOARD_PAN_IGNORE_SELECTOR = [
   '[data-kanban-card]',
@@ -486,13 +514,13 @@ const BOARD_PAN_IGNORE_SELECTOR = [
   '.MuiMenu-root',
 ].join(',');
 
-/** 칸반 — 트렐로형 라운드·라벤더 보드 */
-const KANBAN_DETAIL_SHELL_RADIUS = '8px';
-const KANBAN_SURFACE_RADIUS = '8px';
-const KANBAN_CHIP_RADIUS = '6px';
-const KANBAN_CONTROL_RADIUS = '8px';
+/** 칸반 — 트렐로형 라운드·라벤더 보드 (상세 폼은 모서리를 조금 덜 둥글게) */
+const KANBAN_DETAIL_SHELL_RADIUS = '4px';
+const KANBAN_SURFACE_RADIUS = '4px';
+const KANBAN_CHIP_RADIUS = '3px';
+const KANBAN_CONTROL_RADIUS = '4px';
 const KANBAN_COLUMN_RADIUS = '8px';
-const KANBAN_CARD_RADIUS = '6px';
+const KANBAN_CARD_RADIUS = '4px';
 
 /** 소분류(칸반 열) — 불투명 패널 + 얇은 보더 */
 const KANBAN_COLUMN_BG = '#F1F5F9';
@@ -880,6 +908,64 @@ const findCardPositionInBoard = (boardData: any, cardId: number): { listId: numb
   return null;
 };
 
+/** over 대상에서 카드 드롭 위치 계산 (dragOver / dragEnd 공용) */
+const resolveCardDropTarget = (
+  lists: BoardList[],
+  activeCardId: number,
+  overId: string
+): { targetListId: number; targetIndex: number } | null => {
+  if (overId.startsWith('list-')) {
+    const targetListId = parseInt(overId.replace('list-', ''), 10);
+    if (!Number.isFinite(targetListId)) return null;
+    const list = lists.find((l) => l.id === targetListId);
+    if (!list) return null;
+    const filtered = (list.cards || []).filter((c) => c.id !== activeCardId);
+    return { targetListId, targetIndex: filtered.length };
+  }
+  if (overId.startsWith('card-')) {
+    const overCardId = parseInt(overId.replace('card-', ''), 10);
+    if (!Number.isFinite(overCardId) || overCardId === activeCardId) return null;
+    let found: BoardList | undefined;
+    for (const l of lists) {
+      if ((l.cards || []).some((c) => c.id === overCardId)) {
+        found = l;
+        break;
+      }
+    }
+    if (!found) return null;
+    const filtered = (found.cards || []).filter((c) => c.id !== activeCardId);
+    const idx = filtered.findIndex((c) => c.id === overCardId);
+    return { targetListId: found.id, targetIndex: idx >= 0 ? idx : filtered.length };
+  }
+  return null;
+};
+
+/** 대분류(열) 드롭 대상 인덱스 */
+const resolveListDropTargetIndex = (
+  lists: BoardList[],
+  activeListId: number,
+  overId: string
+): number | null => {
+  let targetListId: number | null = null;
+  if (overId.startsWith('listcol-')) {
+    targetListId = parseInt(overId.replace('listcol-', ''), 10);
+  } else if (overId.startsWith('list-')) {
+    targetListId = parseInt(overId.replace('list-', ''), 10);
+  } else if (overId.startsWith('card-')) {
+    const overCardId = parseInt(overId.replace('card-', ''), 10);
+    for (const l of lists) {
+      if ((l.cards || []).some((c) => c.id === overCardId)) {
+        targetListId = l.id;
+        break;
+      }
+    }
+  }
+  if (!targetListId || !Number.isFinite(targetListId) || targetListId === activeListId) return null;
+  const ordered = [...lists].sort((a, b) => a.position - b.position);
+  const targetIndex = ordered.findIndex((l) => l.id === targetListId);
+  return targetIndex >= 0 ? targetIndex : null;
+};
+
 /** 카드: closestCorners(카드·리스트 droppable만), 대분류(열) 이동: closestCenter */
 const kanbanCollisionDetection: CollisionDetection = (args) => {
   const activeId = String(args.active.id);
@@ -1044,27 +1130,28 @@ const DraggableCard = memo(function DraggableCard({
   members: BoardMemberLite[];
 }) {
   const theme = useTheme();
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+    isOver: isCardOver,
+  } = useSortable({
     id: `card-${card.id}`,
-    data: { card },
-    disabled: Boolean(dragDisabled)
-  });
-  const { setNodeRef: setDropNodeRef } = useDroppable({
-    id: `card-${card.id}`
+    data: { type: 'card', cardId: card.id, card },
+    disabled: Boolean(dragDisabled),
+    animateLayoutChanges: () => true,
   });
 
-  const setCardNodeRef = (node: HTMLElement | null) => {
-    setNodeRef(node);
-    setDropNodeRef(node);
+  // DragOverlay + sortable: 원본은 플레이스홀더, 형제 카드는 transition으로 밀림
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition: isDragging ? undefined : transition || DRAG_TRANSITION,
+    opacity: isDragging ? 0.22 : 1,
+    pointerEvents: isDragging ? 'none' : undefined,
   };
-
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        opacity: isDragging ? 0 : 1,
-        pointerEvents: isDragging ? ('none' as const) : undefined
-      }
-    : { opacity: isDragging ? 0 : 1, pointerEvents: isDragging ? ('none' as const) : undefined };
 
   const descPlain =
     card.description && !isRichTextEmpty(card.description) ? getPlainTextFromHtml(card.description) : '';
@@ -1088,30 +1175,38 @@ const DraggableCard = memo(function DraggableCard({
 
   return (
     <Card
-      ref={setCardNodeRef}
+      ref={setNodeRef}
       elevation={0}
       data-kanban-card=""
+      style={style}
       sx={{
         width: '100%',
         height: 'auto',
         minHeight: WORK_BOARD_CARD_MIN_HEIGHT_PX,
         display: 'flex',
         flexDirection: 'column',
-        cursor: dragDisabled ? 'pointer' : 'grab',
-        touchAction: 'pan-y',
+        cursor: dragDisabled ? 'pointer' : isDragging ? 'grabbing' : 'grab',
+        touchAction: 'none',
         userSelect: 'none',
-        bgcolor: cardBg,
-        border: theme.palette.mode === 'light' ? KANBAN_CARD_BORDER : 'none',
+        bgcolor: isDragging ? alpha(theme.palette.primary.main, 0.05) : cardBg,
+        border: isDragging
+          ? `1px dashed ${alpha(theme.palette.primary.main, 0.5)}`
+          : theme.palette.mode === 'light'
+            ? KANBAN_CARD_BORDER
+            : 'none',
         borderRadius: KANBAN_CARD_RADIUS,
         overflow: 'hidden',
-        boxShadow: KANBAN_CARD_SHADOW,
-        transition: isDragging ? 'none' : DRAG_LAYOUT_TRANSITION,
-        willChange: isDragging ? 'transform' : 'auto',
-        zIndex: isDragging ? 20 : 1,
-        '&:hover': {
-          boxShadow: KANBAN_CARD_HOVER_SHADOW,
-        },
-        ...style,
+        boxShadow: isCardOver && !isDragging ? KANBAN_CARD_HOVER_SHADOW : KANBAN_CARD_SHADOW,
+        outline: isCardOver && !isDragging ? `2px solid ${alpha(theme.palette.primary.main, 0.35)}` : 'none',
+        outlineOffset: 0,
+        willChange: 'transform',
+        zIndex: isDragging ? 2 : 1,
+        contain: 'layout style',
+        '&:hover': isDragging
+          ? undefined
+          : {
+              boxShadow: KANBAN_CARD_HOVER_SHADOW,
+            },
       }}
       {...(dragDisabled ? {} : listeners)}
       {...(dragDisabled ? {} : attributes)}
@@ -1119,6 +1214,10 @@ const DraggableCard = memo(function DraggableCard({
         if (!isDragging) onOpenDetail(card);
       }}
     >
+      {isDragging ? (
+        <Box sx={{ minHeight: WORK_BOARD_CARD_MIN_HEIGHT_PX - 4, px: 1.25, py: 1.15 }} />
+      ) : (
+        <>
       {cardAccent ? (
         <Box sx={{ height: 6, flexShrink: 0, bgcolor: cardAccent }} />
       ) : null}
@@ -1229,6 +1328,8 @@ const DraggableCard = memo(function DraggableCard({
         </Box>
         ) : null}
       </CardContent>
+        </>
+      )}
     </Card>
   );
 });
@@ -1293,19 +1394,21 @@ const ListColumn = memo(function ListColumn({
   const theme = useTheme();
   const [listMenuAnchor, setListMenuAnchor] = useState<null | HTMLElement>(null);
   const { setNodeRef: setCardDropRef, isOver } = useDroppable({ id: `list-${list.id}` });
-  const { setNodeRef: setListDropRef } = useDroppable({ id: `listcol-${list.id}` });
   const {
     attributes: listDragAttributes,
     listeners: listDragListeners,
-    setNodeRef: setListDragRef,
+    setNodeRef: setListSortRef,
     transform: listTransform,
-    isDragging: isListDragging
-  } = useDraggable({
+    transition: listTransition,
+    isDragging: isListDragging,
+  } = useSortable({
     id: `listcol-${list.id}`,
-    data: { listId: list.id },
-    disabled: !allowListReorder
+    data: { type: 'list', listId: list.id },
+    disabled: !allowListReorder,
+    animateLayoutChanges: () => true,
   });
   const cards = list.cards || [];
+  const cardSortIds = useMemo(() => cards.map((c) => `card-${c.id}`), [cards]);
 
   const handleOpenCard = useCallback(
     (card: BoardCard) => onOpenCardDetail(card, list.title, list.id),
@@ -1314,23 +1417,23 @@ const ListColumn = memo(function ListColumn({
 
   const setColumnRef = (node: HTMLElement | null) => {
     setCardDropRef(node);
-    setListDropRef(node);
-    setListDragRef(node);
+    setListSortRef(node);
   };
 
-  const listStyle = listTransform
-    ? {
-        transform: `translate3d(${listTransform.x}px, ${listTransform.y}px, 0)`,
-        opacity: isListDragging ? 0 : 1,
-        pointerEvents: isListDragging ? ('none' as const) : undefined
-      }
-    : { opacity: isListDragging ? 0 : 1, pointerEvents: isListDragging ? ('none' as const) : undefined };
+  // 열 드래그도 Overlay 사용 — 원본은 자리 표시, 형제 열은 transition으로 밀림
+  const listStyle: React.CSSProperties = {
+    transform: CSS.Transform.toString(listTransform),
+    transition: isListDragging ? undefined : listTransition || DRAG_TRANSITION,
+    opacity: isListDragging ? 0.28 : 1,
+    pointerEvents: isListDragging ? 'none' : undefined,
+  };
 
   return (
     <Paper
       ref={setColumnRef}
       elevation={0}
       data-kanban-column=""
+      style={listStyle}
       sx={{
         boxSizing: 'border-box',
         flex: `0 0 ${WORK_BOARD_COLUMN_WIDTH_PX}px`,
@@ -1352,10 +1455,8 @@ const ListColumn = memo(function ListColumn({
         display: 'flex',
         flexDirection: 'column',
         overflow: 'visible',
-        transition: isListDragging ? 'none' : DRAG_TRANSITION,
-        willChange: isListDragging ? 'transform' : 'auto',
+        willChange: 'transform',
         zIndex: isListDragging ? 10 : 1,
-        ...listStyle,
       }}
     >
       <Box
@@ -1502,25 +1603,28 @@ const ListColumn = memo(function ListColumn({
             `${txt('사용자', 'User')} ${list.assignee_user_id}`}
         </Typography>
       ) : null}
-      <Box
-        sx={{
-          overflow: 'visible',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 1,
-        }}
-      >
-        {cards.map((c) => (
-          <DraggableCard
-            key={c.id}
-            card={c}
-            members={members}
-            isCompletedList={isCompletedList}
-            onOpenDetail={handleOpenCard}
-            dragDisabled={!allowListReorder}
-          />
-        ))}
-      </Box>
+      <SortableContext items={cardSortIds} strategy={verticalListSortingStrategy}>
+        <Box
+          sx={{
+            overflow: 'visible',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1,
+            minHeight: 8,
+          }}
+        >
+          {cards.map((c) => (
+            <DraggableCard
+              key={c.id}
+              card={c}
+              members={members}
+              isCompletedList={isCompletedList}
+              onOpenDetail={handleOpenCard}
+              dragDisabled={!allowListReorder}
+            />
+          ))}
+        </Box>
+      </SortableContext>
 
       {allowAddCard && composerOpen ? (
         <Paper
@@ -1707,9 +1811,13 @@ export default function WorkBoardDetailPage() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 0 }
+      // 카드 클릭(상세)과 드래그 구분 — 짧게 움직이면 DnD 시작
+      activationConstraint: { distance: 5 },
     })
   );
+
+  const boardBeforeDragRef = useRef<any>(null);
+  const lastKanbanOverKeyRef = useRef<string | null>(null);
 
   const loadBoard = useCallback(async (options?: { silent?: boolean }) => {
     if (!boardId || Number.isNaN(boardId)) return;
@@ -1813,6 +1921,8 @@ export default function WorkBoardDetailPage() {
   const handleDragStart = (event: DragStartEvent) => {
     const id = String(event.active.id);
     const boardLists: BoardList[] = board?.lists || [];
+    boardBeforeDragRef.current = board;
+    lastKanbanOverKeyRef.current = null;
     if (id.startsWith('card-')) {
       setActiveList(null);
       const cid = parseInt(id.replace('card-', ''), 10);
@@ -1838,9 +1948,78 @@ export default function WorkBoardDetailPage() {
   };
 
   const handleDragCancel = () => {
+    if (boardBeforeDragRef.current) {
+      setBoard(boardBeforeDragRef.current);
+      boardBeforeDragRef.current = null;
+    }
+    lastKanbanOverKeyRef.current = null;
     setActiveCard(null);
     setActiveList(null);
   };
+
+  /** 드래그 중 실시간으로 칸/순서 반영 — 놓을 때만 API */
+  const handleDragOver = useCallback(
+    (event: DragOverEvent) => {
+      if (!menuCanEdit || cardSearch.trim().length > 0) return;
+      const { active, over } = event;
+      if (!over) return;
+
+      const activeIdStr = String(active.id);
+      const overId = String(over.id);
+
+      if (activeIdStr.startsWith('card-')) {
+        const activeCardId = parseInt(activeIdStr.replace('card-', ''), 10);
+        if (!Number.isFinite(activeCardId)) return;
+        setBoard((prev: any) => {
+          if (!prev?.lists) return prev;
+          const lists: BoardList[] = prev.lists || [];
+          const target = resolveCardDropTarget(lists, activeCardId, overId);
+          if (!target) return prev;
+          const key = `card:${activeCardId}:${target.targetListId}:${target.targetIndex}`;
+          if (lastKanbanOverKeyRef.current === key) return prev;
+          const before = findCardPositionInBoard(prev, activeCardId);
+          if (
+            before &&
+            before.listId === target.targetListId &&
+            before.index === target.targetIndex
+          ) {
+            lastKanbanOverKeyRef.current = key;
+            return prev;
+          }
+          lastKanbanOverKeyRef.current = key;
+          return applyOptimisticCardMove(
+            prev,
+            activeCardId,
+            target.targetListId,
+            target.targetIndex
+          );
+        });
+        return;
+      }
+
+      if (activeIdStr.startsWith('listcol-')) {
+        const activeListId = parseInt(activeIdStr.replace('listcol-', ''), 10);
+        if (!Number.isFinite(activeListId)) return;
+        setBoard((prev: any) => {
+          if (!prev?.lists) return prev;
+          const lists: BoardList[] = prev.lists || [];
+          const targetIndex = resolveListDropTargetIndex(lists, activeListId, overId);
+          if (targetIndex == null) return prev;
+          const key = `list:${activeListId}:${targetIndex}`;
+          if (lastKanbanOverKeyRef.current === key) return prev;
+          const ordered = [...lists].sort((a, b) => a.position - b.position);
+          const currentIndex = ordered.findIndex((l) => l.id === activeListId);
+          if (currentIndex === targetIndex) {
+            lastKanbanOverKeyRef.current = key;
+            return prev;
+          }
+          lastKanbanOverKeyRef.current = key;
+          return applyOptimisticListMove(prev, activeListId, targetIndex);
+        });
+      }
+    },
+    [menuCanEdit, cardSearch]
+  );
 
   const isKanbanDragging = Boolean(activeCard || activeList);
   const boardHScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1942,65 +2121,64 @@ export default function WorkBoardDetailPage() {
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const clearDragOverlay = () => {
-    setActiveCard(null);
-    setActiveList(null);
+      setActiveCard(null);
+      setActiveList(null);
+      lastKanbanOverKeyRef.current = null;
     };
+    const snapshot = boardBeforeDragRef.current;
+    boardBeforeDragRef.current = null;
 
     if (!menuCanEdit) {
       clearDragOverlay();
       return;
     }
     const { active, over } = event;
-    if (!over || !board) {
+    if (!board) {
       clearDragOverlay();
       return;
     }
 
     const activeIdStr = String(active.id);
-    const overId = String(over.id);
+    const overId = over ? String(over.id) : '';
     const lists: BoardList[] = board.lists || [];
 
     // 대분류(컬럼) 드래그 이동
     if (activeIdStr.startsWith('listcol-')) {
       const activeListId = parseInt(activeIdStr.replace('listcol-', ''), 10);
-      let targetListId: number | null = null;
-
-      if (overId.startsWith('listcol-')) {
-        targetListId = parseInt(overId.replace('listcol-', ''), 10);
-      } else if (overId.startsWith('list-')) {
-        targetListId = parseInt(overId.replace('list-', ''), 10);
-      } else if (overId.startsWith('card-')) {
-        const overCardId = parseInt(overId.replace('card-', ''), 10);
-        for (const l of lists) {
-          if ((l.cards || []).some((c) => c.id === overCardId)) {
-            targetListId = l.id;
-            break;
-          }
-        }
+      let targetIndex =
+        overId ? resolveListDropTargetIndex(lists, activeListId, overId) : null;
+      if (targetIndex == null) {
+        const ordered = [...lists].sort((a, b) => a.position - b.position);
+        const cur = ordered.findIndex((l) => l.id === activeListId);
+        targetIndex = cur >= 0 ? cur : null;
       }
-
-      if (!targetListId || targetListId === activeListId) {
+      if (targetIndex == null) {
         clearDragOverlay();
-        return;
-      }
-      const orderedLists = [...lists].sort((a, b) => a.position - b.position);
-      const targetIndex = orderedLists.findIndex((l) => l.id === targetListId);
-      if (targetIndex < 0) {
-        clearDragOverlay();
+        if (snapshot) setBoard(snapshot);
         return;
       }
 
-      const prevBoard = board;
-      setBoard((p: any) => applyOptimisticListMove(p, activeListId, targetIndex));
+      const snapOrdered = snapshot
+        ? [...(snapshot.lists || [])].sort(
+            (a: BoardList, b: BoardList) => a.position - b.position
+          )
+        : [];
+      const snapIndex = snapOrdered.findIndex((l: BoardList) => l.id === activeListId);
+      if (snapIndex === targetIndex) {
+        clearDragOverlay();
+        return;
+      }
+
+      setBoard((p: any) => applyOptimisticListMove(p, activeListId, targetIndex!));
       clearDragOverlay();
       try {
         const res = await workBoardService.moveList(boardId, activeListId, targetIndex);
         if (!res.success) {
-          setBoard(prevBoard);
+          if (snapshot) setBoard(snapshot);
           showErrorPopup(res.message || '대분류 이동 실패', '작업 보드');
         }
       } catch (e: any) {
-        setBoard(prevBoard);
+        if (snapshot) setBoard(snapshot);
         showErrorPopup(e, '작업 보드');
       }
       return;
@@ -2012,61 +2190,43 @@ export default function WorkBoardDetailPage() {
     }
     const activeCardId = parseInt(activeIdStr.replace('card-', ''), 10);
 
-    if (overId.startsWith('card-')) {
-      const overCardIdEarly = parseInt(overId.replace('card-', ''), 10);
-      if (overCardIdEarly === activeCardId) {
-        clearDragOverlay();
-        return;
+    // dragOver로 이미 맞춰진 최종 위치를 우선 — over로 한 번 더 보정
+    let finalPos = findCardPositionInBoard(board, activeCardId);
+    if (overId) {
+      const fromOver = resolveCardDropTarget(lists, activeCardId, overId);
+      if (fromOver) {
+        finalPos = { listId: fromOver.targetListId, index: fromOver.targetIndex };
+        setBoard((p: any) =>
+          applyOptimisticCardMove(p, activeCardId, fromOver.targetListId, fromOver.targetIndex)
+        );
       }
     }
-
-    let targetListId: number;
-    let targetIndex: number;
-
-    if (overId.startsWith('list-')) {
-      targetListId = parseInt(overId.replace('list-', ''), 10);
-      const list = lists.find((l) => l.id === targetListId);
-      const filtered = (list?.cards || []).filter((c) => c.id !== activeCardId);
-      targetIndex = filtered.length;
-    } else if (overId.startsWith('card-')) {
-      const overCardId = parseInt(overId.replace('card-', ''), 10);
-      let found: BoardList | undefined;
-      for (const l of lists) {
-        if ((l.cards || []).some((c) => c.id === overCardId)) {
-          found = l;
-          break;
-        }
-      }
-      if (!found) {
-        clearDragOverlay();
-        return;
-      }
-      targetListId = found.id;
-      const filtered = (found.cards || []).filter((c) => c.id !== activeCardId);
-      const idx = filtered.findIndex((c) => c.id === overCardId);
-      targetIndex = idx >= 0 ? idx : filtered.length;
-    } else {
+    if (!finalPos) {
       clearDragOverlay();
+      if (snapshot) setBoard(snapshot);
       return;
     }
 
-    const before = findCardPositionInBoard(board, activeCardId);
+    const beforeSnap = snapshot ? findCardPositionInBoard(snapshot, activeCardId) : null;
     if (
-      before &&
-      before.listId === targetListId &&
-      before.index === targetIndex
+      beforeSnap &&
+      beforeSnap.listId === finalPos.listId &&
+      beforeSnap.index === finalPos.index
     ) {
       clearDragOverlay();
       return;
     }
 
-    const prevBoard = board;
-    setBoard((p: any) => applyOptimisticCardMove(p, activeCardId, targetListId, targetIndex));
     clearDragOverlay();
     try {
-      const res = await workBoardService.moveCard(boardId, activeCardId, targetListId, targetIndex);
+      const res = await workBoardService.moveCard(
+        boardId,
+        activeCardId,
+        finalPos.listId,
+        finalPos.index
+      );
       if (!res.success) {
-        setBoard(prevBoard);
+        if (snapshot) setBoard(snapshot);
         showErrorPopup(res.message || '이동 실패', '작업 보드');
         return;
       }
@@ -2074,12 +2234,12 @@ export default function WorkBoardDetailPage() {
         setBoard((p: any) =>
           applyCardMoveMetaOnBoard(p, activeCardId, {
             assignee: res.data?.assignee,
-            reference_user_ids: res.data?.reference_user_ids
+            reference_user_ids: res.data?.reference_user_ids,
           })
         );
       }
     } catch (e: any) {
-      setBoard(prevBoard);
+      if (snapshot) setBoard(snapshot);
       showErrorPopup(e, '작업 보드');
     }
   };
@@ -2552,9 +2712,13 @@ export default function WorkBoardDetailPage() {
   }, []);
 
   const loadCardComments = useCallback(
-    async (cardId: number, options?: { markRead?: boolean; syncGen?: number }) => {
+    async (
+      cardId: number,
+      options?: { markRead?: boolean; syncGen?: number; silent?: boolean }
+    ) => {
       const syncGen = options?.syncGen ?? ++commentSyncGenRef.current;
-      setCommentLoading(true);
+      const silent = options?.silent === true;
+      if (!silent) setCommentLoading(true);
       try {
         const res = await workBoardService.getCardComments(boardId, cardId);
         if (syncGen !== commentSyncGenRef.current) return;
@@ -2580,7 +2744,7 @@ export default function WorkBoardDetailPage() {
         showErrorPopup(e, '카드 댓글');
         }
       } finally {
-        if (syncGen === commentSyncGenRef.current) {
+        if (!silent && syncGen === commentSyncGenRef.current) {
         setCommentLoading(false);
         }
       }
@@ -2627,7 +2791,7 @@ export default function WorkBoardDetailPage() {
         cardCommentPostedRef.current = true;
         commentSyncGenRef.current += 1;
         const syncGen = commentSyncGenRef.current;
-        await loadCardComments(cardDetail.cardId, { markRead: false, syncGen });
+        await loadCardComments(cardDetail.cardId, { markRead: false, syncGen, silent: true });
         const nextCount =
           typeof res.comment_count === 'number'
             ? res.comment_count
@@ -2819,23 +2983,39 @@ export default function WorkBoardDetailPage() {
   const removeComment = async (commentId: number) => {
     if (!cardDetail?.cardId) return;
     if (!menuCanEdit) return;
+    holdScrollPosition(1200);
+
+    const prevComments = cardComments;
+    // 로딩 스피너로 목록이 접히면 스크롤이 맨 위로 튀므로, 로컬에서 바로 제거
+    setCardComments((prev) =>
+      prev.filter((c) => c.id !== commentId && resolveCommentParentId(c) !== commentId)
+    );
+    setReplyParentId((prev) => (prev === commentId ? null : prev));
     setCommentDeletingId(commentId);
+
     try {
       const res = await workBoardService.deleteCardComment(boardId, cardDetail.cardId, commentId);
       if (res.success) {
-        await loadCardComments(cardDetail.cardId, { markRead: false });
+        const nextCount =
+          typeof res.comment_count === 'number'
+            ? res.comment_count
+            : Math.max(0, prevComments.length - 1);
         patchBoardCardMeta(cardDetail.cardId, {
-          comment_count:
-            typeof res.comment_count === 'number'
-              ? res.comment_count
-              : Math.max(0, cardComments.length - 1),
+          comment_count: nextCount,
           has_unread_comments: Boolean(res.has_unread_comments),
+          comments: prevComments
+            .filter((c) => c.id !== commentId && resolveCommentParentId(c) !== commentId)
+            .map((row) => ({
+              id: row.id,
+              created_at: resolveCommentCreatedAt(row),
+            })),
         });
-        setReplyParentId((prev) => (prev === commentId ? null : prev));
       } else {
+        setCardComments(prevComments);
         showErrorPopup(res.message || '댓글 삭제 실패', '카드 댓글');
       }
     } catch (e: any) {
+      setCardComments(prevComments);
       showErrorPopup(e, '카드 댓글');
     } finally {
       setCommentDeletingId(null);
@@ -3666,7 +3846,7 @@ export default function WorkBoardDetailPage() {
       onPointerCancel={handleBoardPanPointerUp}
       sx={{
         p: 0,
-        pb: cardDetail ? 2 : 0,
+        pb: cardDetail ? 1 : 0,
         flex: 1,
         // 카드 세부 입력 시 칸반 full-bleed 대신 일반 바디(mvsPageContentMaxWidth) 폭
         // AppLayout `& > * { width/maxWidth: 100% }` 보다 우선
@@ -3705,7 +3885,7 @@ export default function WorkBoardDetailPage() {
       }}
     >
       <MvsPageHeader
-        backTo="/work/projects"
+        backTo={cardDetail ? undefined : '/work/projects'}
         title={board.name}
         description={board.description?.trim() || undefined}
         actions={
@@ -4183,14 +4363,19 @@ export default function WorkBoardDetailPage() {
       {!cardDetail && (
         <DndContext
           sensors={sensors}
-          autoScroll={false}
+          autoScroll={{
+            threshold: { x: 0.12, y: 0.12 },
+            acceleration: 12,
+            interval: 8,
+          }}
           collisionDetection={kanbanCollisionDetection}
           measuring={{
             droppable: {
-              strategy: MeasuringStrategy.BeforeDragging,
+              strategy: MeasuringStrategy.Always,
             },
           }}
           onDragStart={handleDragStart}
+          onDragOver={menuCanEdit && !cardSearchActive ? handleDragOver : undefined}
           onDragCancel={handleDragCancel}
           onDragEnd={menuCanEdit && !cardSearchActive ? handleDragEnd : () => {}}
         >
@@ -4221,6 +4406,10 @@ export default function WorkBoardDetailPage() {
                 minHeight: '100%',
                 boxSizing: 'border-box',
               }}
+            >
+            <SortableContext
+              items={displayActiveLists.map((l) => `listcol-${l.id}`)}
+              strategy={horizontalListSortingStrategy}
             >
             {displayActiveLists.map((list) => (
               <ListColumn
@@ -4254,11 +4443,12 @@ export default function WorkBoardDetailPage() {
                 allowAddCard={menuCanCreate}
               />
             ))}
+            </SortableContext>
             </Box>
           </Box>
           <DragOverlay
             adjustScale={false}
-            dropAnimation={null}
+            dropAnimation={KANBAN_DROP_ANIMATION}
             modifiers={[snapCenterToCursor, restrictToWindowEdges]}
             zIndex={1500}
           >
@@ -4351,8 +4541,8 @@ export default function WorkBoardDetailPage() {
             const custom = cardDetail.color?.trim();
             const accent = custom || theme.palette.primary.main;
             return {
-              mt: 1.5,
-              mb: 2,
+              mt: 1,
+              mb: 1,
               width: '100%',
               maxWidth: '100%',
               minWidth: 0,
@@ -4561,64 +4751,74 @@ export default function WorkBoardDetailPage() {
                 {txt('작성일', 'Created')}: {formatCardCreatedAt(cardDetail.createdAt)}
               </Typography>
             ) : null}
+            <IconButton
+              size="small"
+              onClick={closeCardDetail}
+              aria-label={txt('카드 닫기', 'Close card')}
+              sx={{
+                ml: 0.25,
+                color: '#64748B',
+                borderRadius: KANBAN_CONTROL_RADIUS,
+              }}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
           </Box>
         </Box>
         <Box
           sx={{
-            pt: 1.25,
+            pt: 1,
             px: 1.25,
-            pb: 1.25,
+            pb: 0.75,
             display: 'flex',
             flexDirection: 'column',
-            gap: 1.4,
+            gap: 1.1,
             bgcolor: '#F8FAFC',
             overflow: 'visible',
           }}
         >
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.42 }}>
           <Box
+            data-board-no-pan=""
             sx={{
               ...cardDetailFormSectionSx,
               py: 0.32,
+              position: 'relative',
+              zIndex: 5,
             }}
           >
-          <TextField
-            fullWidth
-            size="small"
-            label={txt('제목', 'Title')}
-            {...CARD_DETAIL_OUTLINED}
-            variant="outlined"
-            value={cardDetail?.title || ''}
-            onChange={(e) =>
-              setCardDetail((prev) =>
-                prev ? { ...prev, title: e.target.value } : prev
-              )
-            }
-            disabled={!menuCanEdit}
-              placeholder={txt('카드 제목', 'Card Title')}
-            sx={cardDetailOutlinedWhiteSx}
-          />
-          </Box>
-
-          <Box
-            sx={{
-              ...cardDetailFormSectionSx,
-              py: 0.37,
-            }}
-          >
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
-                gap: 1.58
-            }}
-          >
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: 'minmax(0, 2.15fr) minmax(0, 0.63fr) minmax(0, 1.15fr) minmax(132px, 0.52fr)',
+                },
+                gap: 1,
+                alignItems: 'start',
+              }}
+            >
+              <TextField
+                fullWidth
+                size="small"
+                label={txt('제목', 'Title')}
+                {...CARD_DETAIL_OUTLINED}
+                variant="outlined"
+                value={cardDetail?.title || ''}
+                onChange={(e) =>
+                  setCardDetail((prev) =>
+                    prev ? { ...prev, title: e.target.value } : prev
+                  )
+                }
+                disabled={!menuCanEdit}
+                placeholder={txt('카드 제목', 'Card Title')}
+                sx={cardDetailOutlinedWhiteSx}
+              />
               <TextField
                 select
                 fullWidth
                 size="small"
-              label={txt('담당자', 'Assignee')}
-              {...CARD_DETAIL_OUTLINED}
+                label={txt('담당자', 'Assignee')}
+                {...CARD_DETAIL_OUTLINED}
                 variant="outlined"
                 value={cardDetail?.assigneeUserId ?? ''}
                 disabled={!menuCanEdit}
@@ -4627,19 +4827,19 @@ export default function WorkBoardDetailPage() {
                     prev
                       ? {
                           ...prev,
-                          assigneeUserId: e.target.value === '' ? null : Number(e.target.value)
+                          assigneeUserId: e.target.value === '' ? null : Number(e.target.value),
                         }
                       : prev
                   )
                 }
-              SelectProps={{
-                displayEmpty: true,
-                renderValue: (selected: unknown) => {
-                  if (selected === '' || selected == null) return txt('미지정', 'Unassigned');
-                  return resolveMemberDisplayName(selected);
-                },
-              }}
-              sx={cardDetailOutlinedWhiteSx}
+                SelectProps={{
+                  displayEmpty: true,
+                  renderValue: (selected: unknown) => {
+                    if (selected === '' || selected == null) return txt('미지정', 'Unassigned');
+                    return resolveMemberDisplayName(selected);
+                  },
+                }}
+                sx={cardDetailOutlinedWhiteSx}
               >
                 <MenuItem value="">{txt('미지정', 'Unassigned')}</MenuItem>
                 {members.map((m: any) => (
@@ -4648,12 +4848,81 @@ export default function WorkBoardDetailPage() {
                   </MenuItem>
                 ))}
               </TextField>
+              <Autocomplete
+                multiple
+                disabled={!menuCanEdit}
+                options={memberOptions}
+                getOptionLabel={(option) => option.label}
+                value={memberOptions.filter((option) =>
+                  (cardDetail?.referenceUserIds || []).includes(option.id)
+                )}
+                onChange={(_event, selected) => {
+                  const nextIds = selected.map((item) => item.id);
+                  setCardDetail((prev) =>
+                    prev ? { ...prev, referenceUserIds: nextIds } : prev
+                  );
+                }}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                slotProps={{
+                  popper: {
+                    sx: { zIndex: 2100 },
+                  },
+                }}
+                renderOption={(props, option) => {
+                  const { key, ...rest } = props as typeof props & { key?: React.Key };
+                  return (
+                    <li
+                      key={key ?? option.id}
+                      {...rest}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        rest.onMouseDown?.(event);
+                      }}
+                    >
+                      {option.label}
+                    </li>
+                  );
+                }}
+                renderTags={(value, getTagProps) =>
+                  value.map((option, index) => (
+                    <Chip
+                      size="small"
+                      label={option.label}
+                      {...getTagProps({ index })}
+                      key={option.id}
+                      sx={{ borderRadius: KANBAN_CHIP_RADIUS, fontWeight: 600, maxWidth: 96 }}
+                    />
+                  ))
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    size="small"
+                    label={txt('참조자', 'References')}
+                    {...CARD_DETAIL_OUTLINED}
+                    placeholder={txt('참조할 사용자 선택', 'Select reference users')}
+                    sx={{
+                      ...cardDetailOutlinedWhiteSx,
+                      '& .MuiOutlinedInput-root': {
+                        ...(cardDetailOutlinedWhiteSx['& .MuiOutlinedInput-root'] as Record<
+                          string,
+                          unknown
+                        >),
+                        height: 'auto',
+                        minHeight: 46,
+                        alignItems: 'center',
+                        py: 0.68,
+                      },
+                    }}
+                  />
+                )}
+              />
               <TextField
                 type="date"
                 fullWidth
                 size="small"
-              label={txt('만료일', 'Due Date')}
-              {...CARD_DETAIL_OUTLINED}
+                label={txt('만료일', 'Due Date')}
+                {...CARD_DETAIL_OUTLINED}
                 variant="outlined"
                 value={cardDetail?.dueDate || ''}
                 disabled={!menuCanEdit}
@@ -4662,83 +4931,10 @@ export default function WorkBoardDetailPage() {
                     prev ? { ...prev, dueDate: e.target.value } : prev
                   )
                 }
-              sx={cardDetailOutlinedWhiteSx}
+                InputLabelProps={{ shrink: true }}
+                sx={cardDetailOutlinedWhiteSx}
               />
             </Box>
-          </Box>
-
-          <Box
-            data-board-no-pan=""
-            sx={{
-              ...cardDetailFormSectionSx,
-              py: 0.37,
-              position: 'relative',
-              zIndex: 5,
-            }}
-          >
-            <Autocomplete
-              multiple
-              disabled={!menuCanEdit}
-              options={memberOptions}
-              getOptionLabel={(option) => option.label}
-              value={memberOptions.filter((option) => (cardDetail?.referenceUserIds || []).includes(option.id))}
-              onChange={(_event, selected) => {
-                const nextIds = selected.map((item) => item.id);
-                setCardDetail((prev) => (prev ? { ...prev, referenceUserIds: nextIds } : prev));
-              }}
-              isOptionEqualToValue={(option, value) => option.id === value.id}
-              slotProps={{
-                popper: {
-                  sx: { zIndex: 2100 },
-                },
-              }}
-              renderOption={(props, option) => {
-                const { key, ...rest } = props as typeof props & { key?: React.Key };
-                return (
-                  <li
-                    key={key ?? option.id}
-                    {...rest}
-                    onMouseDown={(event) => {
-                      // blur로 목록이 먼저 닫히며 클릭이 씹히는 것 방지
-                      event.preventDefault();
-                      rest.onMouseDown?.(event);
-                    }}
-                  >
-                    {option.label}
-                  </li>
-                );
-              }}
-              renderTags={(value, getTagProps) =>
-                value.map((option, index) => (
-                  <Chip
-                    size="small"
-                    label={option.label}
-                    {...getTagProps({ index })}
-                    key={option.id}
-                    sx={{ borderRadius: KANBAN_CHIP_RADIUS, fontWeight: 600 }}
-                  />
-                ))
-              }
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  size="small"
-                  label={txt('참조자', 'References')}
-                  {...CARD_DETAIL_OUTLINED}
-                  placeholder={txt('참조할 사용자 선택', 'Select reference users')}
-                  sx={{
-                    ...cardDetailOutlinedWhiteSx,
-                    '& .MuiOutlinedInput-root': {
-                      ...(cardDetailOutlinedWhiteSx['& .MuiOutlinedInput-root'] as Record<string, unknown>),
-                      height: 'auto',
-                      minHeight: 46,
-                      alignItems: 'center',
-                      py: 0.68,
-                    },
-                  }}
-                />
-              )}
-            />
           </Box>
 
           <Box
@@ -4751,81 +4947,80 @@ export default function WorkBoardDetailPage() {
               variant="caption"
               sx={{ ...cardDetailFieldLabelSx, mb: 0.5 }}
             >
-            {txt('카드 색상', 'Card Color')}
-          </Typography>
+              {txt('카드 색상', 'Card Color')}
+            </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75 }}>
-            <TextField
-              type="color"
-              hiddenLabel
-              variant="outlined"
-              size="small"
-              value={cardDetail?.color || '#1976D2'}
-              disabled={!menuCanEdit}
-              onChange={(e) =>
-                setCardDetail((prev) => (prev ? { ...prev, color: e.target.value } : prev))
-              }
-              sx={{
-                width: 44,
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: KANBAN_CONTROL_RADIUS,
-                  bgcolor: '#FFFFFF',
-                  p: 0.25,
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E2E8F0' },
-                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#94A3B8' },
-                },
-                '& input[type="color"]': {
-                  borderRadius: KANBAN_CONTROL_RADIUS,
-                  cursor: 'pointer',
-                  minHeight: 28,
-                },
-              }}
-            />
-            <Button
-              size="small"
-              variant={!cardDetail?.color ? 'contained' : 'text'}
-              disabled={!menuCanEdit}
-              onClick={() =>
-                setCardDetail((prev) => (prev ? { ...prev, color: '' } : prev))
-              }
-              sx={{
-                borderRadius: KANBAN_CONTROL_RADIUS,
-                minWidth: 48,
-                fontWeight: 600,
-                bgcolor: !cardDetail?.color ? 'primary.main' : '#FFFFFF',
-                color: !cardDetail?.color ? '#FFFFFF' : 'primary.main',
-                boxShadow: 'none',
-                '&:hover': {
-                  bgcolor: !cardDetail?.color ? 'primary.dark' : '#F8FAFC',
-                  boxShadow: 'none',
-                },
-              }}
-            >
-              {txt('기본', 'Default')}
-            </Button>
-            {CARD_COLOR_PRESETS.map((hex) => (
-              <Button
-                key={hex}
+              <TextField
+                type="color"
+                hiddenLabel
+                variant="outlined"
                 size="small"
-                variant="text"
+                value={cardDetail?.color || '#1976D2'}
                 disabled={!menuCanEdit}
-                onClick={() =>
-                  setCardDetail((prev) => (prev ? { ...prev, color: hex } : prev))
+                onChange={(e) =>
+                  setCardDetail((prev) => (prev ? { ...prev, color: e.target.value } : prev))
                 }
                 sx={{
-                  minWidth: 28,
-                  width: 28,
-                  height: 28,
-                  p: 0,
-                  borderRadius: KANBAN_CONTROL_RADIUS,
-                  border: 'none',
-                  bgcolor: cardDetail?.color === hex ? hex : hexToRgba(hex, 0.38),
-                  boxShadow: cardDetail?.color === hex ? `0 0 0 2px #FFFFFF, 0 0 0 3px ${hex}` : 'none',
-                  '&:hover': { bgcolor: hex, opacity: 0.9, boxShadow: 'none' },
+                  width: 44,
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: KANBAN_CONTROL_RADIUS,
+                    bgcolor: '#FFFFFF',
+                    p: 0.25,
+                    '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E2E8F0' },
+                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#94A3B8' },
+                  },
+                  '& input[type="color"]': {
+                    borderRadius: KANBAN_CONTROL_RADIUS,
+                    cursor: 'pointer',
+                    minHeight: 28,
+                  },
                 }}
               />
-            ))}
-          </Box>
-          </Box>
+              <Button
+                size="small"
+                variant={!cardDetail?.color ? 'contained' : 'text'}
+                disabled={!menuCanEdit}
+                onClick={() =>
+                  setCardDetail((prev) => (prev ? { ...prev, color: '' } : prev))
+                }
+                sx={{
+                  borderRadius: KANBAN_CONTROL_RADIUS,
+                  minWidth: 48,
+                  fontWeight: 600,
+                  bgcolor: !cardDetail?.color ? 'primary.main' : '#FFFFFF',
+                  color: !cardDetail?.color ? '#FFFFFF' : 'primary.main',
+                  boxShadow: 'none',
+                  '&:hover': {
+                    bgcolor: !cardDetail?.color ? 'primary.dark' : '#F8FAFC',
+                    boxShadow: 'none',
+                  },
+                }}
+              >
+                {txt('기본', 'Default')}
+              </Button>
+              {CARD_COLOR_PRESETS.map((hex) => (
+                <Button
+                  key={hex}
+                  size="small"
+                  variant="text"
+                  disabled={!menuCanEdit}
+                  onClick={() =>
+                    setCardDetail((prev) => (prev ? { ...prev, color: hex } : prev))
+                  }
+                  sx={{
+                    minWidth: 28,
+                    width: 28,
+                    height: 28,
+                    p: 0,
+                    borderRadius: KANBAN_CONTROL_RADIUS,
+                    border: 'none',
+                    bgcolor: cardDetail?.color === hex ? hex : hexToRgba(hex, 0.38),
+                    boxShadow: cardDetail?.color === hex ? `0 0 0 2px #FFFFFF, 0 0 0 3px ${hex}` : 'none',
+                    '&:hover': { bgcolor: hex, opacity: 0.9, boxShadow: 'none' },
+                  }}
+                />
+              ))}
+            </Box>
           </Box>
 
           <Box
@@ -5152,25 +5347,26 @@ export default function WorkBoardDetailPage() {
             </Button>
           </Box>
 
-          <Paper
-            elevation={0}
+          <Box
             sx={{
               ...cardDetailSectionPaperSx,
               display: 'flex',
               flexDirection: 'column',
               flexShrink: 0,
-              p: 1.5,
-              borderRadius: KANBAN_SURFACE_RADIUS,
-              border: '1px solid #E2E8F0',
-              bgcolor: '#FFFFFF',
-              boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)',
+              p: 0,
+              pt: 0.85,
+              pb: 0,
+              borderTop: '1px solid #E2E8F0',
+              borderRadius: 0,
+              bgcolor: 'transparent',
+              boxShadow: 'none',
             }}
           >
           <Typography
             variant="caption"
             sx={{
               ...cardDetailFieldLabelSx,
-              mb: 1,
+              mb: 0.65,
               fontSize: '0.8125rem',
               color: '#334155',
             }}
@@ -5194,11 +5390,8 @@ export default function WorkBoardDetailPage() {
                 justifyContent: 'space-between',
                 gap: 1,
                 mb: 0.75,
-                py: 0.5,
-                px: 1,
-                borderRadius: KANBAN_CONTROL_RADIUS,
-                border: '1px solid #E2E8F0',
-                bgcolor: '#F0F4F8',
+                py: 0.35,
+                px: 0.25,
               }}
             >
               <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
@@ -5223,7 +5416,7 @@ export default function WorkBoardDetailPage() {
               display: 'flex',
               alignItems: 'stretch',
               gap: 1,
-              mb: 0.75,
+              mb: 0.5,
             }}
           >
             <Box
@@ -5235,12 +5428,11 @@ export default function WorkBoardDetailPage() {
                 alignItems: 'center',
                 gap: 0.35,
                 px: 1,
-                py: 0.5,
-                minHeight: 40,
-                border: '1px solid #E2E8F0',
+                py: 0.35,
+                minHeight: 34,
+                border: '1px solid #D5DCE3',
                 borderRadius: KANBAN_CONTROL_RADIUS,
                 bgcolor: '#FFFFFF',
-                boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
                 cursor: isCommentEnabled ? 'text' : 'default',
               }}
               onClick={() => {
@@ -5405,17 +5597,10 @@ export default function WorkBoardDetailPage() {
               onClick={submitComment}
               disabled={!isCommentEnabled || commentSaving || !newComment.trim()}
               sx={{
-                minWidth: 80,
-                px: 1.5,
+                minWidth: 72,
+                px: 1.25,
                 height: 'auto',
-                minHeight: 40,
-                alignSelf: 'stretch',
-                borderRadius: KANBAN_CONTROL_RADIUS,
-                boxShadow: 'none',
-                fontWeight: 700,
-                fontSize: '0.8125rem',
-                textTransform: 'none',
-                bgcolor: 'primary.main',
+                minHeight: 34,
                 color: '#FFFFFF',
                 '&:hover': {
                   bgcolor: 'primary.dark',
@@ -5435,19 +5620,11 @@ export default function WorkBoardDetailPage() {
               {txt('먼저 제목/대분류 등 기본 정보를 입력해 주세요.', 'Please fill in required fields such as title/list first.')}
             </Typography>
           )}
-          <Paper
-            elevation={0}
+          <Box
             sx={{
-              p: 1,
-              minHeight: 96,
-              overflowY: 'visible',
-              bgcolor: '#F8FAFC',
-              border: '1px solid #D5DCE3',
-              borderRadius: KANBAN_CONTROL_RADIUS,
-              overflow: 'hidden',
               display: 'flex',
               flexDirection: 'column',
-              gap: 0.75,
+              gap: 0,
             }}
           >
             {commentLoading ? (
@@ -5455,90 +5632,159 @@ export default function WorkBoardDetailPage() {
                 <CircularProgress size={20} />
               </Box>
             ) : cardComments.length === 0 ? (
-              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.4, px: 0.5, py: 1 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.4, px: 0.25, py: 1 }}>
                 {txt('아직 댓글이 없습니다.', 'No comments yet.')}
               </Typography>
             ) : (
-              cardComments.map((comment) => {
-                const canDelete =
-                  menuCanEdit && (isOwner || comment.user_id === user?.id || user?.role === 'root');
-                const isReply = !!(comment.parent_id && comment.parent_id > 0);
-                const canReplyToComment = isCommentEnabled && !isReply;
-                return (
-                  <Box
-                    key={comment.id}
-                    sx={{
-                      px: 1.1,
-                      py: 0.9,
-                      pl: isReply ? 2 : 1.1,
-                      borderRadius: KANBAN_CONTROL_RADIUS,
-                      border: '1px solid #E2E8F0',
-                      borderLeft: isReply ? '3px solid #1D4E7C' : '1px solid #E2E8F0',
-                      bgcolor: '#FFFFFF',
-                      boxShadow: '0 1px 2px rgba(15, 23, 42, 0.03)',
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        gap: 0.75,
-                        flexWrap: 'nowrap'
-                      }}
-                    >
+              (() => {
+                const rootCandidates = cardComments.filter((c) => resolveCommentParentId(c) == null);
+                const rootIdSet = new Set(rootCandidates.map((c) => c.id));
+                const repliesByParent = new Map<number, BoardCardComment[]>();
+                const orphanReplies: BoardCardComment[] = [];
+                for (const c of cardComments) {
+                  const pid = resolveCommentParentId(c);
+                  if (pid == null) continue;
+                  if (!rootIdSet.has(pid)) {
+                    orphanReplies.push(c);
+                    continue;
+                  }
+                  if (!repliesByParent.has(pid)) repliesByParent.set(pid, []);
+                  repliesByParent.get(pid)!.push(c);
+                }
+                const roots = [...rootCandidates, ...orphanReplies];
+
+                const commentActionBtnSx = {
+                  minWidth: 'auto',
+                  minHeight: 0,
+                  py: 0.1,
+                  px: 0.45,
+                  fontSize: '0.72rem',
+                  lineHeight: 1.3,
+                  textTransform: 'none' as const,
+                };
+
+                const formatCommentDateTimeParts = (
+                  value?: string | null
+                ): { date: string; time: string } => {
+                  const raw = String(value || '').trim();
+                  if (!raw) {
+                    return {
+                      date: txt('날짜 없음', 'No date'),
+                      time: txt('시간 없음', 'No time'),
+                    };
+                  }
+                  const d = new Date(raw);
+                  if (Number.isNaN(d.getTime())) {
+                    return { date: raw, time: '' };
+                  }
+                  const locale = language === 'ko' ? 'ko-KR' : 'en-US';
+                  return {
+                    date: d.toLocaleDateString(locale, {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                    }),
+                    time: d.toLocaleTimeString(locale, {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    }),
+                  };
+                };
+
+                const renderCommentRow = (comment: BoardCardComment, allowReply: boolean) => {
+                  const canDelete =
+                    menuCanEdit && (isOwner || comment.user_id === user?.id || user?.role === 'root');
+                  const { date: commentDate, time: commentTime } = formatCommentDateTimeParts(
+                    resolveCommentCreatedAt(comment)
+                  );
+                  const commentUserId =
+                    comment.user?.id != null
+                      ? Number(comment.user.id)
+                      : comment.user_id != null
+                        ? Number(comment.user_id)
+                        : 0;
+                  const memberAvatar =
+                    commentUserId > 0
+                      ? members.find((m: any) => Number(m.user_id) === commentUserId)?.user
+                          ?.avatar_url
+                      : null;
+                  const avatarSrc = resolveUserAvatarSrc(
+                    comment.user?.avatar_url ?? memberAvatar ?? null
+                  );
+                  const displayName =
+                    comment.user?.username || txt('알 수 없는 사용자', 'Unknown user');
+                  const initial = (displayName || '?').trim().charAt(0).toUpperCase() || '?';
+                  return (
+                    <Box sx={{ minWidth: 0 }}>
                       <Box
                         sx={{
                           display: 'flex',
-                          flexDirection: 'column',
-                          gap: 0.35,
-                          flex: 1,
-                          minWidth: 0
+                          alignItems: 'center',
+                          gap: 0.75,
+                          minWidth: 0,
                         }}
                       >
-                        <Box
+                        <Avatar
+                          src={avatarSrc}
+                          alt={displayName}
                           sx={{
-                            display: 'flex',
-                            alignItems: 'baseline',
-                            justifyContent: 'space-between',
-                            gap: 1,
-                            flexWrap: 'wrap',
+                            width: 22,
+                            height: 22,
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            bgcolor: avatarSrc
+                              ? 'transparent'
+                              : commentUserId > 0
+                                ? getAvatarColor(commentUserId)
+                                : '#64748B',
+                            flexShrink: 0,
                           }}
                         >
-                          <Typography
-                            variant="caption"
-                            component="span"
-                            sx={{ flexShrink: 0, lineHeight: 1.35, fontWeight: 700, color: '#334155' }}
-                          >
-                            {comment.user?.username || txt('알 수 없는 사용자', 'Unknown user')}
-                          </Typography>
+                          {initial}
+                        </Avatar>
                         <Typography
                           variant="caption"
-                          color="text.secondary"
-                          component="span"
-                            sx={{ flexShrink: 0, lineHeight: 1.35, whiteSpace: 'nowrap' }}
-                        >
-                            {formatDateTime(resolveCommentCreatedAt(comment), language) ||
-                              txt('시간 정보 없음', 'No timestamp')}
-                        </Typography>
-                        </Box>
-                        <Typography
-                          variant="body2"
-                          component="span"
+                          component="div"
                           sx={{
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word',
-                            lineHeight: 1.45,
-                            flex: 1,
-                            minWidth: 0,
-                            color: '#1E293B',
+                            lineHeight: 1.35,
+                            fontWeight: 700,
+                            fontSize: '0.75rem',
+                            color: '#1565C0',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
                           }}
                         >
-                          {renderCommentWithMentions(comment.content || '', memberOptions)}
+                          {displayName}
                         </Typography>
                       </Box>
-                      <Box sx={{ display: 'flex', flexShrink: 0, alignItems: 'flex-start', gap: 0.25 }}>
-                        {canReplyToComment && (
+                      <Typography
+                        variant="body2"
+                        component="div"
+                        sx={{
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          lineHeight: 1.4,
+                          mt: 0.25,
+                          ml: '30px',
+                          fontSize: '0.8125rem',
+                          color: '#1E293B',
+                        }}
+                      >
+                        {renderCommentWithMentions(comment.content || '', memberOptions)}
+                      </Typography>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'flex-end',
+                          flexWrap: 'wrap',
+                          gap: 0.35,
+                          mt: 0.25,
+                          rowGap: 0.15,
+                        }}
+                      >
+                        {allowReply && isCommentEnabled ? (
                           <Button
                             size="small"
                             variant="text"
@@ -5546,12 +5792,12 @@ export default function WorkBoardDetailPage() {
                               setReplyParentId(comment.id);
                               commentInputRef.current?.focus();
                             }}
-                            sx={{ minWidth: 'auto', py: 0, px: 0.5, fontSize: '0.75rem' }}
+                            sx={commentActionBtnSx}
                           >
                             {txt('답글', 'Reply')}
                           </Button>
-                        )}
-                        {canDelete && (
+                        ) : null}
+                        {canDelete ? (
                           <Button
                             size="small"
                             color="error"
@@ -5559,23 +5805,98 @@ export default function WorkBoardDetailPage() {
                               void removeComment(comment.id);
                             }}
                             disabled={commentDeletingId === comment.id}
-                            sx={{ minWidth: 'auto', py: 0, px: 0.75, fontSize: '0.75rem' }}
+                            sx={commentActionBtnSx}
                           >
-                            {commentDeletingId === comment.id ? txt('삭제 중...', 'Deleting...') : txt('삭제', 'Delete')}
+                            {commentDeletingId === comment.id
+                              ? txt('삭제 중...', 'Deleting...')
+                              : txt('삭제', 'Delete')}
                           </Button>
-                        )}
+                        ) : null}
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          component="span"
+                          sx={{
+                            lineHeight: 1.35,
+                            fontSize: '0.7rem',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {commentDate}
+                        </Typography>
+                        {commentTime ? (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            component="span"
+                            sx={{
+                              lineHeight: 1.35,
+                              fontSize: '0.7rem',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {commentTime}
+                          </Typography>
+                        ) : null}
                       </Box>
                     </Box>
-                  </Box>
-                );
-              })
+                  );
+                };
+
+                return roots.map((comment, threadIndex) => {
+                  const replies = repliesByParent.get(comment.id) || [];
+                  return (
+                    <Box
+                      key={comment.id}
+                      sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 0.3,
+                        pt: threadIndex === 0 ? 0.1 : 0.55,
+                        borderTop: threadIndex === 0 ? 'none' : '1px solid #EEF2F6',
+                      }}
+                    >
+                      <Box sx={{ py: 0.3, px: 0.15 }}>{renderCommentRow(comment, true)}</Box>
+                      {replies.map((reply) => (
+                        <Box
+                          key={reply.id}
+                          sx={{
+                            display: 'grid',
+                            gridTemplateColumns: '16px 1fr',
+                            columnGap: 0.4,
+                            ml: 1.75,
+                            py: 0.25,
+                            pl: 0.4,
+                            borderLeft: '2px solid #CBD5E1',
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              justifyContent: 'center',
+                              pt: 0.2,
+                              color: '#94A3B8',
+                              lineHeight: 1,
+                            }}
+                            aria-hidden
+                          >
+                            <SubdirectoryArrowRightIcon sx={{ fontSize: 14 }} />
+                          </Box>
+                          <Box sx={{ minWidth: 0 }}>{renderCommentRow(reply, false)}</Box>
+                        </Box>
+                      ))}
+                    </Box>
+                  );
+                });
+              })()
             )}
-          </Paper>
+          </Box>
             </>
           )}
-          </Paper>
+          </Box>
         </Box>
-      </Paper>
+        </Paper>
       )}
 
       <Dialog

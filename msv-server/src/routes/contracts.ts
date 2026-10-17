@@ -10,6 +10,13 @@ import { authenticateToken } from '../middleware/auth';
 import { requireAdminRootOrMenuPermissionAnyOf } from '../middleware/menuPermission';
 import { AuthRequest } from '../types';
 import { ensureUploadSubdir } from '../utils/uploadPath';
+import {
+  assertActiveContractType,
+  createContractType,
+  deleteContractType,
+  getContractTypes,
+  updateContractType,
+} from '../controllers/contractTypeController';
 
 const router = express.Router();
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -89,7 +96,13 @@ const ensureContractSchema = async () => {
 
   if (!table.contract_type) {
     await queryInterface.addColumn('contracts', 'contract_type', {
-      type: DataTypes.STRING(30),
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      defaultValue: 'sales'
+    });
+  } else {
+    await queryInterface.changeColumn('contracts', 'contract_type', {
+      type: DataTypes.STRING(50),
       allowNull: false,
       defaultValue: 'sales'
     });
@@ -121,18 +134,44 @@ const resolveValidCustomerId = async (
 
 router.use(authenticateToken);
 
+const withCustomerName = (row: any) => {
+  const plain = typeof row?.toJSON === 'function' ? row.toJSON() : { ...row };
+  const customerName =
+    plain.customer?.name ||
+    plain.customer_name ||
+    null;
+  return {
+    ...plain,
+    customer_name: customerName,
+  };
+};
+
+const customerInclude = {
+  model: Customer as any,
+  as: 'customer',
+  attributes: ['id', 'name'],
+  required: false,
+};
+
+// 계약 구분 마스터 (/:id 보다 먼저 등록)
+router.get('/types', permRead, getContractTypes);
+router.post('/types', permCreate, createContractType);
+router.put('/types/:id', permEdit, updateContractType);
+router.delete('/types/:id', permDelete, deleteContractType);
+
 // 계약 목록 조회
 router.get('/', permRead, async (req: AuthRequest, res: Response) => {
   try {
     await ensureContractSchema();
     const contracts = await (Contract as any).findAll({
       where: { tenant_id: req.user.tenant_id, company_id: req.user.company_id },
+      include: [customerInclude],
       order: [['created_at', 'DESC']]
     });
 
     res.json({
       success: true,
-      data: contracts
+      data: contracts.map(withCustomerName)
     });
   } catch (error: any) {
     console.error('계약 목록 조회 오류:', error);
@@ -157,7 +196,8 @@ router.get('/:id', permRead, async (req: AuthRequest, res: Response) => {
         id: numericId,
         tenant_id: req.user.tenant_id,
         company_id: req.user.company_id
-      }
+      },
+      include: [customerInclude],
     });
 
     if (!contract) {
@@ -169,7 +209,7 @@ router.get('/:id', permRead, async (req: AuthRequest, res: Response) => {
 
     res.json({
       success: true,
-      data: contract
+      data: withCustomerName(contract)
     });
   } catch (error: any) {
     console.error('계약 조회 오류:', error);
@@ -188,7 +228,7 @@ router.post(
     contract_number: { type: 'string', minLength: 1, maxLength: 50 },
     title: { required: true, type: 'string', minLength: 1, maxLength: 200 },
     customer_id: { type: 'number' },
-    contract_type: { type: 'string', oneOf: ['sales', 'purchase_lease'] },
+    contract_type: { type: 'string', minLength: 1, maxLength: 50 },
     start_date: { required: true, type: 'string', pattern: datePattern },
     end_date: { required: true, type: 'string', pattern: datePattern },
     status: { type: 'string', maxLength: 20 }
@@ -204,13 +244,22 @@ router.post(
         });
       }
 
+      const typeCheck = await assertActiveContractType(
+        req.user.tenant_id,
+        req.user.company_id,
+        req.body.contract_type || 'sales'
+      );
+      if (typeCheck.ok === false) {
+        return res.status(400).json({ success: false, message: typeCheck.message });
+      }
+
       const customerId = await resolveValidCustomerId(req.body.customer_id, req.user);
       const generatedContractNumber = req.body.contract_number || generateContractNumber();
       const contractData = {
         ...req.body,
         customer_id: customerId,
         contract_number: generatedContractNumber,
-        contract_type: req.body.contract_type || 'sales',
+        contract_type: typeCheck.code,
         contract_value: parsedContractValue,
         tenant_id: req.user.tenant_id,
         company_id: req.user.company_id,
@@ -242,7 +291,7 @@ router.put(
     contract_number: { type: 'string', minLength: 1, maxLength: 50 },
     title: { type: 'string', minLength: 1, maxLength: 200 },
     customer_id: { type: 'number' },
-    contract_type: { type: 'string', oneOf: ['sales', 'purchase_lease'] },
+    contract_type: { type: 'string', minLength: 1, maxLength: 50 },
     start_date: { type: 'string', pattern: datePattern },
     end_date: { type: 'string', pattern: datePattern },
     status: { type: 'string', maxLength: 20 }
@@ -287,6 +336,18 @@ router.put(
 
       if (Object.prototype.hasOwnProperty.call(updatePayload, 'customer_id')) {
         updatePayload.customer_id = await resolveValidCustomerId(updatePayload.customer_id, req.user);
+      }
+
+      if (Object.prototype.hasOwnProperty.call(updatePayload, 'contract_type')) {
+        const typeCheck = await assertActiveContractType(
+          req.user.tenant_id,
+          req.user.company_id,
+          updatePayload.contract_type
+        );
+        if (typeCheck.ok === false) {
+          return res.status(400).json({ success: false, message: typeCheck.message });
+        }
+        updatePayload.contract_type = typeCheck.code;
       }
 
       await contract.update(updatePayload);

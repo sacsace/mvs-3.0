@@ -12,6 +12,7 @@ import Department from './Department';
 import Position from './Position';
 import Customer from './Customer';
 import Contract from './Contract';
+import ContractType from './ContractType';
 import SupportTicket from './SupportTicket';
 import SupportResponse from './SupportResponse';
 import Invoice from './Invoice';
@@ -695,6 +696,7 @@ export {
   Position,
   Customer,
   Contract,
+  ContractType,
   SupportTicket,
   SupportResponse,
   Invoice,

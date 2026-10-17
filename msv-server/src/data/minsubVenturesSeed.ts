@@ -90,10 +90,11 @@ const SUB_MENUS: Record<string, Array<{ name_ko: string; name_en: string; route:
   ],
   '/sales': [
     { name_ko: '견적서', name_en: 'Quotation', route: '/accounting/quotation', icon: 'request_quote', order: 1 },
-    { name_ko: '전자세금계산서', name_en: 'E-Invoice', route: '/accounting/e-invoice', icon: 'receipt_long', order: 2 },
-    { name_ko: '일반세금계산서', name_en: 'Invoice', route: '/accounting/invoice', icon: 'receipt', order: 3 },
-    { name_ko: '지출결의서', name_en: 'Expense', route: '/accounting/expense', icon: 'money_off', order: 4 },
-    { name_ko: '매입/매출 통계', name_en: 'Purchasing & Sales Stats', route: '/accounting/statistics', icon: 'assessment', order: 5 },
+    { name_ko: '프로포마인보이스', name_en: 'Proforma Invoice', route: '/accounting/proforma', icon: 'description', order: 2 },
+    { name_ko: '전자세금계산서', name_en: 'E-Invoice', route: '/accounting/e-invoice', icon: 'receipt_long', order: 3 },
+    { name_ko: '일반세금계산서', name_en: 'Invoice', route: '/accounting/invoice', icon: 'receipt', order: 4 },
+    { name_ko: '지출결의서', name_en: 'Expense', route: '/accounting/expense', icon: 'money_off', order: 5 },
+    { name_ko: '매입/매출 통계', name_en: 'Purchasing & Sales Stats', route: '/accounting/statistics', icon: 'assessment', order: 6 },
   ],
   '/inventory': [
     { name_ko: '기초재고 등록', name_en: 'Basic Inventory', route: '/inventory/basic', icon: 'inventory_2', order: 1 },

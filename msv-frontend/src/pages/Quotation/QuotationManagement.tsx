@@ -34,6 +34,9 @@ import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
   mvsPageRootSx,
   mvsKpiCardSx,
+  mvsKpiGridSx,
+  mvsMainTabsSx,
+  mvsFilterBarInnerSx,
   mvsBodyCardSx,
   mvsBodyOutlinedBtnSx,
   mvsBodyPrimaryBtnSx,
@@ -44,7 +47,6 @@ import {
   mvsBodySectionPanelTitleSx,
   mvsSearchFieldSx,
   mvsFilterFieldHeightSx,
-  mvsTableScrollSx,
   mvsTableHeadHighlightSx,
   mvsTableBodyRowSx } from '../../theme/mvsLayout';
 import {
@@ -948,6 +950,8 @@ const QuotationManagement: React.FC = () => {
     <Box sx={{ ...mvsPageRootSx }}>
       <MvsPageHeader
         title={t('quotationManagement.title')}
+        description={t('quotationManagement.description')}
+        mb={2}
         actions={
           isCreating || isEditing ? (
             <Button
@@ -981,55 +985,6 @@ const QuotationManagement: React.FC = () => {
           {t('common.menuNoView')}
         </Alert>
       )}
-
-      {/* 통계 카드 */}
-      <Box sx={{
-        display: 'grid',
-        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
-        gap: 2.5,
-        mb: 3
-      }}>
-        <Card elevation={0} sx={mvsKpiCardSx}>
-          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-              {t('quotationManagement.totalQuotations')}
-            </Typography>
-            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
-              {quotations.length}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card elevation={0} sx={mvsKpiCardSx}>
-          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-              {t('quotationManagement.totalAmount')}
-            </Typography>
-            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
-              Rs. {totalAmountActive.toLocaleString()}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card elevation={0} sx={mvsKpiCardSx}>
-          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-              {t('quotationManagement.approvedQuotations')}
-            </Typography>
-            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'success.main' }}>
-              {approvedQuotations}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card elevation={0} sx={mvsKpiCardSx}>
-          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-              {t('quotationManagement.pendingQuotations')}
-            </Typography>
-            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'warning.main' }}>
-              {myPendingApprovals}
-            </Typography>
-          </CardContent>
-        </Card>
-      </Box>
 
       {isCreating || isEditing ? (
         <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
@@ -1207,106 +1162,134 @@ const QuotationManagement: React.FC = () => {
             <Tabs
               value={listTab}
               onChange={(_, v) => setListTab(v)}
-              sx={{
-                minHeight: 40,
-                px: { xs: 1, sm: 1.5 },
-                bgcolor: '#FFFFFF',
-                '& .MuiTabs-indicator': {
-                  height: 3,
-                  borderRadius: '3px 3px 0 0' },
-                '& .MuiTab-root': {
-                  textTransform: 'none',
-                  fontWeight: 500,
-                  fontSize: '0.8125rem',
-                  minHeight: 40,
-                  py: 0.75,
-                  letterSpacing: '-0.01em',
-                  color: 'text.secondary' },
-                '& .MuiTab-root.Mui-selected': {
-                  color: 'primary.main',
-                  fontWeight: 700 } }}
+              sx={mvsMainTabsSx}
             >
               <Tab value="requested" label={t('quotationManagement.tabRequested')} />
               <Tab value="pending" label={t('quotationManagement.tabPendingApproval')} />
             </Tabs>
           </Card>
 
-          {/* 필터 및 검색 */}
+          <Box sx={mvsKpiGridSx}>
+            <Card elevation={0} sx={mvsKpiCardSx}>
+              <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                  {t('quotationManagement.totalQuotations')}
+                </Typography>
+                <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                  {quotations.length}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card elevation={0} sx={mvsKpiCardSx}>
+              <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                  {t('quotationManagement.totalAmount')}
+                </Typography>
+                <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                  Rs. {totalAmountActive.toLocaleString()}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card elevation={0} sx={mvsKpiCardSx}>
+              <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                  {t('quotationManagement.approvedQuotations')}
+                </Typography>
+                <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'success.main' }}>
+                  {approvedQuotations}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card elevation={0} sx={mvsKpiCardSx}>
+              <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                  {t('quotationManagement.pendingQuotations')}
+                </Typography>
+                <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'warning.main' }}>
+                  {myPendingApprovals}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Box>
+
           <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
             <Box
               sx={{
-                px: { xs: 2, sm: 2.5 },
-                py: 2,
-                bgcolor: '#FFFFFF',
-                ...quotationFilterFieldSx,
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr auto' },
-                gap: 2,
-                alignItems: 'flex-end' }}
+                ...mvsFilterBarInnerSx,
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: 'minmax(180px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) auto',
+                },
+              }}
             >
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="검색"
-                  placeholder={t('quotationManagement.searchPlaceholder')}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
-                      </InputAdornment>
-                    ) }}
-                  sx={quotationFilterFieldSx}
-                />
-                <TextField
-                  fullWidth
-                  size="small"
-                  select
-                  label={t('quotationManagement.status')}
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  SelectProps={{ displayEmpty: true }}
-                  sx={quotationFilterFieldSx}
-                >
-                  <MenuItem value="">{t('menuPermissionManagement.all')}</MenuItem>
-                  <MenuItem value="draft">{t('quotationManagement.statusDraft')}</MenuItem>
-                  <MenuItem value="pending_approval">{t('quotationManagement.statusPendingApproval')}</MenuItem>
-                  <MenuItem value="sent">{t('quotationManagement.statusSent')}</MenuItem>
-                  <MenuItem value="approved">{t('quotationManagement.statusApproved')}</MenuItem>
-                  <MenuItem value="rejected">{t('quotationManagement.statusRejected')}</MenuItem>
-                  <MenuItem value="expired">{t('quotationManagement.statusExpired')}</MenuItem>
-                </TextField>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label={t('quotationManagement.customerName')}
-                  placeholder={t('quotationManagement.customerSearchPlaceholder')}
-                  value={customerFilter}
-                  onChange={(e) => setCustomerFilter(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  sx={quotationFilterFieldSx}
-                />
-                <Button
-                  variant="outlined"
-                  startIcon={<FilterIcon sx={{ fontSize: 18 }} />}
-                  onClick={() => {
-                    setSearchTerm('');
-                    setStatusFilter('');
-                    setCustomerFilter('');
-                  }}
-                  sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap', width: { xs: '100%', sm: 'auto' }, minWidth: { sm: 120 } }}
-                >
-                  {t('common.reset')}
-                </Button>
-              </Box>
+              <TextField
+                fullWidth
+                size="small"
+                label={t('common.search')}
+                placeholder={t('quotationManagement.searchPlaceholder')}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={quotationFilterFieldSx}
+              />
+              <TextField
+                fullWidth
+                size="small"
+                select
+                label={t('quotationManagement.status')}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                SelectProps={{ displayEmpty: true }}
+                sx={quotationFilterFieldSx}
+              >
+                <MenuItem value="">{t('menuPermissionManagement.all')}</MenuItem>
+                <MenuItem value="draft">{t('quotationManagement.statusDraft')}</MenuItem>
+                <MenuItem value="pending_approval">{t('quotationManagement.statusPendingApproval')}</MenuItem>
+                <MenuItem value="sent">{t('quotationManagement.statusSent')}</MenuItem>
+                <MenuItem value="approved">{t('quotationManagement.statusApproved')}</MenuItem>
+                <MenuItem value="rejected">{t('quotationManagement.statusRejected')}</MenuItem>
+                <MenuItem value="expired">{t('quotationManagement.statusExpired')}</MenuItem>
+              </TextField>
+              <TextField
+                fullWidth
+                size="small"
+                label={t('quotationManagement.customerName')}
+                placeholder={t('quotationManagement.customerSearchPlaceholder')}
+                value={customerFilter}
+                onChange={(e) => setCustomerFilter(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                sx={quotationFilterFieldSx}
+              />
+              <Button
+                variant="outlined"
+                startIcon={<FilterIcon sx={{ fontSize: 18 }} />}
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('');
+                  setCustomerFilter('');
+                }}
+                sx={{
+                  ...mvsBodyOutlinedBtnSx,
+                  height: 40,
+                  whiteSpace: 'nowrap',
+                  alignSelf: { xs: 'stretch', sm: 'flex-end' },
+                }}
+              >
+                {t('common.reset')}
+              </Button>
+            </Box>
           </Card>
 
-          {/* 견적서 목록 테이블 */}
           <Box sx={mvsBodyListZoneSx}>
-            <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+            <TableContainer sx={mvsBodyListTableSx}>
               <Table
                 size="small"
                 sx={{
@@ -1324,7 +1307,7 @@ const QuotationManagement: React.FC = () => {
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('quotationManagement.status')}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('quotationManagement.quotationNumber')}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 140 }}>{t('quotationManagement.customerName')}</TableCell>
-                    <TableCell sx={{ width: '100%', minWidth: 160 }}>{t('quotationManagement.description')}</TableCell>
+                    <TableCell sx={{ width: '100%', minWidth: 160 }}>{t('quotationManagement.itemColumn')}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('quotationManagement.issueDate')}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('quotationManagement.totalAmount')}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('common.create')}</TableCell>

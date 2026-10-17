@@ -35,6 +35,8 @@ export async function buildRegularInvoicePdfBuffer(params: {
   companyName: string;
   companyAddress?: string | null;
   companyGstin?: string | null;
+  /** 문서 상단 제목 — 기본 TAX INVOICE, 프로포마는 PROFORMA INVOICE */
+  documentTitle?: string;
   invoice: {
     invoice_number: string;
     invoice_date: string | Date;
@@ -75,7 +77,8 @@ export async function buildRegularInvoicePdfBuffer(params: {
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    doc.fontSize(DOCUMENT_PDF_TITLE_FONT_SIZE_PT).text('TAX INVOICE', { align: 'center' });
+    const docTitle = (params.documentTitle && String(params.documentTitle).trim()) || 'TAX INVOICE';
+    doc.fontSize(DOCUMENT_PDF_TITLE_FONT_SIZE_PT).text(docTitle, { align: 'center' });
     doc.moveDown(0.5);
     doc.fontSize(DOCUMENT_PDF_FONT_SIZE_PT).fillColor('#444').text(`Invoice No. ${inv.invoice_number}`, { align: 'center', lineGap: DOCUMENT_PDF_LINE_GAP_PT });
     doc.fillColor('#000');

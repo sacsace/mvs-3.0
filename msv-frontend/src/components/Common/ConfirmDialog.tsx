@@ -106,6 +106,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       maxWidth={MVS_CONFIRM_DIALOG_MAX_WIDTH}
       fullWidth
       scroll="paper"
+      disableRestoreFocus
       aria-labelledby="mvs-confirm-title"
       aria-describedby="mvs-confirm-message"
       slotProps={{

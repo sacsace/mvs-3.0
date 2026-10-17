@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { holdScrollPosition } from '../utils/preserveScroll';
 
 /**
  * 확인 모달 상태 훅. UI는 반드시 `components/Common/ConfirmDialog` 를 렌더링하고
@@ -61,6 +62,7 @@ export const useConfirmDialog = () => {
   );
 
   const handleConfirm = useCallback(() => {
+    holdScrollPosition(1200);
     onConfirmRef.current?.();
     onConfirmRef.current = null;
     setDialogState(closedState);

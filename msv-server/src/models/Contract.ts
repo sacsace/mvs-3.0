@@ -9,7 +9,7 @@ interface ContractAttributes {
   contract_number: string;
   title: string;
   description?: string;
-  contract_type: 'sales' | 'purchase_lease';
+  contract_type: string;
   contract_value: number;
   start_date: string;
   end_date: string;
@@ -29,7 +29,7 @@ class Contract extends Model<ContractAttributes, ContractCreationAttributes> imp
   public contract_number!: string;
   public title!: string;
   public description?: string;
-  public contract_type!: 'sales' | 'purchase_lease';
+  public contract_type!: string;
   public contract_value!: number;
   public start_date!: string;
   public end_date!: string;
@@ -83,7 +83,7 @@ Contract.init(
       allowNull: true,
     },
     contract_type: {
-      type: DataTypes.STRING(30),
+      type: DataTypes.STRING(50),
       allowNull: false,
       defaultValue: 'sales'
     },

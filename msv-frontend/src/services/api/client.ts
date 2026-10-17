@@ -6,6 +6,16 @@ import {
   isGetWithoutResponse,
   isNotificationFeedGet,
 } from '../../utils/listApi';
+import {
+  extendScrollHold,
+  holdScrollPosition,
+  isScrollHoldActive,
+} from '../../utils/preserveScroll';
+
+const isMutatingHttpMethod = (method?: string): boolean => {
+  const m = String(method || 'get').toLowerCase();
+  return m === 'post' || m === 'put' || m === 'patch' || m === 'delete';
+};
 
 // API Base URL 동적 설정
 // - 프로덕션(Railway 등): 빌드 시 주입된 REACT_APP_API_URL 최우선. 없으면 동일 오리진 /api (리버스 프록시·같은 서비스용).
@@ -269,6 +279,11 @@ const maybeRefreshSessionByActivity = async () => {
 // 요청 인터셉터
 api.interceptors.request.use(
   async (config) => {
+    // 수정·삭제는 요청 시작 시점부터 스크롤 고정 (로딩 UI로 높이 붕괴 대비)
+    if (isMutatingHttpMethod(config.method)) {
+      holdScrollPosition(1200);
+    }
+
     // FormData 업로드 시 Content-Type을 비워 브라우저가 boundary 포함 multipart를 설정하게 함
     // (multipart/form-data를 boundary 없이 넣거나 application/json이 남으면 multer가 파일을 못 받음)
     if (typeof FormData !== 'undefined' && config.data instanceof FormData) {

@@ -22,6 +22,7 @@ import NotificationSnackbar from './components/Common/NotificationSnackbar';
 import ErrorBoundary from './components/Common/ErrorBoundary';
 import AppInstallBanner from './components/Common/AppInstallBanner';
 import InputProperCaseListener from './components/Common/InputProperCaseListener';
+import ScrollPreserveBridge from './components/Common/ScrollPreserveBridge';
 import UnderDevelopment from './components/Common/UnderDevelopment';
 import ComingSoon from './components/Common/ComingSoon';
 import { lazyPage } from './components/Common/LazyPage';
@@ -191,6 +192,7 @@ function App() {
         <ErrorDialog />
         <NotificationSnackbar />
         <AppInstallBanner />
+        <ScrollPreserveBridge />
         <Router>
           <Routes>
           {/* 인증 관련 라우트 */}
@@ -348,6 +350,7 @@ function App() {
             <Route path="sales" element={<Navigate to="/accounting/quotation" replace />} />
             <Route path="customers" element={<Navigate to="/basic-info/partners" replace />} />
             <Route path="accounting/quotation" element={<QuotationManagement />} />
+            <Route path="accounting/proforma" element={<ProformaInvoiceManagement />} />
             <Route path="accounting/e-invoice" element={<EInvoiceManagement />} />
             <Route path="accounting/e-invoice/create" element={<EInvoiceCreate />} />
             <Route path="accounting/invoice" element={<RegularInvoice />} />

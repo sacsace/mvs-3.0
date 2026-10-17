@@ -48,3 +48,22 @@ export function isPayMonthAfterCurrent(ym: string | null | undefined): boolean {
   if (!n) return false;
   return n > currentPayMonthYm();
 }
+
+/** UI용 급여월 라벨 (en: October 2026, ko: 2026년 10월) */
+export function formatPayMonthLabel(
+  ym: string | null | undefined,
+  language: string = 'en'
+): string {
+  const n = normalizePayMonth(ym);
+  if (!n) return String(ym || '').trim();
+  const year = parseInt(n.slice(0, 4), 10);
+  const month = parseInt(n.slice(5, 7), 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return n;
+  if (String(language).toLowerCase().startsWith('ko')) {
+    return `${year}년 ${month}월`;
+  }
+  return new Date(year, month - 1, 1).toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  });
+}

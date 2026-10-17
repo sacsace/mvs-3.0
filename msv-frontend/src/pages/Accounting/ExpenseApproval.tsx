@@ -46,6 +46,9 @@ import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
   mvsPageRootSx,
   mvsKpiCardSx,
+  mvsKpiGridSx,
+  mvsMainTabsSx,
+  mvsFilterBarInnerSx,
   mvsBodyCardSx,
   mvsBodyOutlinedBtnSx,
   mvsBodyPrimaryBtnSx,
@@ -54,7 +57,6 @@ import {
   mvsBodyPaginationSx,
   mvsSearchFieldSx,
   mvsFilterFieldHeightSx,
-  mvsTableScrollSx,
   mvsTableHeadHighlightSx,
   mvsTableBodyRowSx } from '../../theme/mvsLayout';
 import { alpha } from '@mui/material/styles';
@@ -2151,7 +2153,7 @@ const ExpenseApproval: React.FC = () => {
   const expensePdfRef = useRef<HTMLDivElement | null>(null);
   const [pdfDownloading, setPdfDownloading] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'view' | 'create' | 'edit'>('list');
-  const [listTab, setListTab] = useState<'received' | 'written' | 'transfer'>('written');
+  const [listTab, setListTab] = useState<'received' | 'written' | 'transfer'>('received');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState(DEFAULT_LIST_STATUS_FILTER);
   const [priorityFilter, setPriorityFilter] = useState('');
@@ -3361,7 +3363,7 @@ const ExpenseApproval: React.FC = () => {
 
   useEffect(() => {
     if (!hasTransferAccess && listTab === 'transfer') {
-      setListTab('written');
+      setListTab('received');
     }
   }, [hasTransferAccess, listTab]);
 
@@ -10046,6 +10048,7 @@ const ExpenseApproval: React.FC = () => {
     <Box sx={{ ...mvsPageRootSx }}>
       <MvsPageHeader
         title={t('expenseApproval.title')}
+        description={t('expenseApproval.description')}
         mb={2}
         actions={
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -10128,34 +10131,15 @@ const ExpenseApproval: React.FC = () => {
               }
             }
           }}
-          sx={{
-            minHeight: 48,
-            px: { xs: 1, sm: 1.5 },
-            bgcolor: '#FFFFFF',
-            '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' },
-            '& .MuiTab-root': {
-              textTransform: 'none',
-              fontWeight: 500,
-              fontSize: '0.8125rem',
-              minHeight: 48,
-              py: 1.5,
-              letterSpacing: '-0.01em',
-              color: 'text.secondary' },
-            '& .MuiTab-root.Mui-selected': { color: 'primary.main', fontWeight: 700 } }}
+          sx={mvsMainTabsSx}
       >
-        <Tab label={t('expenseApproval.tabs.written')} value="written" />
         <Tab label={t('expenseApproval.tabs.received')} value="received" />
+        <Tab label={t('expenseApproval.tabs.written')} value="written" />
         {hasTransferAccess && <Tab label={t('expenseApproval.tabs.transfer')} value="transfer" />}
       </Tabs>
       </Card>
 
-      {/* 통계 카드 */}
-      <Box sx={{ 
-        display: 'grid', 
-        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
-        gap: 2.5,
-        mb: 3 
-      }}>
+      <Box sx={mvsKpiGridSx}>
         <Card elevation={0} sx={mvsKpiCardSx}>
           <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
@@ -10198,20 +10182,14 @@ const ExpenseApproval: React.FC = () => {
         </Card>
       </Box>
 
-      {/* 필터 및 검색 */}
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
         <Box
           sx={{
-            px: { xs: 2, sm: 2.5 },
-            py: 2,
-            bgcolor: '#FFFFFF',
-            display: 'grid', 
+            ...mvsFilterBarInnerSx,
             gridTemplateColumns: {
               xs: '1fr',
               sm: 'minmax(180px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) auto',
             },
-            gap: 2, 
-            alignItems: 'flex-end',
           }}
         >
               <TextField
@@ -10439,7 +10417,7 @@ const ExpenseApproval: React.FC = () => {
             </Typography>
           </Box>
         ) : (
-          <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+          <TableContainer sx={mvsBodyListTableSx}>
             <Table
               size="small"
               sx={{

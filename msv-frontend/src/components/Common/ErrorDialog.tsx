@@ -94,6 +94,7 @@ const ErrorDialog: React.FC = () => {
       onClose={handleClose}
       maxWidth="sm"
       fullWidth
+      disableRestoreFocus
       PaperProps={{
         sx: {
           borderRadius: 2,
