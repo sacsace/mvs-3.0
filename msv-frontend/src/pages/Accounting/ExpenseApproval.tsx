@@ -145,11 +145,27 @@ const isPdfReceipt = (filePath: string): boolean =>
 
 /** 작성/받은 탭 기본 상태 필터: 초안 + 제출됨 */
 const DEFAULT_LIST_STATUS_FILTER = 'draft_submitted';
-/** 송금 탭 기본 상태 필터: 송금대기 */
+/** 송금 탭 단일 상태 필터 기본값(레거시/일부 리셋용) */
 const DEFAULT_TRANSFER_STATUS_FILTER = 'transfer_pending';
+/** 송금 탭 기본 목록: 송금대기 + 부분송금 + 택스 인보이스 대기 */
+const DEFAULT_TRANSFER_STATUS_FILTERS = [
+  'transfer_pending',
+  'transfer_partial',
+  'awaiting_tax',
+] as const;
+
+const TRANSFER_STATUS_FILTER_OPTIONS = [
+  'transfer_pending',
+  'transfer_partial',
+  'awaiting_tax',
+  'transfer_completed',
+  'transfer_failed',
+] as const;
 
 const defaultStatusFilterForTab = (tab: string) =>
   tab === 'transfer' ? DEFAULT_TRANSFER_STATUS_FILTER : DEFAULT_LIST_STATUS_FILTER;
+
+const defaultTransferStatusFiltersForTab = (): string[] => [...DEFAULT_TRANSFER_STATUS_FILTERS];
 
 type ExpenseInvoiceType = 'tax' | 'proforma' | 'none';
 
@@ -2156,6 +2172,10 @@ const ExpenseApproval: React.FC = () => {
   const [listTab, setListTab] = useState<'received' | 'written' | 'transfer'>('received');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState(DEFAULT_LIST_STATUS_FILTER);
+  /** 송금 탭 상태 필터(다중). 빈 배열 = 전체 */
+  const [transferStatusFilters, setTransferStatusFilters] = useState<string[]>(() =>
+    defaultTransferStatusFiltersForTab()
+  );
   const [priorityFilter, setPriorityFilter] = useState('');
   const [companyFilterId, setCompanyFilterId] = useState<number | ''>(() => {
     const userCompanyId = Number(user?.company_id);
@@ -2987,9 +3007,9 @@ const ExpenseApproval: React.FC = () => {
         filtered = filtered.filter((expense) => {
           if (expense.status !== 'approved' && expense.status !== 'paid') return false;
           const transferKey = getTransferFilterKey(expense);
-          // 전체: 송금 대상 전체 / 기본·선택값: 해당 송금 상태만
-          if (!statusFilter) return true;
-          return transferKey === statusFilter;
+          // 빈 배열 = 전체 / 그 외 = 선택한 송금 상태(복수 OR)
+          if (!transferStatusFilters.length) return true;
+          return transferStatusFilters.includes(transferKey);
         });
       }
     }
@@ -3052,6 +3072,7 @@ const ExpenseApproval: React.FC = () => {
     expenses,
     searchTerm,
     statusFilter,
+    transferStatusFilters,
     priorityFilter,
     listTab,
     user,
@@ -3374,6 +3395,7 @@ const ExpenseApproval: React.FC = () => {
       setListTab(tab);
       setStatusFilter(defaultStatusFilterForTab(tab));
       if (tab === 'transfer') {
+        setTransferStatusFilters(defaultTransferStatusFiltersForTab());
         setListSortKey('createdAt');
         setListSortDir('desc');
       }
@@ -4612,6 +4634,10 @@ const ExpenseApproval: React.FC = () => {
       viewMode === 'view' &&
       selectedExpense != null &&
       expenseIsAwaitingTaxInvoice(selectedExpense);
+    // 보기 모드: 택스 인보이스 대기 업로드만 허용. 그 외 첨부는 수정하기 후 edit에서만.
+    if (viewMode === 'view' && !wasAwaitingTaxInvoice) {
+      return;
+    }
     const uploadingTaxInvoice =
       invoiceTypeForUpload === 'tax' || activeFormType === 'gst';
     // 승인 이후 Tax Invoice가 이미 있으면 재업로드 안내
@@ -5067,6 +5093,7 @@ const ExpenseApproval: React.FC = () => {
         setSelectedExpense(null);
         setListTab('transfer');
         setStatusFilter(DEFAULT_TRANSFER_STATUS_FILTER);
+        setTransferStatusFilters(defaultTransferStatusFiltersForTab());
         setListSortKey('createdAt');
         setListSortDir('desc');
         if (isRootUser) {
@@ -9074,12 +9101,13 @@ const ExpenseApproval: React.FC = () => {
                   hasProforma &&
                   !expenseHasTaxInvoice(selectedExpense.attachments) &&
                   !awaitingTax;
-                // 작성자만, 수정 가능하거나(초안/반려) 택스 인보이스 대기일 때 첨부 가능
+                // 보기 화면에서는 첨부·유형 변경 불가. 「수정하기」(edit)에서만 편집.
+                // 예외: 전액 송금 후 「택스 인보이스 대기」면 Tax Invoice 업로드만 보기에서도 허용.
                 const showInvoiceUpload =
                   isRequester &&
                   !isRemittanceView &&
                   !approvedWithProformaLocked &&
-                  (canEditThis || awaitingTax);
+                  awaitingTax;
                 const taxOnlyUpload = awaitingTax;
                 const isGstForm = detailFormType === 'gst';
 
@@ -10115,6 +10143,9 @@ const ExpenseApproval: React.FC = () => {
           onChange={(_, value) => {
             setListTab(value);
             setStatusFilter(defaultStatusFilterForTab(value));
+            if (value === 'transfer') {
+              setTransferStatusFilters(defaultTransferStatusFiltersForTab());
+            }
             setPage(1);
             if (value === 'transfer') {
               setListSortKey('createdAt');
@@ -10217,21 +10248,40 @@ const ExpenseApproval: React.FC = () => {
               size="small"
               select
               label={t('expenseApproval.filters.status')}
-                value={statusFilter}
+              value={listTab === 'transfer' ? transferStatusFilters : statusFilter}
               onChange={(e) => {
-                setStatusFilter(e.target.value);
+                if (listTab === 'transfer') {
+                  const raw = e.target.value;
+                  const next = typeof raw === 'string' ? raw.split(',') : (raw as string[]);
+                  // 「전체」 선택 시 필터 해제
+                  if (next.includes('__all__') || (next.length === 1 && next[0] === '')) {
+                    setTransferStatusFilters([]);
+                  } else {
+                    setTransferStatusFilters(
+                      next.filter((v) => v && v !== '__all__' && v !== '')
+                    );
+                  }
+                } else {
+                  setStatusFilter(e.target.value as string);
+                }
                 setPage(1);
               }}
               InputLabelProps={{ shrink: true }}
               SelectProps={{
+                multiple: listTab === 'transfer',
                 displayEmpty: true,
                 MenuProps: {
                   disableScrollLock: true,
                   PaperProps: { sx: { maxHeight: 320 } },
                 },
                 renderValue: (selected) => {
-                  if (selected === '' || selected == null) return t('expenseApproval.filters.all');
                   if (listTab === 'transfer') {
+                    const keys = Array.isArray(selected)
+                      ? selected.map(String)
+                      : selected
+                        ? [String(selected)]
+                        : [];
+                    if (!keys.length) return t('expenseApproval.filters.all');
                     const transferLabels: Record<string, string> = {
                       transfer_pending: t('expenseApproval.status.transferPending'),
                       transfer_partial: t('expenseApproval.status.partialTransfer'),
@@ -10239,8 +10289,9 @@ const ExpenseApproval: React.FC = () => {
                       transfer_completed: t('expenseApproval.status.transferCompleted'),
                       transfer_failed: t('expenseApproval.status.transferFailed'),
                     };
-                    return transferLabels[String(selected)] ?? String(selected);
+                    return keys.map((k) => transferLabels[k] ?? k).join(', ');
                   }
+                  if (selected === '' || selected == null) return t('expenseApproval.filters.all');
                   const statusLabels: Record<string, string> = {
                     [DEFAULT_LIST_STATUS_FILTER]: t('expenseApproval.filters.draftAndSubmitted'),
                     draft: t('expenseApproval.status.draft'),
@@ -10255,26 +10306,36 @@ const ExpenseApproval: React.FC = () => {
                 } }}
               sx={expenseApprovalFilterFieldSx}
             >
-              <MenuItem value="">{t('expenseApproval.filters.all')}</MenuItem>
               {listTab === 'transfer'
                 ? [
-                    <MenuItem key="transfer_pending" value="transfer_pending">
-                      {t('expenseApproval.status.transferPending')}
+                    <MenuItem key="__all__" value="__all__">
+                      <Checkbox size="small" checked={transferStatusFilters.length === 0} sx={{ p: 0.5, mr: 0.5 }} />
+                      {t('expenseApproval.filters.all')}
                     </MenuItem>,
-                    <MenuItem key="transfer_partial" value="transfer_partial">
-                      {t('expenseApproval.status.partialTransfer')}
-                    </MenuItem>,
-                    <MenuItem key="awaiting_tax" value="awaiting_tax">
-                      {t('expenseApproval.status.awaitingTaxInvoice')}
-                    </MenuItem>,
-                    <MenuItem key="transfer_completed" value="transfer_completed">
-                      {t('expenseApproval.status.transferCompleted')}
-                    </MenuItem>,
-                    <MenuItem key="transfer_failed" value="transfer_failed">
-                      {t('expenseApproval.status.transferFailed')}
-                    </MenuItem>,
+                    ...TRANSFER_STATUS_FILTER_OPTIONS.map((key) => {
+                      const labels: Record<string, string> = {
+                        transfer_pending: t('expenseApproval.status.transferPending'),
+                        transfer_partial: t('expenseApproval.status.partialTransfer'),
+                        awaiting_tax: t('expenseApproval.status.awaitingTaxInvoice'),
+                        transfer_completed: t('expenseApproval.status.transferCompleted'),
+                        transfer_failed: t('expenseApproval.status.transferFailed'),
+                      };
+                      return (
+                        <MenuItem key={key} value={key}>
+                          <Checkbox
+                            size="small"
+                            checked={transferStatusFilters.includes(key)}
+                            sx={{ p: 0.5, mr: 0.5 }}
+                          />
+                          {labels[key]}
+                        </MenuItem>
+                      );
+                    }),
                   ]
                 : [
+                    <MenuItem key="all" value="">
+                      {t('expenseApproval.filters.all')}
+                    </MenuItem>,
                     <MenuItem key={DEFAULT_LIST_STATUS_FILTER} value={DEFAULT_LIST_STATUS_FILTER}>
                       {t('expenseApproval.filters.draftAndSubmitted')}
                     </MenuItem>,
@@ -10334,6 +10395,9 @@ const ExpenseApproval: React.FC = () => {
                 onClick={() => {
                   setSearchTerm('');
                   setStatusFilter(defaultStatusFilterForTab(listTab));
+                  if (listTab === 'transfer') {
+                    setTransferStatusFilters(defaultTransferStatusFiltersForTab());
+                  }
                   setPriorityFilter('');
                 setListSortKey(null);
                 setListSortDir('asc');
