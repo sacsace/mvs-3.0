@@ -284,20 +284,57 @@ interface ExpenseItem {
   tdsInterest?: number;
   remarks?: string;
   /** GST 전표 유형 전용 */
-  gstRowKey?: 'sale' | 'inputCredit' | 'rcm' | 'earlierCredit';
+  gstRowKey?: 'sale' | 'inputCredit' | 'rcm' | 'earlierCredit' | 'interest' | 'lateFee';
   taxableValue?: number;
   igst?: number;
   cgst?: number;
   sgst?: number;
+  /** (E) 이자 / (F) 연체료 인라인 계산 입력값 */
+  gstExtra?: GstInterestExtra | GstLateFeeExtra;
   /** 일반 전표 — 항목별 GST 세율 */
   igstRate?: number;
   cgstRate?: number;
   sgstRate?: number;
 }
 
+type GstAmountMode = 'auto' | 'manual';
+
+type GstInterestExtra = {
+  kind: 'interest';
+  unpaidAmount: number;
+  dueDate: string;
+  plannedDate: string;
+  annualRatePercent: number;
+  delayDays: number | null;
+  computedAmount: number | null;
+  amount: number;
+  amountMode: GstAmountMode;
+  calcAsOfDate: string;
+};
+
+type GstLateFeeExtra = {
+  kind: 'lateFee';
+  filingDueDate: string;
+  filingPlannedDate: string;
+  dailyFee: number;
+  capAmount: number;
+  delayDays: number | null;
+  computedAmount: number | null;
+  amount: number;
+  amountMode: GstAmountMode;
+  calcAsOfDate: string;
+};
+
 type GstSummaryRowKey = NonNullable<ExpenseItem['gstRowKey']>;
 
-const GST_SUMMARY_ROW_ORDER: GstSummaryRowKey[] = ['sale', 'inputCredit', 'earlierCredit', 'rcm'];
+const GST_SUMMARY_ROW_ORDER: GstSummaryRowKey[] = [
+  'sale',
+  'inputCredit',
+  'earlierCredit',
+  'rcm',
+  'interest',
+  'lateFee',
+];
 
 const GST_SUMMARY_ROW_DEFS: Array<{
   key: GstSummaryRowKey;
@@ -309,7 +346,181 @@ const GST_SUMMARY_ROW_DEFS: Array<{
   { key: 'inputCredit', labelKey: 'gstRowInputCredit', withPeriod: true, fields: { taxable: true, igst: true, cgst: true, sgst: true } },
   { key: 'earlierCredit', labelKey: 'gstRowEarlierCredit', fields: { taxable: true, igst: true, cgst: true, sgst: true } },
   { key: 'rcm', labelKey: 'gstRowRcm', fields: { taxable: true, igst: true, cgst: true, sgst: true } },
+  { key: 'interest', labelKey: 'gstRowInterest', fields: { taxable: false, igst: true, cgst: true, sgst: true } },
+  { key: 'lateFee', labelKey: 'gstRowLateFee', fields: { taxable: false, igst: false, cgst: true, sgst: true } },
 ];
+
+/** 1~4: GST/RCM 본표 */
+const GST_MAIN_ROW_DEFS = GST_SUMMARY_ROW_DEFS.filter(
+  (d) => d.key === 'sale' || d.key === 'inputCredit' || d.key === 'earlierCredit' || d.key === 'rcm'
+);
+/** 5~6: 이자·연체료 */
+const GST_EF_ROW_DEFS = GST_SUMMARY_ROW_DEFS.filter(
+  (d) => d.key === 'interest' || d.key === 'lateFee'
+);
+
+const GST_INDIA_TZ = 'Asia/Kolkata';
+
+const todayIndiaYmd = (): string =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: GST_INDIA_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+
+const parseIndiaYmdParts = (ymd: string): { y: number; m: number; d: number } | null => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || '').trim());
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null;
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return { y, m: mo, d };
+};
+
+/** 기한 당일=0, 다음 날부터 1 (인도 달력일) */
+const calcIndiaDelayDays = (dueYmd: string, plannedYmd: string): number | null => {
+  const due = parseIndiaYmdParts(dueYmd);
+  const planned = parseIndiaYmdParts(plannedYmd);
+  if (!due || !planned) return null;
+  const t0 = Date.UTC(due.y, due.m - 1, due.d);
+  const t1 = Date.UTC(planned.y, planned.m - 1, planned.d);
+  return Math.max(0, Math.round((t1 - t0) / 86400000));
+};
+
+const nonNegDecimal = (value: unknown): number => {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return roundDecimal2(n);
+};
+
+const createDefaultInterestExtra = (): GstInterestExtra => ({
+  kind: 'interest',
+  unpaidAmount: 0,
+  dueDate: '',
+  plannedDate: todayIndiaYmd(),
+  annualRatePercent: 18,
+  delayDays: null,
+  computedAmount: null,
+  amount: 0,
+  amountMode: 'auto',
+  calcAsOfDate: '',
+});
+
+const createDefaultLateFeeExtra = (): GstLateFeeExtra => ({
+  kind: 'lateFee',
+  filingDueDate: '',
+  filingPlannedDate: todayIndiaYmd(),
+  dailyFee: 0,
+  capAmount: 0,
+  delayDays: null,
+  computedAmount: null,
+  amount: 0,
+  amountMode: 'auto',
+  calcAsOfDate: '',
+});
+
+const isInterestCalcComplete = (extra: GstInterestExtra) =>
+  Boolean(extra.dueDate && extra.plannedDate) &&
+  Number(extra.unpaidAmount) > 0 &&
+  Number(extra.annualRatePercent) > 0;
+
+const isLateFeeCalcComplete = (extra: GstLateFeeExtra) =>
+  Boolean(extra.filingDueDate && extra.filingPlannedDate) &&
+  calcIndiaDelayDays(extra.filingDueDate, extra.filingPlannedDate) != null;
+
+const recomputeInterestExtra = (extra: GstInterestExtra): GstInterestExtra => {
+  const unpaidAmount = nonNegDecimal(extra.unpaidAmount);
+  const annualRatePercent = nonNegDecimal(extra.annualRatePercent);
+  const dueDate = String(extra.dueDate || '').trim();
+  const plannedDate = String(extra.plannedDate || '').trim();
+  const delayDays = calcIndiaDelayDays(dueDate, plannedDate);
+  const complete = Boolean(dueDate && plannedDate) && unpaidAmount > 0 && annualRatePercent > 0 && delayDays != null;
+  const computedAmount = complete
+    ? roundDecimal2(unpaidAmount * (annualRatePercent / 100) * (delayDays as number) / 365)
+    : null;
+  const amountMode = extra.amountMode === 'manual' ? 'manual' : 'auto';
+  const amount =
+    amountMode === 'manual'
+      ? nonNegDecimal(extra.amount)
+      : computedAmount != null
+        ? computedAmount
+        : 0;
+  return {
+    kind: 'interest',
+    unpaidAmount,
+    dueDate,
+    plannedDate,
+    annualRatePercent,
+    delayDays,
+    computedAmount,
+    amount,
+    amountMode,
+    calcAsOfDate: amountMode === 'auto' && complete ? plannedDate : String(extra.calcAsOfDate || ''),
+  };
+};
+
+const recomputeLateFeeExtra = (extra: GstLateFeeExtra): GstLateFeeExtra => {
+  const filingDueDate = String(extra.filingDueDate || '').trim();
+  const filingPlannedDate = String(extra.filingPlannedDate || '').trim();
+  const dailyFee = nonNegDecimal(extra.dailyFee);
+  const capAmount = nonNegDecimal(extra.capAmount);
+  const delayDays = calcIndiaDelayDays(filingDueDate, filingPlannedDate);
+  const complete = Boolean(filingDueDate && filingPlannedDate) && delayDays != null;
+  const computedAmount = complete
+    ? roundDecimal2(Math.min((delayDays as number) * dailyFee, capAmount))
+    : null;
+  const amountMode = extra.amountMode === 'manual' ? 'manual' : 'auto';
+  const amount =
+    amountMode === 'manual'
+      ? nonNegDecimal(extra.amount)
+      : computedAmount != null
+        ? computedAmount
+        : 0;
+  return {
+    kind: 'lateFee',
+    filingDueDate,
+    filingPlannedDate,
+    dailyFee,
+    capAmount,
+    delayDays,
+    computedAmount,
+    amount,
+    amountMode,
+    calcAsOfDate:
+      amountMode === 'auto' && complete ? filingPlannedDate : String(extra.calcAsOfDate || ''),
+  };
+};
+
+const applyLateFeeHeadsFromAmount = (amount: number) => {
+  const half = roundDecimal2(amount / 2);
+  const cgst = half;
+  const sgst = roundDecimal2(amount - half);
+  return { taxableValue: 0, igst: 0, cgst, sgst };
+};
+
+const getGstExtraPayableAmount = (item: ExpenseItem | undefined): number => {
+  if (!item?.gstExtra) return 0;
+  if (item.gstExtra.kind === 'interest') {
+    const extra = item.gstExtra;
+    if (extra.amountMode === 'auto' && !isInterestCalcComplete(extra) && extra.computedAmount == null) {
+      return 0;
+    }
+    return nonNegDecimal(extra.amount);
+  }
+  const extra = item.gstExtra;
+  if (extra.amountMode === 'auto' && !isLateFeeCalcComplete(extra) && extra.computedAmount == null) {
+    return 0;
+  }
+  return nonNegDecimal(extra.amount);
+};
+
+const interestHeadsMatchAmount = (item: ExpenseItem, amount: number) => {
+  const heads = calcGstSummaryRowTotal(item);
+  return Math.abs(heads - roundDecimal2(amount)) < 0.015;
+};
 
 type ExpenseFormType = 'general' | 'gst' | 'tds';
 
@@ -680,10 +891,9 @@ const EXPENSE_VENDOR_SUB = '#64748B';
 /** 협력업체 라벨(헤더) 셀 — 기본 muted보다 한 단계 진하게 */
 const EXPENSE_VENDOR_LABEL_BG = '#D0DCE8';
 
-/** GST 요약표 — 숫자열·합계행 간격 (colgroup % + 입력 fullWidth) */
-const GST_SUMMARY_NUM_COL_PERCENT = '15%';
-const GST_SUMMARY_ROW_TOTAL_COL_PERCENT = '11%';
-const GST_SUMMARY_DETAIL_COL_PERCENT = '24%';
+/** GST 요약표 — 숫자열 간격 (colgroup % + 입력 fullWidth) */
+const GST_SUMMARY_NUM_COL_PERCENT = '17%';
+const GST_SUMMARY_DETAIL_COL_PERCENT = '28%';
 
 const gstSummaryTableSx = {
   tableLayout: 'fixed' as const,
@@ -730,32 +940,114 @@ const gstSummaryNumFieldSx = {
   },
 } as const;
 
-const gstSummaryTotalRowSx = {
-  bgcolor: EXPENSE_MUTED_BG,
-  '& .MuiTableCell-root': {
-    py: 1.2,
-    px: 0.75,
-    borderTop: `2px solid ${EXPENSE_LINE}`,
-    borderBottom: `1px solid ${EXPENSE_LINE}`,
-    bgcolor: EXPENSE_MUTED_BG,
-    fontWeight: 700,
-    fontSize: '0.875rem',
-    fontVariantNumeric: 'tabular-nums',
-    lineHeight: 1.45,
-    verticalAlign: 'middle',
+/** (E)/(F) 인라인 계산 — 한 줄·가로스크롤 없음 */
+const gstInlineCalcRowSx = {
+  display: 'grid',
+  alignItems: 'center',
+  columnGap: 0.75,
+  rowGap: 0,
+  width: '100%',
+  minWidth: 0,
+  py: 0.75,
+} as const;
+
+const gstInlineUnitSx = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'stretch',
+  gap: 0.35,
+  minWidth: 0,
+} as const;
+
+const gstInlineLabelSx = {
+  fontSize: '0.625rem',
+  color: '#64748B',
+  fontWeight: 600,
+  lineHeight: 1.15,
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+} as const;
+
+const GST_INLINE_FIELD_HEIGHT = 28;
+
+const gstInlineFieldSx = {
+  width: '100%',
+  minWidth: 0,
+  '& .MuiOutlinedInput-root': {
+    width: '100%',
+    height: GST_INLINE_FIELD_HEIGHT,
+    minHeight: GST_INLINE_FIELD_HEIGHT,
+    boxSizing: 'border-box',
+    borderRadius: '2px',
+    bgcolor: '#FFFFFF',
+    '& fieldset': { borderColor: '#B4B4B4' },
+    '&:hover fieldset': { borderColor: '#94A3B8' },
+    '& .MuiOutlinedInput-input': {
+      py: 0.2,
+      px: 0.4,
+      fontSize: '0.75rem',
+      textAlign: 'right',
+      fontVariantNumeric: 'tabular-nums',
+    },
   },
 } as const;
 
-const gstSummaryPayableRowSx = {
-  bgcolor: EXPENSE_TOTAL_BG,
-  '& .MuiTableCell-root': {
-    py: 0.9,
-    px: 0.75,
-    bgcolor: EXPENSE_TOTAL_BG,
-    fontWeight: 700,
-    borderBottom: 'none',
-    verticalAlign: 'middle',
+/** 지연일수 등 읽기 전용 — 입력 TextField와 동일 규격 */
+const gstInlineReadonlyFieldSx = {
+  ...gstInlineFieldSx,
+  '& .MuiOutlinedInput-root': {
+    ...(gstInlineFieldSx as any)['& .MuiOutlinedInput-root'],
+    bgcolor: '#FAFAFA',
+    '&.Mui-disabled': {
+      bgcolor: '#FAFAFA',
+      '& fieldset': { borderColor: '#B4B4B4' },
+    },
+    '& .MuiOutlinedInput-input.Mui-disabled': {
+      WebkitTextFillColor: '#0F172A',
+      color: '#0F172A',
+    },
   },
+} as const;
+
+const gstInlineRowLabelSx = {
+  fontSize: '0.75rem',
+  fontWeight: 700,
+  whiteSpace: 'nowrap',
+  alignSelf: 'center',
+  lineHeight: 1.2,
+} as const;
+
+const gstInlineModeBtnSx = {
+  minWidth: 0,
+  px: 0.4,
+  py: 0,
+  mt: 0.15,
+  fontSize: '0.625rem',
+  lineHeight: 1.2,
+  textTransform: 'none',
+  color: '#334155',
+  whiteSpace: 'nowrap',
+} as const;
+
+/** (E)/(F) 구분용 — 연한 시트 배경 */
+const GST_EF_ROW_BG = '#F3F8F3';
+const GST_EF_ROW_LINE = '#C5D6C5';
+
+const gstEfRowSx = {
+  bgcolor: GST_EF_ROW_BG,
+  '& > td': {
+    bgcolor: `${GST_EF_ROW_BG} !important`,
+    borderBottom: `1px solid ${GST_EF_ROW_LINE}`,
+    verticalAlign: 'middle',
+    py: 0.55,
+  },
+} as const;
+
+const gstEfRowCellSx = {
+  ...gstSummaryDataCellSx,
+  verticalAlign: 'middle' as const,
+  py: 0.9,
 } as const;
 
 const gstSummaryColGroup = (
@@ -766,7 +1058,6 @@ const gstSummaryColGroup = (
     <col style={{ width: GST_SUMMARY_NUM_COL_PERCENT }} />
     <col style={{ width: GST_SUMMARY_NUM_COL_PERCENT }} />
     <col style={{ width: GST_SUMMARY_NUM_COL_PERCENT }} />
-    <col style={{ width: GST_SUMMARY_ROW_TOTAL_COL_PERCENT }} />
   </colgroup>
 );
 
@@ -1599,8 +1890,11 @@ const applyGstSummaryRowRules = (item: ExpenseItem): ExpenseItem => {
   return next;
 };
 
-const calcGstSummaryColumnTotals = (items: ExpenseItem[]) => {
-  const raw = GST_SUMMARY_ROW_DEFS.reduce(
+const calcGstSummaryColumnTotals = (
+  items: ExpenseItem[],
+  rowDefs: typeof GST_SUMMARY_ROW_DEFS = GST_MAIN_ROW_DEFS
+) => {
+  const raw = rowDefs.reduce(
     (acc, rowDef) => {
       const item =
         getGstLineByKey(items, rowDef.key) ||
@@ -1609,7 +1903,10 @@ const calcGstSummaryColumnTotals = (items: ExpenseItem[]) => {
       acc.igst += Number(item.igst || 0);
       acc.cgst += Number(item.cgst || 0);
       acc.sgst += Number(item.sgst || 0);
-      acc.total += calcGstSummaryRowTotal(item);
+      acc.total +=
+        rowDef.key === 'interest' || rowDef.key === 'lateFee'
+          ? getGstExtraPayableAmount(item)
+          : calcGstSummaryRowTotal(item);
       return acc;
     },
     { taxableValue: 0, igst: 0, cgst: 0, sgst: 0, total: 0 }
@@ -1626,16 +1923,34 @@ const calcGstSummaryColumnTotals = (items: ExpenseItem[]) => {
 const getGstLineByKey = (items: ExpenseItem[], key: GstSummaryRowKey) =>
   items.find((item) => item.gstRowKey === key);
 
-/** Excel H13: (A)-(B)-(C)+(D) — 행 Total = SUM(IGST:SGST) */
-const calcGstPayableAmount = (items: ExpenseItem[]) => {
+/** 일반 GST 현금 납부액 — ITC 상계 후 최소 0 (초과 ITC가 RCM/이자/연체료를 깎지 않음) */
+const calcGstGeneralCashPayable = (items: ExpenseItem[]) => {
   const sale = calcGstSummaryRowTotal(getGstLineByKey(items, 'sale') || {});
   const inputCredit = calcGstSummaryRowTotal(getGstLineByKey(items, 'inputCredit') || {});
-  const rcm = calcGstSummaryRowTotal(getGstLineByKey(items, 'rcm') || {});
   const earlierCredit = calcGstSummaryRowTotal(getGstLineByKey(items, 'earlierCredit') || {});
-  return roundDecimal2(sale - inputCredit - earlierCredit + rcm);
+  return roundDecimal2(Math.max(0, sale - inputCredit - earlierCredit));
 };
 
-/** Excel H13 + rounding, H15 = H13 + Professional Tax */
+/**
+ * 총 납부액 = 일반 GST 현금(최소 0) + RCM(D) + 이자(E) + 연체료(F)
+ */
+const calcGstPayableAmount = (items: ExpenseItem[]) => {
+  const generalCash = calcGstGeneralCashPayable(items);
+  const rcm = calcGstSummaryRowTotal(getGstLineByKey(items, 'rcm') || {});
+  const interest = getGstExtraPayableAmount(getGstLineByKey(items, 'interest'));
+  const lateFee = getGstExtraPayableAmount(getGstLineByKey(items, 'lateFee'));
+  return roundDecimal2(generalCash + rcm + interest + lateFee);
+};
+
+/** ITC 상계 후 일반 GST가 0이 된 경우(초과 공제) — remark 안내용 */
+const isGstGeneralCashZeroedByItc = (items: ExpenseItem[]) => {
+  const sale = calcGstSummaryRowTotal(getGstLineByKey(items, 'sale') || {});
+  const inputCredit = calcGstSummaryRowTotal(getGstLineByKey(items, 'inputCredit') || {});
+  const earlierCredit = calcGstSummaryRowTotal(getGstLineByKey(items, 'earlierCredit') || {});
+  return sale - inputCredit - earlierCredit < 0;
+};
+
+/** GST payable(+RCM 클램프) + rounding, + Professional Tax */
 const calcGstFinalPayable = (
   items: ExpenseItem[],
   roundingAdjustment = 0,
@@ -1648,36 +1963,133 @@ const calcGstFinalPayable = (
   );
 
 const createGstSummaryLineItems = (): ExpenseItem[] =>
-  GST_SUMMARY_ROW_ORDER.map((key) => ({
-    id: `gst-${key}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    invoiceDate: '',
-    description: '',
-    qty: 0,
-    unitPrice: 0,
-    total: 0,
-    gstRowKey: key,
-    taxableValue: 0,
-    igst: 0,
-    cgst: 0,
-    sgst: 0,
-  }));
+  GST_SUMMARY_ROW_ORDER.map((key) => {
+    const base: ExpenseItem = {
+      id: `gst-${key}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      invoiceDate: '',
+      description: '',
+      qty: 0,
+      unitPrice: 0,
+      total: 0,
+      gstRowKey: key,
+      taxableValue: 0,
+      igst: 0,
+      cgst: 0,
+      sgst: 0,
+    };
+    if (key === 'interest') {
+      const gstExtra = createDefaultInterestExtra();
+      return { ...base, gstExtra, total: gstExtra.amount };
+    }
+    if (key === 'lateFee') {
+      const gstExtra = createDefaultLateFeeExtra();
+      return { ...base, gstExtra, total: gstExtra.amount, ...applyLateFeeHeadsFromAmount(0) };
+    }
+    return base;
+  });
+
+const normalizeInterestExtra = (raw: any): GstInterestExtra => {
+  const base = createDefaultInterestExtra();
+  if (!raw || typeof raw !== 'object') return base;
+  return recomputeInterestExtra({
+    ...base,
+    unpaidAmount: nonNegDecimal(raw.unpaidAmount ?? raw.unpaid_amount),
+    dueDate: String(raw.dueDate ?? raw.due_date ?? ''),
+    plannedDate: String(raw.plannedDate ?? raw.planned_date ?? base.plannedDate),
+    annualRatePercent: nonNegDecimal(raw.annualRatePercent ?? raw.annual_rate_percent ?? 18),
+    amount: nonNegDecimal(raw.amount),
+    amountMode: raw.amountMode === 'manual' || raw.amount_mode === 'manual' ? 'manual' : 'auto',
+    calcAsOfDate: String(raw.calcAsOfDate ?? raw.calc_as_of_date ?? ''),
+    delayDays: raw.delayDays ?? raw.delay_days ?? null,
+    computedAmount:
+      raw.computedAmount != null || raw.computed_amount != null
+        ? nonNegDecimal(raw.computedAmount ?? raw.computed_amount)
+        : null,
+  });
+};
+
+const normalizeLateFeeExtra = (raw: any): GstLateFeeExtra => {
+  const base = createDefaultLateFeeExtra();
+  if (!raw || typeof raw !== 'object') return base;
+  return recomputeLateFeeExtra({
+    ...base,
+    filingDueDate: String(raw.filingDueDate ?? raw.filing_due_date ?? ''),
+    filingPlannedDate: String(
+      raw.filingPlannedDate ?? raw.filing_planned_date ?? base.filingPlannedDate
+    ),
+    dailyFee: nonNegDecimal(raw.dailyFee ?? raw.daily_fee),
+    capAmount: nonNegDecimal(raw.capAmount ?? raw.cap_amount),
+    amount: nonNegDecimal(raw.amount),
+    amountMode: raw.amountMode === 'manual' || raw.amount_mode === 'manual' ? 'manual' : 'auto',
+    calcAsOfDate: String(raw.calcAsOfDate ?? raw.calc_as_of_date ?? ''),
+    delayDays: raw.delayDays ?? raw.delay_days ?? null,
+    computedAmount:
+      raw.computedAmount != null || raw.computed_amount != null
+        ? nonNegDecimal(raw.computedAmount ?? raw.computed_amount)
+        : null,
+  });
+};
 
 const mapSavedGstSummaryItem = (item: ExpenseItem, key?: GstSummaryRowKey): ExpenseItem => {
-  const mapped: ExpenseItem = {
+  const rowKey = (item.gstRowKey || key) as GstSummaryRowKey | undefined;
+  let mapped: ExpenseItem = {
     id: item.id || `gst-${key || item.gstRowKey || 'row'}-${Date.now()}`,
     invoiceDate: '',
     description: item.description || '',
     qty: 0,
     unitPrice: 0,
     total: 0,
-    gstRowKey: (item.gstRowKey || key) as GstSummaryRowKey | undefined,
+    gstRowKey: rowKey,
     taxableValue: roundDecimal2(Number(item.taxableValue || 0)),
     igst: roundDecimal2(Number(item.igst || 0)),
     cgst: roundDecimal2(Number(item.cgst || 0)),
     sgst: roundDecimal2(Number(item.sgst || 0)),
   };
-  mapped.total = calcGstSummaryRowTotal(mapped);
-  return applyGstSummaryRowRules(mapped);
+  if (rowKey === 'interest') {
+    const gstExtra = normalizeInterestExtra(item.gstExtra);
+    // 저장본: 날짜 경과만으로 금액이 바뀌지 않도록 저장된 amount/delay 우선
+    if (item.gstExtra && (item.gstExtra as GstInterestExtra).calcAsOfDate) {
+      const saved = item.gstExtra as GstInterestExtra;
+      mapped.gstExtra = {
+        ...gstExtra,
+        delayDays: saved.delayDays ?? gstExtra.delayDays,
+        computedAmount:
+          saved.computedAmount != null ? nonNegDecimal(saved.computedAmount) : gstExtra.computedAmount,
+        amount: nonNegDecimal(saved.amount ?? gstExtra.amount),
+        amountMode: saved.amountMode === 'manual' ? 'manual' : gstExtra.amountMode,
+        calcAsOfDate: String(saved.calcAsOfDate || gstExtra.calcAsOfDate || ''),
+      };
+    } else {
+      mapped.gstExtra = gstExtra;
+    }
+    mapped.total = getGstExtraPayableAmount(mapped);
+  } else if (rowKey === 'lateFee') {
+    const gstExtra = normalizeLateFeeExtra(item.gstExtra);
+    if (item.gstExtra && (item.gstExtra as GstLateFeeExtra).calcAsOfDate) {
+      const saved = item.gstExtra as GstLateFeeExtra;
+      mapped.gstExtra = {
+        ...gstExtra,
+        delayDays: saved.delayDays ?? gstExtra.delayDays,
+        computedAmount:
+          saved.computedAmount != null ? nonNegDecimal(saved.computedAmount) : gstExtra.computedAmount,
+        amount: nonNegDecimal(saved.amount ?? gstExtra.amount),
+        amountMode: saved.amountMode === 'manual' ? 'manual' : gstExtra.amountMode,
+        calcAsOfDate: String(saved.calcAsOfDate || gstExtra.calcAsOfDate || ''),
+      };
+    } else {
+      mapped.gstExtra = gstExtra;
+    }
+    const amount = getGstExtraPayableAmount(mapped);
+    mapped = {
+      ...mapped,
+      ...applyLateFeeHeadsFromAmount(amount),
+      total: amount,
+    };
+  } else {
+    mapped.total = calcGstSummaryRowTotal(mapped);
+    mapped = applyGstSummaryRowRules(mapped);
+  }
+  return mapped;
 };
 
 const parseGstSummaryLineItems = (items: ExpenseItem[]): ExpenseItem[] => {
@@ -2686,6 +3098,51 @@ const ExpenseApproval: React.FC = () => {
       items: {
         rows: lineItems.map((item) => {
           if (voucherData.formType === 'gst' && item.gstRowKey) {
+            if (item.gstRowKey === 'interest' && item.gstExtra?.kind === 'interest') {
+              const extra = recomputeInterestExtra({
+                ...item.gstExtra,
+                amountMode: item.gstExtra.amountMode,
+              });
+              const frozen: GstInterestExtra = {
+                ...extra,
+                amount: getGstExtraPayableAmount({ ...item, gstExtra: extra }),
+                calcAsOfDate:
+                  extra.calcAsOfDate ||
+                  extra.plannedDate ||
+                  todayIndiaYmd(),
+              };
+              return {
+                ...item,
+                taxableValue: 0,
+                igst: roundDecimal2(Number(item.igst || 0)),
+                cgst: roundDecimal2(Number(item.cgst || 0)),
+                sgst: roundDecimal2(Number(item.sgst || 0)),
+                gstExtra: frozen,
+                total: frozen.amount,
+              };
+            }
+            if (item.gstRowKey === 'lateFee' && item.gstExtra?.kind === 'lateFee') {
+              const extra = recomputeLateFeeExtra({
+                ...item.gstExtra,
+                amountMode: item.gstExtra.amountMode,
+              });
+              const amount = getGstExtraPayableAmount({ ...item, gstExtra: extra });
+              const heads = applyLateFeeHeadsFromAmount(amount);
+              const frozen: GstLateFeeExtra = {
+                ...extra,
+                amount,
+                calcAsOfDate:
+                  extra.calcAsOfDate ||
+                  extra.filingPlannedDate ||
+                  todayIndiaYmd(),
+              };
+              return {
+                ...item,
+                ...heads,
+                gstExtra: frozen,
+                total: amount,
+              };
+            }
             const mapped = {
               ...item,
               taxableValue: roundDecimal2(Number(item.taxableValue || 0)),
@@ -4088,11 +4545,68 @@ const ExpenseApproval: React.FC = () => {
     setLineItems((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item;
+        if (item.gstRowKey === 'lateFee' && (field === 'igst' || field === 'cgst' || field === 'sgst')) {
+          // 연체료 세목은 계산금액 기준 자동 배분 — 수동 세목 변경 차단
+          return item;
+        }
+        const safeValue = nonNegDecimal(value);
         const nextItem: ExpenseItem = applyGstSummaryRowRules({
           ...item,
-          [field]: roundDecimal2(Number(value || 0)),
+          [field]: safeValue,
         });
         return nextItem;
+      })
+    );
+  };
+
+  const patchGstInterestExtra = (
+    id: string,
+    patch: Partial<GstInterestExtra>,
+    options?: { forceAuto?: boolean }
+  ) => {
+    setLineItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id || item.gstRowKey !== 'interest') return item;
+        const current =
+          item.gstExtra?.kind === 'interest' ? item.gstExtra : createDefaultInterestExtra();
+        const amountMode: GstAmountMode = options?.forceAuto
+          ? 'auto'
+          : patch.amountMode ?? current.amountMode;
+        const nextExtra = recomputeInterestExtra({ ...current, ...patch, amountMode });
+        return {
+          ...item,
+          gstExtra: nextExtra,
+          taxableValue: 0,
+          igst: 0,
+          cgst: 0,
+          sgst: 0,
+          total: nextExtra.amount,
+        };
+      })
+    );
+  };
+
+  const patchGstLateFeeExtra = (
+    id: string,
+    patch: Partial<GstLateFeeExtra>,
+    options?: { forceAuto?: boolean }
+  ) => {
+    setLineItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id || item.gstRowKey !== 'lateFee') return item;
+        const current =
+          item.gstExtra?.kind === 'lateFee' ? item.gstExtra : createDefaultLateFeeExtra();
+        const amountMode: GstAmountMode = options?.forceAuto
+          ? 'auto'
+          : patch.amountMode ?? current.amountMode;
+        const nextExtra = recomputeLateFeeExtra({ ...current, ...patch, amountMode });
+        const heads = applyLateFeeHeadsFromAmount(nextExtra.amount);
+        return {
+          ...item,
+          gstExtra: nextExtra,
+          ...heads,
+          total: nextExtra.amount,
+        };
       })
     );
   };
@@ -4752,15 +5266,20 @@ const ExpenseApproval: React.FC = () => {
 
   const confirmDeleteExpense = async () => {
     if (!deleteGuard.guard() || !deleteTargetId) return;
+    const deletedId = deleteTargetId;
     try {
-      const response = await accountingService.deleteExpenseReport(deleteTargetId);
+      const response = await accountingService.deleteExpenseReport(deletedId);
       if (!response.success) {
         throw new Error(response.message || t('expenseApproval.errors.deleteFailed'));
       }
       await loadExpenseData();
+      if (selectedExpense?.id === deletedId) {
+        setSelectedExpense(null);
+        setViewMode('list');
+      }
       setSuccess(t('expenseApproval.success.deleted'));
-    } catch {
-      setError(t('expenseApproval.errors.deleteFailed'));
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || t('expenseApproval.errors.deleteFailed'));
     } finally {
       setDeleteTargetId(null);
     }
@@ -4880,11 +5399,24 @@ const ExpenseApproval: React.FC = () => {
   };
 
   const canUserRevisionRejectExpense = (expense: ExpenseApprovalItem) => {
+    // root: 승인·지급 완료 후에도 수정 반려 가능
+    if (isRootUser) {
+      return (
+        ['submitted', 'in_review', 'approved', 'paid'].includes(expense.status) ||
+        isExpensePaymentCompleted(expense)
+      );
+    }
     if (isExpensePaymentCompleted(expense)) return false;
     if (!['submitted', 'in_review', 'approved'].includes(expense.status)) return false;
-    // root: 승인 후에도 수정 반려 가능 (지정 승인자 아니어도)
-    if (isRootUser) return true;
     return isDesignatedApprover(expense);
+  };
+
+  /** root 전용: 승인·지급 완료 후 최종 반려 */
+  const canUserFinalRejectExpense = (expense: ExpenseApprovalItem) => {
+    if (!isRootUser) return false;
+    return (
+      ['approved', 'paid'].includes(expense.status) || isExpensePaymentCompleted(expense)
+    );
   };
 
   const canChangeExpenseApprover = (expense: ExpenseApprovalItem) => {
@@ -4916,22 +5448,21 @@ const ExpenseApproval: React.FC = () => {
 
   const canDeleteExpense = (expense: ExpenseApprovalItem) => {
     if (!user?.id) return false;
+
+    // root: 승인·지급 완료·송금 탭 포함 소프트 삭제 가능
+    if (isRootUser) {
+      return (
+        ['draft', 'submitted', 'in_review', 'rejected', 'approved', 'paid'].includes(expense.status) ||
+        isExpensePaymentCompleted(expense) ||
+        floorMoney(Number(expense.totalAmount || 0)) <= 0
+      );
+    }
+
     if (listTab === 'transfer') return false;
-
-    const total = floorMoney(Number(expense.totalAmount || 0));
-    const isZeroAmount = total <= 0;
-
-    // root: 0원(빈 초안/오분류) 문서는 상태와 무관하게 삭제 가능
-    if (isRootUser && isZeroAmount) return true;
 
     // 목록에 '지급 완료'로 보이는 건(문서 status와 무관) 삭제 불가
     if (resolveDisplayStatus(expense) === 'paid') return false;
     if (expense.status === 'paid') return false;
-
-    // root: 지급 완료 전까지(승인 포함) 삭제 가능
-    if (isRootUser) {
-      return ['draft', 'submitted', 'in_review', 'rejected', 'approved'].includes(expense.status);
-    }
 
     if (['approved', 'paid'].includes(expense.status)) return false;
     if (!isSameUserId(expense.requesterId, user.id)) return false;
@@ -5525,6 +6056,34 @@ const ExpenseApproval: React.FC = () => {
         : 0,
     [lineItems, voucherData.formType, voucherData.gstRoundingAdjustment, voucherData.gstProfessionalTax]
   );
+
+  /** 초과 ITC로 일반 GST 현금이 0일 때 remark에 자동 설명 */
+  useEffect(() => {
+    if (viewMode !== 'create' && viewMode !== 'edit') return;
+    if (voucherData.formType !== 'gst') return;
+    const autoRemark = String(t('expenseApproval.voucher.gstPayableNegativeRemark') || '').trim();
+    if (!autoRemark) return;
+    const zeroed = isGstGeneralCashZeroedByItc(lineItems);
+    setVoucherData((prev) => {
+      const current = String(prev.remarks || '');
+      const trimmed = current.trim();
+      if (zeroed) {
+        if (!trimmed) return { ...prev, remarks: autoRemark };
+        if (trimmed === autoRemark || current.includes(autoRemark)) return prev;
+        return { ...prev, remarks: `${trimmed}\n${autoRemark}` };
+      }
+      if (trimmed === autoRemark) return { ...prev, remarks: '' };
+      if (!current.includes(autoRemark)) return prev;
+      const next = current
+        .split(/\r?\n/)
+        .filter((line) => line.trim() !== autoRemark)
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+      if (next === trimmed) return prev;
+      return { ...prev, remarks: next };
+    });
+  }, [lineItems, voucherData.formType, viewMode, t]);
 
   const formatRemittanceDateTime = (value?: string) => {
     if (!value) return '-';
@@ -6615,6 +7174,19 @@ const ExpenseApproval: React.FC = () => {
                   </Typography>
                 )}
               {voucherData.formType === 'gst' ? (
+              <>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  mb: 0.5,
+                  fontWeight: 700,
+                  fontSize: '0.8125rem',
+                  color: '#1E293B',
+                  pl: 0.25,
+                }}
+              >
+                {t('expenseApproval.voucher.gstSectionMain')}
+              </Typography>
               <TableContainer
                 sx={{
                     mb: 1,
@@ -6658,27 +7230,53 @@ const ExpenseApproval: React.FC = () => {
                         <TableCell align="right" sx={gstSummaryNumCellSx}>
                           {t('expenseApproval.voucher.gstTableSgst')}
                         </TableCell>
-                        <TableCell align="right" sx={gstSummaryNumCellSx}>
-                          {t('expenseApproval.voucher.gstTableRowTotal')}
-                        </TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {GST_SUMMARY_ROW_DEFS.map((rowDef, index) => {
+                      {GST_MAIN_ROW_DEFS.map((rowDef, index) => {
                         const item = getGstLineByKey(lineItems, rowDef.key) || mapSavedGstSummaryItem({ id: `gst-${rowDef.key}` } as ExpenseItem, rowDef.key);
-                        const renderGstCell = (field: 'taxableValue' | 'igst' | 'cgst' | 'sgst') => {
+                        const renderGstCell = (
+                          field: 'taxableValue' | 'igst' | 'cgst' | 'sgst',
+                          opts?: { readOnly?: boolean; compact?: boolean }
+                        ) => {
                           const cellValue = field === 'taxableValue' ? item.taxableValue : item[field];
+                          if (opts?.readOnly) {
+                            return (
+                              <Typography
+                                variant="body2"
+                                sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.8125rem' }}
+                              >
+                                {formatDecimal2(Number(cellValue || 0))}
+                              </Typography>
+                            );
+                          }
                           return (
                             <TextField
                               type="number"
                               size="small"
                               fullWidth
                               value={cellValue ?? 0}
-                              onChange={(e) =>
-                                handleUpdateGstSummaryRow(item.id, field, Number(e.target.value || 0))
-                              }
+                              onChange={(e) => {
+                                const raw = Number(e.target.value);
+                                handleUpdateGstSummaryRow(
+                                  item.id,
+                                  field,
+                                  Number.isFinite(raw) && raw < 0 ? 0 : Number(e.target.value || 0)
+                                );
+                              }}
                               inputProps={{ min: 0, step: 0.01 }}
-                              sx={gstSummaryNumFieldSx}
+                              sx={
+                                opts?.compact
+                                  ? {
+                                      ...gstSummaryNumFieldSx,
+                                      '& .MuiOutlinedInput-root': {
+                                        ...(gstSummaryNumFieldSx as any)['& .MuiOutlinedInput-root'],
+                                        height: 30,
+                                        borderRadius: '2px',
+                                      },
+                                    }
+                                  : gstSummaryNumFieldSx
+                              }
                             />
                           );
                         };
@@ -6704,40 +7302,395 @@ const ExpenseApproval: React.FC = () => {
                             <TableCell align="right" sx={gstSummaryNumCellSx}>
                               {renderGstCell('sgst')}
                             </TableCell>
-                            <TableCell
-                              align="right"
-                              sx={{ ...gstSummaryNumCellSx, fontVariantNumeric: 'tabular-nums' }}
-                            >
-                              {formatDecimal2(calcGstSummaryRowTotal(item))}
-                            </TableCell>
                           </TableRow>
                         );
                       })}
-                      {(() => {
-                        const cols = calcGstSummaryColumnTotals(lineItems);
-                        return (
-                          <TableRow sx={gstSummaryTotalRowSx}>
-                    <TableCell />
-                            <TableCell>{t('expenseApproval.voucher.gstTableColumnTotal')}</TableCell>
-                            <TableCell align="right">{formatDecimal2(cols.taxableValue)}</TableCell>
-                            <TableCell align="right">{formatDecimal2(cols.igst)}</TableCell>
-                            <TableCell align="right">{formatDecimal2(cols.cgst)}</TableCell>
-                            <TableCell align="right">{formatDecimal2(cols.sgst)}</TableCell>
-                            <TableCell align="right">{formatDecimal2(cols.total)}</TableCell>
-                          </TableRow>
-                        );
-                      })()}
-                      <TableRow sx={gstSummaryPayableRowSx}>
-                        <TableCell colSpan={6} sx={{ color: EXPENSE_TOTAL_FG }}>
-                          {t('expenseApproval.voucher.gstPayableLabel')}
-                        </TableCell>
-                        <TableCell align="right" sx={{ color: EXPENSE_TOTAL_FG, fontVariantNumeric: 'tabular-nums' }}>
-                          {formatDecimal2(gstPayableAmount)}
-                        </TableCell>
-                      </TableRow>
                     </TableBody>
                   </Table>
+
                 </TableContainer>
+
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  mt: 1.5,
+                  mb: 0.5,
+                  fontWeight: 700,
+                  fontSize: '0.8125rem',
+                  color: '#1E293B',
+                  pl: 0.25,
+                }}
+              >
+                {t('expenseApproval.voucher.gstSectionExtra')}
+              </Typography>
+              <TableContainer
+                sx={{
+                  mb: 1,
+                  borderRadius: '2px',
+                  border: '1px solid #C5D6C5',
+                  bgcolor: '#F3F8F3',
+                  overflow: 'hidden',
+                }}
+              >
+                <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
+                  <TableBody>
+                    {GST_EF_ROW_DEFS.map((rowDef, index) => {
+                      const item = getGstLineByKey(lineItems, rowDef.key) || mapSavedGstSummaryItem({ id: `gst-${rowDef.key}` } as ExpenseItem, rowDef.key);
+                        if (rowDef.key === 'interest') {
+                          const extra =
+                            item.gstExtra?.kind === 'interest'
+                              ? item.gstExtra
+                              : createDefaultInterestExtra();
+                          const incomplete =
+                            extra.amountMode === 'auto' && extra.computedAmount == null;
+                          return (
+                            <TableRow key={rowDef.key}>
+                              <TableCell
+                                sx={{
+                                  ...gstEfRowCellSx,
+                                  width: 40,
+                                  bgcolor: 'transparent',
+                                  verticalAlign: 'middle',
+                                }}
+                              >
+                                {GST_MAIN_ROW_DEFS.length + index + 1}
+                              </TableCell>
+                              <TableCell
+                                sx={{
+                                  ...gstEfRowCellSx,
+                                  minWidth: 0,
+                                  bgcolor: 'transparent',
+                                  verticalAlign: 'middle',
+                                }}
+                              >
+                                <Box
+                                  sx={{
+                                    ...gstInlineCalcRowSx,
+                                    alignItems: 'center',
+                                    gridTemplateColumns: {
+                                      xs: '72px repeat(3, minmax(0, 1fr))',
+                                      md: '72px repeat(6, minmax(0, 1fr))',
+                                    },
+                                  }}
+                                >
+                                  <Typography sx={gstInlineRowLabelSx}>
+                                    {t(`expenseApproval.voucher.${rowDef.labelKey}`)}
+                                  </Typography>
+                                  <Box sx={gstInlineUnitSx}>
+                                    <Typography sx={gstInlineLabelSx}>{t('expenseApproval.voucher.gstInterestUnpaid')}</Typography>
+                                    <TextField
+                                      type="number"
+                                      size="small"
+                                      value={extra.unpaidAmount || ''}
+                                      onChange={(e) =>
+                                        patchGstInterestExtra(item.id, {
+                                          unpaidAmount: Math.max(0, Number(e.target.value || 0)),
+                                          amountMode: 'auto',
+                                        })
+                                      }
+                                      inputProps={{ min: 0, step: 0.01 }}
+                                      sx={gstInlineFieldSx}
+                                    />
+                                  </Box>
+                                  <Box sx={gstInlineUnitSx}>
+                                    <Typography sx={gstInlineLabelSx}>{t('expenseApproval.voucher.gstInterestDueDate')}</Typography>
+                                    <TextField
+                                      type="date"
+                                      size="small"
+                                      value={extra.dueDate || ''}
+                                      onChange={(e) =>
+                                        patchGstInterestExtra(item.id, {
+                                          dueDate: e.target.value,
+                                          amountMode: 'auto',
+                                        })
+                                      }
+                                      InputLabelProps={{ shrink: true }}
+                                      sx={gstInlineFieldSx}
+                                    />
+                                  </Box>
+                                  <Box sx={gstInlineUnitSx}>
+                                    <Typography sx={gstInlineLabelSx}>{t('expenseApproval.voucher.gstInterestPlannedDate')}</Typography>
+                                    <TextField
+                                      type="date"
+                                      size="small"
+                                      value={extra.plannedDate || ''}
+                                      onChange={(e) =>
+                                        patchGstInterestExtra(item.id, {
+                                          plannedDate: e.target.value,
+                                          amountMode: 'auto',
+                                        })
+                                      }
+                                      InputLabelProps={{ shrink: true }}
+                                      sx={gstInlineFieldSx}
+                                    />
+                                  </Box>
+                                  <Box sx={gstInlineUnitSx}>
+                                    <Typography sx={gstInlineLabelSx}>{t('expenseApproval.voucher.gstInterestDelayDays')}</Typography>
+                                    <TextField
+                                      size="small"
+                                      disabled
+                                      value={
+                                        extra.delayDays == null
+                                          ? t('expenseApproval.voucher.gstCalcIncomplete')
+                                          : String(extra.delayDays)
+                                      }
+                                      sx={gstInlineReadonlyFieldSx}
+                                    />
+                                  </Box>
+                                  <Box sx={gstInlineUnitSx}>
+                                    <Typography sx={gstInlineLabelSx}>{t('expenseApproval.voucher.gstInterestAnnualRate')}</Typography>
+                                    <TextField
+                                      type="number"
+                                      size="small"
+                                      value={extra.annualRatePercent || ''}
+                                      onChange={(e) =>
+                                        patchGstInterestExtra(item.id, {
+                                          annualRatePercent: Math.max(0, Number(e.target.value || 0)),
+                                          amountMode: 'auto',
+                                        })
+                                      }
+                                      inputProps={{ min: 0, step: 0.01 }}
+                                      sx={gstInlineFieldSx}
+                                    />
+                                  </Box>
+                                  <Box sx={gstInlineUnitSx}>
+                                    <Typography sx={gstInlineLabelSx}>
+                                      {t('expenseApproval.voucher.gstCalcAmount')}
+                                      <Typography
+                                        component="span"
+                                        sx={{
+                                          ml: 0.5,
+                                          fontSize: '0.625rem',
+                                          fontWeight: 500,
+                                          color: extra.amountMode === 'manual' ? '#B45309' : '#64748B',
+                                        }}
+                                      >
+                                        ({extra.amountMode === 'manual'
+                                          ? t('expenseApproval.voucher.gstCalcManual')
+                                          : t('expenseApproval.voucher.gstCalcAuto')})
+                                      </Typography>
+                                    </Typography>
+                                    <TextField
+                                      type="number"
+                                      size="small"
+                                      value={incomplete ? '' : extra.amount}
+                                      placeholder={incomplete ? t('expenseApproval.voucher.gstCalcIncomplete') : undefined}
+                                      onChange={(e) =>
+                                        patchGstInterestExtra(item.id, {
+                                          amount: Math.max(0, Number(e.target.value || 0)),
+                                          amountMode: 'manual',
+                                        })
+                                      }
+                                      inputProps={{ min: 0, step: 0.01 }}
+                                      sx={gstInlineFieldSx}
+                                    />
+                                    {extra.amountMode === 'manual' ? (
+                                      <Button
+                                        size="small"
+                                        onClick={() => patchGstInterestExtra(item.id, {}, { forceAuto: true })}
+                                        sx={gstInlineModeBtnSx}
+                                      >
+                                        {t('expenseApproval.voucher.gstCalcRestoreAuto')}
+                                      </Button>
+                                    ) : null}
+                                  </Box>
+                                </Box>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        }
+
+                        if (rowDef.key === 'lateFee') {
+                          const extra =
+                            item.gstExtra?.kind === 'lateFee'
+                              ? item.gstExtra
+                              : createDefaultLateFeeExtra();
+                          const incomplete =
+                            extra.amountMode === 'auto' && extra.computedAmount == null;
+                          return (
+                            <TableRow key={rowDef.key}>
+                              <TableCell
+                                sx={{
+                                  ...gstEfRowCellSx,
+                                  width: 40,
+                                  bgcolor: 'transparent',
+                                  verticalAlign: 'middle',
+                                }}
+                              >
+                                {GST_MAIN_ROW_DEFS.length + index + 1}
+                              </TableCell>
+                              <TableCell
+                                sx={{
+                                  ...gstEfRowCellSx,
+                                  minWidth: 0,
+                                  bgcolor: 'transparent',
+                                  verticalAlign: 'middle',
+                                }}
+                              >
+                                <Box
+                                  sx={{
+                                    ...gstInlineCalcRowSx,
+                                    alignItems: 'center',
+                                    gridTemplateColumns: {
+                                      xs: '72px repeat(3, minmax(0, 1fr))',
+                                      md: '72px repeat(6, minmax(0, 1fr))',
+                                    },
+                                  }}
+                                >
+                                  <Typography sx={gstInlineRowLabelSx}>
+                                    {t(`expenseApproval.voucher.${rowDef.labelKey}`)}
+                                  </Typography>
+                                  <Box sx={gstInlineUnitSx}>
+                                    <Typography sx={gstInlineLabelSx}>{t('expenseApproval.voucher.gstLateFeeFilingDue')}</Typography>
+                                    <TextField
+                                      type="date"
+                                      size="small"
+                                      value={extra.filingDueDate || ''}
+                                      onChange={(e) =>
+                                        patchGstLateFeeExtra(item.id, {
+                                          filingDueDate: e.target.value,
+                                          amountMode: 'auto',
+                                        })
+                                      }
+                                      InputLabelProps={{ shrink: true }}
+                                      sx={gstInlineFieldSx}
+                                    />
+                                  </Box>
+                                  <Box sx={gstInlineUnitSx}>
+                                    <Typography sx={gstInlineLabelSx}>{t('expenseApproval.voucher.gstLateFeeFilingPlanned')}</Typography>
+                                    <TextField
+                                      type="date"
+                                      size="small"
+                                      value={extra.filingPlannedDate || ''}
+                                      onChange={(e) =>
+                                        patchGstLateFeeExtra(item.id, {
+                                          filingPlannedDate: e.target.value,
+                                          amountMode: 'auto',
+                                        })
+                                      }
+                                      InputLabelProps={{ shrink: true }}
+                                      sx={gstInlineFieldSx}
+                                    />
+                                  </Box>
+                                  <Box sx={gstInlineUnitSx}>
+                                    <Typography sx={gstInlineLabelSx}>{t('expenseApproval.voucher.gstInterestDelayDays')}</Typography>
+                                    <TextField
+                                      size="small"
+                                      disabled
+                                      value={
+                                        extra.delayDays == null
+                                          ? t('expenseApproval.voucher.gstCalcIncomplete')
+                                          : String(extra.delayDays)
+                                      }
+                                      sx={gstInlineReadonlyFieldSx}
+                                    />
+                                  </Box>
+                                  <Box sx={gstInlineUnitSx}>
+                                    <Typography sx={gstInlineLabelSx}>{t('expenseApproval.voucher.gstLateFeeDaily')}</Typography>
+                                    <TextField
+                                      type="number"
+                                      size="small"
+                                      value={extra.dailyFee || ''}
+                                      onChange={(e) =>
+                                        patchGstLateFeeExtra(item.id, {
+                                          dailyFee: Math.max(0, Number(e.target.value || 0)),
+                                          amountMode: 'auto',
+                                        })
+                                      }
+                                      inputProps={{ min: 0, step: 0.01 }}
+                                      sx={gstInlineFieldSx}
+                                    />
+                                  </Box>
+                                  <Box sx={gstInlineUnitSx}>
+                                    <Typography sx={gstInlineLabelSx}>{t('expenseApproval.voucher.gstLateFeeCap')}</Typography>
+                                    <TextField
+                                      type="number"
+                                      size="small"
+                                      value={extra.capAmount || ''}
+                                      onChange={(e) =>
+                                        patchGstLateFeeExtra(item.id, {
+                                          capAmount: Math.max(0, Number(e.target.value || 0)),
+                                          amountMode: 'auto',
+                                        })
+                                      }
+                                      inputProps={{ min: 0, step: 0.01 }}
+                                      sx={gstInlineFieldSx}
+                                    />
+                                  </Box>
+                                  <Box sx={gstInlineUnitSx}>
+                                    <Typography sx={gstInlineLabelSx}>
+                                      {t('expenseApproval.voucher.gstCalcAmount')}
+                                      <Typography
+                                        component="span"
+                                        sx={{
+                                          ml: 0.5,
+                                          fontSize: '0.625rem',
+                                          fontWeight: 500,
+                                          color: extra.amountMode === 'manual' ? '#B45309' : '#64748B',
+                                        }}
+                                      >
+                                        ({extra.amountMode === 'manual'
+                                          ? t('expenseApproval.voucher.gstCalcManual')
+                                          : t('expenseApproval.voucher.gstCalcAuto')})
+                                      </Typography>
+                                    </Typography>
+                                    <TextField
+                                      type="number"
+                                      size="small"
+                                      value={incomplete ? '' : extra.amount}
+                                      placeholder={incomplete ? t('expenseApproval.voucher.gstCalcIncomplete') : undefined}
+                                      onChange={(e) =>
+                                        patchGstLateFeeExtra(item.id, {
+                                          amount: Math.max(0, Number(e.target.value || 0)),
+                                          amountMode: 'manual',
+                                        })
+                                      }
+                                      inputProps={{ min: 0, step: 0.01 }}
+                                      sx={gstInlineFieldSx}
+                                    />
+                                    {extra.amountMode === 'manual' ? (
+                                      <Button
+                                        size="small"
+                                        onClick={() => patchGstLateFeeExtra(item.id, {}, { forceAuto: true })}
+                                        sx={gstInlineModeBtnSx}
+                                      >
+                                        {t('expenseApproval.voucher.gstCalcRestoreAuto')}
+                                      </Button>
+                                    ) : null}
+                                  </Box>
+                                </Box>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        }
+                        return null;
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 1,
+                  px: 1.25,
+                  py: 1,
+                  border: '1px solid #FECACA',
+                  borderRadius: '2px',
+                  bgcolor: '#FEE2E2',
+                  mb: 1,
+                }}
+              >
+                <Typography sx={{ color: '#B91C1C', fontWeight: 700, fontSize: '0.8125rem' }}>
+                  {t('expenseApproval.voucher.gstPayableLabel')}
+                </Typography>
+                <Typography sx={{ color: '#B91C1C', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                  {formatDecimal2(gstPayableAmount)}
+                </Typography>
+              </Box>
+              </>
               ) : voucherData.formType === 'tds' ? (
                 <>
                   <TableContainer
@@ -7961,7 +8914,13 @@ const ExpenseApproval: React.FC = () => {
     const isPaymentApproved = selectedExpense.paymentRequestStatus === 'approved';
     const isPaymentPaid = selectedExpense.paymentRequestStatus === 'paid';
     const canApproveThis = listTab !== 'transfer' && canUserApproveExpense(selectedExpense);
-    const canRevisionRejectThis = listTab !== 'transfer' && canUserRevisionRejectExpense(selectedExpense);
+    // root: 송금 탭·승인/지급 후에도 반려·수정반려·삭제 가능
+    const canRevisionRejectThis =
+      (listTab !== 'transfer' || isRootUser) && canUserRevisionRejectExpense(selectedExpense);
+    const canFinalRejectThis =
+      (listTab !== 'transfer' || isRootUser) &&
+      (canApproveThis || canUserFinalRejectExpense(selectedExpense));
+    const canDeleteThis = canDeleteExpense(selectedExpense);
     const canEditThis = canEditExpense(selectedExpense);
     const canResubmitThis = canResubmitExpense(selectedExpense);
     const canChangeApproverThis = listTab !== 'transfer' && canChangeExpenseApprover(selectedExpense);
@@ -8151,38 +9110,18 @@ const ExpenseApproval: React.FC = () => {
               {t('expenseApproval.actions.backToList')}
             </Button>
             {canApproveThis && (
-              <>
-                <Button
-                  variant="contained"
-                  color="success"
-                  disableElevation
-                  startIcon={<CheckCircleIcon fontSize="small" />}
-                  onClick={() => handleApproveExpense(selectedExpense.id)}
-                  sx={mvsBodyPrimaryBtnSx}
-                >
-                  {t('expenseApproval.actions.accept')}
-                </Button>
-                <Button
-                  variant="contained"
-                  color="warning"
-                  disableElevation
-                  startIcon={<EditIcon fontSize="small" />}
-                  onClick={() => openReasonDialog('expense-revision-reject', selectedExpense.id)}
-                >
-                  {t('expenseApproval.actions.revisionReject')}
-                </Button>
-                <Button
-                  variant="contained"
-                  color="error"
-                  disableElevation
-                  startIcon={<CancelIcon fontSize="small" />}
-                  onClick={() => openReasonDialog('expense-reject', selectedExpense.id)}
-                >
-                  {t('expenseApproval.actions.reject')}
-                </Button>
-              </>
+              <Button
+                variant="contained"
+                color="success"
+                disableElevation
+                startIcon={<CheckCircleIcon fontSize="small" />}
+                onClick={() => handleApproveExpense(selectedExpense.id)}
+                sx={mvsBodyPrimaryBtnSx}
+              >
+                {t('expenseApproval.actions.accept')}
+              </Button>
             )}
-            {!canApproveThis && canRevisionRejectThis && (
+            {(canApproveThis || canRevisionRejectThis) && (
               <Button
                 variant="contained"
                 color="warning"
@@ -8191,6 +9130,29 @@ const ExpenseApproval: React.FC = () => {
                 onClick={() => openReasonDialog('expense-revision-reject', selectedExpense.id)}
               >
                 {t('expenseApproval.actions.revisionReject')}
+              </Button>
+            )}
+            {canFinalRejectThis && (
+              <Button
+                variant="contained"
+                color="error"
+                disableElevation
+                startIcon={<CancelIcon fontSize="small" />}
+                onClick={() => openReasonDialog('expense-reject', selectedExpense.id)}
+              >
+                {t('expenseApproval.actions.reject')}
+              </Button>
+            )}
+            {canDeleteThis && (
+              <Button
+                variant="outlined"
+                color="error"
+                disableElevation
+                startIcon={<DeleteIcon fontSize="small" />}
+                onClick={() => handleDeleteExpense(selectedExpense.id)}
+                disabled={deleteGuard.disabled}
+              >
+                {t('common.delete')}
               </Button>
             )}
             {canEditThis && (
@@ -8218,7 +9180,7 @@ const ExpenseApproval: React.FC = () => {
             </>
           }
         />
-          </Box>
+        </Box>
 
         <Card
           elevation={0}
@@ -8783,6 +9745,19 @@ const ExpenseApproval: React.FC = () => {
                   {t('expenseApproval.detail.items')}
               </Typography>
               {detailFormType === 'gst' ? (
+                <>
+                <Typography
+                  variant="subtitle2"
+                  sx={{
+                    mb: 0.5,
+                    fontWeight: 700,
+                    fontSize: '0.8125rem',
+                    color: '#1E293B',
+                    pl: 0.25,
+                  }}
+                >
+                  {t('expenseApproval.voucher.gstSectionMain')}
+                </Typography>
                 <TableContainer sx={{ border: `1px solid ${EXPENSE_LINE}`, borderRadius: '6px', overflowX: 'auto' }}>
                   <Table size="small" sx={gstSummaryTableSx}>
                     {gstSummaryColGroup}
@@ -8817,13 +9792,10 @@ const ExpenseApproval: React.FC = () => {
                         <TableCell align="right" sx={gstSummaryNumCellSx}>
                           {t('expenseApproval.voucher.gstTableSgst')}
                         </TableCell>
-                        <TableCell align="right" sx={gstSummaryNumCellSx}>
-                          {t('expenseApproval.voucher.gstTableRowTotal')}
-                        </TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {GST_SUMMARY_ROW_DEFS.map((rowDef, index) => {
+                      {GST_MAIN_ROW_DEFS.map((rowDef, index) => {
                         const item =
                           getGstLineByKey(detailGstItems, rowDef.key) ||
                           mapSavedGstSummaryItem({ id: `gst-${rowDef.key}` } as ExpenseItem, rowDef.key);
@@ -8849,40 +9821,111 @@ const ExpenseApproval: React.FC = () => {
                             <TableCell align="right" sx={{ ...gstSummaryNumCellSx, ...expenseAmountCellSx }}>
                               {formatAmount(Number(item.sgst || 0))}
                             </TableCell>
-                            <TableCell
-                              align="right"
-                              sx={{ ...gstSummaryNumCellSx, ...expenseAmountCellSx }}
-                            >
-                              {formatDecimal2(calcGstSummaryRowTotal(item))}
-                            </TableCell>
                           </TableRow>
                         );
                       })}
-                      {(() => {
-                        const cols = calcGstSummaryColumnTotals(detailGstItems);
-                        return (
-                          <TableRow sx={gstSummaryTotalRowSx}>
-                            <TableCell />
-                            <TableCell>{t('expenseApproval.voucher.gstTableColumnTotal')}</TableCell>
-                            <TableCell align="right">{formatAmount(cols.taxableValue)}</TableCell>
-                            <TableCell align="right">{formatAmount(cols.igst)}</TableCell>
-                            <TableCell align="right">{formatAmount(cols.cgst)}</TableCell>
-                            <TableCell align="right">{formatAmount(cols.sgst)}</TableCell>
-                            <TableCell align="right">{formatDecimal2(cols.total)}</TableCell>
-                          </TableRow>
-                        );
-                      })()}
-                      <TableRow sx={gstSummaryPayableRowSx}>
-                        <TableCell colSpan={6} sx={{ color: EXPENSE_TOTAL_FG }}>
-                          {t('expenseApproval.voucher.gstPayableLabel')}
-                        </TableCell>
-                        <TableCell align="right" sx={{ ...expenseAmountCellSx, color: EXPENSE_TOTAL_FG }}>
-                          {formatDecimal2(detailGstPayable)}
-                        </TableCell>
-                      </TableRow>
+                    </TableBody>
+                  </Table>
+
+                </TableContainer>
+
+                <Typography
+                  variant="subtitle2"
+                  sx={{
+                    mt: 1.5,
+                    mb: 0.5,
+                    fontWeight: 700,
+                    fontSize: '0.8125rem',
+                    color: '#1E293B',
+                    pl: 0.25,
+                  }}
+                >
+                  {t('expenseApproval.voucher.gstSectionExtra')}
+                </Typography>
+                <TableContainer
+                  sx={{
+                    border: '1px solid #C5D6C5',
+                    borderRadius: '2px',
+                    bgcolor: '#F3F8F3',
+                    overflow: 'hidden',
+                    mb: 1,
+                  }}
+                >
+                  <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
+                    <TableBody>
+                      {GST_EF_ROW_DEFS.map((rowDef, index) => {
+                        const item =
+                          getGstLineByKey(detailGstItems, rowDef.key) ||
+                          mapSavedGstSummaryItem({ id: `gst-${rowDef.key}` } as ExpenseItem, rowDef.key);
+                          const amount = getGstExtraPayableAmount(item);
+                          const extra = item.gstExtra;
+                          const detailBits =
+                            rowDef.key === 'interest' && extra?.kind === 'interest'
+                              ? [
+                                  `${t('expenseApproval.voucher.gstInterestUnpaid')}: ${formatDecimal2(extra.unpaidAmount)}`,
+                                  `${t('expenseApproval.voucher.gstInterestDueDate')}: ${extra.dueDate || '—'}`,
+                                  `${t('expenseApproval.voucher.gstInterestPlannedDate')}: ${extra.plannedDate || '—'}`,
+                                  `${t('expenseApproval.voucher.gstInterestDelayDays')}: ${extra.delayDays ?? '—'}`,
+                                  `${t('expenseApproval.voucher.gstInterestAnnualRate')}: ${formatDecimal2(extra.annualRatePercent)}`,
+                                  `${t('expenseApproval.voucher.gstCalcAmount')}: ${formatDecimal2(amount)}`,
+                                  extra.amountMode === 'manual'
+                                    ? t('expenseApproval.voucher.gstCalcManual')
+                                    : t('expenseApproval.voucher.gstCalcAuto'),
+                                ]
+                              : extra?.kind === 'lateFee'
+                                ? [
+                                    `${t('expenseApproval.voucher.gstLateFeeFilingDue')}: ${extra.filingDueDate || '—'}`,
+                                    `${t('expenseApproval.voucher.gstLateFeeFilingPlanned')}: ${extra.filingPlannedDate || '—'}`,
+                                    `${t('expenseApproval.voucher.gstInterestDelayDays')}: ${extra.delayDays ?? '—'}`,
+                                    `${t('expenseApproval.voucher.gstLateFeeDaily')}: ${formatDecimal2(extra.dailyFee)}`,
+                                    `${t('expenseApproval.voucher.gstLateFeeCap')}: ${formatDecimal2(extra.capAmount)}`,
+                                    `${t('expenseApproval.voucher.gstCalcAmount')}: ${formatDecimal2(amount)}`,
+                                    extra.amountMode === 'manual'
+                                      ? t('expenseApproval.voucher.gstCalcManual')
+                                      : t('expenseApproval.voucher.gstCalcAuto'),
+                                  ]
+                                : [];
+                          return (
+                            <TableRow key={rowDef.key}>
+                              <TableCell sx={{ ...gstEfRowCellSx, width: 40, bgcolor: 'transparent' }}>
+                                {GST_MAIN_ROW_DEFS.length + index + 1}
+                              </TableCell>
+                              <TableCell sx={{ ...gstEfRowCellSx, ...wrapCellSx, bgcolor: 'transparent' }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.8125rem' }}>
+                                  {t(`expenseApproval.voucher.${rowDef.labelKey}`)}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                                  {detailBits.join(' · ')}
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          );
+                      })}
                     </TableBody>
                   </Table>
                 </TableContainer>
+
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 1,
+                    px: 1.25,
+                    py: 1,
+                    border: '1px solid #FECACA',
+                    borderRadius: '2px',
+                    bgcolor: '#FEE2E2',
+                  }}
+                >
+                  <Typography sx={{ color: '#B91C1C', fontWeight: 700, fontSize: '0.8125rem' }}>
+                    {t('expenseApproval.voucher.gstPayableLabel')}
+                  </Typography>
+                  <Typography sx={{ color: '#B91C1C', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                    {formatDecimal2(detailGstPayable)}
+                  </Typography>
+                </Box>
+                </>
               ) : detailFormType === 'tds' ? (
                 <TableContainer sx={{ border: `1px solid ${EXPENSE_LINE}`, borderRadius: '6px', overflowX: 'auto' }}>
                   <Table size="small" sx={{ tableLayout: 'auto', minWidth: 1100 }}>
@@ -9560,34 +10603,16 @@ const ExpenseApproval: React.FC = () => {
                   : t('expenseApproval.detailActions.pdfDownload')}
               </Button>
               {canApproveThis && (
-                <>
-                  <Button
-                    variant="contained"
-                    color="success"
-                    startIcon={<CheckCircleIcon />}
-                    onClick={() => handleApproveExpense(selectedExpense.id)}
-                  >
-                    {t('expenseApproval.actions.accept')}
-                  </Button>
-                  <Button
-                    variant="contained"
-                    color="warning"
-                    startIcon={<EditIcon />}
-                    onClick={() => openReasonDialog('expense-revision-reject', selectedExpense.id)}
-                  >
-                    {t('expenseApproval.actions.revisionReject')}
-                  </Button>
-                  <Button
-                    variant="contained"
-                    color="error"
-                    startIcon={<CancelIcon />}
-                    onClick={() => openReasonDialog('expense-reject', selectedExpense.id)}
-                  >
-                    {t('expenseApproval.actions.reject')}
-                  </Button>
-                </>
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={<CheckCircleIcon />}
+                  onClick={() => handleApproveExpense(selectedExpense.id)}
+                >
+                  {t('expenseApproval.actions.accept')}
+                </Button>
               )}
-              {!canApproveThis && canRevisionRejectThis && (
+              {(canApproveThis || canRevisionRejectThis) && (
                 <Button
                   variant="contained"
                   color="warning"
@@ -9595,6 +10620,27 @@ const ExpenseApproval: React.FC = () => {
                   onClick={() => openReasonDialog('expense-revision-reject', selectedExpense.id)}
                 >
                   {t('expenseApproval.actions.revisionReject')}
+                </Button>
+              )}
+              {canFinalRejectThis && (
+                <Button
+                  variant="contained"
+                  color="error"
+                  startIcon={<CancelIcon />}
+                  onClick={() => openReasonDialog('expense-reject', selectedExpense.id)}
+                >
+                  {t('expenseApproval.actions.reject')}
+                </Button>
+              )}
+              {canDeleteThis && (
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteIcon />}
+                  onClick={() => handleDeleteExpense(selectedExpense.id)}
+                  disabled={deleteGuard.disabled}
+                >
+                  {t('common.delete')}
                 </Button>
               )}
               {canEditThis && (
@@ -10702,44 +11748,21 @@ const ExpenseApproval: React.FC = () => {
                           </IconButton>
                         </Tooltip>
                       )}
-                      {(listTab === 'received' || (isRootUser && listTab === 'written')) &&
+                      {(listTab === 'received' || (isRootUser && (listTab === 'written' || listTab === 'transfer'))) &&
                         canUserApproveExpense(expense) && (
-                        <>
-                          <Tooltip title={t('expenseApproval.actions.accept')}>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleApproveExpense(expense.id)}
-                              color="success"
-                              sx={{ borderRadius: '10px' }}
-                            >
-                              <CheckCircleIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title={t('expenseApproval.actions.revisionReject')}>
-                            <IconButton
-                              size="small"
-                              onClick={() => openReasonDialog('expense-revision-reject', expense.id)}
-                              color="warning"
-                              sx={{ borderRadius: '10px' }}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title={t('expenseApproval.actions.reject')}>
-                            <IconButton
-                              size="small"
-                              onClick={() => openReasonDialog('expense-reject', expense.id)}
-                              color="error"
-                              sx={{ borderRadius: '10px' }}
-                            >
-                              <CancelIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </>
+                        <Tooltip title={t('expenseApproval.actions.accept')}>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleApproveExpense(expense.id)}
+                            color="success"
+                            sx={{ borderRadius: '10px' }}
+                          >
+                            <CheckCircleIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                       )}
-                      {(listTab === 'received' || (isRootUser && listTab === 'written'))
-                        && !canUserApproveExpense(expense)
-                        && canUserRevisionRejectExpense(expense) && (
+                      {(listTab === 'received' || (isRootUser && (listTab === 'written' || listTab === 'transfer'))) &&
+                        (canUserApproveExpense(expense) || canUserRevisionRejectExpense(expense)) && (
                         <Tooltip title={t('expenseApproval.actions.revisionReject')}>
                           <IconButton
                             size="small"
@@ -10751,7 +11774,20 @@ const ExpenseApproval: React.FC = () => {
                           </IconButton>
                         </Tooltip>
                       )}
-                      {listTab !== 'transfer' && canDeleteExpense(expense) && (
+                      {(listTab === 'received' || (isRootUser && (listTab === 'written' || listTab === 'transfer'))) &&
+                        (canUserApproveExpense(expense) || canUserFinalRejectExpense(expense)) && (
+                        <Tooltip title={t('expenseApproval.actions.reject')}>
+                          <IconButton
+                            size="small"
+                            onClick={() => openReasonDialog('expense-reject', expense.id)}
+                            color="error"
+                            sx={{ borderRadius: '10px' }}
+                          >
+                            <CancelIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {canDeleteExpense(expense) && (
                       <Tooltip title={deleteGuard.tooltipTitle || t('common.delete')}>
                         <span>
                         <IconButton

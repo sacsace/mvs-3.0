@@ -187,6 +187,9 @@ export const updateContractType = async (req: AuthRequest, res: Response) => {
   try {
     await ensureContractTypesSchema();
     const { tenantId, companyId } = scope(req);
+    if (!tenantId || !companyId) {
+      return res.status(400).json({ success: false, message: '테넌트/회사 정보가 필요합니다.' });
+    }
     const id = parseInt(String(req.params.id), 10);
     const row = await ContractType.findOne({
       where: { id, tenant_id: tenantId, company_id: companyId, is_active: true },
@@ -204,7 +207,48 @@ export const updateContractType = async (req: AuthRequest, res: Response) => {
     if (req.body?.sort_order !== undefined && Number.isFinite(Number(req.body.sort_order))) {
       patch.sort_order = Number(req.body.sort_order);
     }
-    await row.update(patch);
+
+    let nextCode: string | null = null;
+    if (req.body?.code !== undefined) {
+      if (row.is_system) {
+        return res.status(400).json({
+          success: false,
+          message: '기본 구분의 코드는 변경할 수 없습니다. 이름만 수정하세요.',
+        });
+      }
+      nextCode = slugifyCode(String(req.body.code));
+      if (!nextCode) {
+        return res.status(400).json({ success: false, message: '유효한 코드를 입력하세요. (영문·숫자·_·-)' });
+      }
+      if (nextCode !== row.code) {
+        const dup = await ContractType.findOne({
+          where: { tenant_id: tenantId, company_id: companyId, code: nextCode },
+        });
+        if (dup && dup.id !== row.id) {
+          return res.status(409).json({ success: false, message: '이미 존재하는 구분 코드입니다.' });
+        }
+        patch.code = nextCode;
+      }
+    }
+
+    const prevCode = row.code;
+    await sequelize.transaction(async (transaction) => {
+      await row.update(patch, { transaction });
+      if (nextCode && nextCode !== prevCode) {
+        await (Contract as any).update(
+          { contract_type: nextCode },
+          {
+            where: {
+              tenant_id: tenantId,
+              company_id: companyId,
+              contract_type: prevCode,
+            },
+            transaction,
+          }
+        );
+      }
+    });
+
     return res.json({ success: true, data: row });
   } catch (error: any) {
     console.error('계약 구분 수정 오류:', error);

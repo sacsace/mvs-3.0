@@ -185,7 +185,9 @@ const ContractManagement: React.FC = () => {
   const [typeDialogOpen, setTypeDialogOpen] = useState(false);
   const [typesLoading, setTypesLoading] = useState(false);
   const [typeDraftName, setTypeDraftName] = useState('');
+  const [typeDraftCode, setTypeDraftCode] = useState('');
   const [editingTypeId, setEditingTypeId] = useState<number | null>(null);
+  const [editingTypeCode, setEditingTypeCode] = useState('');
   const [editingTypeName, setEditingTypeName] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
@@ -280,17 +282,23 @@ const ContractManagement: React.FC = () => {
   const openTypeDialog = () => {
     setTypeDialogOpen(true);
     setTypeDraftName('');
+    setTypeDraftCode('');
     setEditingTypeId(null);
     setEditingTypeName('');
+    setEditingTypeCode('');
     void loadContractTypes();
   };
 
   const handleCreateContractType = async () => {
     const name = typeDraftName.trim();
     if (!name) return;
+    const code = typeDraftCode.trim();
     try {
       setTypesLoading(true);
-      const res = await api.post('/contracts/types', { name });
+      const res = await api.post('/contracts/types', {
+        name,
+        ...(code ? { code } : {}),
+      });
       if (res.data?.success === false) {
         showSnackbar(
           res.data?.message || txt('계약 구분 등록에 실패했습니다.', 'Failed to create contract type.'),
@@ -299,6 +307,7 @@ const ContractManagement: React.FC = () => {
         return;
       }
       setTypeDraftName('');
+      setTypeDraftCode('');
       showSnackbar(txt('계약 구분이 등록되었습니다.', 'Contract type created.'), 'success');
       await loadContractTypes();
     } catch (err: any) {
@@ -312,12 +321,20 @@ const ContractManagement: React.FC = () => {
     }
   };
 
-  const handleUpdateContractType = async (id: number) => {
+  const handleUpdateContractType = async (id: number, isSystem: boolean) => {
     const name = editingTypeName.trim();
     if (!name) return;
+    const code = editingTypeCode.trim();
+    if (!isSystem && !code) {
+      showSnackbar(txt('코드를 입력하세요.', 'Enter a code.'), 'error');
+      return;
+    }
     try {
       setTypesLoading(true);
-      const res = await api.put(`/contracts/types/${id}`, { name });
+      const res = await api.put(`/contracts/types/${id}`, {
+        name,
+        ...(isSystem ? {} : { code }),
+      });
       if (res.data?.success === false) {
         showSnackbar(
           res.data?.message || txt('계약 구분 수정에 실패했습니다.', 'Failed to update contract type.'),
@@ -327,6 +344,7 @@ const ContractManagement: React.FC = () => {
       }
       setEditingTypeId(null);
       setEditingTypeName('');
+      setEditingTypeCode('');
       showSnackbar(txt('계약 구분이 수정되었습니다.', 'Contract type updated.'), 'success');
       await loadContractTypes();
     } catch (err: any) {
@@ -1797,7 +1815,28 @@ const ContractManagement: React.FC = () => {
               }}
               disabled={!menuFlags.canCreate || typesLoading}
               InputLabelProps={{ shrink: true }}
-              sx={{ flex: 1, minWidth: 180 }}
+              sx={{ flex: 1.2, minWidth: 160 }}
+            />
+            <TextField
+              size="small"
+              label={txt('코드', 'Code')}
+              value={typeDraftCode}
+              onChange={(e) => setTypeDraftCode(e.target.value)}
+              placeholder={txt('비우면 자동 생성', 'Auto if empty')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void handleCreateContractType();
+                }
+              }}
+              disabled={!menuFlags.canCreate || typesLoading}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ spellCheck: false }}
+              sx={{
+                flex: 1,
+                minWidth: 140,
+                '& .MuiInputBase-input': { fontFamily: 'monospace', fontSize: '0.8125rem' },
+              }}
             />
             <Button
               variant="contained"
@@ -1851,9 +1890,36 @@ const ContractManagement: React.FC = () => {
                           )}
                         </TableCell>
                         <TableCell
-                          sx={{ fontFamily: 'monospace', fontSize: '0.8125rem', color: 'text.secondary' }}
+                          sx={{
+                            fontFamily: 'monospace',
+                            fontSize: '0.8125rem',
+                            color: 'text.secondary',
+                            minWidth: 140,
+                          }}
                         >
-                          {row.code}
+                          {editingTypeId === row.id ? (
+                            <TextField
+                              size="small"
+                              value={editingTypeCode}
+                              onChange={(e) => setEditingTypeCode(e.target.value)}
+                              fullWidth
+                              disabled={row.is_system}
+                              title={
+                                row.is_system
+                                  ? txt('기본 구분 코드는 변경할 수 없습니다.', 'Default type codes cannot be changed.')
+                                  : undefined
+                              }
+                              inputProps={{ spellCheck: false }}
+                              sx={{
+                                '& .MuiInputBase-input': {
+                                  fontFamily: 'monospace',
+                                  fontSize: '0.8125rem',
+                                },
+                              }}
+                            />
+                          ) : (
+                            row.code
+                          )}
                         </TableCell>
                         <TableCell align="center">
                           {row.is_system
@@ -1868,8 +1934,13 @@ const ContractManagement: React.FC = () => {
                                   <span>
                                     <IconButton
                                       size="small"
-                                      onClick={() => void handleUpdateContractType(row.id)}
-                                      disabled={!editingTypeName.trim() || typesLoading || !menuFlags.canEdit}
+                                      onClick={() => void handleUpdateContractType(row.id, row.is_system)}
+                                      disabled={
+                                        !editingTypeName.trim() ||
+                                        (!row.is_system && !editingTypeCode.trim()) ||
+                                        typesLoading ||
+                                        !menuFlags.canEdit
+                                      }
                                     >
                                       <SaveIcon fontSize="small" />
                                     </IconButton>
@@ -1881,6 +1952,7 @@ const ContractManagement: React.FC = () => {
                                     onClick={() => {
                                       setEditingTypeId(null);
                                       setEditingTypeName('');
+                                      setEditingTypeCode('');
                                     }}
                                   >
                                     <CloseIcon fontSize="small" />
@@ -1897,6 +1969,7 @@ const ContractManagement: React.FC = () => {
                                       onClick={() => {
                                         setEditingTypeId(row.id);
                                         setEditingTypeName(row.name);
+                                        setEditingTypeCode(row.code);
                                       }}
                                     >
                                       <EditIcon fontSize="small" />

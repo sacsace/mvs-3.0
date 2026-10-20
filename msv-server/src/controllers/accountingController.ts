@@ -3604,13 +3604,14 @@ export const deleteExpenseReport = async (req: RequestWithUser, res: Response) =
       status === 'paid' ||
       paymentStatus === 'paid' ||
       (Number(expense.paid_amount || 0) > 0 && remaining <= 0);
-    if (isPaid || status === 'paid') {
+    // root: 승인·지급 완료 문서도 소프트 삭제 가능
+    if (!isRoot && (isPaid || status === 'paid')) {
       return res.status(400).json({
         success: false,
         message: '지급 완료된 문서는 삭제할 수 없습니다.',
       });
     }
-    // 일반 작성자: 승인·제출/검토 중 삭제 불가. root는 지급 완료 전(승인 포함) 삭제 가능
+    // 일반 작성자: 승인·제출/검토 중 삭제 불가
     if (!isRoot && (status === 'approved' || ['submitted', 'in_review'].includes(status))) {
       return res.status(400).json({
         success: false,
@@ -3687,24 +3688,27 @@ export const updateExpenseReportStatus = async (req: RequestWithUser, res: Respo
 
     if (status === 'rejected') {
       const isRevisionReject = String(rejectKindRaw || 'final').toLowerCase() === 'revision';
-      if (isRevisionReject && isExpensePaymentCompleted(expense)) {
+      // root: 승인·지급 완료 후에도 반려/수정반려 가능. 그 외는 기존 제한 유지
+      if (!isRootActor && isRevisionReject && isExpensePaymentCompleted(expense)) {
         return res.status(400).json({
           success: false,
           message: '지급이 완료된 문서는 수정 반려할 수 없습니다.',
         });
       }
-      const allowedPrevStatuses = isRevisionReject
-        ? ['submitted', 'in_review', 'approved']
-        : ['submitted', 'in_review'];
+      const allowedPrevStatuses = isRootActor
+        ? ['submitted', 'in_review', 'approved', 'paid']
+        : isRevisionReject
+          ? ['submitted', 'in_review', 'approved']
+          : ['submitted', 'in_review'];
       if (!allowedPrevStatuses.includes(String(prevStatus))) {
         return res.status(400).json({
           success: false,
           message: isRevisionReject
             ? '수정 반려할 수 없는 상태입니다.'
-            : '반려된 문서는 재요청 후에만 승인할 수 있습니다.',
+            : '반려할 수 없는 상태입니다.',
         });
       }
-      // root는 지정 승인자가 아니어도 수정 반려(승인 후 포함) 가능
+      // root는 지정 승인자가 아니어도 반려/수정반려(승인·지급 후 포함) 가능
       if (!isRootActor && (!designatedId || designatedId !== Number(user_id))) {
         return res.status(403).json({ success: false, message: '지정된 승인권자만 처리할 수 있습니다.' });
       }
@@ -3735,6 +3739,14 @@ export const updateExpenseReportStatus = async (req: RequestWithUser, res: Respo
       patch.payment_rejected_reason = null;
       patch.payment_rejected_at = null;
       patch.payment_rejected_by = null;
+      // root가 지급 완료 건을 반려할 때 지급·송금 상태도 롤백 (로그는 감사 목적상 유지)
+      if (isRootActor && (isExpensePaymentCompleted(expense) || String(prevStatus) === 'paid')) {
+        patch.paid_amount = 0;
+        patch.payment_completed_at = null;
+        patch.payment_completed_by = null;
+        patch.bank_transfer_status = null;
+        patch.bank_transfer_provider = null;
+      }
       if (isRevisionReject) {
         patch.items = mergeExpenseItemsMeta(expense.items, {
           revisionRejected: true,
