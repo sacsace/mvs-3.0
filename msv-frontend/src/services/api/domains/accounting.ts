@@ -947,13 +947,22 @@ export const payrollService = {
   sendPayrollPayslip: async (
     id: number,
     pdf_base64: string,
-    opts?: { company_id?: number; html_body?: string; image_base64?: string }
+    opts?: {
+      company_id?: number;
+      html_body?: string;
+      image_base64?: string;
+      /** 그리드 재계산 실수령액 — 내 명세서 목록 net과 PDF 일치 */
+      net_salary?: number;
+    }
   ) => {
     const response = await api.post(`/hr/payrolls/${id}/send-payslip`, {
       pdf_base64,
       ...(opts?.company_id != null ? { company_id: opts.company_id } : {}),
       ...(opts?.html_body ? { html_body: opts.html_body } : {}),
       ...(opts?.image_base64 ? { image_base64: opts.image_base64 } : {}),
+      ...(opts?.net_salary != null && Number.isFinite(opts.net_salary)
+        ? { net_salary: opts.net_salary }
+        : {}),
     });
     return response.data;
   },

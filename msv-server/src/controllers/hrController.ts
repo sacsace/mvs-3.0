@@ -1296,6 +1296,45 @@ export const completePayrollPeriod = async (req: RequestWithUser, res: Response)
   }
 };
 
+/** 급여 행에서 실수령액 추정 — DB net이 수당 조각값으로 잘못된 경우 gross−공제로 복구 */
+const parsePayrollExtraMoney = (raw: unknown): number => {
+  const n = Number(String(raw ?? '').replace(/,/g, '').replace(/[^\d.-]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+};
+
+const resolvePayrollNetSalary = (payroll: any, preferredNet?: number | null): number | null => {
+  if (preferredNet != null && Number.isFinite(Number(preferredNet))) {
+    const n = Math.round(Number(preferredNet));
+    if (n >= 0) return n;
+  }
+  const gross = Number(payroll?.gross_salary);
+  const stored = Number(payroll?.net_salary);
+  const extra =
+    payroll?.extra_fields && typeof payroll.extra_fields === 'object'
+      ? (payroll.extra_fields as Record<string, unknown>)
+      : {};
+  const pf = parsePayrollExtraMoney(extra.pf_employee);
+  const esic = parsePayrollExtraMoney(extra.esic_employee);
+  const pt = parsePayrollExtraMoney(extra.pt);
+  const tds = Number(payroll?.tax_amount) || 0;
+  const statutory = pf + esic + pt + tds;
+  const deductField = Number(payroll?.deductions) || 0;
+  // deductions 컬럼이 총공제면 그대로, 선공제(advance)만이면 statutory에 가산
+  const totalDed =
+    deductField >= statutory ? deductField : statutory + Math.max(0, deductField);
+  if (Number.isFinite(gross) && gross > 0) {
+    const recomputed = Math.round(gross - totalDed);
+    if (recomputed > 0) {
+      // 저장된 net이 총지급의 ~40% 미만이면 수당(HRA 등) 오저장으로 보고 재계산값 사용
+      if (!Number.isFinite(stored) || stored < 0 || stored < gross * 0.4) {
+        return recomputed;
+      }
+      return Math.round(stored);
+    }
+  }
+  return Number.isFinite(stored) && stored >= 0 ? Math.round(stored) : null;
+};
+
 /** PDF 첨부 급여 명세서를 직원 이메일로 발송 (클라이언트 생성 PDF base64) */
 export const sendPayrollPayslip = async (req: RequestWithUser, res: Response) => {
   try {
@@ -1387,11 +1426,24 @@ export const sendPayrollPayslip = async (req: RequestWithUser, res: Response) =>
         empId = String(fresh?.employee_number || fresh?.get?.('employee_number') || '').trim();
       }
     }
-    const netRaw = (payroll as any).net_salary;
-    const netSalary =
-      netRaw === undefined || netRaw === null || netRaw === ''
+    const bodyNetRaw = req.body?.net_salary;
+    const bodyNet =
+      bodyNetRaw === undefined || bodyNetRaw === null || bodyNetRaw === ''
         ? null
-        : Number(netRaw);
+        : Number(bodyNetRaw);
+    const netSalary = resolvePayrollNetSalary(payroll, bodyNet);
+    // 발송 시점에 DB net이 어긋나 있으면 급여 행도 맞춰 둔다
+    if (
+      netSalary != null &&
+      Number.isFinite(netSalary) &&
+      Math.round(Number((payroll as any).net_salary)) !== netSalary
+    ) {
+      try {
+        await payroll.update({ net_salary: netSalary });
+      } catch {
+        /* 목록 보관이 우선 — payroll 갱신 실패는 무시 */
+      }
+    }
     const companyLabel = shortCompanyNameForMail((companyRow as any)?.name);
     const mailVars = { name: uname, company: companyLabel, period };
     const subject = fillPayslipMailTemplate(DEFAULT_PAYSLIP_MAIL_SUBJECT, mailVars);
@@ -1784,7 +1836,68 @@ export const getMyPayslips = async (req: RequestWithUser, res: Response) => {
       ]
     });
 
-    return res.json({ success: true, data: rows });
+    // 발송 당시 DB net이 수당값으로 잘못 저장된 경우 → 동일 월 급여 행으로 실수령액 보정
+    const periods = [
+      ...new Set(
+        rows
+          .map((r: any) => normalizePayrollPeriodInput(String(r.payroll_period || '')))
+          .filter(Boolean)
+      ),
+    ];
+    const payrollByPeriod = new Map<string, any>();
+    if (periods.length > 0) {
+      const payrollRows = await (Payroll as any).findAll({
+        where: {
+          tenant_id,
+          company_id,
+          employee_id: userId,
+          is_active: true,
+          [Op.or]: periods.map((ym) => sameMonthPayrollPeriodWhere(ym)),
+        },
+        attributes: [
+          'id',
+          'payroll_period',
+          'gross_salary',
+          'net_salary',
+          'tax_amount',
+          'deductions',
+          'extra_fields',
+        ],
+      });
+      for (const p of payrollRows) {
+        const key = normalizePayrollPeriodInput(String(p.payroll_period || ''));
+        if (!key) continue;
+        if (!payrollByPeriod.has(key)) payrollByPeriod.set(key, p);
+      }
+    }
+
+    const data = [];
+    for (const r of rows) {
+      const plain = typeof r.toJSON === 'function' ? r.toJSON() : { ...r };
+      const key = normalizePayrollPeriodInput(String(plain.payroll_period || ''));
+      const payroll = key ? payrollByPeriod.get(key) : null;
+      if (payroll) {
+        const fixed = resolvePayrollNetSalary(payroll, null);
+        const stored = Number(plain.net_salary);
+        if (
+          fixed != null &&
+          (!Number.isFinite(stored) || Math.round(stored) !== fixed)
+        ) {
+          plain.net_salary = fixed;
+          // 목록이 즉시 맞도록 보관값도 수정 (soft sync)
+          try {
+            if (Math.round(stored) !== fixed) {
+              await r.update({ net_salary: fixed });
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+      data.push(plain);
+    }
+
+    return res.json({ success: true, data });
   } catch (error) {
     console.error('내 급여 명세서 목록 오류:', error);
     return res.status(500).json({ success: false, message: '급여 명세서 목록을 불러오지 못했습니다.' });

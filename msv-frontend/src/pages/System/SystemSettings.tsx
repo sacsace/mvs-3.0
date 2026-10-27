@@ -53,6 +53,7 @@ import { useTranslation } from 'react-i18next';
 import { systemSettingsService } from '../../services/api';
 import { getUploadUrl } from '../../utils/uploadUrl';
 import { useStore, useMenuStore } from '../../store';
+import { ensureI18nLanguage } from '../../locales/i18n';
 import { canAccessSystemLoginHistory } from '../../utils/canAccessSystemLoginHistory';
 import SystemLoginHistoryTab from './SystemLoginHistoryTab';
 import { usePageMenuPermission } from '../../context/MenuPermissionContext';
@@ -464,12 +465,11 @@ const SystemSettings: React.FC = () => {
           severity: 'success'
         });
         
-        // 언어 설정이 변경되면 store 업데이트 후 새로고침
+        // 언어 설정 변경: store + i18n 동기화 (전체 페이지 reload 금지)
         if (canManageAll && settings.general.language !== language) {
-          setLanguage(settings.general.language as 'ko' | 'en');
-          setTimeout(() => {
-            window.location.reload();
-          }, 300);
+          const nextLang = settings.general.language as 'ko' | 'en';
+          setLanguage(nextLang);
+          void ensureI18nLanguage(nextLang);
         }
       }
     } catch (error: any) {

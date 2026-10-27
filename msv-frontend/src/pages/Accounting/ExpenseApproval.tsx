@@ -3033,6 +3033,47 @@ const ExpenseApproval: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- stable mapping helper
   }, [canViewAllCompanies, companyFilterId]);
 
+  /**
+   * mutation 성공 후 목록·상세 동기화 (F5 없이 반영).
+   * - refreshList: 목록 quiet refresh
+   * - syncDetail: 열려 있는 상세가 해당 id면 서버 단건으로 교체
+   * - clearSelection: 상세 닫고 목록으로
+   */
+  const syncExpenseAfterMutation = useCallback(
+    async (
+      id: number,
+      opts?: { refreshList?: boolean; syncDetail?: boolean; clearSelection?: boolean }
+    ) => {
+      const refreshList = opts?.refreshList !== false;
+      const syncDetail = opts?.syncDetail !== false;
+      if (opts?.clearSelection) {
+        setSelectedExpense(null);
+        setViewMode('list');
+      }
+      if (refreshList) {
+        await refreshExpenseListQuietly();
+      }
+      if (opts?.clearSelection || !syncDetail) return;
+      try {
+        const response = await accountingService.getExpenseReport(id);
+        if (!response?.success || !response.data) return;
+        const mapped = mapExpense(response.data);
+        setSelectedExpense((prev) => (prev?.id === id ? mapped : prev));
+        setExpenses((prev) => {
+          const idx = prev.findIndex((item) => item.id === id);
+          if (idx < 0) return prev;
+          const next = [...prev];
+          next[idx] = mapped;
+          return next;
+        });
+      } catch {
+        /* 목록은 유지 */
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mapExpense is render-local
+    [refreshExpenseListQuietly]
+  );
+
   const getTransferFilterKey = useCallback((expense: ExpenseApprovalItem) => {
     const total = floorMoney(Number(expense.totalAmount || 0));
     // 지급 금액이 없으면 송금 완료로 보지 않음 (0원 문서 오분류 방지)
@@ -4938,6 +4979,9 @@ const ExpenseApproval: React.FC = () => {
       setSelectedExpense((prev) =>
         prev && prev.id === activeExpenseId ? { ...prev, attachments: next } : prev
       );
+      setExpenses((prev) =>
+        prev.map((item) => (item.id === activeExpenseId ? { ...item, attachments: next } : item))
+      );
       setSuccess(t('expenseApproval.success.receiptDeleted'));
     } catch (deleteError: any) {
       setError(
@@ -5272,11 +5316,12 @@ const ExpenseApproval: React.FC = () => {
       if (!response.success) {
         throw new Error(response.message || t('expenseApproval.errors.deleteFailed'));
       }
-      await loadExpenseData();
       if (selectedExpense?.id === deletedId) {
         setSelectedExpense(null);
         setViewMode('list');
       }
+      await refreshExpenseListQuietly();
+      setExpenses((prev) => prev.filter((item) => item.id !== deletedId));
       setSuccess(t('expenseApproval.success.deleted'));
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || t('expenseApproval.errors.deleteFailed'));
@@ -5286,12 +5331,11 @@ const ExpenseApproval: React.FC = () => {
   };
 
   const handleApproveExpense = (id: number) => {
-    accountingService.updateExpenseReportStatus(id, 'approved')
-      .then(() => loadExpenseData())
+    accountingService
+      .updateExpenseReportStatus(id, 'approved')
+      .then(() => syncExpenseAfterMutation(id, { clearSelection: true }))
       .then(() => {
-        setSelectedExpense(null);
         setListTab('received');
-        setViewMode('list');
         setSuccess(t('expenseApproval.success.approved'));
       })
       .catch(() => {
@@ -5300,23 +5344,10 @@ const ExpenseApproval: React.FC = () => {
   };
 
   const handleRejectExpense = (id: number, reason: string) => {
-    accountingService.updateExpenseReportStatus(id, 'rejected', { reason, reject_kind: 'final' })
-      .then(() => loadExpenseData())
+    accountingService
+      .updateExpenseReportStatus(id, 'rejected', { reason, reject_kind: 'final' })
+      .then(() => syncExpenseAfterMutation(id))
       .then(() => {
-        setSelectedExpense((prev) => {
-          if (!prev || prev.id !== id) return prev;
-          return {
-            ...prev,
-            status: 'rejected',
-            itemMeta: {
-              ...(prev.itemMeta || {}),
-              rejectedReason: reason,
-              rejectedById: user?.id,
-              rejectedAt: new Date().toISOString(),
-              revisionRejected: false,
-            },
-          };
-        });
         setSuccess(t('expenseApproval.success.rejected'));
       })
       .catch(() => {
@@ -5325,26 +5356,10 @@ const ExpenseApproval: React.FC = () => {
   };
 
   const handleRevisionRejectExpense = (id: number, reason: string) => {
-    accountingService.updateExpenseReportStatus(id, 'rejected', { reason, reject_kind: 'revision' })
-      .then(() => loadExpenseData())
+    accountingService
+      .updateExpenseReportStatus(id, 'rejected', { reason, reject_kind: 'revision' })
+      .then(() => syncExpenseAfterMutation(id))
       .then(() => {
-        setSelectedExpense((prev) => {
-          if (!prev || prev.id !== id) return prev;
-          return {
-            ...prev,
-            status: 'rejected',
-            itemMeta: {
-              ...(prev.itemMeta || {}),
-              revisionRejected: true,
-              revisionRejectReason: reason,
-              revisionRejectedById: user?.id,
-              revisionRejectedAt: new Date().toISOString(),
-              rejectedReason: reason,
-              rejectedById: user?.id,
-              rejectedAt: new Date().toISOString(),
-            },
-          };
-        });
         setSuccess(t('expenseApproval.success.revisionRejected'));
       })
       .catch(() => {
@@ -5353,15 +5368,10 @@ const ExpenseApproval: React.FC = () => {
   };
 
   const handleResubmitExpense = (id: number) => {
-    accountingService.updateExpenseReportStatus(id, 'submitted')
-      .then(() => loadExpenseData())
-      .then(() => accountingService.getExpenseReport(id))
-      .then((response) => {
-        if (response?.success && response.data) {
-          setSelectedExpense(mapExpense(response.data));
-        } else {
-          setSelectedExpense((prev) => (prev && prev.id === id ? { ...prev, status: 'submitted' } : prev));
-        }
+    accountingService
+      .updateExpenseReportStatus(id, 'submitted')
+      .then(() => syncExpenseAfterMutation(id))
+      .then(() => {
         setSuccess(t('expenseApproval.success.resubmitted'));
       })
       .catch((resubmitError: any) => {
@@ -5499,7 +5509,7 @@ const ExpenseApproval: React.FC = () => {
       if (!response?.success) {
         throw new Error(response?.message || t('expenseApproval.errors.paymentRequestFailed'));
       }
-      await loadExpenseData();
+      await syncExpenseAfterMutation(id);
       setSuccess(t('expenseApproval.success.paymentRequested'));
     } catch {
       setError(t('expenseApproval.errors.paymentRequestFailed'));
@@ -5595,33 +5605,31 @@ const ExpenseApproval: React.FC = () => {
       if (!response?.success) {
         throw new Error(response?.message || t('expenseApproval.errors.paymentCompleteFailed'));
       }
-      await loadExpenseData();
       setPaymentDialogOpen(false);
       setRemittanceProofFile(null);
       const remaining = Number(response?.remaining_amount);
       if (response?.awaiting_tax_invoice) {
         setSuccess(t('expenseApproval.success.remittanceAwaitingTax'));
         if (response?.data) {
-          setSelectedExpense(mapExpense(response.data));
+          const mapped = mapExpense(response.data);
+          setSelectedExpense(mapped);
+          setExpenses((prev) => prev.map((item) => (item.id === mapped.id ? mapped : item)));
         }
+        await syncExpenseAfterMutation(id, { syncDetail: !response?.data });
         setViewMode('view');
       } else if (Number.isFinite(remaining) && remaining > 0) {
         setSuccess(t('expenseApproval.success.partialPaymentCompleted', { remaining }));
         if (response?.data) {
-          setSelectedExpense(mapExpense(response.data));
+          const mapped = mapExpense(response.data);
+          setSelectedExpense(mapped);
+          setExpenses((prev) => prev.map((item) => (item.id === mapped.id ? mapped : item)));
+          await refreshExpenseListQuietly();
         } else {
-          setSelectedExpense((prev) => {
-            if (!prev || prev.id !== id) return prev;
-            return {
-              ...prev,
-              paidAmount: Number(response?.paid_amount ?? prev.paidAmount),
-              paymentRequestStatus: 'approved',
-            };
-          });
+          await syncExpenseAfterMutation(id);
         }
       } else {
-      setSuccess(t('expenseApproval.success.paymentCompleted'));
-        setSelectedExpense(null);
+        setSuccess(t('expenseApproval.success.paymentCompleted'));
+        await syncExpenseAfterMutation(id, { clearSelection: true });
         setListTab('transfer');
         setStatusFilter(DEFAULT_TRANSFER_STATUS_FILTER);
         setTransferStatusFilters(defaultTransferStatusFiltersForTab());
@@ -5630,7 +5638,6 @@ const ExpenseApproval: React.FC = () => {
         if (isRootUser) {
           setCompanyFilterId(resolveDefaultCompanyFilterId());
         }
-        setViewMode('list');
       }
     } catch (err: any) {
       setError(
@@ -5673,7 +5680,7 @@ const ExpenseApproval: React.FC = () => {
       if (!response?.success) {
         throw new Error(response?.message || t('expenseApproval.errors.finalApproveFailed'));
       }
-      await loadExpenseData();
+      await syncExpenseAfterMutation(id);
       setSuccess(t('expenseApproval.success.finalApproved'));
     } catch {
       setError(t('expenseApproval.errors.finalApproveFailed'));
@@ -5686,7 +5693,7 @@ const ExpenseApproval: React.FC = () => {
       if (!response?.success) {
         throw new Error(response?.message || t('expenseApproval.errors.paymentRejectResponseFailed'));
       }
-      await loadExpenseData();
+      await syncExpenseAfterMutation(id);
       setSuccess(t('expenseApproval.success.paymentRejected'));
     } catch {
       setError(t('expenseApproval.errors.rejectFailed'));
@@ -11741,7 +11748,10 @@ const ExpenseApproval: React.FC = () => {
                         <Tooltip title={t('expenseApproval.actions.transferLog')}>
                           <IconButton
                             size="small"
-                            onClick={() => navigate(`/accounting/expense/transfer-log/${expense.id}`)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/accounting/expense/transfer-log/${expense.id}`);
+                            }}
                             sx={{ color: 'text.secondary', borderRadius: '10px', '&:hover': { bgcolor: 'action.hover' } }}
                           >
                             <PendingIcon fontSize="small" />
@@ -11753,7 +11763,10 @@ const ExpenseApproval: React.FC = () => {
                         <Tooltip title={t('expenseApproval.actions.accept')}>
                           <IconButton
                             size="small"
-                            onClick={() => handleApproveExpense(expense.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleApproveExpense(expense.id);
+                            }}
                             color="success"
                             sx={{ borderRadius: '10px' }}
                           >
@@ -11766,7 +11779,10 @@ const ExpenseApproval: React.FC = () => {
                         <Tooltip title={t('expenseApproval.actions.revisionReject')}>
                           <IconButton
                             size="small"
-                            onClick={() => openReasonDialog('expense-revision-reject', expense.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openReasonDialog('expense-revision-reject', expense.id);
+                            }}
                             color="warning"
                             sx={{ borderRadius: '10px' }}
                           >
@@ -11779,7 +11795,10 @@ const ExpenseApproval: React.FC = () => {
                         <Tooltip title={t('expenseApproval.actions.reject')}>
                           <IconButton
                             size="small"
-                            onClick={() => openReasonDialog('expense-reject', expense.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openReasonDialog('expense-reject', expense.id);
+                            }}
                             color="error"
                             sx={{ borderRadius: '10px' }}
                           >
@@ -11792,7 +11811,10 @@ const ExpenseApproval: React.FC = () => {
                         <span>
                         <IconButton
                           size="small"
-                          onClick={() => handleDeleteExpense(expense.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteExpense(expense.id);
+                          }}
                             disabled={deleteGuard.disabled}
                           sx={{
                             color: 'text.secondary',

@@ -188,6 +188,7 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({
               ...(resolvedCompanyId != null ? { company_id: resolvedCompanyId } : {}),
               html_body: htmlBody,
               image_base64: imageB64,
+              net_salary: Number(row.net_salary_payable) || undefined,
             }
           );
           if (res.success) ok += 1;

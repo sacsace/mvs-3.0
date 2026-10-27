@@ -384,6 +384,7 @@ const ContractManagement: React.FC = () => {
               );
               return;
             }
+            setContractTypes((prev) => prev.filter((item) => item.id !== row.id));
             showSnackbar(txt('계약 구분이 삭제되었습니다.', 'Contract type deleted.'), 'success');
             await loadContractTypes();
           } catch (err: any) {
@@ -699,7 +700,8 @@ const ContractManagement: React.FC = () => {
       
       setDialogOpen(false);
       setSelectedFiles([]);
-      loadContracts();
+      setSelectedContract(null);
+      await loadContracts();
     } catch (error) {
       showSnackbar(txt('계약 저장 중 오류가 발생했습니다.', 'Failed to save contract.'), 'error');
     }
@@ -716,8 +718,13 @@ const ContractManagement: React.FC = () => {
         void (async () => {
           try {
             await api.delete(`/contracts/${contract.id}`);
+            setContracts((prev) => prev.filter((row) => row.id !== contract.id));
+            if (selectedContract?.id === contract.id) {
+              setDialogOpen(false);
+              setSelectedContract(null);
+            }
             showSnackbar(txt('계약이 성공적으로 삭제되었습니다.', 'Contract deleted.'), 'success');
-            loadContracts();
+            await loadContracts();
           } catch (error) {
             showSnackbar(txt('계약 삭제 중 오류가 발생했습니다.', 'Failed to delete contract.'), 'error');
           }

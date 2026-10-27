@@ -201,7 +201,9 @@ router.post(
   restrictAuditToReadOnly,
   validateBody({
     pdf_base64: { required: true, type: 'string', minLength: 20 },
-    company_id: { type: 'number' } // root 회사 선택
+    company_id: { type: 'number' }, // root 회사 선택
+    /** 그리드 재계산 실수령액 — DB payroll.net_salary 보다 우선 (목록·내 명세서 표시용) */
+    net_salary: { type: 'number' },
   }),
   sendPayrollPayslip
 );
