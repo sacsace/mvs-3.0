@@ -211,8 +211,8 @@ const MyPayslips: React.FC = () => {
       <MvsPageHeader
         title={txt('급여 명세서', 'My Payslips')}
         description={txt(
-          '인사 담당자가 발송한 본인 급여 명세서를 검색하고, 행을 클릭해 미리보거나 PDF로 다운로드할 수 있습니다.',
-          'Search payslips sent to you. Click a row to preview, or download the PDF.'
+          '인사 담당자가 「급여 명세서 보내기」로 발송한 명세서만 표시됩니다. 급여 생성·마감만으로는 여기에 나타나지 않습니다. 행을 클릭해 미리보거나 PDF로 다운로드하세요.',
+          'Only payslips sent by HR via “Send Payslips” appear here. Finalizing payroll alone does not add them. Click a row to preview or download the PDF.'
         )}
       />
 
@@ -281,10 +281,10 @@ const MyPayslips: React.FC = () => {
             >
               {txt('저장된 급여 명세서가 없습니다.', 'No payslips saved.')}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 440 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 480 }}>
               {txt(
-                '인사 담당자가 급여 명세서 발송으로 메일을 보내면 여기에 표시됩니다.',
-                'Payslips appear here after HR sends them via Payslip Delivery.'
+                '급여 관리에서 해당 월을 「급여 생성 완료」한 뒤, 「급여 명세서 보내기」로 메일을 발송해야 이 목록에 추가됩니다.',
+                'After HR finalizes the pay month in Payroll Management, they must use “Send Payslips” before entries appear here.'
               )}
             </Typography>
           </Box>

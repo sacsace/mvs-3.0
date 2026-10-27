@@ -1742,7 +1742,9 @@ export default {
         sendNoRowsForPayMonth:
           'No grid rows for the same work month as the payroll month used for create/complete. Align the payroll month or reset filters.',
         sendHint:
-          'Send the payslip PDF by email to each employee in the list. Only employees with an email can be selected.',
+          'Send the payslip PDF by email to each employee in the list. Only employees with an email can be selected. After a successful send, the month also appears under My Work → Payslips.',
+        sendAfterCompleteHint:
+          'This pay month is already finalized. Employees will only see it under Payslips after you use “Send Payslips”. Closing payroll alone does not add it to that list.',
         sendEmailNote: 'The server must have mail settings (EMAIL_HOST, EMAIL_USER, EMAIL_PASS).',
         sendAction: 'Send to selected',
         sendNoSelection: 'Select recipients (email required).',

@@ -1223,6 +1223,12 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
         </Typography>
       )}
 
+      {!payslipSendOnly && selectedPeriodPayrollComplete && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {t('payrollManagement.payslip.sendAfterCompleteHint')}
+        </Alert>
+      )}
+
       {!payslipSendOnly && (
         <Box
           sx={{
