@@ -4871,7 +4871,9 @@ export default {
         totalExpense: 'Total requested amount',
         approvedAmount: 'Approved amount',
         pendingAmount: 'Amount pending approval',
-        urgentRequests: 'Urgent requests'
+        urgentRequests: 'Urgent requests',
+        monthLabel: 'Summary month',
+        monthScopeHint: 'Totals for {{period}} by voucher date (or created date if missing).',
       },
       status: {
         draft: 'Draft',

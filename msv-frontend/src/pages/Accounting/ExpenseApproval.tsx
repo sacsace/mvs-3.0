@@ -2589,6 +2589,8 @@ const ExpenseApproval: React.FC = () => {
     defaultTransferStatusFiltersForTab()
   );
   const [priorityFilter, setPriorityFilter] = useState('');
+  /** 상단 KPI 합산 기준 월 (YYYY-MM). 전표일(voucherDate) 우선, 없으면 작성일 */
+  const [summaryMonth, setSummaryMonth] = useState(() => getTodayLocalYmd().slice(0, 7));
   const [companyFilterId, setCompanyFilterId] = useState<number | ''>(() => {
     const userCompanyId = Number(user?.company_id);
     return Number.isFinite(userCompanyId) && userCompanyId > 0 ? userCompanyId : '';
@@ -6143,14 +6145,30 @@ const ExpenseApproval: React.FC = () => {
     mb: 0,
   } as const;
 
-  const totalExpenseAmount = expenses.reduce((sum, expense) => sum + getExpenseGrandTotal(expense), 0);
-  const approvedAmount = expenses
-    .filter(expense => expense.status === 'approved' || expense.status === 'paid')
+  const getExpenseSummaryMonthKey = useCallback((expense: ExpenseApprovalItem) => {
+    const voucher = formatLocalYmd(expense.itemMeta?.voucherDate);
+    const created = formatLocalYmd(expense.createdAt);
+    const due = formatLocalYmd(expense.dueDate);
+    const ymd = voucher || created || due || '';
+    return ymd.length >= 7 ? ymd.slice(0, 7) : '';
+  }, []);
+
+  const summaryExpenses = useMemo(
+    () => expenses.filter((expense) => getExpenseSummaryMonthKey(expense) === summaryMonth),
+    [expenses, getExpenseSummaryMonthKey, summaryMonth]
+  );
+
+  const totalExpenseAmount = summaryExpenses.reduce(
+    (sum, expense) => sum + getExpenseGrandTotal(expense),
+    0
+  );
+  const approvedAmount = summaryExpenses
+    .filter((expense) => expense.status === 'approved' || expense.status === 'paid')
     .reduce((sum, expense) => sum + getExpenseGrandTotal(expense), 0);
-  const pendingAmount = expenses
-    .filter(expense => expense.status === 'submitted' || expense.status === 'in_review')
+  const pendingAmount = summaryExpenses
+    .filter((expense) => expense.status === 'submitted' || expense.status === 'in_review')
     .reduce((sum, expense) => sum + getExpenseGrandTotal(expense), 0);
-  const urgentCount = expenses.filter(expense => expense.priority === 'urgent').length;
+  const urgentCount = summaryExpenses.filter((expense) => expense.priority === 'urgent').length;
 
   const paginatedExpenses = displayedExpenses.slice(
     (page - 1) * itemsPerPage,
@@ -11223,6 +11241,37 @@ const ExpenseApproval: React.FC = () => {
       </Tabs>
       </Card>
 
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 1,
+          mb: 1.25,
+        }}
+      >
+        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+          {t('expenseApproval.summary.monthScopeHint', { period: summaryMonth })}
+        </Typography>
+        <TextField
+          type="month"
+          size="small"
+          label={t('expenseApproval.summary.monthLabel')}
+          value={summaryMonth}
+          onChange={(e) => {
+            const next = String(e.target.value || '').trim();
+            if (/^\d{4}-\d{2}$/.test(next)) setSummaryMonth(next);
+          }}
+          InputLabelProps={{ shrink: true }}
+          inputProps={{ lang: formLangAttr }}
+          sx={{
+            width: { xs: '100%', sm: 180 },
+            ...mvsSearchFieldSx,
+            ...mvsFilterFieldHeightSx,
+          }}
+        />
+      </Box>
       <Box sx={mvsKpiGridSx}>
         <Card elevation={0} sx={mvsKpiCardSx}>
           <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>

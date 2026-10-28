@@ -4987,7 +4987,9 @@ export default {
         totalExpense: '총 지출 금액',
         approvedAmount: '승인된 금액',
         pendingAmount: '대기중인 금액',
-        urgentRequests: '긴급 신청'
+        urgentRequests: '긴급 신청',
+        monthLabel: '집계 월',
+        monthScopeHint: '{{period}} 전표일(없으면 작성일) 기준 합계입니다.',
       },
       status: {
         draft: '초안',
