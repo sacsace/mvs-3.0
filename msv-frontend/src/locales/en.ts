@@ -2442,7 +2442,9 @@ export default {
       confirm: {
         deleteTitle: 'Deactivate project',
         deleteMessage: 'Deactivate this project?',
+        completeTitle: 'Complete project',
         completeMessage: 'Mark this project as completed?',
+        setManagerTitle: 'Change project owner',
         setManagerMessage: 'Set {{name}} as the project owner?'
       },
       messages: {

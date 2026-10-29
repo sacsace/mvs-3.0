@@ -46,6 +46,8 @@ import { useStore } from '../../store';
 import { showErrorPopup, showSuccessPopup } from '../../utils/errorHandler';
 import { getUploadUrl } from '../../utils/uploadUrl';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 import {
   getMvsDialogActionsSx,
@@ -217,6 +219,7 @@ const ProjectDetailPage: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const { user } = useStore();
   const menuFlags = useMenuRoutePermissionFlags([MENU_ROUTE]);
+  const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
 
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState<any | null>(null);
@@ -375,9 +378,8 @@ const ProjectDetailPage: React.FC = () => {
     canEditProjectMeta && projectStatus !== 'completed' && projectStatus !== 'cancelled';
   const currentManagerId = Number(project?.project_manager || project?.manager?.id || 0);
 
-  const completeProject = async () => {
+  const runCompleteProject = async () => {
     if (!canCompleteProject || completingProject) return;
-    if (!window.confirm(t('projectManagement.confirm.completeMessage'))) return;
     setCompletingProject(true);
     try {
       const res = await projectService.updateProject(id, { status: 'completed' });
@@ -408,19 +410,22 @@ const ProjectDetailPage: React.FC = () => {
     }
   };
 
-  const setMemberAsManager = async (member: MemberRow) => {
+  const completeProject = () => {
+    if (!canCompleteProject || completingProject) return;
+    showConfirm(t('projectManagement.confirm.completeMessage'), () => {
+      void runCompleteProject();
+    }, {
+      title: t('projectManagement.confirm.completeTitle'),
+      confirmText: t('projectManagement.actions.complete'),
+    });
+  };
+
+  const runSetMemberAsManager = async (member: MemberRow) => {
     const userId = Number(member.user_id);
     if (!canEditProjectMeta || !userId || userId === currentManagerId || changingManagerId != null) {
       return;
     }
     const name = member.user?.username || `#${userId}`;
-    if (
-      !window.confirm(
-        t('projectManagement.confirm.setManagerMessage', { name })
-      )
-    ) {
-      return;
-    }
     setChangingManagerId(userId);
     try {
       const res = await projectService.updateProject(id, { project_manager: userId });
@@ -438,6 +443,19 @@ const ProjectDetailPage: React.FC = () => {
     } finally {
       setChangingManagerId(null);
     }
+  };
+
+  const setMemberAsManager = (member: MemberRow) => {
+    const userId = Number(member.user_id);
+    if (!canEditProjectMeta || !userId || userId === currentManagerId || changingManagerId != null) {
+      return;
+    }
+    const name = member.user?.username || `#${userId}`;
+    showConfirm(t('projectManagement.confirm.setManagerMessage', { name }), () => {
+      void runSetMemberAsManager(member);
+    }, {
+      title: t('projectManagement.confirm.setManagerTitle'),
+    });
   };
 
   const range = useMemo(() => {
@@ -2069,6 +2087,18 @@ const ProjectDetailPage: React.FC = () => {
           )}
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={dialogState.open}
+        title={dialogState.title}
+        message={dialogState.message}
+        confirmText={dialogState.confirmText}
+        cancelText={dialogState.cancelText}
+        confirmColor={dialogState.confirmColor}
+        messageTone={dialogState.messageTone}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+      />
     </Box>
   );
 };

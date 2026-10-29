@@ -2560,7 +2560,9 @@ export default {
       confirm: {
         deleteTitle: '프로젝트 삭제',
         deleteMessage: '이 프로젝트를 비활성화하시겠습니까?',
+        completeTitle: '프로젝트 완료',
         completeMessage: '이 프로젝트를 완료 처리하시겠습니까?',
+        setManagerTitle: '책임자 변경',
         setManagerMessage: '{{name}}을(를) 책임자로 변경하시겠습니까?'
       },
       messages: {
