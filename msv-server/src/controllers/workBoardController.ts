@@ -2373,6 +2373,13 @@ export const updateWorkBoardMember = async (req: RequestWithUser, res: Response)
     }
 
     if (target.role === 'owner' && role === 'member') {
+      const isBoardCreator = Number(board.created_by) === Number(user.id);
+      if (!isBoardCreator && user.role !== 'root') {
+        return res.status(403).json({
+          success: false,
+          message: '최초 관리자만 다른 Admin을 해제할 수 있습니다.'
+        });
+      }
       const ownerCount = await WorkBoardMember.count({
         where: { board_id: board.id, role: 'owner' }
       });

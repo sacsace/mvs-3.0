@@ -2350,7 +2350,9 @@ export default {
         memberMenu: {
           viewPhoto: 'View photo',
           setAdmin: 'Set as Admin',
+          removeAdmin: 'Remove Admin',
           alreadyAdmin: 'Already Admin',
+          lastAdmin: 'Cannot remove the last Admin.',
           noPhoto: 'No photo available.'
         },
         hints: {
@@ -2390,7 +2392,8 @@ export default {
           assignmentBulkSaved: 'Assignee applied to {{count}} rows.',
           periodGenerated: '{{period}}: created {{created}}, kept {{skipped}} existing',
           statusUpdated: 'Status updated.',
-          memberSetAdmin: '{{name}} set as Admin.'
+          memberSetAdmin: '{{name}} set as Admin.',
+          memberRemoveAdmin: 'Admin removed from {{name}}.'
         },
         errors: {
           loadFailed: 'Could not load recurring setup.',

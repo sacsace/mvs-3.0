@@ -275,6 +275,7 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
   const [checklistLoading, setChecklistLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [canManage, setCanManage] = useState(false);
+  const [boardCreatedById, setBoardCreatedById] = useState<number | null>(null);
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [checklistClients, setChecklistClients] = useState<ClientRow[]>([]);
@@ -311,6 +312,10 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
   const [expandedAssignClientId, setExpandedAssignClientId] = useState<number | null>(null);
   const [checklistSort, setChecklistSort] = useState<{
     key: 'client' | 'assignee' | `template:${number}`;
+    dir: 'asc' | 'desc';
+  }>({ key: 'client', dir: 'asc' });
+  const [assignSort, setAssignSort] = useState<{
+    key: 'client' | 'assignee' | 'reviewer' | 'progress';
     dir: 'asc' | 'desc';
   }>({ key: 'client', dir: 'asc' });
 
@@ -399,6 +404,8 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
       setMembers(Array.isArray(data.members) ? data.members : []);
       setCanManage(Boolean(data.can_manage));
       if (data.board?.company_id) setCompanyId(Number(data.board.company_id));
+      const createdBy = Number(data.board?.created_by);
+      setBoardCreatedById(Number.isInteger(createdBy) && createdBy > 0 ? createdBy : null);
     } catch (e) {
       showErrorPopup(e, t('workBoards.title'));
     } finally {
@@ -468,8 +475,28 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
     );
   };
 
+  /** 체크리스트 전체 열람: 시스템 root/audit 또는 이 보드 owner(Admin)만 */
+  const canViewAllChecklist = useMemo(() => {
+    if (currentUser?.role === 'root' || currentUser?.role === 'audit') return true;
+    const myId = Number(currentUser?.id || 0);
+    if (!myId) return false;
+    const myMember = members.find(
+      (m) => Number(m.user?.id || m.user_id) === myId
+    );
+    if (myMember) return myMember.role === 'owner';
+    // 멤버 목록 아직 없으면 overview의 can_manage만 참고
+    return canManage;
+  }, [canManage, currentUser?.id, currentUser?.role, members]);
+
   const sortedChecklistClients = useMemo(() => {
-    const rows = [...checklistClients];
+    const myId = Number(currentUser?.id || 0);
+    /** 보드 Admin만 전체. 일반 멤버는 본인 담당만. id 없으면 비움 */
+    const scoped = canViewAllChecklist
+      ? checklistClients
+      : !myId
+        ? []
+        : checklistClients.filter((c) => Number(c.assignee_user_id) === myId);
+    const rows = [...scoped];
     const dirMul = checklistSort.dir === 'asc' ? 1 : -1;
     const textCmp = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' });
 
@@ -508,7 +535,7 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
     });
 
     return rows;
-  }, [checklistClients, checklistSort, instanceMap]);
+  }, [canViewAllChecklist, checklistClients, checklistSort, currentUser?.id, instanceMap]);
 
   /** 연속된 동일 고객사 행에 rowSpan 적용 */
   const checklistClientRowSpan = useMemo(() => {
@@ -1081,6 +1108,18 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
     }
   };
 
+  const ownerCount = useMemo(
+    () => members.filter((m) => m.role === 'owner').length,
+    [members]
+  );
+
+  /** 보드 생성자(최초 관리자) 또는 root만 다른 Admin 해제 가능 */
+  const isInitialAdmin = useMemo(() => {
+    if (currentUser?.role === 'root') return true;
+    const myId = Number(currentUser?.id || 0);
+    return Boolean(myId && boardCreatedById && myId === boardCreatedById);
+  }, [boardCreatedById, currentUser?.id, currentUser?.role]);
+
   const setMemberAsAdmin = async () => {
     if (!memberMenuTarget || memberRoleSaving) return;
     if (!canManage) {
@@ -1115,6 +1154,52 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
         })
       );
       showSuccessToast(tr('success.memberSetAdmin', { name: targetName }));
+    } catch (e) {
+      showErrorPopup(e, t('workBoards.title'));
+    } finally {
+      setMemberRoleSaving(false);
+    }
+  };
+
+  const removeMemberAdmin = async () => {
+    if (!memberMenuTarget || memberRoleSaving) return;
+    if (!canManage || !isInitialAdmin) {
+      showWarningPopup(tr('hints.manageOnly'), t('workBoards.title'));
+      closeMemberMenu();
+      return;
+    }
+    if (memberMenuTarget.role !== 'owner') {
+      closeMemberMenu();
+      return;
+    }
+    if (ownerCount <= 1) {
+      showWarningPopup(tr('memberMenu.lastAdmin'), t('workBoards.title'));
+      closeMemberMenu();
+      return;
+    }
+    const targetId = memberMenuTarget.id;
+    const targetName = memberMenuTarget.name;
+    closeMemberMenu();
+    setMemberRoleSaving(true);
+    try {
+      const res = await workBoardService.updateMemberRole(board.id, targetId, 'member');
+      if (!res?.success) {
+        showErrorPopup(res?.message || tr('errors.saveFailed'), t('workBoards.title'));
+        return;
+      }
+      const updated = res.data;
+      setMembers((prev) =>
+        prev.map((m) => {
+          const uid = Number(m.user?.id || m.user_id);
+          if (uid !== targetId) return m;
+          return {
+            ...m,
+            role: 'member',
+            user: updated?.user ? { ...m.user, ...updated.user } : m.user,
+          };
+        })
+      );
+      showSuccessToast(tr('success.memberRemoveAdmin', { name: targetName }));
     } catch (e) {
       showErrorPopup(e, t('workBoards.title'));
     } finally {
@@ -1248,6 +1333,80 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
       };
     });
   }, [clients, templates, assignmentMap]);
+
+  const toggleAssignSort = (key: 'client' | 'assignee' | 'reviewer' | 'progress') => {
+    setAssignSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: 'asc' }
+    );
+  };
+
+  const memberLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of memberOptions) map.set(String(m.id), m.label);
+    return map;
+  }, [memberOptions]);
+
+  const sortedClientAssignRows = useMemo(() => {
+    const rows = [...clientAssignRows];
+    const dirMul = assignSort.dir === 'asc' ? 1 : -1;
+    const textCmp = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' });
+    const roleLabel = (
+      primaryId: string,
+      mixed: boolean,
+      uniqueCount: number,
+      mixedKey: 'multipleByTask' | 'mixed'
+    ) => {
+      if (mixed) {
+        return mixedKey === 'multipleByTask'
+          ? tr('bulkAssign.multipleByTask', { count: uniqueCount })
+          : tr('bulkAssign.mixed');
+      }
+      if (!primaryId) return tr('fields.none');
+      return memberLabelById.get(primaryId) || primaryId;
+    };
+
+    rows.sort((ra, rb) => {
+      const clientA = String(ra.client.customer?.name || ra.client.customer_id || '').trim();
+      const clientB = String(rb.client.customer?.name || rb.client.customer_id || '').trim();
+      if (assignSort.key === 'client') {
+        const c = textCmp(clientA, clientB) * dirMul;
+        return c !== 0 ? c : ra.client.id - rb.client.id;
+      }
+      if (assignSort.key === 'assignee') {
+        const a = roleLabel(
+          ra.primaryAssigneeId,
+          ra.assigneeMixed,
+          ra.assigneeUniqueCount,
+          'multipleByTask'
+        );
+        const b = roleLabel(
+          rb.primaryAssigneeId,
+          rb.assigneeMixed,
+          rb.assigneeUniqueCount,
+          'multipleByTask'
+        );
+        const c = textCmp(a, b) * dirMul;
+        return c !== 0 ? c : textCmp(clientA, clientB);
+      }
+      if (assignSort.key === 'reviewer') {
+        const a = roleLabel(ra.primaryReviewerId, ra.reviewerMixed, 0, 'mixed');
+        const b = roleLabel(rb.primaryReviewerId, rb.reviewerMixed, 0, 'mixed');
+        const c = textCmp(a, b) * dirMul;
+        return c !== 0 ? c : textCmp(clientA, clientB);
+      }
+      const progressA =
+        ra.totalTemplates > 0 ? ra.assignedCount / ra.totalTemplates : 0;
+      const progressB =
+        rb.totalTemplates > 0 ? rb.assignedCount / rb.totalTemplates : 0;
+      const c = (progressA - progressB) * dirMul;
+      if (c !== 0) return c;
+      const byCount = (ra.assignedCount - rb.assignedCount) * dirMul;
+      return byCount !== 0 ? byCount : textCmp(clientA, clientB);
+    });
+    return rows;
+  }, [assignSort, clientAssignRows, memberLabelById, tr]);
 
   const mergeAssignmentResults = (rows: AssignmentRow[]) => {
     setAssignments((prev) => {
@@ -1888,14 +2047,58 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
                     <Table size="small" stickyHeader sx={{ ...tableSx, tableLayout: 'fixed', minWidth: 720 }}>
                       <TableHead sx={mvsTableHeadHighlightSx}>
                         <TableRow>
-                          <TableCell sx={{ width: '30%' }}>{tr('fields.client')}</TableCell>
-                          <TableCell sx={{ width: '22%' }}>{tr('fields.defaultAssignee')}</TableCell>
-                          <TableCell sx={{ width: '22%' }}>{tr('fields.defaultReviewer')}</TableCell>
-                          <TableCell sx={{ width: '26%' }}>{tr('bulkAssign.detail')}</TableCell>
+                          <TableCell
+                            sx={{ width: '30%' }}
+                            sortDirection={assignSort.key === 'client' ? assignSort.dir : false}
+                          >
+                            <TableSortLabel
+                              active={assignSort.key === 'client'}
+                              direction={assignSort.key === 'client' ? assignSort.dir : 'asc'}
+                              onClick={() => toggleAssignSort('client')}
+                            >
+                              {tr('fields.client')}
+                            </TableSortLabel>
+                          </TableCell>
+                          <TableCell
+                            sx={{ width: '22%' }}
+                            sortDirection={assignSort.key === 'assignee' ? assignSort.dir : false}
+                          >
+                            <TableSortLabel
+                              active={assignSort.key === 'assignee'}
+                              direction={assignSort.key === 'assignee' ? assignSort.dir : 'asc'}
+                              onClick={() => toggleAssignSort('assignee')}
+                            >
+                              {tr('fields.defaultAssignee')}
+                            </TableSortLabel>
+                          </TableCell>
+                          <TableCell
+                            sx={{ width: '22%' }}
+                            sortDirection={assignSort.key === 'reviewer' ? assignSort.dir : false}
+                          >
+                            <TableSortLabel
+                              active={assignSort.key === 'reviewer'}
+                              direction={assignSort.key === 'reviewer' ? assignSort.dir : 'asc'}
+                              onClick={() => toggleAssignSort('reviewer')}
+                            >
+                              {tr('fields.defaultReviewer')}
+                            </TableSortLabel>
+                          </TableCell>
+                          <TableCell
+                            sx={{ width: '26%' }}
+                            sortDirection={assignSort.key === 'progress' ? assignSort.dir : false}
+                          >
+                            <TableSortLabel
+                              active={assignSort.key === 'progress'}
+                              direction={assignSort.key === 'progress' ? assignSort.dir : 'asc'}
+                              onClick={() => toggleAssignSort('progress')}
+                            >
+                              {tr('bulkAssign.detail')}
+                            </TableSortLabel>
+                          </TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody sx={assignTableBodySx}>
-                        {clientAssignRows.map(
+                        {sortedClientAssignRows.map(
                           ({
                             client,
                             primaryAssigneeId,
@@ -2795,31 +2998,54 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
             primaryTypographyProps={{ fontWeight: 600, fontSize: '0.8125rem' }}
           />
         </MenuItem>
-        <MenuItem
-          onClick={() => void setMemberAsAdmin()}
-          disabled={
-            !canManage ||
-            memberRoleSaving ||
-            memberMenuTarget?.role === 'owner'
-          }
-          sx={{ py: 1.1 }}
-        >
-          <ListItemIcon sx={{ minWidth: 36 }}>
-            {memberRoleSaving ? (
-              <CircularProgress size={16} color="inherit" />
-            ) : (
-              <AdminIcon fontSize="small" />
-            )}
-          </ListItemIcon>
-          <ListItemText
-            primary={
-              memberMenuTarget?.role === 'owner'
-                ? tr('memberMenu.alreadyAdmin')
-                : tr('memberMenu.setAdmin')
+        {memberMenuTarget?.role === 'owner' ? (
+          <MenuItem
+            onClick={() => void removeMemberAdmin()}
+            disabled={
+              !canManage ||
+              !isInitialAdmin ||
+              memberRoleSaving ||
+              ownerCount <= 1
             }
-            primaryTypographyProps={{ fontWeight: 600, fontSize: '0.8125rem' }}
-          />
-        </MenuItem>
+            sx={{ py: 1.1 }}
+          >
+            <ListItemIcon sx={{ minWidth: 36 }}>
+              {memberRoleSaving ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                <AdminIcon fontSize="small" />
+              )}
+            </ListItemIcon>
+            <ListItemText
+              primary={
+                ownerCount <= 1
+                  ? tr('memberMenu.lastAdmin')
+                  : !isInitialAdmin
+                    ? tr('memberMenu.alreadyAdmin')
+                    : tr('memberMenu.removeAdmin')
+              }
+              primaryTypographyProps={{ fontWeight: 600, fontSize: '0.8125rem' }}
+            />
+          </MenuItem>
+        ) : (
+          <MenuItem
+            onClick={() => void setMemberAsAdmin()}
+            disabled={!canManage || memberRoleSaving}
+            sx={{ py: 1.1 }}
+          >
+            <ListItemIcon sx={{ minWidth: 36 }}>
+              {memberRoleSaving ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                <AdminIcon fontSize="small" />
+              )}
+            </ListItemIcon>
+            <ListItemText
+              primary={tr('memberMenu.setAdmin')}
+              primaryTypographyProps={{ fontWeight: 600, fontSize: '0.8125rem' }}
+            />
+          </MenuItem>
+        )}
       </Menu>
 
       <ConfirmDialog

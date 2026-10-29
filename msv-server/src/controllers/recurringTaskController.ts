@@ -436,6 +436,7 @@ export const getRecurringOverview = async (req: RequestWithUser, res: Response) 
           board_type: board.board_type,
           board_color: board.board_color,
           company_id: board.company_id,
+          created_by: board.created_by,
         },
         my_role: loaded.member?.role || (req.user!.role === 'root' || req.user!.role === 'audit' ? 'admin' : null),
         /** 정기 업무 마스터(=보드 owner)만 템플릿·고객사·담당 배정 변경 */
@@ -1268,7 +1269,28 @@ export const getRecurringChecklist = async (req: RequestWithUser, res: Response)
       }
     }
 
-    const visibleCustomerIds = new Set(visibleClients.map((c: any) => Number(c.customer_id)));
+    const canManage = canManageRecurring(req.user!, loaded.member);
+    const memberRole = String(loaded.member?.role || '');
+    const canViewAllChecklist =
+      canManage ||
+      req.user!.role === 'audit' ||
+      req.user!.role === 'root' ||
+      memberRole === 'owner';
+    /** 보드 Admin만 전체. 일반 멤버는 본인 담당 고객만 */
+    const scopedClients = canViewAllChecklist
+      ? visibleClients
+      : visibleClients.filter(
+          (c: any) => Number(c.assignee_user_id) === Number(req.user!.id)
+        );
+
+    const allowedInstanceKeys = new Set<string>();
+    for (const c of scopedClients) {
+      const customerId = Number(c.customer_id);
+      const templateIds = Array.isArray(c.template_ids) ? c.template_ids : applicableTemplateIds;
+      for (const templateId of templateIds) {
+        allowedInstanceKeys.add(`${customerId}:${Number(templateId)}`);
+      }
+    }
 
     let total = 0;
     let completed = 0;
@@ -1277,7 +1299,9 @@ export const getRecurringChecklist = async (req: RequestWithUser, res: Response)
     let overdue = 0;
     let notApplicable = 0;
     const enriched = instances
-      .filter((row) => visibleCustomerIds.has(Number(row.customer_id)))
+      .filter((row) =>
+        allowedInstanceKeys.has(`${Number(row.customer_id)}:${Number(row.template_id)}`)
+      )
       .map((row) => {
         const json = applyAssignmentToInstanceJson(
           serializeInstance(row),
@@ -1298,10 +1322,10 @@ export const getRecurringChecklist = async (req: RequestWithUser, res: Response)
       success: true,
       data: {
         period,
-        can_manage: canManageRecurring(req.user!, loaded.member),
+        can_manage: canManage,
         templates: applicableTemplates,
         all_templates: templates,
-        clients: visibleClients,
+        clients: scopedClients,
         clients_total: clients.length,
         clients_hidden_unassigned: Math.max(0, clients.length - visibleClients.length),
         instances: enriched,
