@@ -18,6 +18,7 @@ interface ProjectAttributes {
   progress: number;
   project_manager: number;
   created_by: number;
+  sort_order: number;
   is_active?: boolean;
   created_at: Date;
   updated_at: Date;
@@ -42,6 +43,7 @@ class Project extends Model<ProjectAttributes, ProjectCreationAttributes> implem
   public progress!: number;
   public project_manager!: number;
   public created_by!: number;
+  public sort_order!: number;
   public is_active?: boolean;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
@@ -138,6 +140,11 @@ Project.init(
         model: 'users',
         key: 'id',
       },
+    },
+    sort_order: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
     },
     is_active: {
       type: DataTypes.BOOLEAN,

@@ -2389,6 +2389,7 @@ export default {
         allManagers: 'All managers'
       },
       columns: {
+        order: 'Order',
         code: 'Code',
         name: 'Project',
         manager: 'Manager',
@@ -2401,6 +2402,8 @@ export default {
         progress: 'Progress',
         actions: 'Actions'
       },
+      reorderHint: 'Clear search, status, and manager filters to reorder.',
+      reorderNeedCompany: 'Select a company before reordering.',
       fields: {
         name: 'Project name',
         code: 'Project code',
@@ -2466,6 +2469,8 @@ export default {
         createFailed: 'Failed to create project.',
         updateFailed: 'Failed to update project.',
         deleteFailed: 'Failed to deactivate project.',
+        reorderTitle: 'Reorder projects error',
+        reorderFailed: 'Could not reorder projects.',
         scheduleTitle: 'Schedule error',
         taskTitle: 'Task error',
         titleRequired: 'Enter a title.'

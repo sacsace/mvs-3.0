@@ -8,6 +8,7 @@ import {
   createProject,
   updateProject,
   deleteProject,
+  moveProject,
   getProjectMembers,
   addProjectMembers,
   updateProjectMember,
@@ -198,6 +199,13 @@ router.delete(
 );
 
 router.get('/:id/activities', requireMenuPermission(MENU_PROJECT_MANAGEMENT, 'can_view'), listProjectActivities);
+
+router.post(
+  '/:id/move',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_PROJECT_MANAGEMENT, 'can_edit'),
+  moveProject
+);
 
 router.get('/:id', requireMenuPermission(MENU_PROJECT_MANAGEMENT, 'can_view'), getProject);
 router.put(

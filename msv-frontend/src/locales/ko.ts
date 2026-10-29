@@ -2507,6 +2507,7 @@ export default {
         allManagers: '전체 담당자'
       },
       columns: {
+        order: '순서',
         code: '코드',
         name: '프로젝트명',
         manager: '담당자',
@@ -2519,6 +2520,8 @@ export default {
         progress: '진행률',
         actions: '작업'
       },
+      reorderHint: '검색·상태·담당자 필터를 해제한 뒤 순서를 변경할 수 있습니다.',
+      reorderNeedCompany: '회사를 선택한 뒤 순서를 변경할 수 있습니다.',
       fields: {
         name: '프로젝트명',
         code: '프로젝트 코드',
@@ -2584,6 +2587,8 @@ export default {
         createFailed: '프로젝트 등록에 실패했습니다.',
         updateFailed: '프로젝트 수정에 실패했습니다.',
         deleteFailed: '프로젝트 삭제에 실패했습니다.',
+        reorderTitle: '프로젝트 순서 변경 오류',
+        reorderFailed: '프로젝트 순서를 변경하지 못했습니다.',
         scheduleTitle: '일정 오류',
         taskTitle: 'Task 오류',
         titleRequired: '제목을 입력하세요.'

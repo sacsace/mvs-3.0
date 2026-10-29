@@ -29,6 +29,8 @@ import {
   Add as AddIcon,
   DeleteOutline as DeleteIcon,
   EditOutlined as EditIcon,
+  KeyboardArrowDown as ArrowDownIcon,
+  KeyboardArrowUp as ArrowUpIcon,
   Refresh as RefreshIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
@@ -165,8 +167,15 @@ const ProjectManagement: React.FC = () => {
   });
   const [formData, setFormData] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [movingId, setMovingId] = useState<number | null>(null);
 
   const isRootOrAudit = user?.role === 'root' || user?.role === 'audit';
+  const canReorder =
+    menuFlags.canEdit &&
+    !searchTerm.trim() &&
+    statusFilter === 'all' &&
+    managerFilter === 'all' &&
+    !(isRootOrAudit && selectedCompanyId === '');
 
   const statusLabel = useCallback(
     (status: string) => {
@@ -300,6 +309,53 @@ const ProjectManagement: React.FC = () => {
         p.manager.toLowerCase().includes(q)
     );
   }, [projects, searchTerm]);
+
+  const moveProject = async (project: ProjectRow, direction: 'up' | 'down', e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!canReorder || movingId != null) return;
+    const index = projects.findIndex((p) => p.id === project.id);
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || swapIndex < 0 || swapIndex >= projects.length) return;
+
+    const previous = projects;
+    const next = [...projects];
+    const tmp = next[index];
+    next[index] = next[swapIndex];
+    next[swapIndex] = tmp;
+    setProjects(next);
+    setMovingId(project.id);
+    try {
+      const res = await projectService.moveProject(project.id, direction);
+      if (!res.success) {
+        setProjects(previous);
+        showErrorPopup(
+          res.message || t('projectManagement.errors.reorderFailed'),
+          t('projectManagement.errors.reorderTitle')
+        );
+        return;
+      }
+      if (Array.isArray(res.data) && res.data.length > 0) {
+        const orderMap = new Map<number, number>(
+          res.data.map((row: { id: number; sort_order: number }, i: number) => [
+            Number(row.id),
+            Number.isFinite(Number(row.sort_order)) ? Number(row.sort_order) : i,
+          ])
+        );
+        setProjects((curr) =>
+          [...curr].sort((a, b) => {
+            const ao = orderMap.has(a.id) ? (orderMap.get(a.id) as number) : Number.MAX_SAFE_INTEGER;
+            const bo = orderMap.has(b.id) ? (orderMap.get(b.id) as number) : Number.MAX_SAFE_INTEGER;
+            return ao - bo || a.id - b.id;
+          })
+        );
+      }
+    } catch (error: any) {
+      setProjects(previous);
+      showErrorPopup(error, t('projectManagement.errors.reorderTitle'));
+    } finally {
+      setMovingId(null);
+    }
+  };
 
   const handleOpenDialog = (project?: ProjectRow, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -588,6 +644,11 @@ const ProjectManagement: React.FC = () => {
               >
                 <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
+                    {menuFlags.canEdit && (
+                      <TableCell sx={{ width: 44, px: 0.5 }}>
+                        {t('projectManagement.columns.order')}
+                      </TableCell>
+                    )}
                     <TableCell>{t('projectManagement.columns.code')}</TableCell>
                     <TableCell>{t('projectManagement.columns.name')}</TableCell>
                     <TableCell>{t('projectManagement.columns.manager')}</TableCell>
@@ -602,7 +663,7 @@ const ProjectManagement: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody sx={mvsTableBodyRowSx}>
-                  {filteredProjects.map((project) => {
+                  {filteredProjects.map((project, projectIndex) => {
                     const duration = daysBetween(project.startDate, project.endDate);
                     const remain = remainingDays(project.endDate);
                     const overdue =
@@ -610,6 +671,13 @@ const ProjectManagement: React.FC = () => {
                       remain < 0 &&
                       project.status !== 'completed' &&
                       project.status !== 'cancelled';
+                    const reorderDisabledReason = !menuFlags.canEdit
+                      ? t('projectManagement.noEditPermission')
+                      : isRootOrAudit && selectedCompanyId === ''
+                        ? t('projectManagement.reorderNeedCompany')
+                        : !canReorder
+                          ? t('projectManagement.reorderHint')
+                          : '';
                     return (
                       <TableRow
                         key={project.id}
@@ -617,6 +685,43 @@ const ProjectManagement: React.FC = () => {
                         onClick={() => navigate(`/work/project-management/${project.id}`)}
                         sx={{ cursor: 'pointer' }}
                       >
+                        {menuFlags.canEdit && (
+                          <TableCell
+                            sx={{ width: 44, px: 0.5, verticalAlign: 'middle' }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Tooltip title={reorderDisabledReason}>
+                              <Box sx={{ display: 'inline-flex', flexDirection: 'column', lineHeight: 0 }}>
+                                <IconButton
+                                  size="small"
+                                  disabled={
+                                    !canReorder ||
+                                    movingId != null ||
+                                    projectIndex === 0
+                                  }
+                                  onClick={(e) => void moveProject(project, 'up', e)}
+                                  sx={{ p: 0, width: 18, height: 14 }}
+                                  title={t('projectManagement.detail.moveUp')}
+                                >
+                                  <ArrowUpIcon sx={{ fontSize: 14 }} />
+                                </IconButton>
+                                <IconButton
+                                  size="small"
+                                  disabled={
+                                    !canReorder ||
+                                    movingId != null ||
+                                    projectIndex === filteredProjects.length - 1
+                                  }
+                                  onClick={(e) => void moveProject(project, 'down', e)}
+                                  sx={{ p: 0, width: 18, height: 14 }}
+                                  title={t('projectManagement.detail.moveDown')}
+                                >
+                                  <ArrowDownIcon sx={{ fontSize: 14 }} />
+                                </IconButton>
+                              </Box>
+                            </Tooltip>
+                          </TableCell>
+                        )}
                         <TableCell>{project.project_code}</TableCell>
                         <TableCell>
                           <Typography

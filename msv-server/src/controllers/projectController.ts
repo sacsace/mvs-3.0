@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { RequestWithUser } from '../types';
 import { Project, ProjectMember, User } from '../models';
-import { Op } from 'sequelize';
+import { DataTypes, Op } from 'sequelize';
 import sequelize from '../config/database';
 import {
   canEditProject,
@@ -20,6 +20,50 @@ import { pushNotification } from './notificationController';
 
 const memberUserAttrs = ['id', 'username', 'email', 'department', 'position', 'avatar_url'];
 
+let projectSchemaReady: Promise<void> | null = null;
+
+async function ensureProjectSchema(): Promise<void> {
+  if (!projectSchemaReady) {
+    projectSchemaReady = (async () => {
+      const qi = sequelize.getQueryInterface();
+      try {
+        const table = await qi.describeTable('projects');
+        if (!table.sort_order) {
+          await qi.addColumn('projects', 'sort_order', {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+            defaultValue: 0,
+          });
+          const rows = await (Project as any).findAll({
+            where: { is_active: true },
+            order: [
+              ['company_id', 'ASC'],
+              ['start_date', 'DESC'],
+              ['id', 'DESC'],
+            ],
+            attributes: ['id', 'company_id'],
+          });
+          let lastCompany: number | null = null;
+          let order = 0;
+          for (const row of rows) {
+            const companyId = Number(row.company_id);
+            if (lastCompany !== companyId) {
+              lastCompany = companyId;
+              order = 0;
+            }
+            await row.update({ sort_order: order });
+            order += 1;
+          }
+        }
+      } catch (error) {
+        console.warn('ensureProjectSchema columns:', error);
+        projectSchemaReady = null;
+      }
+    })();
+  }
+  await projectSchemaReady;
+}
+
 function companyScopeWhere(user: any, companyIdQuery?: unknown) {
   const where: any = { is_active: true };
   const role = user?.role;
@@ -37,6 +81,7 @@ function companyScopeWhere(user: any, companyIdQuery?: unknown) {
 
 export const getProjects = async (req: RequestWithUser, res: Response) => {
   try {
+    await ensureProjectSchema();
     const user = req.user!;
     const { page = 1, limit = 10, status = '', manager_id = '', company_id, q = '' } = req.query;
 
@@ -85,8 +130,8 @@ export const getProjects = async (req: RequestWithUser, res: Response) => {
       limit: Number(limit),
       offset: (Number(page) - 1) * Number(limit),
       order: [
-        ['start_date', 'DESC'],
-        ['id', 'DESC'],
+        ['sort_order', 'ASC'],
+        ['id', 'ASC'],
       ],
       distinct: true,
     });
@@ -153,6 +198,7 @@ export const getProject = async (req: RequestWithUser, res: Response) => {
 export const createProject = async (req: RequestWithUser, res: Response) => {
   const t = await sequelize.transaction();
   try {
+    await ensureProjectSchema();
     const user = req.user!;
     const tenant_id = user.tenant_id!;
     const company_id = user.company_id!;
@@ -198,6 +244,12 @@ export const createProject = async (req: RequestWithUser, res: Response) => {
 
     const project_code = await generateProjectCode(tenant_id, company_id, t);
 
+    const maxOrder = await (Project as any).max('sort_order', {
+      where: { tenant_id, company_id, is_active: true },
+      transaction: t,
+    });
+    const sort_order = Number.isFinite(Number(maxOrder)) ? Number(maxOrder) + 1 : 0;
+
     const project = await (Project as any).create(
       {
         tenant_id,
@@ -214,6 +266,7 @@ export const createProject = async (req: RequestWithUser, res: Response) => {
         progress: 0,
         project_manager,
         created_by: user_id,
+        sort_order,
         is_active: true,
       },
       { transaction: t }
@@ -399,6 +452,91 @@ export const deleteProject = async (req: RequestWithUser, res: Response) => {
       return res.status(status).json({ success: false, message: error.message });
     }
     console.error('프로젝트 삭제 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+};
+
+export const moveProject = async (req: RequestWithUser, res: Response) => {
+  const t = await sequelize.transaction();
+  try {
+    await ensureProjectSchema();
+    const user = req.user!;
+    const { project, membership, asAdmin } = await getProjectWithAccessOrThrow(
+      Number(req.params.id),
+      user
+    );
+    if (!canEditProject(membership?.role, asAdmin)) {
+      await t.rollback();
+      return res.status(403).json({ success: false, message: '프로젝트 순서를 변경할 권한이 없습니다.' });
+    }
+
+    const direction = String(req.body.direction || '').trim().toLowerCase();
+    if (direction !== 'up' && direction !== 'down') {
+      await t.rollback();
+      return res.status(400).json({ success: false, message: 'direction은 up 또는 down 이어야 합니다.' });
+    }
+
+    const where: any = {
+      tenant_id: project.tenant_id,
+      company_id: project.company_id,
+      is_active: true,
+    };
+    const accessible = await listAccessibleProjectIds(user);
+    if (accessible !== 'all') {
+      if (accessible.length === 0) {
+        await t.rollback();
+        return res.status(403).json({ success: false, message: '프로젝트 순서를 변경할 권한이 없습니다.' });
+      }
+      where.id = { [Op.in]: accessible };
+    }
+
+    const projects = await (Project as any).findAll({
+      where,
+      order: [
+        ['sort_order', 'ASC'],
+        ['id', 'ASC'],
+      ],
+      transaction: t,
+    });
+
+    const index = projects.findIndex((row: any) => Number(row.id) === Number(project.id));
+    if (index < 0) {
+      await t.rollback();
+      return res.status(404).json({ success: false, message: '프로젝트를 찾을 수 없습니다.' });
+    }
+
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= projects.length) {
+      await t.commit();
+      return res.json({
+        success: true,
+        data: projects.map((row: any) => ({ id: row.id, sort_order: row.sort_order })),
+      });
+    }
+
+    const ordered = [...projects];
+    const tmp = ordered[index];
+    ordered[index] = ordered[swapIndex];
+    ordered[swapIndex] = tmp;
+
+    for (let i = 0; i < ordered.length; i += 1) {
+      if (Number(ordered[i].sort_order) !== i) {
+        await ordered[i].update({ sort_order: i }, { transaction: t });
+      }
+    }
+
+    await t.commit();
+    res.json({
+      success: true,
+      data: ordered.map((row: any) => ({ id: row.id, sort_order: Number(row.sort_order) || 0 })),
+    });
+  } catch (error: any) {
+    await t.rollback();
+    const status = error?.status || 500;
+    if (status !== 500) {
+      return res.status(status).json({ success: false, message: error.message });
+    }
+    console.error('프로젝트 이동 오류:', error);
     res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
   }
 };

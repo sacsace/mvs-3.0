@@ -33,6 +33,11 @@ export const projectService = {
     return response.data;
   },
 
+  moveProject: async (id: number, direction: 'up' | 'down') => {
+    const response = await api.post(`/projects/${id}/move`, { direction });
+    return response.data;
+  },
+
   getMembers: async (projectId: number) => {
     const response = await api.get(`/projects/${projectId}/members`);
     return response.data;
