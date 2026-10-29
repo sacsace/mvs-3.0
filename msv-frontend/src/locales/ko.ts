@@ -2459,7 +2459,8 @@ export default {
         startTime: '시작 시간',
         endTime: '종료 시간',
         confirmDeleteSchedule: '이 일정을 삭제하시겠습니까?',
-        confirmDeleteTask: '이 Task를 삭제하시겠습니까?'
+        confirmDeleteTask: '이 Task를 삭제하시겠습니까?',
+        setAsManagerHint: '{{name}}을(를) 책임자로 지정'
       },
       scheduleTypes: {
         milestone: '마일스톤',
@@ -2494,7 +2495,8 @@ export default {
         cancel: '취소',
         save: '저장',
         delete: '삭제',
-        edit: '수정'
+        edit: '수정',
+        complete: '프로젝트 완료'
       },
       filters: {
         searchPlaceholder: '프로젝트명, 코드, 담당자 검색',
@@ -2557,12 +2559,16 @@ export default {
       },
       confirm: {
         deleteTitle: '프로젝트 삭제',
-        deleteMessage: '이 프로젝트를 비활성화하시겠습니까?'
+        deleteMessage: '이 프로젝트를 비활성화하시겠습니까?',
+        completeMessage: '이 프로젝트를 완료 처리하시겠습니까?',
+        setManagerMessage: '{{name}}을(를) 책임자로 변경하시겠습니까?'
       },
       messages: {
         created: '프로젝트가 등록되었습니다.',
         updated: '프로젝트가 수정되었습니다.',
         deleted: '프로젝트가 비활성화되었습니다.',
+        completed: '프로젝트가 완료 처리되었습니다.',
+        managerChanged: '{{name}}을(를) 책임자로 지정했습니다.',
         invited: '멤버를 추가했습니다.',
         scheduleSaved: '일정이 저장되었습니다.',
         scheduleDeleted: '일정이 삭제되었습니다.',

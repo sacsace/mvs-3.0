@@ -226,6 +226,8 @@ const ProjectDetailPage: React.FC = () => {
   const [inviteRole, setInviteRole] = useState('member');
   const [companyUsers, setCompanyUsers] = useState<any[]>([]);
   const [savingInvite, setSavingInvite] = useState(false);
+  const [completingProject, setCompletingProject] = useState(false);
+  const [changingManagerId, setChangingManagerId] = useState<number | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState({
@@ -360,12 +362,83 @@ const ProjectDetailPage: React.FC = () => {
   const canManageMembers =
     menuFlags.canEdit &&
     (project?.my_role === 'owner' || project?.my_role === 'manager' || project?.my_role === 'admin');
+  const canEditProjectMeta = canManageMembers;
   const canEditWorkspace =
     menuFlags.canEdit &&
     (project?.my_role === 'owner' ||
       project?.my_role === 'manager' ||
       project?.my_role === 'member' ||
       project?.my_role === 'admin');
+
+  const projectStatus = String(project?.status || '').toLowerCase();
+  const canCompleteProject =
+    canEditProjectMeta && projectStatus !== 'completed' && projectStatus !== 'cancelled';
+  const currentManagerId = Number(project?.project_manager || project?.manager?.id || 0);
+
+  const completeProject = async () => {
+    if (!canCompleteProject || completingProject) return;
+    if (!window.confirm(t('projectManagement.confirm.completeMessage'))) return;
+    setCompletingProject(true);
+    try {
+      const res = await projectService.updateProject(id, { status: 'completed' });
+      if (!res.success) {
+        showErrorPopup(
+          res.message || t('projectManagement.errors.updateFailed'),
+          t('projectManagement.errors.saveTitle')
+        );
+        return;
+      }
+      setProject((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              ...(res.data || {}),
+              status: 'completed',
+              members: prev.members,
+              my_role: prev.my_role,
+              manager: prev.manager,
+            }
+          : prev
+      );
+      showSuccessPopup(t('projectManagement.messages.completed'));
+    } catch (e: any) {
+      showErrorPopup(e, t('projectManagement.errors.saveTitle'));
+    } finally {
+      setCompletingProject(false);
+    }
+  };
+
+  const setMemberAsManager = async (member: MemberRow) => {
+    const userId = Number(member.user_id);
+    if (!canEditProjectMeta || !userId || userId === currentManagerId || changingManagerId != null) {
+      return;
+    }
+    const name = member.user?.username || `#${userId}`;
+    if (
+      !window.confirm(
+        t('projectManagement.confirm.setManagerMessage', { name })
+      )
+    ) {
+      return;
+    }
+    setChangingManagerId(userId);
+    try {
+      const res = await projectService.updateProject(id, { project_manager: userId });
+      if (!res.success) {
+        showErrorPopup(
+          res.message || t('projectManagement.errors.updateFailed'),
+          t('projectManagement.errors.saveTitle')
+        );
+        return;
+      }
+      showSuccessPopup(t('projectManagement.messages.managerChanged', { name }));
+      await load();
+    } catch (e: any) {
+      showErrorPopup(e, t('projectManagement.errors.saveTitle'));
+    } finally {
+      setChangingManagerId(null);
+    }
+  };
 
   const range = useMemo(() => {
     let start = parseYmd(project?.start_date) || new Date();
@@ -817,6 +890,17 @@ const ProjectDetailPage: React.FC = () => {
             >
               {t('projectManagement.actions.refresh')}
             </Button>
+            {canCompleteProject && (
+              <Button
+                variant="outlined"
+                startIcon={<CheckCircleOutlineIcon sx={{ fontSize: 18 }} />}
+                onClick={() => void completeProject()}
+                disabled={completingProject}
+                sx={mvsBodyOutlinedBtnSx}
+              >
+                {t('projectManagement.actions.complete')}
+              </Button>
+            )}
             {canEditWorkspace && (
               <Button
                 variant="contained"
@@ -975,15 +1059,50 @@ const ProjectDetailPage: React.FC = () => {
                     defaultValue: m.role,
                   });
                   const avatarSrc = getUploadUrl(m.user?.avatar_url) || undefined;
+                  const isCurrentManager = Number(m.user_id) === currentManagerId;
+                  const canSetAsManager =
+                    canEditProjectMeta && !isCurrentManager && Number(m.user_id) > 0;
+                  const tip = canSetAsManager
+                    ? t('projectManagement.detail.setAsManagerHint', { name })
+                    : isCurrentManager
+                      ? `${roleLabel} · ${t('projectManagement.detail.managerLabel')}`
+                      : roleLabel;
                   return (
-                    <Tooltip key={m.id} title={roleLabel} placement="top" enterDelay={400}>
+                    <Tooltip key={m.id} title={tip} placement="top" enterDelay={400}>
                       <Box
+                        role={canSetAsManager ? 'button' : undefined}
+                        tabIndex={canSetAsManager ? 0 : undefined}
+                        onClick={
+                          canSetAsManager
+                            ? (e: React.MouseEvent) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (changingManagerId != null) return;
+                                void setMemberAsManager(m);
+                              }
+                            : undefined
+                        }
+                        onKeyDown={
+                          canSetAsManager
+                            ? (e: React.KeyboardEvent) => {
+                                if (e.key !== 'Enter' && e.key !== ' ') return;
+                                e.preventDefault();
+                                if (changingManagerId != null) return;
+                                void setMemberAsManager(m);
+                              }
+                            : undefined
+                        }
                         sx={{
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: 0.5,
                           minWidth: 0,
                           maxWidth: '100%',
+                          cursor: canSetAsManager ? 'pointer' : 'default',
+                          opacity: changingManagerId === Number(m.user_id) ? 0.55 : 1,
+                          '&:hover': canSetAsManager
+                            ? { textDecoration: 'underline', textUnderlineOffset: '2px' }
+                            : undefined,
                         }}
                       >
                         <Avatar
@@ -1005,7 +1124,7 @@ const ProjectDetailPage: React.FC = () => {
                           sx={{
                             fontSize: '0.75rem',
                             fontWeight: 600,
-                            color: '#0F172A',
+                            color: isCurrentManager ? '#006100' : '#0F172A',
                             lineHeight: 1.2,
                             whiteSpace: 'nowrap',
                             overflow: 'hidden',

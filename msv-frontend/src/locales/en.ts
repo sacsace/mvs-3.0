@@ -2341,7 +2341,8 @@ export default {
         startTime: 'Start time',
         endTime: 'End time',
         confirmDeleteSchedule: 'Delete this schedule?',
-        confirmDeleteTask: 'Delete this task?'
+        confirmDeleteTask: 'Delete this task?',
+        setAsManagerHint: 'Set {{name}} as project owner'
       },
       scheduleTypes: {
         milestone: 'Milestone',
@@ -2376,7 +2377,8 @@ export default {
         cancel: 'Cancel',
         save: 'Save',
         delete: 'Delete',
-        edit: 'Edit'
+        edit: 'Edit',
+        complete: 'Complete project'
       },
       filters: {
         searchPlaceholder: 'Search by name, code, or manager',
@@ -2439,12 +2441,16 @@ export default {
       },
       confirm: {
         deleteTitle: 'Deactivate project',
-        deleteMessage: 'Deactivate this project?'
+        deleteMessage: 'Deactivate this project?',
+        completeMessage: 'Mark this project as completed?',
+        setManagerMessage: 'Set {{name}} as the project owner?'
       },
       messages: {
         created: 'Project created.',
         updated: 'Project updated.',
         deleted: 'Project deactivated.',
+        completed: 'Project marked as completed.',
+        managerChanged: '{{name}} is now the project owner.',
         invited: 'Members added.',
         scheduleSaved: 'Schedule saved.',
         scheduleDeleted: 'Schedule deleted.',

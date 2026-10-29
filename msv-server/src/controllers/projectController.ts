@@ -424,6 +424,17 @@ export const updateProject = async (req: RequestWithUser, res: Response) => {
     delete patch.project_code;
 
     await project.update(patch);
+    if (patch.project_manager != null) {
+      await project.reload({
+        include: [
+          {
+            model: User,
+            as: 'manager',
+            attributes: memberUserAttrs,
+          },
+        ],
+      });
+    }
     res.json({ success: true, data: project });
   } catch (error: any) {
     const status = error?.status || 500;
