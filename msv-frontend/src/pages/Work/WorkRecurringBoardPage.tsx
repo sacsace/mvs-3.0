@@ -46,6 +46,7 @@ import {
 } from '@mui/icons-material';
 import { getUploadUrl } from '../../utils/uploadUrl';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { usePhotoPreviewOptional } from '../../components/Common/PhotoPreviewProvider';
@@ -259,6 +260,7 @@ function resolveMemberAvatarSrc(avatarUrl?: string | null) {
 const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
   const { t } = useTranslation();
   const theme = useTheme();
+  const navigate = useNavigate();
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const photoPreview = usePhotoPreviewOptional();
 
@@ -428,14 +430,12 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
       if (typeof data.can_manage === 'boolean') setCanManage(data.can_manage);
 
       const myId = Number(currentUser?.id || 0);
-      const myRole = String(currentUser?.role || '');
-      const isSystemViewer = myRole === 'root' || myRole === 'audit';
       const myBoardRole = members.find(
         (m) => Number(m.user?.id || m.user_id) === myId
       )?.role;
-      /** 보드 Admin(owner)만 전체. can_manage 플래그만으로는 열지 않음 */
+      /** 보드 Admin(owner)만 전체. audit 등 시스템 역할로는 열지 않음 */
       const allowAllChecklist =
-        isSystemViewer || myBoardRole === 'owner';
+        myBoardRole === 'owner' || String(currentUser?.role || '') === 'root';
 
       let clientsRows: ClientRow[] = Array.isArray(data.clients) ? data.clients : [];
       let instanceRows: InstanceRow[] = Array.isArray(data.instances) ? data.instances : [];
@@ -534,9 +534,9 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
     );
   };
 
-  /** 체크리스트 전체 열람: 시스템 root/audit 또는 이 보드 owner(Admin)만 */
+  /** 체크리스트 전체 열람: 이 보드 owner(Admin)만. audit은 보드 멤버 역할 따름 */
   const canViewAllChecklist = useMemo(() => {
-    if (currentUser?.role === 'root' || currentUser?.role === 'audit') return true;
+    if (currentUser?.role === 'root') return true;
     const myId = Number(currentUser?.id || 0);
     if (!myId || !overviewReady) return false;
     const myMember = members.find(
@@ -1262,6 +1262,58 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
     } finally {
       setMemberRoleSaving(false);
     }
+  };
+
+  const removeFromBoard = () => {
+    if (!memberMenuTarget || memberRoleSaving) return;
+    const myId = Number(currentUser?.id || 0);
+    const targetId = memberMenuTarget.id;
+    const targetName = memberMenuTarget.name;
+    const isSelf = myId > 0 && targetId === myId;
+    const canRemove = canManage || isSelf;
+    if (!canRemove) {
+      showWarningPopup(tr('hints.manageOnly'), t('workBoards.title'));
+      closeMemberMenu();
+      return;
+    }
+    if (memberMenuTarget.role === 'owner' && ownerCount <= 1) {
+      showWarningPopup(tr('memberMenu.lastAdminCannotRemove'), t('workBoards.title'));
+      closeMemberMenu();
+      return;
+    }
+    closeMemberMenu();
+    showConfirm(
+      tr('dialog.removeMemberMsg', { name: targetName }),
+      () => {
+        void (async () => {
+          if (memberRoleSaving) return;
+          setMemberRoleSaving(true);
+          try {
+            const res = await workBoardService.removeMember(board.id, targetId);
+            if (!res?.success) {
+              showErrorPopup(res?.message || tr('errors.saveFailed'), t('workBoards.title'));
+              return;
+            }
+            setMembers((prev) =>
+              prev.filter((m) => Number(m.user?.id || m.user_id) !== targetId)
+            );
+            showSuccessToast(tr('success.memberRemoved', { name: targetName }));
+            if (isSelf) {
+              navigate('/work/projects', { replace: true });
+            }
+          } catch (e) {
+            showErrorPopup(e, t('workBoards.title'));
+          } finally {
+            setMemberRoleSaving(false);
+          }
+        })();
+      },
+      {
+        title: tr('dialog.removeMemberTitle'),
+        confirmColor: 'error',
+        messageTone: 'danger',
+      }
+    );
   };
 
   const confirmRemoveClient = (row: ClientRow) => {
@@ -3103,6 +3155,34 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
             />
           </MenuItem>
         )}
+        <MenuItem
+          onClick={removeFromBoard}
+          disabled={
+            memberRoleSaving ||
+            (memberMenuTarget?.role === 'owner' && ownerCount <= 1) ||
+            !(
+              canManage ||
+              Number(memberMenuTarget?.id) === Number(currentUser?.id || 0)
+            )
+          }
+          sx={{ py: 1.1, color: 'error.main' }}
+        >
+          <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
+            {memberRoleSaving ? (
+              <CircularProgress size={16} color="inherit" />
+            ) : (
+              <DeleteOutlineIcon fontSize="small" />
+            )}
+          </ListItemIcon>
+          <ListItemText
+            primary={
+              memberMenuTarget?.role === 'owner' && ownerCount <= 1
+                ? tr('memberMenu.lastAdminCannotRemove')
+                : tr('memberMenu.removeFromBoard')
+            }
+            primaryTypographyProps={{ fontWeight: 600, fontSize: '0.8125rem' }}
+          />
+        </MenuItem>
       </Menu>
 
       <ConfirmDialog

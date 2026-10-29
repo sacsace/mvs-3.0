@@ -1271,12 +1271,8 @@ export const getRecurringChecklist = async (req: RequestWithUser, res: Response)
 
     const canManage = canManageRecurring(req.user!, loaded.member);
     const memberRole = String(loaded.member?.role || '');
-    const canViewAllChecklist =
-      canManage ||
-      req.user!.role === 'audit' ||
-      req.user!.role === 'root' ||
-      memberRole === 'owner';
-    /** 보드 Admin만 전체. 일반 멤버는 본인 담당 고객만 */
+    /** 보드 Admin(owner)만 전체. 시스템 audit/admin이어도 보드 멤버면 본인 담당만 */
+    const canViewAllChecklist = memberRole === 'owner' || req.user!.role === 'root';
     const scopedClients = canViewAllChecklist
       ? visibleClients
       : visibleClients.filter(

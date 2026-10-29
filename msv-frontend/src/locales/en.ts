@@ -2351,8 +2351,10 @@ export default {
           viewPhoto: 'View photo',
           setAdmin: 'Set as Admin',
           removeAdmin: 'Remove Admin',
+          removeFromBoard: 'Remove from board',
           alreadyAdmin: 'Already Admin',
           lastAdmin: 'Cannot remove the last Admin.',
+          lastAdminCannotRemove: 'Cannot remove the last Admin from the board.',
           noPhoto: 'No photo available.'
         },
         hints: {
@@ -2379,7 +2381,9 @@ export default {
             'Delete template "{{name}}"? Related assignments will also be cleared.',
           removeClientTitle: 'Unlink client',
           removeClientMsg:
-            'Unlink "{{name}}"? Related assignments will also be cleared.'
+            'Unlink "{{name}}"? Related assignments will also be cleared.',
+          removeMemberTitle: 'Remove member',
+          removeMemberMsg: 'Remove "{{name}}" from this board?'
         },
         success: {
           templateCreated: 'Template added.',
@@ -2393,7 +2397,8 @@ export default {
           periodGenerated: '{{period}}: created {{created}}, kept {{skipped}} existing',
           statusUpdated: 'Status updated.',
           memberSetAdmin: '{{name}} set as Admin.',
-          memberRemoveAdmin: 'Admin removed from {{name}}.'
+          memberRemoveAdmin: 'Admin removed from {{name}}.',
+          memberRemoved: '{{name}} removed from the board.'
         },
         errors: {
           loadFailed: 'Could not load recurring setup.',

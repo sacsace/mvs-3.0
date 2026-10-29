@@ -2468,8 +2468,10 @@ export default {
           viewPhoto: '사진보기',
           setAdmin: 'Admin으로 지정',
           removeAdmin: 'Admin 해제',
+          removeFromBoard: '멤버에서 삭제',
           alreadyAdmin: '이미 Admin',
           lastAdmin: '마지막 Admin은 해제할 수 없습니다.',
+          lastAdminCannotRemove: '마지막 Admin은 멤버에서 삭제할 수 없습니다.',
           noPhoto: '등록된 사진이 없습니다.'
         },
         hints: {
@@ -2494,7 +2496,9 @@ export default {
           deleteTemplateTitle: '템플릿 삭제',
           deleteTemplateMsg: '「{{name}}」 템플릿을 삭제할까요? 관련 담당 배정도 해제됩니다.',
           removeClientTitle: '고객사 연결 해제',
-          removeClientMsg: '「{{name}}」 연결을 해제할까요? 관련 담당 배정도 해제됩니다.'
+          removeClientMsg: '「{{name}}」 연결을 해제할까요? 관련 담당 배정도 해제됩니다.',
+          removeMemberTitle: '멤버 삭제',
+          removeMemberMsg: '「{{name}}」 님을 이 보드 멤버에서 삭제할까요?'
         },
         success: {
           templateCreated: '템플릿을 추가했습니다.',
@@ -2508,7 +2512,8 @@ export default {
           periodGenerated: '{{period}} 업무 {{created}}건 생성 (기존 {{skipped}}건 유지)',
           statusUpdated: '상태를 변경했습니다.',
           memberSetAdmin: '{{name}} 님을 Admin으로 지정했습니다.',
-          memberRemoveAdmin: '{{name}} 님의 Admin을 해제했습니다.'
+          memberRemoveAdmin: '{{name}} 님의 Admin을 해제했습니다.',
+          memberRemoved: '{{name}} 님을 멤버에서 삭제했습니다.'
         },
         errors: {
           loadFailed: '정기 업무 설정을 불러오지 못했습니다.',
