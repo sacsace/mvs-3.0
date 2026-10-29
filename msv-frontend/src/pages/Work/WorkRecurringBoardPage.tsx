@@ -58,7 +58,7 @@ import {
   getMvsDialogTitleRowSx,
 } from '../../components/Common/mvsDialogShell';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
-import { api, workBoardService } from '../../services/api';
+import { api, partnerService, workBoardService } from '../../services/api';
 import { showErrorPopup, showSuccessToast, showWarningPopup } from '../../utils/errorHandler';
 import { useStore } from '../../store';
 import { filterActiveCompanyUsers, useReferenceDataStore } from '../../store/referenceDataStore';
@@ -176,7 +176,14 @@ type ChecklistSummary = {
   completion_rate: number;
 };
 
-type CustomerOption = { id: number; name: string; business_number?: string | null };
+type CustomerOption = {
+  id: number;
+  name: string;
+  business_number?: string | null;
+  source?: 'partner' | 'customer';
+};
+
+const normalizeClientKey = (value?: string | null) => String(value || '').trim().toLowerCase();
 
 const INSTANCE_STATUSES = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'VERIFIED', 'NOT_APPLICABLE'] as const;
 
@@ -859,22 +866,86 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
     setCustomersLoading(true);
     try {
       const params = companyId ? { company_id: companyId } : undefined;
-      const response = await api.get('/customers', { params });
-      const linked = new Set(clients.map((c) => Number(c.customer_id)));
-      const rows = (response.data?.data || [])
+      const linkedIds = new Set(clients.map((c) => Number(c.customer_id)));
+      const linkedNames = new Set<string>();
+      const linkedBiz = new Set<string>();
+      for (const row of clients) {
+        const nameKey = normalizeClientKey(row.customer?.name);
+        const bizKey = normalizeClientKey(row.customer?.business_number);
+        if (nameKey) linkedNames.add(nameKey);
+        if (bizKey) linkedBiz.add(bizKey);
+      }
+
+      const [partnerRes, customerRes] = await Promise.all([
+        partnerService.getPartners(companyId).catch(() => ({ data: [] })),
+        api.get('/customers', { params }).catch(() => ({ data: { data: [] } })),
+      ]);
+
+      const partnersRaw = Array.isArray(partnerRes?.data)
+        ? partnerRes.data
+        : Array.isArray(partnerRes)
+          ? partnerRes
+          : [];
+      const customersRaw = Array.isArray(customerRes?.data?.data)
+        ? customerRes.data.data
+        : Array.isArray(customerRes?.data)
+          ? customerRes.data
+          : [];
+
+      const partnerRows: CustomerOption[] = partnersRaw
+        .map((p: any) => ({
+          id: Number(p.id),
+          name: String(p.company_name || p.name || '').trim(),
+          business_number: p.business_number || null,
+          source: 'partner' as const,
+        }))
+        .filter((p: CustomerOption) => {
+          if (!Number.isInteger(p.id) || p.id <= 0 || !p.name) return false;
+          const nameKey = normalizeClientKey(p.name);
+          const bizKey = normalizeClientKey(p.business_number);
+          if (nameKey && linkedNames.has(nameKey)) return false;
+          if (bizKey && linkedBiz.has(bizKey)) return false;
+          return true;
+        });
+
+      const partnerNameKeys = new Set(
+        partnerRows.map((p) => normalizeClientKey(p.name)).filter(Boolean)
+      );
+      const partnerBizKeys = new Set(
+        partnerRows
+          .map((p) => normalizeClientKey(p.business_number))
+          .filter(Boolean)
+      );
+
+      const customerRows: CustomerOption[] = customersRaw
         .filter((c: any) => {
           if (c?.source_type && c.source_type !== 'customer') return false;
           if (typeof c?.id === 'number' && c.id >= 1000000000) return false;
-          if (linked.has(Number(c.id))) return false;
+          if (linkedIds.has(Number(c.id))) return false;
           return true;
         })
         .map((c: any) => ({
           id: Number(c.id),
           name: String(c.name || '').trim(),
           business_number: c.business_number || null,
+          source: 'customer' as const,
         }))
-        .filter((c: CustomerOption) => c.id > 0 && c.name);
-      setCustomerOptions(rows);
+        .filter((c: CustomerOption) => {
+          if (!c.id || !c.name) return false;
+          const nameKey = normalizeClientKey(c.name);
+          const bizKey = normalizeClientKey(c.business_number);
+          if (nameKey && linkedNames.has(nameKey)) return false;
+          if (bizKey && linkedBiz.has(bizKey)) return false;
+          // 파트너와 동일 업체면 파트너 행만 표시
+          if (nameKey && partnerNameKeys.has(nameKey)) return false;
+          if (bizKey && partnerBizKeys.has(bizKey)) return false;
+          return true;
+        });
+
+      const merged = [...partnerRows, ...customerRows].sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
+      setCustomerOptions(merged);
     } catch (e) {
       showErrorPopup(e, t('workBoards.title'));
       setCustomerOptions([]);
@@ -891,10 +962,13 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
     if (saving) return;
     setSaving(true);
     try {
-      const res = await workBoardService.addRecurringClients(
-        board.id,
-        selectedCustomers.map((c) => c.id)
-      );
+      const partnerIds = selectedCustomers
+        .filter((c) => c.source === 'partner')
+        .map((c) => c.id);
+      const customerIds = selectedCustomers
+        .filter((c) => c.source !== 'partner')
+        .map((c) => c.id);
+      const res = await workBoardService.addRecurringClients(board.id, customerIds, partnerIds);
       if (!res?.success) {
         showErrorPopup(res?.message || tr('errors.saveFailed'), t('workBoards.title'));
         return;

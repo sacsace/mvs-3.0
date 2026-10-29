@@ -3,6 +3,7 @@ import { Op } from 'sequelize';
 import { RequestWithUser } from '../types';
 import {
   Customer,
+  Partner,
   RecurringBoardClient,
   RecurringTaskAssignment,
   RecurringTaskInstance,
@@ -659,7 +660,69 @@ export const seedRecurringSampleTemplates = async (req: RequestWithUser, res: Re
   }
 };
 
-/** POST /boards/:boardId/recurring/clients  body: { customer_ids: number[] } */
+/** 파트너 마스터 → customers 행 매칭/생성 (정기 업무 연결은 customer_id 유지) */
+async function ensureCustomerFromPartner(
+  partner: any,
+  tenantId: number,
+  companyId: number
+): Promise<any> {
+  const biz = String(partner.business_number || '').trim();
+  const name = String(partner.company_name || '').trim();
+
+  let customer: any = null;
+  if (biz) {
+    customer = await Customer.findOne({
+      where: { tenant_id: tenantId, company_id: companyId, business_number: biz },
+    });
+  }
+  if (!customer && name) {
+    customer = await Customer.findOne({
+      where: { tenant_id: tenantId, company_id: companyId, name },
+    });
+  }
+  if (customer) return customer;
+
+  return Customer.create({
+    tenant_id: tenantId,
+    company_id: companyId,
+    name: name || biz || `Partner #${partner.id}`,
+    business_number: biz || null,
+    ceo_name: partner.representative || null,
+    address: partner.address || null,
+    phone: partner.phone || null,
+    email: partner.email || null,
+    website: partner.website || null,
+    industry: partner.industry || null,
+    status:
+      partner.status === 'inactive' || partner.status === 'suspended' ? 'inactive' : 'active',
+  });
+}
+
+async function linkRecurringCustomer(
+  board: { id: number; tenant_id: number; company_id: number },
+  customerId: number,
+  userId: number
+) {
+  const existing = await RecurringBoardClient.findOne({
+    where: { board_id: board.id, customer_id: customerId },
+    paranoid: false,
+  });
+  if (existing) {
+    if (existing.deleted_at) await existing.restore();
+    await existing.update({ is_active: true, created_by: userId });
+    return existing;
+  }
+  return RecurringBoardClient.create({
+    tenant_id: board.tenant_id,
+    company_id: board.company_id,
+    board_id: board.id,
+    customer_id: customerId,
+    is_active: true,
+    created_by: userId,
+  });
+}
+
+/** POST /boards/:boardId/recurring/clients  body: { customer_ids?, partner_ids? } */
 export const addRecurringClients = async (req: RequestWithUser, res: Response) => {
   try {
     const boardId = Number(req.params.boardId);
@@ -674,46 +737,51 @@ export const addRecurringClients = async (req: RequestWithUser, res: Response) =
       return res.status(403).json({ success: false, message: '고객사를 연결할 권한이 없습니다.' });
     }
     const board = loaded.board!;
-    const ids = Array.isArray(req.body.customer_ids)
+    const customerIds = Array.isArray(req.body.customer_ids)
       ? req.body.customer_ids.map((x: any) => Number(x)).filter((n: number) => Number.isInteger(n) && n > 0)
       : [];
-    if (ids.length === 0) {
+    const partnerIds = Array.isArray(req.body.partner_ids)
+      ? req.body.partner_ids.map((x: any) => Number(x)).filter((n: number) => Number.isInteger(n) && n > 0)
+      : [];
+    if (customerIds.length === 0 && partnerIds.length === 0) {
       return res.status(400).json({ success: false, message: '고객사를 선택하세요.' });
     }
 
-    const customers = await Customer.findAll({
-      where: {
-        id: { [Op.in]: ids },
-        tenant_id: board.tenant_id,
-        company_id: board.company_id,
-      },
-      attributes: ['id', 'name'],
-    });
-    if (customers.length === 0) {
-      return res.status(400).json({ success: false, message: '유효한 고객사가 없습니다.' });
+    const customerIdSet = new Set<number>();
+
+    if (customerIds.length > 0) {
+      const customers = await Customer.findAll({
+        where: {
+          id: { [Op.in]: customerIds },
+          tenant_id: board.tenant_id,
+          company_id: board.company_id,
+        },
+        attributes: ['id'],
+      });
+      for (const c of customers) customerIdSet.add(Number(c.id));
+    }
+
+    if (partnerIds.length > 0) {
+      const partners = await Partner.findAll({
+        where: {
+          id: { [Op.in]: partnerIds },
+          tenant_id: board.tenant_id,
+          company_id: board.company_id,
+        },
+      });
+      for (const partner of partners) {
+        const customer = await ensureCustomerFromPartner(partner, board.tenant_id, board.company_id);
+        customerIdSet.add(Number(customer.id));
+      }
+    }
+
+    if (customerIdSet.size === 0) {
+      return res.status(400).json({ success: false, message: '유효한 고객사/파트너가 없습니다.' });
     }
 
     const added = [];
-    for (const c of customers) {
-      const existing = await RecurringBoardClient.findOne({
-        where: { board_id: board.id, customer_id: c.id },
-        paranoid: false,
-      });
-      if (existing) {
-        if (existing.deleted_at) await existing.restore();
-        await existing.update({ is_active: true, created_by: req.user!.id });
-        added.push(existing);
-      } else {
-        const row = await RecurringBoardClient.create({
-          tenant_id: board.tenant_id,
-          company_id: board.company_id,
-          board_id: board.id,
-          customer_id: c.id,
-          is_active: true,
-          created_by: req.user!.id,
-        });
-        added.push(row);
-      }
+    for (const customerId of customerIdSet) {
+      added.push(await linkRecurringCustomer(board, customerId, req.user!.id));
     }
 
     const full = await RecurringBoardClient.findAll({

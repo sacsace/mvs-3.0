@@ -348,8 +348,15 @@ export const workBoardService = {
     const response = await api.post(`/work/boards/${boardId}/recurring/templates/seed-samples`);
     return response.data;
   },
-  addRecurringClients: async (boardId: number, customer_ids: number[]) => {
-    const response = await api.post(`/work/boards/${boardId}/recurring/clients`, { customer_ids });
+  addRecurringClients: async (
+    boardId: number,
+    customer_ids: number[],
+    partner_ids: number[] = []
+  ) => {
+    const response = await api.post(`/work/boards/${boardId}/recurring/clients`, {
+      customer_ids,
+      partner_ids,
+    });
     return response.data;
   },
   removeRecurringClient: async (boardId: number, customerId: number) => {
