@@ -44,6 +44,7 @@ import {
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
+  mvsPageContentMaxWidth,
   mvsPageRootSx,
   mvsKpiCardSx,
   mvsKpiGridSx,
@@ -219,6 +220,12 @@ const normalizeExpenseAttachments = (value: unknown): ExpenseAttachment[] => {
       return null;
     })
     .filter(Boolean) as ExpenseAttachment[];
+};
+
+/** 지출결의서 body 가로 — 공통 maxWidth 대비 20% 확장 */
+const expensePageRootSx = {
+  ...mvsPageRootSx,
+  maxWidth: Math.round(mvsPageContentMaxWidth * 1.2),
 };
 
 const expenseHasTaxInvoice = (attachments: ExpenseAttachment[] | string[] | unknown) =>
@@ -6343,7 +6350,7 @@ const ExpenseApproval: React.FC = () => {
       selectedExpense != null &&
       (selectedExpense.status === 'submitted' || selectedExpense.status === 'in_review');
     return (
-      <Box sx={{ ...mvsPageRootSx }}>
+      <Box sx={{ ...expensePageRootSx }}>
         <MvsPageHeader
           title={isEdit ? t('expenseApproval.form.editTitle') : t('expenseApproval.form.createTitle')}
           mb={2}
@@ -9121,7 +9128,7 @@ const ExpenseApproval: React.FC = () => {
     };
 
     return (
-      <Box sx={{ ...mvsPageRootSx }}>
+      <Box sx={{ ...expensePageRootSx }}>
         <Box className="expense-no-print">
         <MvsPageHeader
           title={t('expenseApproval.detail.title')}
@@ -11144,7 +11151,7 @@ const ExpenseApproval: React.FC = () => {
   }
 
   return (
-    <Box sx={{ ...mvsPageRootSx }}>
+    <Box sx={{ ...expensePageRootSx }}>
       <MvsPageHeader
         title={t('expenseApproval.title')}
         description={t('expenseApproval.description')}
@@ -11606,7 +11613,18 @@ const ExpenseApproval: React.FC = () => {
             >
               <TableHead sx={mvsTableHeadHighlightSx}>
               <TableRow>
-                <TableCell sx={{ width: 52, minWidth: 52, maxWidth: 52, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                <TableCell
+                  sx={{
+                    width: 68,
+                    minWidth: 68,
+                    maxWidth: 68,
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap',
+                    overflow: 'visible',
+                    textOverflow: 'clip',
+                    px: 1,
+                  }}
+                >
                   {t('expenseApproval.columns.no')}
                 </TableCell>
                 <ExpenseListHeadCell
@@ -11614,7 +11632,14 @@ const ExpenseApproval: React.FC = () => {
                   activeKey={listSortKey}
                   direction={listSortDir}
                   onSort={handleListSort}
-                  sx={{ width: 112, minWidth: 112, maxWidth: 112 }}
+                  sx={{
+                    width: 140,
+                    minWidth: 140,
+                    maxWidth: 140,
+                    overflow: 'visible',
+                    textOverflow: 'clip',
+                    px: 1,
+                  }}
                 >
                   {t('expenseApproval.columns.createdAt')}
                 </ExpenseListHeadCell>
@@ -11623,7 +11648,7 @@ const ExpenseApproval: React.FC = () => {
                   activeKey={listSortKey}
                   direction={listSortDir}
                   onSort={handleListSort}
-                  sx={{ width: 'auto' }}
+                  sx={{ width: '24%', maxWidth: 280 }}
                 >
                   {t('expenseApproval.columns.expenseInfo')}
                 </ExpenseListHeadCell>
@@ -11688,15 +11713,36 @@ const ExpenseApproval: React.FC = () => {
                   onClick={() => handleViewExpense(expense)}
                     sx={{ cursor: 'pointer', '&:active': { bgcolor: 'action.selected' } }}
                   >
-                  <TableCell sx={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums', width: 52, minWidth: 52, maxWidth: 52 }}>
+                  <TableCell
+                    sx={{
+                      textAlign: 'center',
+                      fontVariantNumeric: 'tabular-nums',
+                      width: 68,
+                      minWidth: 68,
+                      maxWidth: 68,
+                      overflow: 'visible',
+                      textOverflow: 'clip',
+                      px: 1,
+                    }}
+                  >
                     {(listViewMode === 'page' ? (page - 1) * itemsPerPage : 0) + index + 1}
                   </TableCell>
-                  <TableCell sx={{ width: 112, minWidth: 112, maxWidth: 112 }}>
+                  <TableCell
+                    sx={{
+                      width: 140,
+                      minWidth: 140,
+                      maxWidth: 140,
+                      overflow: 'visible',
+                      textOverflow: 'clip',
+                      px: 1,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
                     {formatLocalYmd(expense.createdAt)
                       ? new Date(`${formatLocalYmd(expense.createdAt)}T00:00:00`).toLocaleDateString(dateLocale)
                       : '-'}
                   </TableCell>
-                  <TableCell sx={{ minWidth: 0 }}>
+                  <TableCell sx={{ width: '24%', maxWidth: 280, minWidth: 0 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, gap: 0.5 }}>
                       <Typography variant="subtitle2" fontWeight="bold" noWrap sx={{ minWidth: 0 }}>
                         {expense.title}
