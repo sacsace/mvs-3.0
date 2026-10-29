@@ -275,6 +275,7 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
   const [checklistLoading, setChecklistLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [canManage, setCanManage] = useState(false);
+  const [overviewReady, setOverviewReady] = useState(false);
   const [boardCreatedById, setBoardCreatedById] = useState<number | null>(null);
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
@@ -391,6 +392,7 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
 
   const loadOverview = useCallback(async () => {
     setLoading(true);
+    setOverviewReady(false);
     try {
       const res = await workBoardService.getRecurringOverview(board.id);
       if (!res?.success) {
@@ -409,6 +411,7 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
     } catch (e) {
       showErrorPopup(e, t('workBoards.title'));
     } finally {
+      setOverviewReady(true);
       setLoading(false);
     }
   }, [board.id, t, tr]);
@@ -422,17 +425,73 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
         return;
       }
       const data = res.data || {};
-      setChecklistTemplates(Array.isArray(data.templates) ? data.templates : []);
-      setChecklistClients(Array.isArray(data.clients) ? data.clients : []);
-      setInstances(Array.isArray(data.instances) ? data.instances : []);
-      setSummary(data.summary || null);
       if (typeof data.can_manage === 'boolean') setCanManage(data.can_manage);
+
+      const myId = Number(currentUser?.id || 0);
+      const myRole = String(currentUser?.role || '');
+      const isSystemViewer = myRole === 'root' || myRole === 'audit';
+      const myBoardRole = members.find(
+        (m) => Number(m.user?.id || m.user_id) === myId
+      )?.role;
+      /** 보드 Admin(owner)만 전체. can_manage 플래그만으로는 열지 않음 */
+      const allowAllChecklist =
+        isSystemViewer || myBoardRole === 'owner';
+
+      let clientsRows: ClientRow[] = Array.isArray(data.clients) ? data.clients : [];
+      let instanceRows: InstanceRow[] = Array.isArray(data.instances) ? data.instances : [];
+
+      // 서버 스코프와 별개로 클라이언트에서 한 번 더 강제
+      if (!allowAllChecklist && myId > 0) {
+        clientsRows = clientsRows.filter((c) => Number(c.assignee_user_id) === myId);
+        const allowed = new Set<string>();
+        for (const c of clientsRows) {
+          const tids = Array.isArray(c.template_ids) ? c.template_ids : [];
+          for (const tid of tids) allowed.add(`${Number(c.customer_id)}:${Number(tid)}`);
+        }
+        // template_ids 없는 구응답 대비: 담당자 id만으로 인스턴스 필터
+        instanceRows = instanceRows.filter((inst) => {
+          const key = `${Number(inst.customer_id)}:${Number(inst.template_id)}`;
+          if (allowed.size > 0) return allowed.has(key);
+          return Number(inst.assigned_user_id) === myId;
+        });
+        let total = 0;
+        let completed = 0;
+        let inProgress = 0;
+        let pending = 0;
+        let overdue = 0;
+        let notApplicable = 0;
+        for (const inst of instanceRows) {
+          if (inst.status === 'NOT_APPLICABLE') notApplicable += 1;
+          else {
+            total += 1;
+            if (inst.status === 'COMPLETED' || inst.status === 'VERIFIED') completed += 1;
+            else if (inst.status === 'IN_PROGRESS') inProgress += 1;
+            else pending += 1;
+            if (inst.is_overdue) overdue += 1;
+          }
+        }
+        setSummary({
+          total,
+          completed,
+          in_progress: inProgress,
+          pending,
+          overdue,
+          not_applicable: notApplicable,
+          completion_rate: total > 0 ? Math.round((completed / total) * 1000) / 10 : 0,
+        });
+      } else {
+        setSummary(data.summary || null);
+      }
+
+      setChecklistTemplates(Array.isArray(data.templates) ? data.templates : []);
+      setChecklistClients(clientsRows);
+      setInstances(instanceRows);
     } catch (e) {
       showErrorPopup(e, t('workBoards.title'));
     } finally {
       setChecklistLoading(false);
     }
-  }, [board.id, t, tr]);
+  }, [board.id, currentUser?.id, currentUser?.role, members, t, tr]);
 
   useEffect(() => {
     void loadOverview();
@@ -479,14 +538,12 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
   const canViewAllChecklist = useMemo(() => {
     if (currentUser?.role === 'root' || currentUser?.role === 'audit') return true;
     const myId = Number(currentUser?.id || 0);
-    if (!myId) return false;
+    if (!myId || !overviewReady) return false;
     const myMember = members.find(
       (m) => Number(m.user?.id || m.user_id) === myId
     );
-    if (myMember) return myMember.role === 'owner';
-    // 멤버 목록 아직 없으면 overview의 can_manage만 참고
-    return canManage;
-  }, [canManage, currentUser?.id, currentUser?.role, members]);
+    return myMember?.role === 'owner';
+  }, [currentUser?.id, currentUser?.role, members, overviewReady]);
 
   const sortedChecklistClients = useMemo(() => {
     const myId = Number(currentUser?.id || 0);
@@ -1746,7 +1803,7 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
               {tab === 0 &&
                 (clients.length === 0 || templates.length === 0 ? (
                   emptyBox(tr('checklist.needSetup'))
-                ) : checklistClients.length === 0 ? (
+                ) : sortedChecklistClients.length === 0 ? (
                   emptyBox(tr('checklist.needAssignees'))
                 ) : instances.length === 0 ? (
                   <Box sx={{ px: 2.5, py: 3 }}>
