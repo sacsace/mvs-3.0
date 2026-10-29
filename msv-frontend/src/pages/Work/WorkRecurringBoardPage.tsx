@@ -345,7 +345,7 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
   const [assignSort, setAssignSort] = useState<{
     key: 'client' | 'assignee' | 'reviewer' | 'progress';
     dir: 'asc' | 'desc';
-  }>({ key: 'client', dir: 'asc' });
+  }>({ key: 'assignee', dir: 'asc' });
 
   const currentUser = useStore((s) => s.user);
 
