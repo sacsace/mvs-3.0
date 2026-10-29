@@ -2266,6 +2266,9 @@ export default {
           period: 'Month',
           purposeHint:
             'Track monthly task completion by client and assignee at a glance.',
+          search: 'Search',
+          searchPlaceholder: 'Assignee or client',
+          searchNoResults: 'No rows match your search.',
           generateHelp:
             'Creates tasks only for clients with assignees × templates for this month. Existing rows are kept.',
           empty: 'No tasks for this month yet. Click “Generate Monthly Tasks”.',

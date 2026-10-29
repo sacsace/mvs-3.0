@@ -27,6 +27,7 @@ import {
   TableRow,
   TableSortLabel,
   TextField,
+  InputAdornment,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -43,6 +44,7 @@ import {
   PersonAddAlt1 as PersonAddIcon,
   PhotoOutlined as PhotoOutlinedIcon,
   PlaylistAddCheck as GenerateIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import { getUploadUrl } from '../../utils/uploadUrl';
 import { useTranslation } from 'react-i18next';
@@ -342,6 +344,7 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
     key: 'client' | 'assignee' | `template:${number}`;
     dir: 'asc' | 'desc';
   }>({ key: 'assignee', dir: 'asc' });
+  const [checklistSearchQuery, setChecklistSearchQuery] = useState('');
   const [assignSort, setAssignSort] = useState<{
     key: 'client' | 'assignee' | 'reviewer' | 'progress';
     dir: 'asc' | 'desc';
@@ -578,7 +581,23 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
       : !myId
         ? []
         : checklistClients.filter((c) => Number(c.assignee_user_id) === myId);
-    const rows = [...scoped];
+    const q = checklistSearchQuery.trim().toLowerCase();
+    const filtered = !q
+      ? scoped
+      : scoped.filter((c) => {
+          const assignee = String(
+            c.assignee_label ||
+              (Array.isArray(c.assignee_names) ? c.assignee_names.join(' ') : '') ||
+              ''
+          )
+            .trim()
+            .toLowerCase();
+          const clientName = String(c.customer?.name || c.customer_id || '')
+            .trim()
+            .toLowerCase();
+          return assignee.includes(q) || clientName.includes(q);
+        });
+    const rows = [...filtered];
     const dirMul = checklistSort.dir === 'asc' ? 1 : -1;
     const textCmp = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' });
 
@@ -617,7 +636,14 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
     });
 
     return rows;
-  }, [canViewAllChecklist, checklistClients, checklistSort, currentUser?.id, instanceMap]);
+  }, [
+    canViewAllChecklist,
+    checklistSearchQuery,
+    checklistClients,
+    checklistSort,
+    currentUser?.id,
+    instanceMap,
+  ]);
 
   /** 연속된 동일 담당자 블록마다 0,1,2… → 흰색/회색 교차 */
   const checklistAssigneeBandIndex = useMemo(() => {
@@ -1794,6 +1820,26 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
                   {...mvsOutlinedLabelProps}
                   sx={{ ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx, width: { xs: '100%', sm: 180 } }}
                 />
+                <TextField
+                  size="small"
+                  label={tr('checklist.search')}
+                  placeholder={tr('checklist.searchPlaceholder')}
+                  value={checklistSearchQuery}
+                  onChange={(e) => setChecklistSearchQuery(e.target.value)}
+                  {...mvsOutlinedLabelProps}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ fontSize: 18, color: '#64748B' }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                  sx={{
+                    ...mvsSearchFieldSx,
+                    ...mvsFilterFieldHeightSx,
+                    width: { xs: '100%', sm: 260 },
+                  }}
+                />
                 <Button
                   variant="contained"
                   startIcon={<GenerateIcon sx={{ fontSize: 18 }} />}
@@ -1911,7 +1957,11 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
                 (clients.length === 0 || templates.length === 0 ? (
                   emptyBox(tr('checklist.needSetup'))
                 ) : sortedChecklistClients.length === 0 ? (
-                  emptyBox(tr('checklist.needAssignees'))
+                  emptyBox(
+                    checklistSearchQuery.trim()
+                      ? tr('checklist.searchNoResults')
+                      : tr('checklist.needAssignees')
+                  )
                 ) : instances.length === 0 ? (
                   <Box sx={{ px: 2.5, py: 3 }}>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>

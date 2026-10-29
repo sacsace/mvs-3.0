@@ -2383,6 +2383,9 @@ export default {
           period: '업무 기간',
           purposeHint:
             '이번 달 고객사·담당자별 업무 완료 여부를 한눈에 확인합니다. 담당자가 여러 명이면 담당자마다 행이 나뉩니다.',
+          search: '검색',
+          searchPlaceholder: '담당자·고객사명',
+          searchNoResults: '검색 조건에 맞는 항목이 없습니다.',
           generateHelp:
             '담당이 지정된 고객사 × 이 기간 템플릿만 생성합니다. 이미 있는 건은 유지됩니다.',
           empty: '이 기간에 생성된 업무가 없습니다. 「이 달 생성」을 눌러 주세요.',
