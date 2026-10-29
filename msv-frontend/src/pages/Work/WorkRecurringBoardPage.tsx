@@ -248,8 +248,33 @@ function userLabel(u?: { username?: string; userid?: string } | null): string {
 
 const MEMBER_AVATAR_COLORS = ['#2563EB', '#0D9488', '#7C3AED', '#DB2777', '#EA580C', '#059669'];
 
+/** 담당자 블록 교차: 투명(흰색) → 파스텔 붉은색 → 투명 … */
+const ASSIGNEE_BAND_CLEAR = '#FFFFFF';
+const ASSIGNEE_BAND_ACCENT = '#FDECEC';
+
 function memberAvatarColor(userId: number) {
   return MEMBER_AVATAR_COLORS[Math.abs(userId) % MEMBER_AVATAR_COLORS.length];
+}
+
+function assigneeBandKey(row: {
+  assignee_user_id?: number;
+  assignee_label?: string;
+  assignee_names?: string[];
+}) {
+  const uid = Number(row.assignee_user_id || 0);
+  if (Number.isInteger(uid) && uid > 0) return `u:${uid}`;
+  const label = String(
+    row.assignee_label ||
+      (Array.isArray(row.assignee_names) ? row.assignee_names[0] : '') ||
+      ''
+  )
+    .trim()
+    .toLowerCase();
+  return label ? `n:${label}` : 'u:0';
+}
+
+function assigneeBandBg(bandIndex: number) {
+  return bandIndex % 2 === 0 ? ASSIGNEE_BAND_CLEAR : ASSIGNEE_BAND_ACCENT;
 }
 
 function resolveMemberAvatarSrc(avatarUrl?: string | null) {
@@ -316,7 +341,7 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
   const [checklistSort, setChecklistSort] = useState<{
     key: 'client' | 'assignee' | `template:${number}`;
     dir: 'asc' | 'desc';
-  }>({ key: 'client', dir: 'asc' });
+  }>({ key: 'assignee', dir: 'asc' });
   const [assignSort, setAssignSort] = useState<{
     key: 'client' | 'assignee' | 'reviewer' | 'progress';
     dir: 'asc' | 'desc';
@@ -593,6 +618,20 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
 
     return rows;
   }, [canViewAllChecklist, checklistClients, checklistSort, currentUser?.id, instanceMap]);
+
+  /** 연속된 동일 담당자 블록마다 0,1,2… → 흰색/회색 교차 */
+  const checklistAssigneeBandIndex = useMemo(() => {
+    const bands: number[] = [];
+    let band = 0;
+    let prevKey: string | null = null;
+    for (const row of sortedChecklistClients) {
+      const key = assigneeBandKey(row);
+      if (prevKey !== null && key !== prevKey) band += 1;
+      prevKey = key;
+      bands.push(band);
+    }
+    return bands;
+  }, [sortedChecklistClients]);
 
   /** 연속된 동일 고객사 행에 rowSpan 적용 */
   const checklistClientRowSpan = useMemo(() => {
@@ -1940,7 +1979,26 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
                           })}
                         </TableRow>
                       </TableHead>
-                      <TableBody sx={mvsTableBodyRowSx}>
+                      <TableBody
+                        sx={
+                          {
+                            ...(typeof mvsTableBodyRowSx === 'function'
+                              ? {}
+                              : mvsTableBodyRowSx),
+                            '& .MuiTableCell-body': {
+                              py: 1.5,
+                              px: 2,
+                              fontSize: '0.875rem',
+                              borderBottom: '1px solid #E2E8F0',
+                            },
+                            '& .MuiTableRow-root': { bgcolor: 'transparent' },
+                            '& .MuiTableRow-root:hover': { bgcolor: 'transparent' },
+                            '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
+                              borderBottom: 'none',
+                            },
+                          } as const
+                        }
+                      >
                         {sortedChecklistClients.map((client, rowIndex) => {
                           const clientName = client.customer?.name || String(client.customer_id);
                           const assigneeLabel =
@@ -1956,8 +2014,30 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
                             `${client.customer_id}:${client.assignee_user_id || client.id}`;
                           const showClientCell = !checklistClientRowSpan.hideClientCell.has(rowIndex);
                           const clientSpan = checklistClientRowSpan.spanAt.get(rowIndex) || 1;
+                          const rowBg = assigneeBandBg(
+                            checklistAssigneeBandIndex[rowIndex] ?? 0
+                          );
+                          const isAccentBand = rowBg === ASSIGNEE_BAND_ACCENT;
+                          const rowLine = isAccentBand ? '#FFFFFF' : '#E2E8F0';
+                          const cellBgSx = {
+                            bgcolor: `${rowBg} !important`,
+                            backgroundColor: `${rowBg} !important`,
+                            borderBottom: `1px solid ${rowLine} !important`,
+                          };
                           return (
-                            <TableRow key={rowKey} hover>
+                            <TableRow
+                              key={rowKey}
+                              hover
+                              data-assignee-band={checklistAssigneeBandIndex[rowIndex] ?? 0}
+                              sx={{
+                                bgcolor: `${rowBg} !important`,
+                                '& > .MuiTableCell-root': cellBgSx,
+                                '&:hover > .MuiTableCell-root': {
+                                  ...cellBgSx,
+                                  filter: 'brightness(0.97)',
+                                },
+                              }}
+                            >
                               {showClientCell ? (
                                 <TableCell
                                   rowSpan={clientSpan}
@@ -1965,7 +2045,7 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
                                     position: 'sticky',
                                     left: 0,
                                     zIndex: 1,
-                                    bgcolor: '#FFFFFF',
+                                    ...cellBgSx,
                                     fontWeight: 600,
                                     maxWidth: 220,
                                     whiteSpace: 'nowrap',
@@ -1983,7 +2063,7 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
                                   position: 'sticky',
                                   left: 160,
                                   zIndex: 1,
-                                  bgcolor: '#FFFFFF',
+                                  ...cellBgSx,
                                   maxWidth: 140,
                                   whiteSpace: 'nowrap',
                                   overflow: 'hidden',
@@ -2002,7 +2082,11 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
                                   return (
                                     <TableCell
                                       key={tpl.id}
-                                      sx={{ color: 'text.disabled', bgcolor: '#F8FAFC' }}
+                                      sx={{
+                                        ...cellBgSx,
+                                        color: 'text.disabled',
+                                        opacity: 0.72,
+                                      }}
                                     >
                                       {tr('checklist.cellEmpty')}
                                     </TableCell>
@@ -2017,7 +2101,13 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
                                   '';
                                 if (!cell) {
                                   return (
-                                    <TableCell key={tpl.id} sx={{ color: 'text.disabled' }}>
+                                    <TableCell
+                                      key={tpl.id}
+                                      sx={{
+                                        ...cellBgSx,
+                                        color: 'text.disabled',
+                                      }}
+                                    >
                                       {tr('checklist.cellEmpty')}
                                     </TableCell>
                                   );
@@ -2030,7 +2120,7 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
                                   isDone ? tr('checklist.done') : tr('checklist.notDone'),
                                 ].filter(Boolean);
                                 return (
-                                  <TableCell key={tpl.id}>
+                                  <TableCell key={tpl.id} sx={cellBgSx}>
                                     <Chip
                                       size="small"
                                       title={tipParts.join(' · ')}
