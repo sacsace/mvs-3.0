@@ -1837,13 +1837,12 @@ export const getMyPayslips = async (req: RequestWithUser, res: Response) => {
     });
 
     // 발송 당시 DB net이 수당값으로 잘못 저장된 경우 → 동일 월 급여 행으로 실수령액 보정
-    const periods = [
-      ...new Set(
-        rows
-          .map((r: any) => normalizePayrollPeriodInput(String(r.payroll_period || '')))
-          .filter(Boolean)
-      ),
-    ];
+    const periodSet = new Set<string>();
+    for (const r of rows) {
+      const ym = normalizePayrollPeriodInput(String((r as any).payroll_period || ''));
+      if (ym) periodSet.add(ym);
+    }
+    const periods = Array.from(periodSet);
     const payrollByPeriod = new Map<string, any>();
     if (periods.length > 0) {
       const payrollRows = await (Payroll as any).findAll({
@@ -1852,7 +1851,7 @@ export const getMyPayslips = async (req: RequestWithUser, res: Response) => {
           company_id,
           employee_id: userId,
           is_active: true,
-          [Op.or]: periods.map((ym) => sameMonthPayrollPeriodWhere(ym)),
+          [Op.or]: periods.map((ym: string) => sameMonthPayrollPeriodWhere(ym)),
         },
         attributes: [
           'id',

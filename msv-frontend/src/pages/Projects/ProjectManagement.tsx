@@ -21,6 +21,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
   TextField,
   Tooltip,
   Typography,
@@ -86,6 +87,7 @@ type ProjectRow = {
   description: string;
   manager: string;
   manager_id: number | null;
+  members: string;
   status: string;
   priority: string;
   startDate: string;
@@ -93,6 +95,61 @@ type ProjectRow = {
   progress: number;
   budget: number;
 };
+
+type ProjectListSortKey =
+  | 'name'
+  | 'members'
+  | 'startDate'
+  | 'endDate'
+  | 'duration'
+  | 'remaining'
+  | 'status'
+  | 'priority'
+  | 'progress';
+
+const PROJECT_STATUS_RANK: Record<string, number> = {
+  planning: 0,
+  in_progress: 1,
+  on_hold: 2,
+  completed: 3,
+  cancelled: 4,
+};
+
+const ProjectListHeadCell = ({
+  sortKey,
+  activeKey,
+  direction,
+  onSort,
+  children,
+  sx,
+}: {
+  sortKey: ProjectListSortKey;
+  activeKey: ProjectListSortKey | null;
+  direction: 'asc' | 'desc';
+  onSort: (key: ProjectListSortKey) => void;
+  children: React.ReactNode;
+  sx?: object;
+}) => (
+  <TableCell sx={{ whiteSpace: 'nowrap', ...sx }}>
+    <TableSortLabel
+      active={activeKey === sortKey}
+      direction={activeKey === sortKey ? direction : 'asc'}
+      onClick={() => onSort(sortKey)}
+      sx={{
+        color: 'inherit',
+        '&:hover': { color: 'inherit' },
+        '&.Mui-active': { color: 'inherit' },
+        '& .MuiTableSortLabel-icon': {
+          color: 'inherit !important',
+          fontSize: 14,
+          opacity: activeKey === sortKey ? 1 : 0.35,
+        },
+      }}
+    >
+      {children}
+    </TableSortLabel>
+  </TableCell>
+);
 
 type FormState = {
   name: string;
@@ -168,6 +225,8 @@ const ProjectManagement: React.FC = () => {
   const [formData, setFormData] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [movingId, setMovingId] = useState<number | null>(null);
+  const [sortKey, setSortKey] = useState<ProjectListSortKey | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const isRootOrAudit = user?.role === 'root' || user?.role === 'audit';
   const canReorder =
@@ -175,7 +234,19 @@ const ProjectManagement: React.FC = () => {
     !searchTerm.trim() &&
     statusFilter === 'all' &&
     managerFilter === 'all' &&
+    sortKey == null &&
     !(isRootOrAudit && selectedCompanyId === '');
+
+  const handleListSort = useCallback((key: ProjectListSortKey) => {
+    setSortKey((prev) => {
+      if (prev === key) {
+        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+        return prev;
+      }
+      setSortDir('asc');
+      return key;
+    });
+  }, []);
 
   const statusLabel = useCallback(
     (status: string) => {
@@ -207,20 +278,28 @@ const ProjectManagement: React.FC = () => {
       const response = await projectService.getProjects(params);
       if (response.success) {
         setProjects(
-          (response.data || []).map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            description: p.description || '',
-            manager: p.manager?.username || '-',
-            manager_id: p.project_manager ?? null,
-            status: normalizeStatus(p.status),
-            progress: Number(p.progress) || 0,
-            startDate: p.start_date || '',
-            endDate: p.end_date || '',
-            priority: p.priority || 'medium',
-            project_code: p.project_code || '',
-            budget: parseFloat(String(p.budget || 0)) || 0,
-          }))
+          (response.data || []).map((p: any) => {
+            const memberNames = Array.isArray(p.members)
+              ? p.members
+                  .map((m: any) => String(m?.user?.username || '').trim())
+                  .filter(Boolean)
+              : [];
+            return {
+              id: p.id,
+              name: p.name,
+              description: p.description || '',
+              manager: p.manager?.username || '-',
+              manager_id: p.project_manager ?? null,
+              members: memberNames.length > 0 ? memberNames.join(', ') : '-',
+              status: normalizeStatus(p.status),
+              progress: Number(p.progress) || 0,
+              startDate: p.start_date || '',
+              endDate: p.end_date || '',
+              priority: p.priority || 'medium',
+              project_code: p.project_code || '',
+              budget: parseFloat(String(p.budget || 0)) || 0,
+            };
+          })
         );
       } else {
         showErrorPopup(response.message || t('projectManagement.errors.loadList'), t('projectManagement.errors.loadListTitle'));
@@ -306,9 +385,63 @@ const ProjectManagement: React.FC = () => {
         p.name.toLowerCase().includes(q) ||
         p.description.toLowerCase().includes(q) ||
         p.project_code.toLowerCase().includes(q) ||
+        p.members.toLowerCase().includes(q) ||
         p.manager.toLowerCase().includes(q)
     );
   }, [projects, searchTerm]);
+
+  const displayedProjects = useMemo(() => {
+    const priorityRank: Record<string, number> = {
+      urgent: 4,
+      high: 3,
+      medium: 2,
+      low: 1,
+    };
+    // 기본: 기획 → 진행중 → 보류 → 완료 → 취소 (동일 상태 내 API/수동 순서 유지)
+    if (!sortKey) {
+      return [...filteredProjects].sort((a, b) => {
+        const ra = PROJECT_STATUS_RANK[a.status] ?? 99;
+        const rb = PROJECT_STATUS_RANK[b.status] ?? 99;
+        return ra - rb;
+      });
+    }
+    const dir = sortDir === 'asc' ? 1 : -1;
+    const valueOf = (p: ProjectRow): string | number => {
+      switch (sortKey) {
+        case 'name':
+          return p.name.toLowerCase();
+        case 'members':
+          return p.members.toLowerCase();
+        case 'startDate':
+          return p.startDate || '';
+        case 'endDate':
+          return p.endDate || '';
+        case 'duration':
+          return daysBetween(p.startDate, p.endDate) ?? -1;
+        case 'remaining':
+          return remainingDays(p.endDate) ?? Number.NEGATIVE_INFINITY;
+        case 'status':
+          return PROJECT_STATUS_RANK[p.status] ?? 99;
+        case 'priority':
+          return priorityRank[p.priority] ?? 0;
+        case 'progress':
+          return Number(p.progress) || 0;
+        default:
+          return '';
+      }
+    };
+    return [...filteredProjects].sort((a, b) => {
+      const av = valueOf(a);
+      const bv = valueOf(b);
+      if (typeof av === 'number' && typeof bv === 'number') {
+        if (av === bv) return (a.id - b.id) * dir;
+        return (av - bv) * dir;
+      }
+      const cmp = String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' });
+      if (cmp === 0) return (a.id - b.id) * dir;
+      return cmp * dir;
+    });
+  }, [filteredProjects, sortDir, sortKey]);
 
   const moveProject = async (project: ProjectRow, direction: 'up' | 'down', e: React.MouseEvent) => {
     e.stopPropagation();
@@ -649,21 +782,38 @@ const ProjectManagement: React.FC = () => {
                         {t('projectManagement.columns.order')}
                       </TableCell>
                     )}
-                    <TableCell>{t('projectManagement.columns.code')}</TableCell>
-                    <TableCell>{t('projectManagement.columns.name')}</TableCell>
-                    <TableCell>{t('projectManagement.columns.manager')}</TableCell>
-                    <TableCell>{t('projectManagement.columns.startDate')}</TableCell>
-                    <TableCell>{t('projectManagement.columns.endDate')}</TableCell>
-                    <TableCell>{t('projectManagement.columns.duration')}</TableCell>
-                    <TableCell>{t('projectManagement.columns.remaining')}</TableCell>
-                    <TableCell>{t('projectManagement.columns.status')}</TableCell>
-                    <TableCell>{t('projectManagement.columns.priority')}</TableCell>
-                    <TableCell>{t('projectManagement.columns.progress')}</TableCell>
+                    <ProjectListHeadCell sortKey="name" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                      {t('projectManagement.columns.name')}
+                    </ProjectListHeadCell>
+                    <ProjectListHeadCell sortKey="members" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                      {t('projectManagement.columns.members')}
+                    </ProjectListHeadCell>
+                    <ProjectListHeadCell sortKey="startDate" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                      {t('projectManagement.columns.startDate')}
+                    </ProjectListHeadCell>
+                    <ProjectListHeadCell sortKey="endDate" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                      {t('projectManagement.columns.endDate')}
+                    </ProjectListHeadCell>
+                    <ProjectListHeadCell sortKey="duration" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                      {t('projectManagement.columns.duration')}
+                    </ProjectListHeadCell>
+                    <ProjectListHeadCell sortKey="remaining" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                      {t('projectManagement.columns.remaining')}
+                    </ProjectListHeadCell>
+                    <ProjectListHeadCell sortKey="status" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                      {t('projectManagement.columns.status')}
+                    </ProjectListHeadCell>
+                    <ProjectListHeadCell sortKey="priority" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                      {t('projectManagement.columns.priority')}
+                    </ProjectListHeadCell>
+                    <ProjectListHeadCell sortKey="progress" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                      {t('projectManagement.columns.progress')}
+                    </ProjectListHeadCell>
                     <TableCell sx={{ textAlign: 'center' }}>{t('projectManagement.columns.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody sx={mvsTableBodyRowSx}>
-                  {filteredProjects.map((project, projectIndex) => {
+                  {displayedProjects.map((project, projectIndex) => {
                     const duration = daysBetween(project.startDate, project.endDate);
                     const remain = remainingDays(project.endDate);
                     const overdue =
@@ -675,9 +825,11 @@ const ProjectManagement: React.FC = () => {
                       ? t('projectManagement.noEditPermission')
                       : isRootOrAudit && selectedCompanyId === ''
                         ? t('projectManagement.reorderNeedCompany')
-                        : !canReorder
+                        : sortKey != null
                           ? t('projectManagement.reorderHint')
-                          : '';
+                          : !canReorder
+                            ? t('projectManagement.reorderHint')
+                            : '';
                     return (
                       <TableRow
                         key={project.id}
@@ -710,7 +862,7 @@ const ProjectManagement: React.FC = () => {
                                   disabled={
                                     !canReorder ||
                                     movingId != null ||
-                                    projectIndex === filteredProjects.length - 1
+                                    projectIndex === displayedProjects.length - 1
                                   }
                                   onClick={(e) => void moveProject(project, 'down', e)}
                                   sx={{ p: 0, width: 18, height: 14 }}
@@ -722,7 +874,6 @@ const ProjectManagement: React.FC = () => {
                             </Tooltip>
                           </TableCell>
                         )}
-                        <TableCell>{project.project_code}</TableCell>
                         <TableCell>
                           <Typography
                             component="span"
@@ -734,14 +885,30 @@ const ProjectManagement: React.FC = () => {
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
-                              maxWidth: 220,
+                              maxWidth: 260,
                             }}
                             title={project.name}
                           >
                             {project.name}
                           </Typography>
                         </TableCell>
-                        <TableCell>{project.manager}</TableCell>
+                        <TableCell>
+                          <Typography
+                            component="span"
+                            sx={{
+                              fontSize: '0.8125rem',
+                              color: '#0F172A',
+                              display: 'block',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              maxWidth: 260,
+                            }}
+                            title={project.members}
+                          >
+                            {project.members}
+                          </Typography>
+                        </TableCell>
                         <TableCell>{project.startDate || '-'}</TableCell>
                         <TableCell>{project.endDate || '-'}</TableCell>
                         <TableCell>

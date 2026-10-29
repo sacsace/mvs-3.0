@@ -101,7 +101,7 @@ export async function sendWorkReportSubmittedEmail(params: {
     ccAddresses = [...new Set(ccAddresses)];
   }
 
-  const title = String(report.title || '').trim() || '업무 보고서';
+  const title = String(report.title || '').trim() || 'Work Report';
   const reportId = String(report.report_id || report.id);
   const reportDate = formatReportDate(report.report_date);
   const summaryPlain = stripHtml(String(report.summary || ''));
@@ -110,16 +110,6 @@ export async function sendWorkReportSubmittedEmail(params: {
 
   const baseUrl = resolveAppBaseUrl();
   const viewUrl = baseUrl ? `${baseUrl}/work/reports` : '';
-
-  const metaLinesKo = [
-    `보고서 ID: ${reportId}`,
-    reportDate ? `작성일: ${reportDate}` : '',
-    `제목: ${title}`,
-    summaryPlain ? `\n요약:\n${summaryPlain}` : '',
-    contentExcerpt ? `\n내용:\n${contentExcerpt}` : ''
-  ]
-    .filter(Boolean)
-    .join('\n');
 
   const metaLinesEn = [
     `Report ID: ${reportId}`,
@@ -133,23 +123,21 @@ export async function sendWorkReportSubmittedEmail(params: {
 
   const sharedTable = `
       <table style="border-collapse:collapse;margin:12px 0 16px;width:100%;">
-        <tr><td style="padding:4px 12px 4px 0;color:#6b7280;vertical-align:top;">보고서 ID / Report ID</td><td>${escapeHtml(reportId)}</td></tr>
-        ${reportDate ? `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;vertical-align:top;">작성일 / Date</td><td>${escapeHtml(reportDate)}</td></tr>` : ''}
-        <tr><td style="padding:4px 12px 4px 0;color:#6b7280;vertical-align:top;">제목 / Title</td><td><strong>${escapeHtml(title)}</strong></td></tr>
+        <tr><td style="padding:4px 12px 4px 0;color:#6b7280;vertical-align:top;">Report ID</td><td>${escapeHtml(reportId)}</td></tr>
+        ${reportDate ? `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;vertical-align:top;">Date</td><td>${escapeHtml(reportDate)}</td></tr>` : ''}
+        <tr><td style="padding:4px 12px 4px 0;color:#6b7280;vertical-align:top;">Title</td><td><strong>${escapeHtml(title)}</strong></td></tr>
       </table>
-      ${summaryPlain ? `<p style="margin:0 0 8px;"><span style="color:#6b7280;">요약 / Summary</span><br/>${escapeHtml(summaryPlain).replace(/\n/g, '<br/>')}</p>` : ''}
-      ${contentExcerpt ? `<p style="margin:0 0 12px;"><span style="color:#6b7280;">내용 / Content</span><br/>${escapeHtml(contentExcerpt).replace(/\n/g, '<br/>')}</p>` : ''}
+      ${summaryPlain ? `<p style="margin:0 0 8px;"><span style="color:#6b7280;">Summary</span><br/>${escapeHtml(summaryPlain).replace(/\n/g, '<br/>')}</p>` : ''}
+      ${contentExcerpt ? `<p style="margin:0 0 12px;"><span style="color:#6b7280;">Content</span><br/>${escapeHtml(contentExcerpt).replace(/\n/g, '<br/>')}</p>` : ''}
   `;
 
   const content = {
-    titleKo: '업무 보고서 제출',
+    titleKo: 'Work Report Submitted',
     titleEn: 'Work Report Submitted',
-    bodyKo: `${authorName}님이 업무 보고서를 제출했습니다.\n\n${metaLinesKo}`,
+    bodyKo: `${authorName} submitted a work report.\n\n${metaLinesEn}`,
     bodyEn: `${authorName} submitted a work report.\n\n${metaLinesEn}`,
-    bodyHtmlKo: `<p style="margin:0 0 12px;"><strong>${escapeHtml(authorName)}</strong>님이 업무 보고서를 제출했습니다.</p>${sharedTable}`,
     bodyHtmlEn: `<p style="margin:0 0 12px;"><strong>${escapeHtml(authorName)}</strong> submitted a work report.</p>${sharedTable}`,
     linkUrl: viewUrl || undefined,
-    footerKo: '본 메일은 MVS 업무 보고서 알림입니다.',
     footerEn: 'This is an MVS work report notification.'
   };
 
@@ -158,7 +146,7 @@ export async function sendWorkReportSubmittedEmail(params: {
     from: mailOpts.from,
     to,
     cc: ccAddresses.length > 0 ? ccAddresses : undefined,
-    subject: bilingualSubject(`[업무 보고서] ${title}`, `[Work Report] ${title}`),
+    subject: bilingualSubject(`[Work Report] ${title}`, `[Work Report] ${title}`),
     text: buildBilingualText(content),
     html: buildBilingualHtml(content)
   });

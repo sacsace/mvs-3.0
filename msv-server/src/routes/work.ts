@@ -83,6 +83,24 @@ import {
   deleteWorkBoardCardAttachment,
 } from '../controllers/workBoardController';
 import {
+  getRecurringOverview,
+  createRecurringTemplate,
+  updateRecurringTemplate,
+  deleteRecurringTemplate,
+  seedRecurringSampleTemplates,
+  addRecurringClients,
+  removeRecurringClient,
+  upsertRecurringAssignment,
+  bulkUpsertRecurringAssignments,
+  getRecurringChecklist,
+  generateRecurringPeriod,
+  generateRecurringPeriodAllBoards,
+  getRecurringInstance,
+  updateRecurringInstance,
+  uploadRecurringInstanceAttachments,
+  deleteRecurringInstanceAttachment,
+} from '../controllers/recurringTaskController';
+import {
   getWorkAssigneeList,
   createWorkAssignee,
   updateWorkAssignee,
@@ -146,6 +164,90 @@ router.post(
   requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
   moveWorkBoard
 );
+
+/** 정기 업무(RECURRING) — 템플릿 / 고객사 / 담당 배정 */
+router.get(
+  '/boards/:boardId/recurring/overview',
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_view'),
+  getRecurringOverview
+);
+router.post(
+  '/boards/:boardId/recurring/templates',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  createRecurringTemplate
+);
+router.put(
+  '/boards/:boardId/recurring/templates/:templateId',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  updateRecurringTemplate
+);
+router.delete(
+  '/boards/:boardId/recurring/templates/:templateId',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  deleteRecurringTemplate
+);
+router.post(
+  '/boards/:boardId/recurring/templates/seed-samples',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  seedRecurringSampleTemplates
+);
+router.post(
+  '/boards/:boardId/recurring/clients',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  addRecurringClients
+);
+router.delete(
+  '/boards/:boardId/recurring/clients/:customerId',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  removeRecurringClient
+);
+router.put(
+  '/boards/:boardId/recurring/assignments',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  upsertRecurringAssignment
+);
+router.put(
+  '/boards/:boardId/recurring/assignments/bulk',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  bulkUpsertRecurringAssignments
+);
+router.get(
+  '/boards/:boardId/recurring/checklist',
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_view'),
+  getRecurringChecklist
+);
+router.post(
+  '/boards/:boardId/recurring/generate',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  generateRecurringPeriod
+);
+router.post(
+  '/recurring/generate-all',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  generateRecurringPeriodAllBoards
+);
+router.get(
+  '/boards/:boardId/recurring/instances/:instanceId',
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_view'),
+  getRecurringInstance
+);
+router.put(
+  '/boards/:boardId/recurring/instances/:instanceId',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  updateRecurringInstance
+);
+
 router.post(
   '/boards/:boardId/lists',
   restrictAuditToReadOnly,
@@ -351,6 +453,64 @@ router.delete(
   restrictAuditToReadOnly,
   requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
   deleteWorkBoardCardAttachment
+);
+
+const recurringInstanceAttachmentStorage = multer.diskStorage({
+  destination: (req, _file, cb) => {
+    ensureUploadDir();
+    const instanceId = String(req.params.instanceId || 'unknown');
+    const dir = path.join(uploadPath, 'recurring-instances', instanceId);
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    let original = file.originalname || 'attachment';
+    try {
+      original = Buffer.from(original, 'latin1').toString('utf8');
+    } catch {
+      // keep
+    }
+    const safeName = original.replace(/[^a-zA-Z0-9.\-_]/g, '_') || 'attachment';
+    let finalName = safeName;
+    let counter = 1;
+    const instanceId = String(req.params.instanceId || 'unknown');
+    const dir = path.join(uploadPath, 'recurring-instances', instanceId);
+    while (fs.existsSync(path.join(dir, finalName))) {
+      const extIndex = safeName.lastIndexOf('.');
+      const base = extIndex > -1 ? safeName.slice(0, extIndex) : safeName;
+      const ext = extIndex > -1 ? safeName.slice(extIndex) : '';
+      finalName = `${base}_${counter}${ext}`;
+      counter += 1;
+    }
+    cb(null, finalName);
+  },
+});
+
+const recurringInstanceAttachmentUpload = multer({
+  storage: recurringInstanceAttachmentStorage,
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (isAllowedWorkAttachment(file)) return cb(null, true);
+    const extension = path.extname(String(file.originalname || '')).toLowerCase();
+    if (!allowedExtensionSet.has(extension)) {
+      return cb(new Error('허용되지 않은 파일 확장자입니다.'));
+    }
+    return cb(new Error(`허용되지 않은 파일 형식입니다. (${file.mimetype || 'unknown'})`));
+  },
+});
+
+router.post(
+  '/boards/:boardId/recurring/instances/:instanceId/attachments',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  recurringInstanceAttachmentUpload.array('files', 10),
+  uploadRecurringInstanceAttachments
+);
+router.delete(
+  '/boards/:boardId/recurring/instances/:instanceId/attachments/:storedName',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  deleteRecurringInstanceAttachment
 );
 
 // 업무 통계 관련 라우트

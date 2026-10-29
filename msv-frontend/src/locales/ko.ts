@@ -2329,7 +2329,191 @@ export default {
       },
       fields: {
         boardName: '보드 이름',
+        boardType: '보드 유형',
         descriptionOptional: '설명 (선택)'
+      },
+      boardTypes: {
+        general: '일반 업무 (General Tasks)',
+        generalHint: '일회성 업무를 카드로 생성하고 관리합니다.',
+        recurring: '정기 업무 (Recurring Tasks)',
+        recurringHint: '고객사별 월간·분기별·연간 업무를 관리합니다.'
+      },
+      recurring: {
+        phase1Title: '정기 업무 보드가 생성되었습니다',
+        phase1Body:
+          '다음 단계에서 업무 템플릿, 고객사 연결, 담당자 지정, 월별 체크리스트를 연결합니다.\n지금은 보드 유형 저장과 목록·진입 분기까지 지원합니다.',
+        tabs: {
+          checklist: '월별 체크리스트',
+          templates: '업무 템플릿',
+          clients: '고객사',
+          assignments: '담당 배정'
+        },
+        actions: {
+          addTemplate: '템플릿 추가',
+          seedSamples: '샘플 불러오기',
+          addClients: '고객사 연결',
+          generatePeriod: '이 달 생성',
+          inviteMembers: '멤버 초대',
+          bulkApply: '일괄 설정',
+          save: '저장',
+          cancel: '취소',
+          remove: '해제',
+          edit: '수정',
+          back: '보드 목록'
+        },
+        bulkAssign: {
+          title: '세부 설정',
+          detail: '세부 설정',
+          detailHint: '업무·검토자별 배정',
+          mixed: '업무별 다름',
+          multiplePeople: '여러명',
+          multipleByTask: '업무별 {{count}}명',
+          progress: '{{assigned}}/{{total}}건 배정',
+          useClient: '고객사',
+          useAssignee: '담당자',
+          clientPlaceholder: '일괄 적용할 고객사 선택',
+          assigneePlaceholder: '담당자 선택',
+          selectedCount: '{{count}}건 선택',
+          needTarget: '표에서 행을 선택하거나, 고객사 옵션을 켠 뒤 고객사를 선택하세요.',
+          needAssigneeOption: '담당자 일괄 설정 옵션을 선택하세요.',
+          needAssignee: '적용할 담당자를 선택하세요.',
+          applied: '{{count}}건 담당자를 일괄 설정했습니다.'
+        },
+        checklist: {
+          period: '업무 기간',
+          purposeHint:
+            '이번 달 고객사·담당자별 업무 완료 여부를 한눈에 확인합니다. 담당자가 여러 명이면 담당자마다 행이 나뉩니다.',
+          generateHelp:
+            '담당이 지정된 고객사 × 이 기간 템플릿만 생성합니다. 이미 있는 건은 유지됩니다.',
+          empty: '이 기간에 생성된 업무가 없습니다. 「이 달 생성」을 눌러 주세요.',
+          needSetup: '고객사와 템플릿을 먼저 등록하세요.',
+          needAssignees:
+            '담당이 지정된 고객사만 표시됩니다. 「담당 배정」에서 이번 달 업무 담당자를 모두 지정하세요.',
+          cellEmpty: '—',
+          cellUnassigned: '미배정',
+          done: '완료',
+          notDone: '미완료',
+          summaryTotal: '전체',
+          summaryCompleted: '완료',
+          summaryInProgress: '진행',
+          summaryPending: '대기',
+          summaryOverdue: '지연',
+          summaryRate: '완료율'
+        },
+        status: {
+          PENDING: '대기',
+          IN_PROGRESS: '진행',
+          COMPLETED: '완료',
+          VERIFIED: '검증',
+          NOT_APPLICABLE: '해당 없음'
+        },
+        statusDialog: {
+          title: '업무 상세',
+          due: '마감일',
+          period: '업무 기간',
+          assignee: '담당자',
+          reviewer: '검토자',
+          notes: '메모',
+          notesPlaceholder: '메모를 입력하세요',
+          changeTo: '상태 변경',
+          attachments: '첨부',
+          addAttachment: '파일 추가',
+          noAttachments: '첨부 없음',
+          requiresAttachment: '첨부 필수',
+          requiresVerification: '검증 필수',
+          overdue: '지연',
+          saveNotes: '메모 저장',
+          openFile: '열기',
+          needAttachmentComplete: '이 업무는 첨부 파일이 있어야 완료할 수 있습니다. 아래에서 파일을 추가하세요.',
+          needAttachmentVerify: '검증하려면 첨부 파일이 필요합니다. 파일을 올린 뒤 완료·검증하세요.',
+          needCompleteFirst: '검증 필수 업무는 먼저 「완료」한 다음 「검증」하세요.'
+        },
+        fields: {
+          name: '업무명',
+          code: '코드',
+          category: '분류',
+          frequency: '주기',
+          dueDay: '마감일(일)',
+          priority: '우선순위',
+          requiresAttachment: '첨부 필수',
+          requiresVerification: '검증 필수',
+          client: '고객사',
+          businessNumber: '사업자등록번호 / GST',
+          template: '업무',
+          assignee: '담당자',
+          reviewer: '검토자',
+          defaultAssignee: '기본 담당자',
+          defaultReviewer: '기본 검토자',
+          none: '미지정'
+        },
+        frequency: {
+          MONTHLY: '매월',
+          QUARTERLY: '분기',
+          HALF_YEARLY: '반기',
+          ANNUALLY: '연간',
+          CUSTOM: '사용자 정의'
+        },
+        empty: {
+          templates: '등록된 업무 템플릿이 없습니다.',
+          clients: '연결된 고객사가 없습니다.',
+          assignments: '고객사와 템플릿을 먼저 등록하세요.',
+          noCandidates: '추가할 고객사가 없습니다.'
+        },
+        roles: {
+          master: '마스터',
+          admin: 'Admin',
+          member: '멤버'
+        },
+        memberMenu: {
+          viewPhoto: '사진보기',
+          setAdmin: 'Admin으로 지정',
+          alreadyAdmin: '이미 Admin',
+          noPhoto: '등록된 사진이 없습니다.'
+        },
+        hints: {
+          manageOnly:
+            '템플릿·고객사·담당 배정·멤버 초대는 정기 업무 마스터(보드 소유자)만 할 수 있습니다.',
+          assignmentHelp:
+            '고객사마다 기본 담당자·검토자를 지정합니다. 업무별로 다르게 지정하려면 「세부 설정」을 여세요. 마스터만 변경할 수 있습니다.',
+          membersCount: '보드 멤버 ({{count}})',
+          membersTitle: '보드 멤버'
+        },
+        invite: {
+          title: '보드 멤버 초대',
+          search: '회사 사용자 검색',
+          empty: '초대할 사용자가 없습니다.',
+          success: '멤버를 초대했습니다.',
+          failed: '멤버 초대에 실패했습니다.'
+        },
+        dialog: {
+          newTemplate: '업무 템플릿 추가',
+          editTemplate: '업무 템플릿 수정',
+          addClients: '고객사 연결',
+          deleteTemplateTitle: '템플릿 삭제',
+          deleteTemplateMsg: '「{{name}}」 템플릿을 삭제할까요? 관련 담당 배정도 해제됩니다.',
+          removeClientTitle: '고객사 연결 해제',
+          removeClientMsg: '「{{name}}」 연결을 해제할까요? 관련 담당 배정도 해제됩니다.'
+        },
+        success: {
+          templateCreated: '템플릿을 추가했습니다.',
+          templateUpdated: '템플릿을 수정했습니다.',
+          templateDeleted: '템플릿을 삭제했습니다.',
+          samplesSeeded: '샘플 템플릿을 추가했습니다. ({{count}}건)',
+          clientsAdded: '고객사를 연결했습니다.',
+          clientRemoved: '고객사 연결을 해제했습니다.',
+          assignmentSaved: '담당 배정을 저장했습니다.',
+          assignmentBulkSaved: '담당자를 {{count}}건 일괄 설정했습니다.',
+          periodGenerated: '{{period}} 업무 {{created}}건 생성 (기존 {{skipped}}건 유지)',
+          statusUpdated: '상태를 변경했습니다.',
+          memberSetAdmin: '{{name}} 님을 Admin으로 지정했습니다.'
+        },
+        errors: {
+          loadFailed: '정기 업무 설정을 불러오지 못했습니다.',
+          checklistFailed: '체크리스트를 불러오지 못했습니다.',
+          saveFailed: '저장에 실패했습니다.',
+          nameRequired: '업무명을 입력하세요.',
+          clientsRequired: '고객사를 선택하세요.'
+        }
       },
       filters: {
         company: '회사',
@@ -2499,7 +2683,7 @@ export default {
         complete: '프로젝트 완료'
       },
       filters: {
-        searchPlaceholder: '프로젝트명, 코드, 담당자 검색',
+        searchPlaceholder: '프로젝트명, 참여자 검색',
         company: '회사',
         searchCompany: '회사명 검색',
         allCompanies: '전체 회사',
@@ -2513,6 +2697,7 @@ export default {
         code: '코드',
         name: '프로젝트명',
         manager: '담당자',
+        members: '참여자',
         startDate: '시작일',
         endDate: '종료일',
         duration: '기간',
@@ -2522,7 +2707,7 @@ export default {
         progress: '진행률',
         actions: '작업'
       },
-      reorderHint: '검색·상태·담당자 필터를 해제한 뒤 순서를 변경할 수 있습니다.',
+      reorderHint: '검색·상태·담당자 필터와 헤더 정렬을 해제한 뒤 순서를 변경할 수 있습니다.',
       reorderNeedCompany: '회사를 선택한 뒤 순서를 변경할 수 있습니다.',
       fields: {
         name: '프로젝트명',

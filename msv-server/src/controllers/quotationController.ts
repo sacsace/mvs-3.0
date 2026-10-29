@@ -925,22 +925,9 @@ export const sendQuotation = async (req: RequestWithUser, res: Response) => {
     const customerInSubject = toTitleCaseWords(customerShort) || 'Customer';
 
     const subject = bilingualSubject(
-      `[${abbrev}] 견적서 첨부 (${customerInSubject})`,
+      `[${abbrev}] Quotation attached (${customerInSubject})`,
       `[${abbrev}] Quotation attached (${customerInSubject})`
     );
-
-    const bodyKo = [
-      '고객님께,',
-      '',
-      '검토용 견적서 PDF를 첨부하오니 확인해 주시기 바랍니다.',
-      '',
-      `고객명: ${quotation.customer_name}`,
-      `견적번호: ${quotation.quotation_number}`,
-      `총액: ${cur} ${total.toLocaleString('en-IN')}`,
-      `유효기간: ${validUntil}`,
-      '',
-      '문의 사항이 있으시면 이 메일로 회신해 주세요.'
-    ].join('\n');
 
     const bodyEn = [
       'Dear Customer,',
@@ -957,31 +944,28 @@ export const sendQuotation = async (req: RequestWithUser, res: Response) => {
 
     const summaryTable = `
       <table cellpadding="8" style="border-collapse:collapse;border:1px solid #ccc;margin:12px 0;">
-        <tr><td style="border:1px solid #ccc;"><b>고객 / Customer</b></td><td style="border:1px solid #ccc;">${cnameFull}</td></tr>
-        <tr><td style="border:1px solid #ccc;"><b>견적번호 / Quotation no.</b></td><td style="border:1px solid #ccc;">${qn}</td></tr>
-        <tr><td style="border:1px solid #ccc;"><b>총액 / Total amount</b></td><td style="border:1px solid #ccc;">${cur} ${total.toLocaleString('en-IN')}</td></tr>
-        <tr><td style="border:1px solid #ccc;"><b>유효기간 / Valid until</b></td><td style="border:1px solid #ccc;">${escapeHtml(validUntil)}</td></tr>
+        <tr><td style="border:1px solid #ccc;"><b>Customer</b></td><td style="border:1px solid #ccc;">${cnameFull}</td></tr>
+        <tr><td style="border:1px solid #ccc;"><b>Quotation no.</b></td><td style="border:1px solid #ccc;">${qn}</td></tr>
+        <tr><td style="border:1px solid #ccc;"><b>Total amount</b></td><td style="border:1px solid #ccc;">${cur} ${total.toLocaleString('en-IN')}</td></tr>
+        <tr><td style="border:1px solid #ccc;"><b>Valid until</b></td><td style="border:1px solid #ccc;">${escapeHtml(validUntil)}</td></tr>
       </table>
     `;
 
     const html = buildBilingualHtml({
-      titleKo: '견적서 발송',
+      titleKo: 'Quotation Sent',
       titleEn: 'Quotation Sent',
-      bodyKo,
+      bodyKo: bodyEn,
       bodyEn,
-      bodyHtmlKo: `<p style="margin:0 0 8px;">고객님께,</p><p style="margin:0 0 8px;">검토용 견적서 PDF를 첨부하오니 확인해 주시기 바랍니다.</p>${summaryTable}<p>문의 사항이 있으시면 이 메일로 회신해 주세요.</p>`,
       bodyHtmlEn: `<p style="margin:0 0 8px;">Dear Customer,</p><p style="margin:0 0 8px;">Please find our quotation in PDF attached for your review.</p>${summaryTable}<p>If you have any questions or need a revised offer, please reply to this email.</p>`,
-      footerKo: '본 메일은 MSV 시스템에서 자동 발송되었습니다.',
-      footerEn: 'This message was sent automatically from the MSV system.'
+      footerEn: 'This message was sent automatically from the MVS system.'
     });
 
     const text = buildBilingualText({
-      titleKo: '견적서 발송',
+      titleKo: 'Quotation Sent',
       titleEn: 'Quotation Sent',
-      bodyKo,
+      bodyKo: bodyEn,
       bodyEn,
-      footerKo: '본 메일은 MSV 시스템에서 자동 발송되었습니다.',
-      footerEn: 'This message was sent automatically from the MSV system.'
+      footerEn: 'This message was sent automatically from the MVS system.'
     });
 
     /** Gmail 등은 전체 메시지 약 25MB 제한 — 첨부 PDF는 여유 있게 18MB 이하 권장 */

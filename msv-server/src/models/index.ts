@@ -83,6 +83,10 @@ import WorkBoardList from './WorkBoardList';
 import WorkBoardCard from './WorkBoardCard';
 import WorkBoardCardComment from './WorkBoardCardComment';
 import WorkBoardMember from './WorkBoardMember';
+import RecurringTaskTemplate from './RecurringTaskTemplate';
+import RecurringBoardClient from './RecurringBoardClient';
+import RecurringTaskAssignment from './RecurringTaskAssignment';
+import RecurringTaskInstance from './RecurringTaskInstance';
 import WorkAssignee from './WorkAssignee';
 import WorkAssigneeItem from './WorkAssigneeItem';
 import ApprovalType from './ApprovalType';
@@ -601,6 +605,34 @@ AcImportIssue.belongsTo(AcImportSourceDocument, { foreignKey: 'source_document_i
 (WorkBoardMember as any).belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 (WorkBoardMember as any).belongsTo(User, { foreignKey: 'invited_by', as: 'inviter' });
 
+(WorkBoard as any).hasMany(RecurringTaskTemplate, { foreignKey: 'board_id', as: 'recurringTemplates' });
+(RecurringTaskTemplate as any).belongsTo(WorkBoard, { foreignKey: 'board_id', as: 'board' });
+(WorkBoard as any).hasMany(RecurringBoardClient, { foreignKey: 'board_id', as: 'recurringClients' });
+(RecurringBoardClient as any).belongsTo(WorkBoard, { foreignKey: 'board_id', as: 'board' });
+(Customer as any).hasMany(RecurringBoardClient, { foreignKey: 'customer_id', as: 'recurringBoardLinks' });
+(RecurringBoardClient as any).belongsTo(Customer, { foreignKey: 'customer_id', as: 'customer' });
+(WorkBoard as any).hasMany(RecurringTaskAssignment, { foreignKey: 'board_id', as: 'recurringAssignments' });
+(RecurringTaskAssignment as any).belongsTo(WorkBoard, { foreignKey: 'board_id', as: 'board' });
+(RecurringTaskTemplate as any).hasMany(RecurringTaskAssignment, { foreignKey: 'template_id', as: 'assignments' });
+(RecurringTaskAssignment as any).belongsTo(RecurringTaskTemplate, { foreignKey: 'template_id', as: 'template' });
+(Customer as any).hasMany(RecurringTaskAssignment, { foreignKey: 'customer_id', as: 'recurringAssignments' });
+(RecurringTaskAssignment as any).belongsTo(Customer, { foreignKey: 'customer_id', as: 'customer' });
+(User as any).hasMany(RecurringTaskAssignment, { foreignKey: 'assigned_user_id', as: 'recurringAssignedTasks' });
+(RecurringTaskAssignment as any).belongsTo(User, { foreignKey: 'assigned_user_id', as: 'assignee' });
+(User as any).hasMany(RecurringTaskAssignment, { foreignKey: 'reviewer_user_id', as: 'recurringReviewTasks' });
+(RecurringTaskAssignment as any).belongsTo(User, { foreignKey: 'reviewer_user_id', as: 'reviewer' });
+
+(WorkBoard as any).hasMany(RecurringTaskInstance, { foreignKey: 'board_id', as: 'recurringInstances' });
+(RecurringTaskInstance as any).belongsTo(WorkBoard, { foreignKey: 'board_id', as: 'board' });
+(RecurringTaskTemplate as any).hasMany(RecurringTaskInstance, { foreignKey: 'template_id', as: 'instances' });
+(RecurringTaskInstance as any).belongsTo(RecurringTaskTemplate, { foreignKey: 'template_id', as: 'template' });
+(Customer as any).hasMany(RecurringTaskInstance, { foreignKey: 'customer_id', as: 'recurringInstances' });
+(RecurringTaskInstance as any).belongsTo(Customer, { foreignKey: 'customer_id', as: 'customer' });
+(User as any).hasMany(RecurringTaskInstance, { foreignKey: 'assigned_user_id', as: 'recurringInstanceAssigned' });
+(RecurringTaskInstance as any).belongsTo(User, { foreignKey: 'assigned_user_id', as: 'assignee' });
+(User as any).hasMany(RecurringTaskInstance, { foreignKey: 'reviewer_user_id', as: 'recurringInstanceReview' });
+(RecurringTaskInstance as any).belongsTo(User, { foreignKey: 'reviewer_user_id', as: 'reviewer' });
+
 (Tenant as any).hasMany(WorkAssignee, { foreignKey: 'tenant_id', as: 'workAssignees' });
 (WorkAssignee as any).belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
 (Company as any).hasMany(WorkAssignee, { foreignKey: 'company_id', as: 'workAssignees' });
@@ -767,6 +799,10 @@ export {
   WorkBoardCard,
   WorkBoardCardComment,
   WorkBoardMember,
+  RecurringTaskTemplate,
+  RecurringBoardClient,
+  RecurringTaskAssignment,
+  RecurringTaskInstance,
   WorkAssignee,
   WorkAssigneeItem,
   ApprovalType,

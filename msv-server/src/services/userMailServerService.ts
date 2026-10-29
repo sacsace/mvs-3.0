@@ -133,9 +133,9 @@ export async function sendUserMailServerTest(params: {
   await transporter.sendMail({
     from: mailOpts.from,
     to,
-    subject: '[MVS] SMTP 테스트 메일 / SMTP test',
-    text: '개인 메일 설정(SMTP) 테스트가 성공했습니다.\nYour personal SMTP settings work.',
-    html: '<p>개인 메일 설정(SMTP) 테스트가 성공했습니다.</p><p>Your personal SMTP settings work.</p>',
+    subject: '[MVS] SMTP test',
+    text: 'Your personal SMTP settings work.',
+    html: '<p>Your personal SMTP settings work.</p>',
   });
   return true;
 }

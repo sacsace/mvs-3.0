@@ -3337,7 +3337,7 @@ const ExpenseApproval: React.FC = () => {
     try {
       setIsInitializingDraft(true);
       draftInitInFlightRef.current = true;
-      const payload = buildExpensePayload('draft');
+        const payload = buildExpensePayload('draft');
       const response = await accountingService.createExpenseReport(payload);
       if (!response?.success) {
         throw new Error(response?.message || t('expenseApproval.errors.createDraftFailed'));
@@ -3368,7 +3368,7 @@ const ExpenseApproval: React.FC = () => {
           : t('expenseApproval.errors.createDraftFailed')
       );
       return null;
-    } finally {
+      } finally {
       draftInitInFlightRef.current = false;
       setIsInitializingDraft(false);
     }
@@ -5630,7 +5630,7 @@ const ExpenseApproval: React.FC = () => {
           await syncExpenseAfterMutation(id);
         }
       } else {
-        setSuccess(t('expenseApproval.success.paymentCompleted'));
+      setSuccess(t('expenseApproval.success.paymentCompleted'));
         await syncExpenseAfterMutation(id, { clearSelection: true });
         setListTab('transfer');
         setStatusFilter(DEFAULT_TRANSFER_STATUS_FILTER);
@@ -6890,7 +6890,7 @@ const ExpenseApproval: React.FC = () => {
                       sx={softFieldSx}
                   />
                 </Box>
-                </Box>
+                  </Box>
                 </Box>
               </Box>
             </Box>
@@ -7727,25 +7727,25 @@ const ExpenseApproval: React.FC = () => {
                     }}
                   >
                     <Table size="small" sx={{ tableLayout: 'auto', minWidth: 1100 }}>
-                      <TableHead
-                        sx={{
+                <TableHead
+                  sx={{
                           bgcolor: EXPENSE_HEADER_BG,
-                          '& .MuiTableCell-head': {
+                    '& .MuiTableCell-head': {
                             bgcolor: EXPENSE_HEADER_BG,
                             color: EXPENSE_HEADER_FG,
-                            fontWeight: 600,
-                            fontSize: '0.75rem',
+                      fontWeight: 600,
+                      fontSize: '0.75rem',
                             letterSpacing: '0.02em',
-                            textTransform: 'none',
+                      textTransform: 'none',
                             borderBottom: `1px solid ${EXPENSE_LINE}`,
                             borderTop: '2px solid #94A3B8',
                             py: 0.55,
                             px: 0.75,
                             whiteSpace: 'nowrap',
-                          },
-                        }}
-                      >
-                        <TableRow>
+                    },
+                  }}
+                >
+                  <TableRow>
                           <TableCell sx={{ width: 40 }}>{t('expenseApproval.voucher.tableNo')}</TableCell>
                           <TableCell>{t('expenseApproval.voucher.tdsColDate')}</TableCell>
                           <TableCell>{t('expenseApproval.voucher.tdsColPan')}</TableCell>
@@ -10268,11 +10268,11 @@ const ExpenseApproval: React.FC = () => {
                 const otherRows = attachmentRows.filter((row) => row.invoiceType !== 'proforma');
                 if (attachmentRows.length === 0) {
                   return (
-                    <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" color="text.secondary">
                       {detailFormType === 'gst'
                         ? t('expenseApproval.voucher.calculationNone')
                         : t('expenseApproval.voucher.receiptNone')}
-                    </Typography>
+                      </Typography>
                   );
                 }
                 const gstTypeLabel =
@@ -10294,7 +10294,7 @@ const ExpenseApproval: React.FC = () => {
                         {proformaRows.length > 0 && detailFormType !== 'gst' ? (
                           <Typography variant="subtitle2" sx={{ ...sectionTitleSx, mt: 0, mb: 0.75 }}>
                             {t('expenseApproval.voucher.invoiceTypeTax')}
-                          </Typography>
+                        </Typography>
                         ) : null}
                         {renderAttachmentList(otherRows, gstTypeLabel)}
                       </Box>
@@ -10354,7 +10354,7 @@ const ExpenseApproval: React.FC = () => {
                     </TableBody>
                   </Table>
                 </TableContainer>
-              </Box>
+            </Box>
             )}
 
             {detailFormType === 'general' && (
@@ -10628,14 +10628,14 @@ const ExpenseApproval: React.FC = () => {
                   : t('expenseApproval.detailActions.pdfDownload')}
               </Button>
               {canApproveThis && (
-                <Button
-                  variant="contained"
-                  color="success"
-                  startIcon={<CheckCircleIcon />}
-                  onClick={() => handleApproveExpense(selectedExpense.id)}
-                >
+                  <Button
+                    variant="contained"
+                    color="success"
+                    startIcon={<CheckCircleIcon />}
+                    onClick={() => handleApproveExpense(selectedExpense.id)}
+                  >
                   {t('expenseApproval.actions.accept')}
-                </Button>
+                  </Button>
               )}
               {(canApproveThis || canRevisionRejectThis) && (
                 <Button
@@ -10648,14 +10648,14 @@ const ExpenseApproval: React.FC = () => {
                 </Button>
               )}
               {canFinalRejectThis && (
-                <Button
-                  variant="contained"
-                  color="error"
-                  startIcon={<CancelIcon />}
+                  <Button
+                    variant="contained"
+                    color="error"
+                    startIcon={<CancelIcon />}
                   onClick={() => openReasonDialog('expense-reject', selectedExpense.id)}
-                >
-                  {t('expenseApproval.actions.reject')}
-                </Button>
+                  >
+                    {t('expenseApproval.actions.reject')}
+                  </Button>
               )}
               {canDeleteThis && (
                 <Button
@@ -11186,19 +11186,19 @@ const ExpenseApproval: React.FC = () => {
             )}
             <Tooltip title={createGuard.tooltipTitle} disableHoverListener={!createGuard.tooltipTitle}>
               <span style={{ display: 'inline-flex' }}>
-                <Button
-                  variant="contained"
-                  disableElevation
-                  startIcon={<AddIcon fontSize="small" />}
-                  onClick={handleCreateExpense}
+        <Button
+          variant="contained"
+          disableElevation
+          startIcon={<AddIcon fontSize="small" />}
+          onClick={handleCreateExpense}
                   disabled={createGuard.disabled}
                   sx={mvsBodyPrimaryBtnSx}
-                >
-                  {t('expenseApproval.actions.requestExpense')}
-                </Button>
+        >
+          {t('expenseApproval.actions.requestExpense')}
+        </Button>
               </span>
             </Tooltip>
-          </Box>
+      </Box>
         }
       />
 
@@ -11317,7 +11317,7 @@ const ExpenseApproval: React.FC = () => {
 
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
         <Box
-          sx={{
+                sx={{
             ...mvsFilterBarInnerSx,
             gridTemplateColumns: {
               xs: '1fr',
@@ -11515,7 +11515,7 @@ const ExpenseApproval: React.FC = () => {
       {/* 지출결의서 목록 테이블 */}
       <Box sx={mvsBodyListZoneSx}>
         <Box
-          sx={{
+              sx={{
             mb: 1.25,
             display: 'flex',
             flexWrap: 'wrap',
@@ -11536,7 +11536,7 @@ const ExpenseApproval: React.FC = () => {
               minWidth: 0,
               px: 1.5,
               textTransform: 'none',
-              fontWeight: 600,
+                  fontWeight: 600,
               fontSize: '0.75rem',
               borderRadius: '10px',
               boxShadow: 'none',
@@ -11560,7 +11560,7 @@ const ExpenseApproval: React.FC = () => {
               height: 32,
               minWidth: 0,
               px: 1.5,
-              textTransform: 'none',
+                  textTransform: 'none',
               fontWeight: 600,
               fontSize: '0.75rem',
               borderRadius: '10px',
@@ -11810,18 +11810,18 @@ const ExpenseApproval: React.FC = () => {
                       {(listTab === 'received' || (isRootUser && (listTab === 'written' || listTab === 'transfer'))) &&
                         canUserApproveExpense(expense) && (
                         <Tooltip title={t('expenseApproval.actions.accept')}>
-                          <IconButton
-                            size="small"
+                            <IconButton
+                              size="small"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleApproveExpense(expense.id);
                             }}
-                            color="success"
-                            sx={{ borderRadius: '10px' }}
-                          >
-                            <CheckCircleIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                              color="success"
+                              sx={{ borderRadius: '10px' }}
+                            >
+                              <CheckCircleIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                       )}
                       {(listTab === 'received' || (isRootUser && (listTab === 'written' || listTab === 'transfer'))) &&
                         (canUserApproveExpense(expense) || canUserRevisionRejectExpense(expense)) && (
@@ -11841,19 +11841,19 @@ const ExpenseApproval: React.FC = () => {
                       )}
                       {(listTab === 'received' || (isRootUser && (listTab === 'written' || listTab === 'transfer'))) &&
                         (canUserApproveExpense(expense) || canUserFinalRejectExpense(expense)) && (
-                        <Tooltip title={t('expenseApproval.actions.reject')}>
-                          <IconButton
-                            size="small"
+                          <Tooltip title={t('expenseApproval.actions.reject')}>
+                            <IconButton
+                              size="small"
                             onClick={(e) => {
                               e.stopPropagation();
                               openReasonDialog('expense-reject', expense.id);
                             }}
-                            color="error"
-                            sx={{ borderRadius: '10px' }}
-                          >
-                            <CancelIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                              color="error"
+                              sx={{ borderRadius: '10px' }}
+                            >
+                              <CancelIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                       )}
                       {canDeleteExpense(expense) && (
                       <Tooltip title={deleteGuard.tooltipTitle || t('common.delete')}>
@@ -11886,13 +11886,13 @@ const ExpenseApproval: React.FC = () => {
 
         {listViewMode === 'page' ? (
           <Box sx={mvsBodyPaginationSx}>
-            <Pagination
+          <Pagination
               count={Math.max(1, Math.ceil(displayedExpenses.length / itemsPerPage))}
-              page={page}
-              onChange={(_, value) => setPage(value)}
-              color="primary"
-            />
-          </Box>
+            page={page}
+            onChange={(_, value) => setPage(value)}
+            color="primary"
+          />
+        </Box>
         ) : null}
       </Box>
 

@@ -98,7 +98,25 @@ const ensureWorkBoardSchema = async () => {
       defaultValue: 0
     });
   }
+  if (!table.board_type) {
+    await queryInterface.addColumn('work_boards', 'board_type', {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'GENERAL'
+    });
+    await sequelize.query(`
+      UPDATE work_boards
+      SET board_type = 'GENERAL'
+      WHERE board_type IS NULL
+         OR board_type NOT IN ('GENERAL', 'RECURRING')
+    `);
+  }
   workBoardSchemaEnsured = true;
+};
+
+const normalizeBoardType = (value: unknown): 'GENERAL' | 'RECURRING' => {
+  const raw = String(value || 'GENERAL').trim().toUpperCase();
+  return raw === 'RECURRING' ? 'RECURRING' : 'GENERAL';
 };
 
 const ensureWorkBoardListSchema = async () => {
@@ -500,7 +518,7 @@ const resolveRootTargetCompanyId = async (
   return { companyId };
 };
 
-async function findBoardForUser(
+export async function findBoardForUser(
   boardId: number,
   user: RequestWithUser['user'],
   forWrite = false
@@ -527,7 +545,19 @@ export const getWorkBoards = async (req: RequestWithUser, res: Response) => {
       ? ['id', 'username', 'userid', 'avatar_url']
       : ['id', 'username', 'userid', 'email', 'avatar_url'];
     const boardAttributes = light
-      ? ['id', 'tenant_id', 'company_id', 'name', 'description', 'board_color', 'position', 'created_by', 'created_at', 'updated_at']
+      ? [
+          'id',
+          'tenant_id',
+          'company_id',
+          'name',
+          'description',
+          'board_color',
+          'board_type',
+          'position',
+          'created_by',
+          'created_at',
+          'updated_at',
+        ]
       : undefined;
     const memberInclude = {
       model: WorkBoardMember,
@@ -606,7 +636,7 @@ export const createWorkBoard = async (req: RequestWithUser, res: Response) => {
     await ensureWorkBoardSchema();
     await ensureWorkBoardCardSchema();
     const user = req.user!;
-    const { name, description, board_color } = req.body;
+    const { name, description, board_color, board_type } = req.body;
     if (!name || String(name).trim().length === 0) {
       return res.status(400).json({ success: false, message: '보드 이름이 필요합니다.' });
     }
@@ -615,6 +645,7 @@ export const createWorkBoard = async (req: RequestWithUser, res: Response) => {
     if (!parsedBoardColor.valid) {
       return res.status(400).json({ success: false, message: '보드 색상 형식이 올바르지 않습니다.' });
     }
+    const resolvedBoardType = normalizeBoardType(board_type);
 
     let targetCompanyId = user.company_id != null ? Number(user.company_id) : NaN;
     if (user.role === 'root') {
@@ -643,17 +674,21 @@ export const createWorkBoard = async (req: RequestWithUser, res: Response) => {
           name: String(name).trim().slice(0, 200),
           description: description ? String(description).slice(0, 5000) : undefined,
           board_color: parsedBoardColor.value ?? null,
+          board_type: resolvedBoardType,
           position: 0,
           created_by: user.id
         },
         { transaction: t }
       );
 
-      for (const dl of DEFAULT_LISTS) {
-        await WorkBoardList.create(
-          { board_id: b.id, title: dl.title, position: dl.position },
-          { transaction: t }
-        );
+      // 정기 업무 보드는 칸반 기본 리스트를 만들지 않는다 (2단계+ 매트릭스 UI)
+      if (resolvedBoardType === 'GENERAL') {
+        for (const dl of DEFAULT_LISTS) {
+          await WorkBoardList.create(
+            { board_id: b.id, title: dl.title, position: dl.position },
+            { transaction: t }
+          );
+        }
       }
 
       await WorkBoardMember.create(
@@ -2209,6 +2244,9 @@ export const inviteWorkBoardMember = async (req: RequestWithUser, res: Response)
     const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
+    }
+    if (member?.role !== 'owner' && user.role !== 'root') {
+      return res.status(403).json({ success: false, message: '보드 마스터(소유자)만 멤버를 초대할 수 있습니다.' });
     }
 
     const target = await User.findByPk(targetUserId);

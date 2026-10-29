@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Paper,
@@ -20,7 +20,7 @@ import {
   Fingerprint as FingerprintIcon
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { api, API_BASE_URL } from '../../services/api';
 import { useTranslation } from 'react-i18next';
 import { ensureI18nLanguage, detectOsLanguage } from '../../locales/i18n';
@@ -33,13 +33,16 @@ import {
   registerPlatformPasskey,
   rememberUserid,
 } from '../../utils/webauthn';
+import { redirectFromSearchParams } from '../../utils/safeInternalPath';
 
 const Login: React.FC = () => {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
-  const { login } = useStore();
+  const { login, isAuthenticated } = useStore();
   const setMenuLanguage = useMenuStore((s) => s.setLanguage);
   const navigate = useNavigate();
+  const location = useLocation();
+  const postLoginPath = redirectFromSearchParams(location.search, '/dashboard');
   const [formData, setFormData] = useState({
     userid: getRememberedUserid(),
     password: '',
@@ -191,10 +194,24 @@ const Login: React.FC = () => {
     return message || t('login.signup.registerFailed');
   };
 
+  const goAfterLogin = () => {
+    navigate(postLoginPath, { replace: true });
+  };
+
+  // 세션이 이미 있는 채 메일 링크로 /login?redirect=… 들어온 경우만 즉시 이동
+  // (신규 로그인 직후 패스키 등록 모달과 충돌하지 않도록 mount 시점 인증 상태만 본다)
+  const wasAuthenticatedOnMount = useRef(isAuthenticated);
+  useEffect(() => {
+    if (wasAuthenticatedOnMount.current) {
+      goAfterLogin();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const finishLogin = (token: string, user: any) => {
     rememberUserid(user?.userid || formData.userid);
     login(token, user);
-    navigate('/dashboard', { replace: true });
+    goAfterLogin();
   };
 
   const offerPasskeyRegistration = async (token: string, user: any) => {
@@ -203,13 +220,13 @@ const Login: React.FC = () => {
 
     const can = await canUsePlatformPasskey();
     if (!can) {
-      navigate('/dashboard', { replace: true });
+      goAfterLogin();
       return;
     }
     try {
       const existing = await listPasskeyCredentials();
       if (existing.length > 0) {
-        navigate('/dashboard', { replace: true });
+        goAfterLogin();
         return;
       }
     } catch {
@@ -292,14 +309,14 @@ const Login: React.FC = () => {
     } finally {
       setRegisterPasskeyBusy(false);
       setRegisterPasskeyOpen(false);
-      navigate('/dashboard', { replace: true });
+      goAfterLogin();
     }
   };
 
   const handleRegisterPasskeySkip = () => {
     if (registerPasskeyBusy) return;
     setRegisterPasskeyOpen(false);
-    navigate('/dashboard', { replace: true });
+    goAfterLogin();
   };
 
   const handleSignupSubmit = async (e: React.FormEvent) => {

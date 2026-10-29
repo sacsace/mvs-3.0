@@ -674,30 +674,22 @@ router.post('/test-mail', authenticateToken, requireRole(['root', 'admin']), asy
     }
 
     const companyName = String(companyRow.name || 'MVS').trim();
-    const defaultSubjectKo = `[${companyName}] 메일 발송 테스트`;
     const defaultSubjectEn = `[${companyName}] Mail send test`;
     const customSubject =
       typeof rawSubject === 'string' && rawSubject.trim().length > 0
         ? rawSubject.trim().slice(0, 200)
         : '';
-    const subject = customSubject
-      ? customSubject
-      : `${defaultSubjectKo} / ${defaultSubjectEn}`;
+    const subject = customSubject || defaultSubjectEn;
 
     const sentAt = new Date().toISOString();
     const html = `
-      <div style="font-family:Segoe UI,Malgun Gothic,sans-serif;font-size:14px;color:#111827;line-height:1.55;max-width:640px;">
-        <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#6b7280;">한국어</p>
-        <p style="margin:0 0 8px;">이 메일은 <strong>${companyName}</strong> MVS 시스템의 SMTP 설정 테스트로 발송되었습니다.</p>
-        <p style="margin:0 0 16px;">발송 시각(UTC): ${sentAt}</p>
-        <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
-        <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#6b7280;">English</p>
+      <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#111827;line-height:1.55;max-width:640px;">
         <p style="margin:0 0 8px;">This message was sent as an SMTP configuration test from the <strong>${companyName}</strong> MVS system.</p>
         <p style="margin:0 0 16px;">Sent at (UTC): ${sentAt}</p>
-        <p style="margin-top:16px;color:#666;font-size:12px;">본 메일은 테스트용입니다. / This is a test email.</p>
+        <p style="margin-top:16px;color:#666;font-size:12px;">This is a test email.</p>
       </div>
     `;
-    const text = `[KO]\nSMTP 테스트 메일 (${companyName})\n발송 시각(UTC): ${sentAt}\n\n[EN]\nSMTP test mail (${companyName})\nSent at (UTC): ${sentAt}\n\n본 메일은 테스트용입니다. / This is a test email.`;
+    const text = `SMTP test mail (${companyName})\nSent at (UTC): ${sentAt}\n\nThis is a test email.`;
 
     const transporter = nodemailer.createTransport(buildNodemailerTransportOptions(mailOpts));
 

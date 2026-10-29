@@ -46,11 +46,13 @@ import { activityLogMiddleware } from './middleware/activityLogMiddleware';
 import { startLoginLogRetentionScheduler } from './services/loginLogRetentionService';
 import { startProjectTaskCommentReminderScheduler } from './services/projectTaskCommentReminderService';
 import { startUnreadReminderScheduler } from './services/unreadReminderService';
+import { startRecurringTaskGenerateScheduler } from './services/recurringTaskGenerateService';
 import {
   blockSensitivePaths,
   buildApiContentSecurityPolicy,
   forceHttpsRedirect,
 } from './middleware/securityHeaders';
+// schedulers: attendance / login-log / project-comment / unread / recurring-generate
 
 // 환경 변수 검증 및 출력
 validateEnv();
@@ -99,6 +101,7 @@ connectDB()
     startLoginLogRetentionScheduler();
     startProjectTaskCommentReminderScheduler();
     startUnreadReminderScheduler();
+    startRecurringTaskGenerateScheduler();
   })
   .catch((error) => {
     console.error('Database connection error:', error);

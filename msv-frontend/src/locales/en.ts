@@ -2212,7 +2212,193 @@ export default {
       },
       fields: {
         boardName: 'Board Name',
+        boardType: 'Board Type',
         descriptionOptional: 'Description (Optional)'
+      },
+      boardTypes: {
+        general: 'General Tasks',
+        generalHint: 'Create and manage one-off work as cards on a Kanban board.',
+        recurring: 'Recurring Tasks',
+        recurringHint: 'Manage monthly, quarterly, and annual client work.'
+      },
+      recurring: {
+        phase1Title: 'Recurring board created',
+        phase1Body:
+          'Next phases will add task templates, client linking, assignees, and the monthly checklist.\nThis phase only saves the board type and opens the recurring entry screen.',
+        tabs: {
+          checklist: 'Monthly Checklist',
+          templates: 'Task Templates',
+          clients: 'Clients',
+          assignments: 'Task Assignments'
+        },
+        actions: {
+          addTemplate: 'Add template',
+          seedSamples: 'Load samples',
+          addClients: 'Link clients',
+          generatePeriod: 'Generate Monthly Tasks',
+          inviteMembers: 'Invite Members',
+          bulkApply: 'Apply bulk',
+          save: 'Save',
+          cancel: 'Cancel',
+          remove: 'Remove',
+          edit: 'Edit',
+          back: 'Back to boards'
+        },
+        bulkAssign: {
+          title: 'Bulk settings',
+          detail: 'Task Details',
+          detailHint: 'Assign people per task',
+          mixed: 'Varies by Task',
+          multiplePeople: 'Multiple',
+          multipleByTask: 'Varies by Task ({{count}} Assignees)',
+          progress: '{{assigned}}/{{total}} Tasks Assigned',
+          useClient: 'Client',
+          useAssignee: 'Assignee',
+          clientPlaceholder: 'Select clients for bulk apply',
+          assigneePlaceholder: 'Select assignee',
+          selectedCount: '{{count}} selected',
+          needTarget: 'Select rows in the table, or turn on Client and pick clients.',
+          needAssigneeOption: 'Turn on the Assignee bulk option.',
+          needAssignee: 'Select an assignee to apply.',
+          applied: 'Assignee applied to {{count}} rows.'
+        },
+        checklist: {
+          period: 'Month',
+          purposeHint:
+            'Track monthly task completion by client and assignee at a glance.',
+          generateHelp:
+            'Creates tasks only for clients with assignees × templates for this month. Existing rows are kept.',
+          empty: 'No tasks for this month yet. Click “Generate Monthly Tasks”.',
+          needSetup: 'Add clients and templates first.',
+          needAssignees:
+            'Only clients with assignees are listed. Assign every applicable task under “Task Assignments”.',
+          cellEmpty: '—',
+          cellUnassigned: 'Unassigned',
+          done: 'Done',
+          notDone: 'Not done',
+          summaryTotal: 'Total Tasks:',
+          summaryCompleted: 'Completed:',
+          summaryInProgress: 'In Progress:',
+          summaryPending: 'Pending:',
+          summaryOverdue: 'Overdue:',
+          summaryRate: 'Completion Rate:'
+        },
+        status: {
+          PENDING: 'Pending',
+          IN_PROGRESS: 'In Progress',
+          COMPLETED: 'Completed',
+          VERIFIED: 'Verified',
+          NOT_APPLICABLE: 'N/A'
+        },
+        statusDialog: {
+          title: 'Task detail',
+          due: 'Due',
+          period: 'Month',
+          assignee: 'Assignee',
+          reviewer: 'Reviewer',
+          notes: 'Notes',
+          notesPlaceholder: 'Add notes',
+          changeTo: 'Set status',
+          attachments: 'Attachments',
+          addAttachment: 'Add files',
+          noAttachments: 'No attachments',
+          requiresAttachment: 'Attachment required',
+          requiresVerification: 'Verification required',
+          overdue: 'Overdue',
+          saveNotes: 'Save notes',
+          openFile: 'Open',
+          needAttachmentComplete: 'This task needs an attachment before it can be completed. Add a file below.',
+          needAttachmentVerify: 'Verification requires an attachment. Upload a file, complete, then verify.',
+          needCompleteFirst: 'This task must be Completed before it can be Verified.'
+        },
+        fields: {
+          name: 'Task name',
+          code: 'Code',
+          category: 'Category',
+          frequency: 'Frequency',
+          dueDay: 'Due day',
+          priority: 'Priority',
+          requiresAttachment: 'Attachment required',
+          requiresVerification: 'Verification required',
+          client: 'Client',
+          businessNumber: 'GST / Reg. No.',
+          template: 'Task',
+          assignee: 'Assignee',
+          reviewer: 'Reviewer',
+          defaultAssignee: 'Default Assignee',
+          defaultReviewer: 'Default Reviewer',
+          none: 'Unassigned'
+        },
+        frequency: {
+          MONTHLY: 'Monthly',
+          QUARTERLY: 'Quarterly',
+          HALF_YEARLY: 'Half-yearly',
+          ANNUALLY: 'Annually',
+          CUSTOM: 'Custom'
+        },
+        empty: {
+          templates: 'No task templates yet.',
+          clients: 'No clients linked yet.',
+          assignments: 'Add clients and templates first.',
+          noCandidates: 'No clients available to add.'
+        },
+        roles: {
+          master: 'Master',
+          admin: 'Admin',
+          member: 'Member'
+        },
+        memberMenu: {
+          viewPhoto: 'View photo',
+          setAdmin: 'Set as Admin',
+          alreadyAdmin: 'Already Admin',
+          noPhoto: 'No photo available.'
+        },
+        hints: {
+          manageOnly:
+            'Only the recurring-task master (board owner) can change templates, clients, assignments, and invites.',
+          assignmentHelp:
+            'Set a default assignee and reviewer for each client. Open Task Details to assign different people to individual tasks. Only users with the Master role can make changes.',
+          membersCount: 'Board Members ({{count}})',
+          membersTitle: 'Board Members'
+        },
+        invite: {
+          title: 'Invite Board Members',
+          search: 'Search company users',
+          empty: 'No users available to invite.',
+          success: 'Members invited.',
+          failed: 'Could not invite members.'
+        },
+        dialog: {
+          newTemplate: 'Add task template',
+          editTemplate: 'Edit task template',
+          addClients: 'Link clients',
+          deleteTemplateTitle: 'Delete template',
+          deleteTemplateMsg:
+            'Delete template "{{name}}"? Related assignments will also be cleared.',
+          removeClientTitle: 'Unlink client',
+          removeClientMsg:
+            'Unlink "{{name}}"? Related assignments will also be cleared.'
+        },
+        success: {
+          templateCreated: 'Template added.',
+          templateUpdated: 'Template updated.',
+          templateDeleted: 'Template deleted.',
+          samplesSeeded: 'Sample templates added ({{count}}).',
+          clientsAdded: 'Clients linked.',
+          clientRemoved: 'Client unlinked.',
+          assignmentSaved: 'Assignment saved.',
+          assignmentBulkSaved: 'Assignee applied to {{count}} rows.',
+          periodGenerated: '{{period}}: created {{created}}, kept {{skipped}} existing',
+          statusUpdated: 'Status updated.',
+          memberSetAdmin: '{{name}} set as Admin.'
+        },
+        errors: {
+          loadFailed: 'Could not load recurring setup.',
+          checklistFailed: 'Could not load checklist.',
+          saveFailed: 'Save failed.',
+          nameRequired: 'Enter a task name.',
+          clientsRequired: 'Select at least one client.'
+        }
       },
       filters: {
         company: 'Company',
@@ -2381,7 +2567,7 @@ export default {
         complete: 'Complete project'
       },
       filters: {
-        searchPlaceholder: 'Search by name, code, or manager',
+        searchPlaceholder: 'Search by name or participant',
         company: 'Company',
         searchCompany: 'Search company',
         allCompanies: 'All companies',
@@ -2395,6 +2581,7 @@ export default {
         code: 'Code',
         name: 'Project',
         manager: 'Manager',
+        members: 'Participants',
         startDate: 'Start',
         endDate: 'End',
         duration: 'Duration',
@@ -2404,7 +2591,7 @@ export default {
         progress: 'Progress',
         actions: 'Actions'
       },
-      reorderHint: 'Clear search, status, and manager filters to reorder.',
+      reorderHint: 'Clear search, status, manager filters, and column sort to reorder.',
       reorderNeedCompany: 'Select a company before reordering.',
       fields: {
         name: 'Project name',

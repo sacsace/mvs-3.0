@@ -25,7 +25,10 @@ import {
   Add as AddIcon,
   DragIndicator as DragIndicatorIcon,
   EditOutlined as EditOutlinedIcon,
+  EventRepeatOutlined as EventRepeatOutlinedIcon,
   GroupsOutlined as GroupsOutlinedIcon,
+  RadioButtonChecked as RadioCheckedIcon,
+  RadioButtonUnchecked as RadioUncheckedIcon,
   ViewKanbanOutlined as ViewKanbanOutlinedIcon
 } from '@mui/icons-material';
 import {
@@ -112,6 +115,11 @@ const getMemberAvatarSrc = (member: any) => {
 const getMemberLabel = (member: any) =>
   member?.user?.username || member?.user?.userid || member?.user?.email || '';
 
+type BoardType = 'GENERAL' | 'RECURRING';
+
+const normalizeBoardType = (value: unknown): BoardType =>
+  String(value || 'GENERAL').toUpperCase() === 'RECURRING' ? 'RECURRING' : 'GENERAL';
+
 type SortableBoardCardProps = {
   board: any;
   themePrimaryColor: string;
@@ -136,6 +144,8 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
   const headerText = getContrastText(accent);
   const members = Array.isArray(board.members) ? board.members : [];
   const previewMembers = members.slice(0, 4);
+  const boardType = normalizeBoardType(board.board_type);
+  const isRecurring = boardType === 'RECURRING';
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: board.id,
     disabled: !canEdit
@@ -193,25 +203,43 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
             gap: 1,
           }}
         >
-          <ViewKanbanOutlinedIcon sx={{ fontSize: '1rem', color: headerText, opacity: 0.88, mt: 0.1 }} />
-          <Typography
-            variant="subtitle1"
-            sx={{
-              flex: 1,
-              minWidth: 0,
-              fontWeight: 700,
-              lineHeight: 1.35,
-              letterSpacing: '-0.02em',
-              fontSize: '0.9rem',
-              color: headerText,
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-            }}
-          >
-            {board.name}
-          </Typography>
+          {isRecurring ? (
+            <EventRepeatOutlinedIcon sx={{ fontSize: '1rem', color: headerText, opacity: 0.88, mt: 0.1 }} />
+          ) : (
+            <ViewKanbanOutlinedIcon sx={{ fontSize: '1rem', color: headerText, opacity: 0.88, mt: 0.1 }} />
+          )}
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography
+              variant="subtitle1"
+              sx={{
+                fontWeight: 700,
+                lineHeight: 1.35,
+                letterSpacing: '-0.02em',
+                fontSize: '0.9rem',
+                color: headerText,
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}
+            >
+              {board.name}
+            </Typography>
+            <Typography
+              sx={{
+                mt: 0.35,
+                fontSize: '0.6875rem',
+                fontWeight: 600,
+                color: headerText,
+                opacity: 0.88,
+                letterSpacing: '0.01em',
+              }}
+            >
+              {isRecurring
+                ? t('workBoards.boardTypes.recurring')
+                : t('workBoards.boardTypes.general')}
+            </Typography>
+          </Box>
           <Box
             className="board-card-actions"
             sx={{
@@ -392,6 +420,7 @@ const WorkBoardsPage: React.FC = () => {
   const [editingBoardId, setEditingBoardId] = useState<number | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [boardType, setBoardType] = useState<BoardType>('GENERAL');
   const [boardColor, setBoardColor] = useState<string>(themePrimaryColor);
   const [saving, setSaving] = useState(false);
   const [companies, setCompanies] = useState<any[]>([]);
@@ -525,12 +554,14 @@ const WorkBoardsPage: React.FC = () => {
           name: name.trim(),
           description: trimmedDesc === '' ? undefined : trimmedDesc,
           board_color: boardColor,
+          board_type: boardType,
           ...(isRootUser && effectiveCompanyId != null ? { company_id: effectiveCompanyId } : {}),
         });
         if (createRes.success && createRes.data?.id) {
           setOpen(false);
           setName('');
           setDescription('');
+          setBoardType('GENERAL');
           setBoardColor(themePrimaryColor);
           navigate(`/work/projects/${createRes.data.id}`);
         } else {
@@ -555,6 +586,7 @@ const WorkBoardsPage: React.FC = () => {
     setEditingBoardId(null);
     setName('');
     setDescription('');
+    setBoardType('GENERAL');
     setBoardColor(themePrimaryColor);
     setOpen(true);
   };
@@ -635,6 +667,7 @@ const WorkBoardsPage: React.FC = () => {
     setEditingBoardId(board.id);
     setName(board.name || '');
     setDescription(board.description || '');
+    setBoardType(normalizeBoardType(board.board_type));
     setBoardColor(getBoardAccentColor(board, themePrimaryColor));
     setOpen(true);
   };
@@ -866,6 +899,87 @@ const WorkBoardsPage: React.FC = () => {
               onChange={(e) => setName(e.target.value)}
               placeholder={t('workBoards.placeholders.boardName')}
             />
+            <Box>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
+                {t('workBoards.fields.boardType')}
+                {!editingBoardId ? (
+                  <Box component="span" sx={{ color: 'error.main', ml: 0.25 }}>
+                    *
+                  </Box>
+                ) : null}
+              </Typography>
+              {editingBoardId ? (
+                <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
+                  {boardType === 'RECURRING'
+                    ? t('workBoards.boardTypes.recurring')
+                    : t('workBoards.boardTypes.general')}
+                </Typography>
+              ) : (
+                <Stack spacing={1}>
+                  {(
+                    [
+                      {
+                        value: 'GENERAL' as BoardType,
+                        title: t('workBoards.boardTypes.general'),
+                        hint: t('workBoards.boardTypes.generalHint'),
+                        icon: <ViewKanbanOutlinedIcon sx={{ fontSize: 20 }} />,
+                      },
+                      {
+                        value: 'RECURRING' as BoardType,
+                        title: t('workBoards.boardTypes.recurring'),
+                        hint: t('workBoards.boardTypes.recurringHint'),
+                        icon: <EventRepeatOutlinedIcon sx={{ fontSize: 20 }} />,
+                      },
+                    ] as const
+                  ).map((opt) => {
+                    const selected = boardType === opt.value;
+                    return (
+                      <Box
+                        key={opt.value}
+                        component="button"
+                        type="button"
+                        onClick={() => setBoardType(opt.value)}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 1.25,
+                          textAlign: 'left',
+                          m: 0,
+                          p: 1.25,
+                          borderRadius: '6px',
+                          border: '1px solid',
+                          borderColor: selected ? 'primary.main' : 'divider',
+                          bgcolor: selected ? alpha(theme.palette.primary.main, 0.06) : 'transparent',
+                          cursor: 'pointer',
+                          font: 'inherit',
+                          color: 'inherit',
+                          '&:hover': {
+                            borderColor: selected ? 'primary.main' : alpha(theme.palette.primary.main, 0.4),
+                          },
+                        }}
+                      >
+                        <Box sx={{ mt: 0.15, color: selected ? 'primary.main' : 'text.secondary' }}>
+                          {selected ? (
+                            <RadioCheckedIcon sx={{ fontSize: 20 }} />
+                          ) : (
+                            <RadioUncheckedIcon sx={{ fontSize: 20 }} />
+                          )}
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                            <Box sx={{ color: 'text.secondary', display: 'flex' }}>{opt.icon}</Box>
+                            <Typography sx={{ fontWeight: 700, fontSize: '0.875rem' }}>{opt.title}</Typography>
+                          </Box>
+                          <Typography sx={{ mt: 0.35, fontSize: '0.75rem', color: 'text.secondary', lineHeight: 1.45 }}>
+                            {opt.hint}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              )}
+            </Box>
             <FormFieldLabeled
               fieldLabel={t('workBoards.fields.descriptionOptional')}
               value={description}

@@ -129,7 +129,18 @@ export const getProjects = async (req: RequestWithUser, res: Response) => {
       ],
       limit: Number(limit),
       offset: (Number(page) - 1) * Number(limit),
+      // 기본: 기획 → 진행중 → 보류 → 완료 → 취소, 이후 수동 순서
       order: [
+        [
+          sequelize.literal(`CASE "Project"."status"
+            WHEN 'planning' THEN 0
+            WHEN 'in_progress' THEN 1
+            WHEN 'on_hold' THEN 2
+            WHEN 'completed' THEN 3
+            WHEN 'cancelled' THEN 4
+            ELSE 5 END`),
+          'ASC',
+        ],
         ['sort_order', 'ASC'],
         ['id', 'ASC'],
       ],
@@ -504,6 +515,16 @@ export const moveProject = async (req: RequestWithUser, res: Response) => {
     const projects = await (Project as any).findAll({
       where,
       order: [
+        [
+          sequelize.literal(`CASE "Project"."status"
+            WHEN 'planning' THEN 0
+            WHEN 'in_progress' THEN 1
+            WHEN 'on_hold' THEN 2
+            WHEN 'completed' THEN 3
+            WHEN 'cancelled' THEN 4
+            ELSE 5 END`),
+          'ASC',
+        ],
         ['sort_order', 'ASC'],
         ['id', 'ASC'],
       ],

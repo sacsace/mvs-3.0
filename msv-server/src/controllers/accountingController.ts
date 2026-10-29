@@ -615,32 +615,27 @@ export const sendInvoiceEmail = async (req: RequestWithUser, res: Response) => {
     });
 
     const invoiceNo = String(invPlain.invoice_number || '');
-    const subjectKo = subject?.trim()
-      ? String(subject).trim()
-      : `[인보이스] ${invoiceNo}`;
     const subjectEn = subject?.trim()
       ? String(subject).trim()
       : `[Invoice] ${invoiceNo}`;
-    const bodyKo = message?.trim()
-      ? String(message).trim()
-      : `인보이스 ${invoiceNo} PDF를 첨부합니다.`;
     const bodyEn = message?.trim()
       ? String(message).trim()
       : `Please find the attached invoice PDF for ${invoiceNo}.`;
+    const bodyHtml = String(bodyEn)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br/>');
 
     await transporter.sendMail({
       from: mailOpts.from,
       to,
-      subject: subjectKo === subjectEn ? subjectKo : `${subjectKo} / ${subjectEn}`,
-      text: `[KO]\n${bodyKo}\n\n[EN]\n${bodyEn}\n\n본 메일은 MVS 알림입니다. / This is an MVS notification.`,
+      subject: subjectEn,
+      text: `${bodyEn}\n\nThis is an MVS notification.`,
       html: `
-        <div style="font-family:Segoe UI,Malgun Gothic,sans-serif;font-size:14px;color:#111827;line-height:1.55;max-width:640px;">
-          <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#6b7280;">한국어</p>
-          <p style="margin:0 0 16px;">${String(bodyKo).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>')}</p>
-          <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
-          <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#6b7280;">English</p>
-          <p style="margin:0 0 16px;">${String(bodyEn).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>')}</p>
-          <p style="margin-top:20px;font-size:12px;color:#9ca3af;">본 메일은 MVS 알림입니다. / This is an MVS notification.</p>
+        <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#111827;line-height:1.55;max-width:640px;">
+          <p style="margin:0 0 16px;">${bodyHtml}</p>
+          <p style="margin-top:20px;font-size:12px;color:#9ca3af;">This is an MVS notification.</p>
         </div>
       `,
       attachments: [

@@ -1,4 +1,7 @@
-/** 시스템 메일 — 영문 전용 (호환을 위해 bilingual* 함수명 유지) */
+/**
+ * 시스템 아웃바운드 메일 — **영문 전용**.
+ * (호환을 위해 bilingual* 함수명·ko 필드 유지하되, 본문/제목은 en을 우선 사용한다.)
+ */
 
 export function escapeHtml(text: string): string {
   return String(text || '')

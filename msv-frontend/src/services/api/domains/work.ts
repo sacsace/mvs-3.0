@@ -175,6 +175,7 @@ export const workBoardService = {
     name: string;
     description?: string;
     board_color?: string;
+    board_type?: 'GENERAL' | 'RECURRING';
     company_id?: number;
   }) => {
     const response = await api.post('/work/boards', data);
@@ -185,7 +186,10 @@ export const workBoardService = {
     const response = await api.get(`/work/boards/${boardId}`, { params });
     return response.data;
   },
-  updateBoard: async (boardId: number, data: { name?: string; description?: string | null; board_color?: string | null }) => {
+  updateBoard: async (
+    boardId: number,
+    data: { name?: string; description?: string | null; board_color?: string | null }
+  ) => {
     const response = await api.put(`/work/boards/${boardId}`, data);
     return response.data;
   },
@@ -304,7 +308,124 @@ export const workBoardService = {
   removeMember: async (boardId: number, userId: number) => {
     const response = await api.delete(`/work/boards/${boardId}/members/${userId}`);
     return response.data;
-  }
+  },
+
+  /** 정기 업무(RECURRING) */
+  getRecurringOverview: async (boardId: number) => {
+    const response = await api.get(`/work/boards/${boardId}/recurring/overview`);
+    return response.data;
+  },
+  createRecurringTemplate: async (
+    boardId: number,
+    data: {
+      name: string;
+      code?: string | null;
+      description?: string | null;
+      category?: string | null;
+      frequency?: string;
+      default_priority?: string;
+      default_due_day?: number | null;
+      requires_attachment?: boolean;
+      requires_verification?: boolean;
+    }
+  ) => {
+    const response = await api.post(`/work/boards/${boardId}/recurring/templates`, data);
+    return response.data;
+  },
+  updateRecurringTemplate: async (
+    boardId: number,
+    templateId: number,
+    data: Record<string, unknown>
+  ) => {
+    const response = await api.put(`/work/boards/${boardId}/recurring/templates/${templateId}`, data);
+    return response.data;
+  },
+  deleteRecurringTemplate: async (boardId: number, templateId: number) => {
+    const response = await api.delete(`/work/boards/${boardId}/recurring/templates/${templateId}`);
+    return response.data;
+  },
+  seedRecurringSampleTemplates: async (boardId: number) => {
+    const response = await api.post(`/work/boards/${boardId}/recurring/templates/seed-samples`);
+    return response.data;
+  },
+  addRecurringClients: async (boardId: number, customer_ids: number[]) => {
+    const response = await api.post(`/work/boards/${boardId}/recurring/clients`, { customer_ids });
+    return response.data;
+  },
+  removeRecurringClient: async (boardId: number, customerId: number) => {
+    const response = await api.delete(`/work/boards/${boardId}/recurring/clients/${customerId}`);
+    return response.data;
+  },
+  upsertRecurringAssignment: async (
+    boardId: number,
+    data: {
+      customer_id: number;
+      template_id: number;
+      assigned_user_id?: number | null;
+      reviewer_user_id?: number | null;
+      is_active?: boolean;
+    }
+  ) => {
+    const response = await api.put(`/work/boards/${boardId}/recurring/assignments`, data);
+    return response.data;
+  },
+  bulkUpsertRecurringAssignments: async (
+    boardId: number,
+    data: {
+      items: Array<{ customer_id: number; template_id: number }>;
+      set_assignee?: boolean;
+      assigned_user_id?: number | null;
+      set_reviewer?: boolean;
+      reviewer_user_id?: number | null;
+    }
+  ) => {
+    const response = await api.put(`/work/boards/${boardId}/recurring/assignments/bulk`, data);
+    return response.data;
+  },
+  getRecurringChecklist: async (boardId: number, period?: string) => {
+    const response = await api.get(`/work/boards/${boardId}/recurring/checklist`, {
+      params: period ? { period } : undefined,
+    });
+    return response.data;
+  },
+  generateRecurringPeriod: async (boardId: number, period?: string) => {
+    const response = await api.post(`/work/boards/${boardId}/recurring/generate`, period ? { period } : {});
+    return response.data;
+  },
+  getRecurringInstance: async (boardId: number, instanceId: number) => {
+    const response = await api.get(`/work/boards/${boardId}/recurring/instances/${instanceId}`);
+    return response.data;
+  },
+  updateRecurringInstance: async (
+    boardId: number,
+    instanceId: number,
+    data: {
+      status?: string;
+      notes?: string | null;
+      due_date?: string | null;
+      assigned_user_id?: number | null;
+      reviewer_user_id?: number | null;
+    }
+  ) => {
+    const response = await api.put(`/work/boards/${boardId}/recurring/instances/${instanceId}`, data);
+    return response.data;
+  },
+  uploadRecurringInstanceAttachments: async (boardId: number, instanceId: number, files: File[]) => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    const response = await api.post(
+      `/work/boards/${boardId}/recurring/instances/${instanceId}/attachments`,
+      formData,
+      { timeout: 120000 }
+    );
+    return response.data;
+  },
+  deleteRecurringInstanceAttachment: async (boardId: number, instanceId: number, storedName: string) => {
+    const response = await api.delete(
+      `/work/boards/${boardId}/recurring/instances/${instanceId}/attachments/${encodeURIComponent(storedName)}`
+    );
+    return response.data;
+  },
 };
 
 // ?�무 ?�계 API ?�비??

@@ -91,6 +91,7 @@ import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { usePhotoPreviewOptional } from '../../components/Common/PhotoPreviewProvider';
 import RichTextEditor from '../../components/RichTextEditor/RichTextEditor';
+import WorkRecurringBoardPage from './WorkRecurringBoardPage';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
@@ -1357,6 +1358,7 @@ const ListColumn = memo(function ListColumn({
   txt,
   language,
   allowListReorder,
+  allowCardDrag,
   allowListTitleEdit,
   allowListDelete,
   allowAddCard,
@@ -1385,6 +1387,8 @@ const ListColumn = memo(function ListColumn({
   txt: (ko: string, en: string) => string;
   language: 'ko' | 'en';
   allowListReorder: boolean;
+  /** 검색·내 업무 필터 중에도 카드 이동 허용 */
+  allowCardDrag: boolean;
   allowListTitleEdit: boolean;
   allowListDelete: boolean;
   allowAddCard: boolean;
@@ -1620,7 +1624,7 @@ const ListColumn = memo(function ListColumn({
               members={members}
               isCompletedList={isCompletedList}
               onOpenDetail={handleOpenCard}
-              dragDisabled={!allowListReorder}
+              dragDisabled={!allowCardDrag}
             />
           ))}
         </Box>
@@ -1957,10 +1961,10 @@ export default function WorkBoardDetailPage() {
     setActiveList(null);
   };
 
-  /** 드래그 중 실시간으로 칸/순서 반영 — 놓을 때만 API */
+  /** 드래그 중 실시간으로 칸/순서 반영 — 놓을 때만 API (검색 필터 중에도 카드 이동 가능) */
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
-      if (!menuCanEdit || cardSearch.trim().length > 0) return;
+      if (!menuCanEdit) return;
       const { active, over } = event;
       if (!over) return;
 
@@ -1997,7 +2001,8 @@ export default function WorkBoardDetailPage() {
         return;
       }
 
-      if (activeIdStr.startsWith('listcol-')) {
+      // 검색 중에는 보이는 카드만 필터된 상태라 대분류(열) 순서 변경은 막는다
+      if (activeIdStr.startsWith('listcol-') && cardSearch.trim().length === 0) {
         const activeListId = parseInt(activeIdStr.replace('listcol-', ''), 10);
         if (!Number.isFinite(activeListId)) return;
         setBoard((prev: any) => {
@@ -2142,8 +2147,13 @@ export default function WorkBoardDetailPage() {
     const overId = over ? String(over.id) : '';
     const lists: BoardList[] = board.lists || [];
 
-    // 대분류(컬럼) 드래그 이동
+    // 대분류(컬럼) 드래그 이동 — 검색 중에는 비활성
     if (activeIdStr.startsWith('listcol-')) {
+      if (cardSearch.trim().length > 0) {
+        clearDragOverlay();
+        if (snapshot) setBoard(snapshot);
+        return;
+      }
       const activeListId = parseInt(activeIdStr.replace('listcol-', ''), 10);
       let targetIndex =
         overId ? resolveListDropTargetIndex(lists, activeListId, overId) : null;
@@ -3797,6 +3807,10 @@ export default function WorkBoardDetailPage() {
     );
   }
 
+  if (String(board.board_type || 'GENERAL').toUpperCase() === 'RECURRING') {
+    return <WorkRecurringBoardPage board={board} />;
+  }
+
   const commentsBlockedUntilSave = !!cardDetail?.blockCommentsUntilDetailSave;
   const isCommentEnabled =
     menuCanEdit &&
@@ -4375,9 +4389,9 @@ export default function WorkBoardDetailPage() {
             },
           }}
           onDragStart={handleDragStart}
-          onDragOver={menuCanEdit && !cardSearchActive ? handleDragOver : undefined}
+          onDragOver={menuCanEdit ? handleDragOver : undefined}
           onDragCancel={handleDragCancel}
-          onDragEnd={menuCanEdit && !cardSearchActive ? handleDragEnd : () => {}}
+          onDragEnd={menuCanEdit ? handleDragEnd : () => {}}
         >
           <Box
             ref={boardHScrollRef}
@@ -4438,6 +4452,7 @@ export default function WorkBoardDetailPage() {
                 savingCard={savingCard}
                 onOpenCardDetail={openCardDetail}
                 allowListReorder={menuCanEdit && !cardSearchActive}
+                allowCardDrag={menuCanEdit}
                 allowListTitleEdit={menuCanEdit}
                 allowListDelete={menuCanDelete}
                 allowAddCard={menuCanCreate}

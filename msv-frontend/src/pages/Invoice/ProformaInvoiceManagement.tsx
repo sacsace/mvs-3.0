@@ -719,14 +719,14 @@ const ProformaInvoiceManagement: React.FC = () => {
         notes: inv.notes ?? ''
       }));
       setAllInvoices(list);
-    } catch (error) {
+      } catch (error) {
       setSnackbar({
         open: true,
         message: tr('인보이스 목록을 불러오지 못했습니다.', 'Failed to load invoices.'),
         severity: 'error'
       });
-    } finally {
-      setLoading(false);
+      } finally {
+        setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- tr은 초기 로드 시점 기준
   }, [canSelectCompany, selectedCompanyId]);
@@ -810,7 +810,7 @@ const ProformaInvoiceManagement: React.FC = () => {
     setInvoiceNumber('');
     setRecipientCompanyId('');
     setCustomerGstNumbers([]);
-    setFormData({
+        setFormData({
       customer_name: '',
       customer_email: '',
       customer_phone: '',
@@ -819,7 +819,7 @@ const ProformaInvoiceManagement: React.FC = () => {
       invoice_date: new Date().toISOString().split('T')[0],
       due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       currency: 'INR',
-      notes: '',
+          notes: '',
       taxMode: 'overall',
       overallCgstRate: 9,
       overallSgstRate: 9,
@@ -1699,10 +1699,10 @@ const ProformaInvoiceManagement: React.FC = () => {
   const renderApprovalCell = (inv: Invoice) => {
     const s = inv.approval_status;
     if (s == null || s === '') {
-      return (
+  return (
         <Typography variant="caption" color="text.secondary">
           —
-        </Typography>
+      </Typography>
       );
     }
     if (s === 'pending_approval') {
@@ -1938,15 +1938,15 @@ const ProformaInvoiceManagement: React.FC = () => {
                 },
               }}
             >
-              <TextField
+                <TextField
                 fullWidth
-                size="small"
+                  size="small"
                 label={tr('검색', 'Search')}
                 placeholder={tr('인보이스 번호 또는 고객명 검색', 'Search by invoice number or customer')}
                 value={filters.search}
                 onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                 InputLabelProps={{ shrink: true }}
-                InputProps={{
+                  InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
                       <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
@@ -2047,7 +2047,7 @@ const ProformaInvoiceManagement: React.FC = () => {
                                 alt="Company logo"
                                 sx={{ maxHeight: 60, maxWidth: 220, objectFit: 'contain' }}
                               />
-                            </Box>
+                        </Box>
                           )}
                         </Box>
                         <Box sx={{ minWidth: 220 }}>
@@ -2073,14 +2073,14 @@ const ProformaInvoiceManagement: React.FC = () => {
                             <CardContent sx={{ p: 2 }}>
                               <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
                                 {tr('공급자', 'Supplier')}
-                              </Typography>
+                        </Typography>
                               {issuerCompany ? (
                                 <Stack spacing={0.4}>
                                   <Typography variant="body2" fontWeight={600}>{issuerCompany.name}</Typography>
                                   <Typography variant="caption" color="text.secondary">{tr('사업자번호', 'Business No.')}: {issuerCompany.business_number || '-'}</Typography>
                                   <Typography variant="caption" color="text.secondary">
                                     GSTIN: {issuerGst || '-'}, PAN: {issuerCompany.pan_number || '-'}
-                                  </Typography>
+                        </Typography>
                                   {issuerCompany.address && (
                                     <Typography variant="caption" color="text.secondary">{tr('주소', 'Address')}: {issuerCompany.address}</Typography>
                                   )}
@@ -2099,7 +2099,7 @@ const ProformaInvoiceManagement: React.FC = () => {
                             <CardContent sx={{ p: 2 }}>
                               <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
                                 {tr('청구 대상', 'Bill To')}
-                              </Typography>
+                        </Typography>
                               <Stack spacing={0.4}>
                                 <Typography variant="body2" fontWeight={600}>{viewCustomer.name || selectedInvoice.customer_name}</Typography>
                                 <Typography variant="caption" color="text.secondary">GSTIN: {viewCustomer.gst || '-'}</Typography>
@@ -2114,7 +2114,7 @@ const ProformaInvoiceManagement: React.FC = () => {
                             <CardContent sx={{ p: 2 }}>
                               <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
                                 {tr('배송 대상', 'Shipping To')}
-                              </Typography>
+                        </Typography>
                               <Stack spacing={0.4}>
                                 <Typography variant="body2" fontWeight={600}>{viewCustomer.name || selectedInvoice.customer_name}</Typography>
                                 <Typography variant="caption" color="text.secondary">GSTIN: {viewCustomer.gst || '-'}</Typography>
@@ -2130,7 +2130,7 @@ const ProformaInvoiceManagement: React.FC = () => {
 
                   <TableContainer component={Paper} variant="outlined" sx={{ mb: 2, borderColor: 'grey.300' }}>
                     <Table
-                      size="small"
+                              size="small" 
                       sx={{
                         '& .MuiTableCell-root': {
                           fontSize: EXCEL_BASE_FONT_SIZE,
@@ -2170,7 +2170,7 @@ const ProformaInvoiceManagement: React.FC = () => {
                             </>
                           ) : null}
                           <TableCell align="center" sx={{ width: '10%' }}>Amount</TableCell>
-                        </TableRow>
+                    </TableRow>
                       </TableHead>
                       <TableBody>
                         {pageItems.map((item, idx) => {
@@ -2198,16 +2198,16 @@ const ProformaInvoiceManagement: React.FC = () => {
                             </TableRow>
                           );
                         })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                </TableBody>
+              </Table>
+            </TableContainer>
 
                   {isLast && (
                     <>
                       <Card variant="outlined" sx={{ borderColor: 'grey.400' }}>
                         <CardContent sx={{ py: 0.625, px: 1.25, '&:last-child': { pb: 0.625 } }}>
                           <Table size="small" className="tax-summary-table" sx={taxSummaryTableSx}>
-                            <TableBody>
+                <TableBody>
                               <TableRow sx={{ bgcolor: 'grey.100' }}>
                                 {summaryColumnSx.map((col, idx) => {
                                   const labelIndex = summaryAmountColumn - 2;
@@ -2216,14 +2216,14 @@ const ProformaInvoiceManagement: React.FC = () => {
                                     return (
                                       <TableCell key={idx} sx={{ ...col, borderBottom: 'none', textAlign: 'right', fontWeight: 700 }}>
                                         {uniformGstRate !== null ? 'Sum' : 'Subtotal'}
-                                      </TableCell>
+                      </TableCell>
                                     );
                                   }
                                   if (idx === amountIndex) {
                                     return (
                                       <TableCell key={idx} sx={{ ...col, borderBottom: 'none', textAlign: 'right', fontWeight: 700 }}>
                                         {formatFloorAmount(selectedInvoice.sub_total ?? viewItemsSubtotal ?? itemsSubtotal)} {selectedInvoice.currency}
-                                      </TableCell>
+                      </TableCell>
                                     );
                                   }
                                   return <TableCell key={idx} sx={{ ...col, borderBottom: 'none' }} />;
@@ -2240,14 +2240,14 @@ const ProformaInvoiceManagement: React.FC = () => {
                                           return (
                                             <TableCell key={idx} className="tax-summary-label" sx={{ ...col, borderBottom: 'none', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                               {label} ({(uniformGstRate / 2).toLocaleString(undefined, { maximumFractionDigits: 2 })}%)
-                                            </TableCell>
+                      </TableCell>
                                           );
                                         }
                                         if (idx === amountIndex) {
                                           return (
                                             <TableCell key={idx} sx={{ ...col, borderBottom: 'none', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                               {formatFloorAmount(computedTaxTotal / 2)} {selectedInvoice.currency}
-                                            </TableCell>
+                      </TableCell>
                                           );
                                         }
                                         return <TableCell key={idx} sx={{ ...col, borderBottom: 'none' }} />;
@@ -2265,19 +2265,19 @@ const ProformaInvoiceManagement: React.FC = () => {
                                         return (
                                           <TableCell key={idx} className="tax-summary-label" sx={{ ...col, borderBottom: 'none', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                             GST Total Amount
-                                          </TableCell>
+                      </TableCell>
                                         );
                                       }
                                       if (idx === amountIndex) {
                                         return (
                                           <TableCell key={idx} sx={{ ...col, borderBottom: 'none', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                             {formatFloorAmount(computedTaxTotal)} {selectedInvoice.currency}
-                                          </TableCell>
+                      </TableCell>
                                         );
                                       }
                                       return <TableCell key={idx} sx={{ ...col, borderBottom: 'none' }} />;
                                     })}
-                                  </TableRow>
+                    </TableRow>
                                 )
                               )}
                               <TableRow sx={{ bgcolor: 'grey.100' }}>
@@ -2301,8 +2301,8 @@ const ProformaInvoiceManagement: React.FC = () => {
                                   return <TableCell key={idx} sx={{ ...col, borderBottom: 'none' }} />;
                                 })}
                               </TableRow>
-                            </TableBody>
-                          </Table>
+                </TableBody>
+              </Table>
                         </CardContent>
                       </Card>
 
@@ -2314,12 +2314,12 @@ const ProformaInvoiceManagement: React.FC = () => {
                           <Paper variant="outlined" sx={{ p: 1.2, borderColor: 'grey.400' }}>
                             <Typography variant="body2" fontWeight={600}>
                               {tr('계좌 정보', 'Bank Details')}
-                            </Typography>
+            </Typography>
                             <Stack spacing={0.2} sx={{ mt: 0.6 }}>
                               {issuerCompany?.account_holder_name && (
                                 <Typography variant="body2" color="text.secondary">
                                   Account Holder: {issuerCompany.account_holder_name}
-                                </Typography>
+                  </Typography>
                               )}
                               {issuerCompany?.bank_name && (
                                 <Typography variant="body2" color="text.secondary">
@@ -2476,8 +2476,8 @@ const ProformaInvoiceManagement: React.FC = () => {
                 </Button>
               )}
             </Box>
-          </CardContent>
-        </Card>
+                </CardContent>
+              </Card>
       ) : ((isCreating || isEditing) ? (
         <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
           <CardContent sx={{ p: { xs: 2.5, md: 4 } }}>
@@ -2518,13 +2518,13 @@ const ProformaInvoiceManagement: React.FC = () => {
                 <Grid container spacing={1.5}>
                   <Grid size={{ xs: 12, md: 12 }}>
                     <Card variant="outlined" sx={{ bgcolor: 'white' }}>
-                      <CardContent>
+                <CardContent>
                         {issuerCompany ? (
                           <Stack spacing={0.5}>
                             <Typography variant="body2" fontWeight={600}>{issuerCompany.name}</Typography>
                             <Typography variant="caption" color="text.secondary">
                               Business No.: {issuerCompany.business_number || '-'}
-                            </Typography>
+                  </Typography>
                             {issuerGstNumbers.length > 1 ? (
                               <Box
                                 sx={{
@@ -2572,17 +2572,17 @@ const ProformaInvoiceManagement: React.FC = () => {
                         ) : (
                           <Typography variant="body2" color="text.secondary">No issuer company information</Typography>
                         )}
-                      </CardContent>
-                    </Card>
+                </CardContent>
+              </Card>
                   </Grid>
                 </Grid>
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
                 <Card variant="outlined" sx={{ bgcolor: 'white', height: '100%' }}>
-                  <CardContent>
+                <CardContent>
                     <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
                       Bill to
-                    </Typography>
+                  </Typography>
                     <Grid container spacing={0.8}>
                       <Grid size={{ xs: 12 }}>
                         <Typography variant="body2" sx={{ mb: 0.15, color: 'text.secondary', fontSize: '0.875rem' }}>
@@ -2723,15 +2723,15 @@ const ProformaInvoiceManagement: React.FC = () => {
                         />
                       </Grid>
                     </Grid>
-                  </CardContent>
-                </Card>
+                </CardContent>
+              </Card>
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
                 <Card variant="outlined" sx={{ bgcolor: 'white', height: '100%' }}>
-                  <CardContent>
+                <CardContent>
                     <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
                       Issue Info
-                    </Typography>
+                  </Typography>
                     <Grid container spacing={1}>
                       <Grid size={{ xs: 12 }}>
                         <Typography variant="body2" sx={{ mb: 0.2, color: 'text.secondary', fontSize: '0.875rem' }}>
@@ -2749,15 +2749,15 @@ const ProformaInvoiceManagement: React.FC = () => {
                         <Typography variant="body2" sx={{ mb: 0.2, color: 'text.secondary', fontSize: '0.875rem' }}>
                           Currency
                         </Typography>
-                        <FormControl fullWidth>
-                          <Select
+            <FormControl fullWidth>
+              <Select
                             value={formData.currency}
                             onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
                           >
                             <MenuItem value="INR">INR</MenuItem>
                             <MenuItem value="USD">USD</MenuItem>
-                          </Select>
-                        </FormControl>
+              </Select>
+            </FormControl>
                       </Grid>
                     </Grid>
                   </CardContent>
@@ -2825,7 +2825,7 @@ const ProformaInvoiceManagement: React.FC = () => {
                         }}
                       >
                         <Box sx={{ flex: 1.6, pr: 2, display: 'flex', gap: 1 }}>
-                          <TextField
+            <TextField
                             size="small"
                             inputRef={(el) => {
                               if (el) itemNameRefs.current[index] = el;
@@ -2844,11 +2844,11 @@ const ProformaInvoiceManagement: React.FC = () => {
                               }
                             }}
                             placeholder="Item Name"
-                            fullWidth
+              fullWidth
                             sx={{ flex: 1, ...itemInputSx }}
                             inputProps={{ style: { padding: '6px 8px' } }}
-                          />
-                          <TextField
+            />
+            <TextField
                             size="small"
                             inputRef={(el) => {
                               if (el) descriptionRefs.current[index] = el;
@@ -2867,13 +2867,13 @@ const ProformaInvoiceManagement: React.FC = () => {
                               }
                             }}
                             placeholder="HSN/SAC"
-                            fullWidth
+              fullWidth
                             sx={{ flex: 0.5, ...itemInputSx }}
                             inputProps={{ style: { padding: '6px 8px' } }}
                           />
                         </Box>
                         <Box sx={{ width: 110, pr: 2 }}>
-                          <TextField
+            <TextField
                             size="small"
                             type="number"
                             inputRef={(el) => {
@@ -2894,13 +2894,13 @@ const ProformaInvoiceManagement: React.FC = () => {
                                 unitPriceRefs.current[index]?.focus();
                               }
                             }}
-                            fullWidth
+              fullWidth
                             sx={itemInputSx}
                             inputProps={{ style: { padding: '6px 8px' } }}
                           />
                         </Box>
                         <Box sx={{ width: 160, pr: 2 }}>
-                          <TextField
+            <TextField
                             size="small"
                             type="number"
                             inputRef={(el) => {
@@ -2921,11 +2921,11 @@ const ProformaInvoiceManagement: React.FC = () => {
                                 addItemAndFocusName();
                               }
                             }}
-                            fullWidth
+              fullWidth
                             sx={itemInputSx}
                             inputProps={{ style: { padding: '6px 8px' } }}
-                          />
-                        </Box>
+            />
+          </Box>
                         <Box sx={{ width: 240, pr: 2, display: 'flex', gap: 1 }}>
                           <FormControl size="small" fullWidth disabled={formData.taxMode === 'overall' || (item.igstRate || 0) > 0} sx={itemInputSx}>
                             <Select
@@ -2986,12 +2986,12 @@ const ProformaInvoiceManagement: React.FC = () => {
                               ))}
                             </Select>
                           </FormControl>
-                        </Box>
+          </Box>
                         <Box sx={{ width: 120, pr: 2, textAlign: 'right' }}>
                           <Typography variant="body2">
                             {(item.total_price + item.tax_amount).toLocaleString()} {formData.currency}
-                          </Typography>
-                        </Box>
+                  </Typography>
+                </Box>
                         <Box sx={{ width: 40, textAlign: 'center' }}>
                           <IconButton
                             size="small"
@@ -3009,10 +3009,10 @@ const ProformaInvoiceManagement: React.FC = () => {
                     <Box sx={{ px: 2, py: 2 }}>
                       <Typography variant="body2" color="text.secondary">
                         No items added.
-                      </Typography>
-                    </Box>
-                  )}
+                  </Typography>
                 </Box>
+                  )}
+              </Box>
               </Grid>
 
               <Grid size={{ xs: 12 }}>
@@ -3123,20 +3123,20 @@ const ProformaInvoiceManagement: React.FC = () => {
                         <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                           <Typography variant="body2" color="text.secondary">Subtotal</Typography>
                           <Typography variant="body2">{itemsSubtotal.toLocaleString()}</Typography>
-                        </Box>
+                  </Box>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                           <Typography variant="body2" color="text.secondary">Tax</Typography>
                           <Typography variant="body2">{itemsTaxTotal.toLocaleString()}</Typography>
-                        </Box>
+                  </Box>
                         <Divider />
                         <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                           <Typography variant="subtitle2">Total</Typography>
                           <Typography variant="subtitle2">{itemsGrandTotal.toLocaleString()} {formData.currency}</Typography>
-                        </Box>
+                  </Box>
                       </Stack>
                     </CardContent>
                   </Card>
-                </Box>
+                  </Box>
               </Grid>
 
               {isCreating && (
@@ -3198,8 +3198,8 @@ const ProformaInvoiceManagement: React.FC = () => {
                           }}
                         />
                       )}
-                    </Box>
-                  </Box>
+                </Box>
+              </Box>
                 </Grid>
               )}
 
@@ -3234,7 +3234,7 @@ const ProformaInvoiceManagement: React.FC = () => {
                     ))}
                   </colgroup>
                   <TableHead sx={mvsTableHeadHighlightSx}>
-                    <TableRow>
+                      <TableRow>
                       {invoiceListColumns.map((col) => (
                         <TableCell
                           key={col.key}
@@ -3259,8 +3259,8 @@ const ProformaInvoiceManagement: React.FC = () => {
                           </Box>
                         </TableCell>
                       ))}
-                    </TableRow>
-                  </TableHead>
+                      </TableRow>
+                    </TableHead>
                   <TableBody sx={mvsTableBodyRowSx}>
                     {pagedInvoices.map((invoice) => (
                       <TableRow
@@ -3380,11 +3380,11 @@ const ProformaInvoiceManagement: React.FC = () => {
                             )}
                           </Stack>
                         </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
             )}
 
             <Box sx={mvsBodyPaginationSx}>
@@ -3394,8 +3394,8 @@ const ProformaInvoiceManagement: React.FC = () => {
                 onChange={(_, newPage) => setPage(newPage)}
                 color="primary"
               />
-            </Box>
-          </Box>
+                  </Box>
+                  </Box>
         </>
       ))}
 
@@ -3444,7 +3444,7 @@ const ProformaInvoiceManagement: React.FC = () => {
                   'Deletion is not immediate. It will be processed after the approver approves.'
                 )}
           </Typography>
-          <Box sx={{ mb: 2 }}>
+                    <Box sx={{ mb: 2 }}>
             <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 600 }}>
               {tr('승인 대상', 'Approver')} *
             </Typography>
@@ -3476,7 +3476,7 @@ const ProformaInvoiceManagement: React.FC = () => {
             <FormHelperText sx={{ mx: 0 }}>
               {tr('이 요청을 검토·승인할 사용자를 선택하세요.', 'Choose who will review and approve this request.')}
             </FormHelperText>
-          </Box>
+                    </Box>
           <TextField
             fullWidth
             multiline
