@@ -1804,34 +1804,50 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
                   {tr('actions.generatePeriod')}
                 </Button>
               </Box>
-              {summary ? (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.25, alignItems: 'center' }}>
-                  <Typography sx={{ fontSize: '0.75rem', color: '#64748B' }}>
-                    {tr('checklist.summaryTotal')} {summary.total}
-                  </Typography>
-                  <Typography sx={{ fontSize: '0.75rem', color: '#64748B' }}>
-                    {tr('checklist.summaryCompleted')} {summary.completed}
-                  </Typography>
-                  <Typography sx={{ fontSize: '0.75rem', color: '#64748B' }}>
-                    {tr('checklist.summaryInProgress')} {summary.in_progress}
-                  </Typography>
-                  <Typography sx={{ fontSize: '0.75rem', color: '#64748B' }}>
-                    {tr('checklist.summaryPending')} {summary.pending}
-                  </Typography>
-                  <Typography sx={{ fontSize: '0.75rem', color: summary.overdue ? '#DC2626' : '#64748B' }}>
-                    {tr('checklist.summaryOverdue')} {summary.overdue}
-                  </Typography>
-                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#0F172A' }}>
-                    {tr('checklist.summaryRate')} {summary.completion_rate}%
-                  </Typography>
-                </Box>
-              ) : null}
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-end',
+                  gap: 0.75,
+                  flexShrink: 0,
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: '0.75rem',
+                    color: '#64748B',
+                    textAlign: 'right',
+                    lineHeight: 1.4,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {tr('checklist.purposeHint')}
+                </Typography>
+                {summary ? (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.25, alignItems: 'center', justifyContent: 'flex-end' }}>
+                    <Typography sx={{ fontSize: '0.75rem', color: '#64748B' }}>
+                      {tr('checklist.summaryTotal')} {summary.total}
+                    </Typography>
+                    <Typography sx={{ fontSize: '0.75rem', color: '#64748B' }}>
+                      {tr('checklist.summaryCompleted')} {summary.completed}
+                    </Typography>
+                    <Typography sx={{ fontSize: '0.75rem', color: '#64748B' }}>
+                      {tr('checklist.summaryInProgress')} {summary.in_progress}
+                    </Typography>
+                    <Typography sx={{ fontSize: '0.75rem', color: '#64748B' }}>
+                      {tr('checklist.summaryPending')} {summary.pending}
+                    </Typography>
+                    <Typography sx={{ fontSize: '0.75rem', color: summary.overdue ? '#DC2626' : '#64748B' }}>
+                      {tr('checklist.summaryOverdue')} {summary.overdue}
+                    </Typography>
+                    <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: '#0F172A' }}>
+                      {tr('checklist.summaryRate')} {summary.completion_rate}%
+                    </Typography>
+                  </Box>
+                ) : null}
+              </Box>
             </Box>
-          )}
-          {tab === 0 && (
-            <Typography sx={{ px: 2.5, pb: 1, fontSize: '0.75rem', color: '#64748B' }}>
-              {tr('checklist.purposeHint')}
-            </Typography>
           )}
 
           {tab === 1 && (
@@ -1906,8 +1922,8 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
                     </Typography>
                   </Box>
                 ) : (
-                  <TableContainer sx={{ maxHeight: 'calc(100vh - 320px)' }}>
-                    <Table size="small" stickyHeader sx={{ ...tableSx, minWidth: 720 }}>
+                  <TableContainer>
+                    <Table size="small" sx={{ ...tableSx, minWidth: 720 }}>
                       <TableHead sx={mvsTableHeadHighlightSx}>
                         <TableRow>
                           <TableCell
@@ -1986,9 +2002,9 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
                               ? {}
                               : mvsTableBodyRowSx),
                             '& .MuiTableCell-body': {
-                              py: 1.5,
-                              px: 2,
-                              fontSize: '0.875rem',
+                              py: 1.1,
+                              px: 1.5,
+                              fontSize: '0.75rem',
                               borderBottom: '1px solid #E2E8F0',
                             },
                             '& .MuiTableRow-root': { bgcolor: 'transparent' },
@@ -2069,7 +2085,7 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
                                   overflow: 'hidden',
                                   textOverflow: 'ellipsis',
                                   color: assigneeLabel ? 'text.primary' : 'text.disabled',
-                                  fontSize: '0.8125rem',
+                                  fontSize: '0.75rem',
                                 }}
                                 title={assigneeLabel || tr('fields.none')}
                               >
@@ -2135,8 +2151,8 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
                                       }
                                       onClick={() => void openInstanceDetail(cell)}
                                       sx={{
-                                        height: 24,
-                                        fontSize: '0.75rem',
+                                        height: 22,
+                                        fontSize: '0.6875rem',
                                         fontWeight: 600,
                                         cursor: 'pointer',
                                         maxWidth: '100%',
@@ -2242,8 +2258,8 @@ const WorkRecurringBoardPage: React.FC<{ board: BoardProp }> = ({ board }) => {
                 (clients.length === 0 || templates.length === 0 ? (
                   emptyBox(tr('empty.assignments'))
                 ) : (
-                  <TableContainer sx={{ maxHeight: 'calc(100vh - 300px)' }}>
-                    <Table size="small" stickyHeader sx={{ ...tableSx, tableLayout: 'fixed', minWidth: 720 }}>
+                  <TableContainer>
+                    <Table size="small" sx={{ ...tableSx, tableLayout: 'fixed', minWidth: 720 }}>
                       <TableHead sx={mvsTableHeadHighlightSx}>
                         <TableRow>
                           <TableCell
