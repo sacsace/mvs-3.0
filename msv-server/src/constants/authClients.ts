@@ -1,6 +1,6 @@
 /**
- * Auth client kinds — 웹 단일 세션과 알람(트레이) 앱 세션을 분리한다.
- * - 웹↔웹: session_version 증가로 중복 로그인 차단
+ * Auth client kinds — 웹과 알람(트레이) 앱 세션을 분리한다.
+ * - 웹↔웹: 동시 로그인 허용 (login_notice_version으로 안내만)
  * - 알람 앱: 웹 세션을 끊지 않으며, API 스코프는 알림/세션으로 제한
  */
 export const MVS_NOTIFIER_CLIENT = 'mvs_notifier';

@@ -95,8 +95,10 @@ const authStorage = {
 };
 const SESSION_WARNING_MS = 30 * 1000; // 30초
 const SESSION_CHECK_INTERVAL_MS = 5 * 1000; // 5초
-const SESSION_VALIDITY_POLL_MS = 30 * 1000; // 중복 로그인 감지 폴링
+const SESSION_VALIDITY_POLL_MS = 3 * 1000; // 다른 기기 로그인 안내 폴링
 const SESSION_SUPERSEDED_CODE = 'SESSION_SUPERSEDED';
+const LOGIN_NOTICE_STORAGE_KEY = 'mvs_login_notice_version';
+const LOGIN_NOTICE_HEADER = 'x-mvs-login-notice-version';
 
 /** 동일 429 안내가 errorStore에 반복 적재되지 않도록 */
 let lastRateLimitNoticeAt = 0;
@@ -123,7 +125,48 @@ let refreshPromise: Promise<string | null> | null = null;
 let lastRefreshAt = 0;
 let lastUserActivityAt = Date.now();
 let sessionSupersededHandled = false;
+let loginElsewhereNoticeShownForVersion: number | null = null;
 const isUserRecentlyActive = () => Date.now() - lastUserActivityAt <= ACTIVITY_RECENT_WINDOW_MS;
+
+export const setStoredLoginNoticeVersion = (version: number | null | undefined) => {
+  if (typeof window === 'undefined') return;
+  const n = Number(version);
+  if (!Number.isFinite(n) || n < 0) {
+    window.sessionStorage.removeItem(LOGIN_NOTICE_STORAGE_KEY);
+    loginElsewhereNoticeShownForVersion = null;
+    return;
+  }
+  window.sessionStorage.setItem(LOGIN_NOTICE_STORAGE_KEY, String(Math.floor(n)));
+  loginElsewhereNoticeShownForVersion = Math.floor(n);
+};
+
+/** 로그아웃 시 호출 — 다음 로그인에서 자기 로그인 팝업이 뜨지 않도록 */
+export const clearStoredLoginNoticeVersion = () => {
+  setStoredLoginNoticeVersion(null);
+};
+
+const getStoredLoginNoticeVersion = (): number | null => {
+  if (typeof window === 'undefined') return null;
+  const raw = window.sessionStorage.getItem(LOGIN_NOTICE_STORAGE_KEY);
+  if (raw == null || raw === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? Math.floor(n) : null;
+};
+
+const tAuth = (key: string, fallback: string) => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const i18nMod = require('../../locales/i18n');
+    const i18n = i18nMod?.default || i18nMod;
+    const translated = i18n?.t?.(`auth.${key}`);
+    if (typeof translated === 'string' && translated && translated !== `auth.${key}`) {
+      return translated;
+    }
+  } catch {
+    /* ignore */
+  }
+  return fallback;
+};
 
 const readStoredAuthToken = (): { raw: string; parsed: any; token: string } | null => {
   try {
@@ -160,18 +203,73 @@ const clearAuthAndRedirectLogin = () => {
   }
 };
 
+/** 비밀번호 변경 등으로 session_version 이 바뀐 경우 — 강제 로그아웃 */
 const handleSessionSuperseded = () => {
   if (sessionSupersededHandled) return;
   if (window.location.pathname === '/login' || window.location.pathname === '/') return;
   sessionSupersededHandled = true;
   authStorage.removeItem(AUTH_STORAGE_KEY);
+  window.sessionStorage.removeItem(LOGIN_NOTICE_STORAGE_KEY);
   useErrorStore.getState().showError(
-    '중복 로그인',
-    '다른 곳에서 동일한 계정으로 로그인되어 현재 세션이 종료됩니다.',
+    tAuth('sessionSupersededTitle', '세션 종료'),
+    tAuth(
+      'sessionSupersededMessage',
+      '비밀번호 변경 등으로 세션이 만료되어 다시 로그인해 주세요.'
+    ),
     undefined,
     'warning',
     '/login'
   );
+};
+
+const isLoginPagePath = () => {
+  if (typeof window === 'undefined') return true;
+  const path = window.location.pathname;
+  return path === '/login' || path === '/';
+};
+
+/** 서버 loginNoticeVersion 과 로컬 기준값 비교 — 상승 시에만 팝업 */
+const applyLoginNoticeVersion = (serverVersionRaw: unknown) => {
+  const serverVersion = Number(serverVersionRaw);
+  if (!Number.isFinite(serverVersion) || serverVersion < 0) return;
+
+  const localNotice = getStoredLoginNoticeVersion();
+  // 최초 동기화(로그인 직후·새로고침): 기준값만 맞추고 팝업 없음
+  if (localNotice == null) {
+    setStoredLoginNoticeVersion(serverVersion);
+    return;
+  }
+  if (serverVersion > localNotice) {
+    handleLoginElsewhereNotice(serverVersion);
+  }
+};
+
+/** 다른 곳에서 로그인 — 세션은 유지하고 안내 팝업만 */
+const handleLoginElsewhereNotice = (serverVersion: number) => {
+  if (isLoginPagePath()) return;
+  if (loginElsewhereNoticeShownForVersion === serverVersion) return;
+  loginElsewhereNoticeShownForVersion = serverVersion;
+  setStoredLoginNoticeVersion(serverVersion);
+  useErrorStore.getState().showError(
+    tAuth('loginElsewhereTitle', '다른 곳에서 로그인'),
+    tAuth(
+      'loginElsewhereMessage',
+      '다른 기기 또는 브라우저에서 동일한 계정으로 로그인했습니다. 현재 세션은 유지됩니다.'
+    ),
+    undefined,
+    'warning'
+  );
+};
+
+const readLoginNoticeHeader = (headers: any): number | null => {
+  if (!headers) return null;
+  const raw =
+    headers[LOGIN_NOTICE_HEADER] ??
+    headers['X-MVS-Login-Notice-Version'] ??
+    (typeof headers.get === 'function' ? headers.get(LOGIN_NOTICE_HEADER) : null);
+  if (raw == null || raw === '') return null;
+  const n = Number(Array.isArray(raw) ? raw[0] : raw);
+  return Number.isFinite(n) ? Math.floor(n) : null;
 };
 
 const isAuthBypassEndpoint = (url?: string) => {
@@ -407,20 +505,24 @@ const checkSessionTimeout = () => {
   }
 };
 
-/** 서버에 현재 세션이 유효한지 확인 (다른 기기 로그인 감지) */
+/** 서버에 현재 세션이 유효한지 확인 + 다른 기기 로그인 안내 */
 const pollSessionValidity = async () => {
   try {
     const storedAuth = readStoredAuthToken();
     if (!storedAuth?.token) return;
-    if (window.location.pathname === '/login' || window.location.pathname === '/') return;
+    if (isLoginPagePath()) return;
 
-    await api.get('/auth/session', {
+    const response = await api.get('/auth/session', {
       headers: {
         Authorization: `Bearer ${storedAuth.token}`,
         'x-skip-session-refresh': 'true',
         'x-skip-error-popup': 'true',
       },
     });
+    const payload = response?.data?.data || {};
+    const fromBody = payload.loginNoticeVersion;
+    const fromHeader = readLoginNoticeHeader(response?.headers);
+    applyLoginNoticeVersion(fromBody ?? fromHeader);
   } catch (error) {
     if (isSessionSupersededError(error)) {
       handleSessionSuperseded();
@@ -433,6 +535,12 @@ setInterval(checkSessionTimeout, SESSION_CHECK_INTERVAL_MS);
 setInterval(() => {
   void pollSessionValidity();
 }, SESSION_VALIDITY_POLL_MS);
+// 모듈 로드 직후 1회 — 첫 폴링 주기까지 기다리지 않음
+if (typeof window !== 'undefined') {
+  window.setTimeout(() => {
+    void pollSessionValidity();
+  }, 800);
+}
 
 if (typeof window !== 'undefined') {
   const activityEvents: Array<keyof WindowEventMap> = [
@@ -459,11 +567,23 @@ if (typeof window !== 'undefined') {
       void pollSessionValidity();
     }
   });
+
+  window.addEventListener('focus', () => {
+    void pollSessionValidity();
+  });
 }
 
 // 응답 인터셉터
 api.interceptors.response.use(
   (response) => {
+    const url = String(response?.config?.url || '');
+    // 로그인 응답은 Login.tsx 가 기준값을 먼저 저장 — 여기서 비교하면 레이스 발생
+    if (!url.includes('/auth/login') && !url.includes('/auth/webauthn/login')) {
+      const notice = readLoginNoticeHeader(response?.headers);
+      if (notice != null) {
+        applyLoginNoticeVersion(notice);
+      }
+    }
     return response;
   },
   async (error) => {

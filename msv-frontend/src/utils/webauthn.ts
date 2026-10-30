@@ -102,7 +102,11 @@ export const loginWithPlatformPasskey = async (userid: string) => {
   if (!verifyRes.data?.success || !verifyRes.data?.data) {
     throw new Error(verifyRes.data?.message || '생체 로그인에 실패했습니다.');
   }
-  return verifyRes.data.data as { token: string; user: any };
+  return verifyRes.data.data as {
+    token: string;
+    user: any;
+    loginNoticeVersion?: number;
+  };
 };
 
 export const listPasskeyCredentials = async () => {

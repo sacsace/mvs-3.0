@@ -63,6 +63,14 @@ export const useStore = create<AuthState>()(
         bindNotificationPrefsUser(null);
         useErrorStore.getState().clearNotifications();
         useErrorStore.getState().clearErrors();
+        try {
+          // 동적 import 순환 참조 방지 — sessionStorage 키 직접 제거
+          if (typeof window !== 'undefined') {
+            window.sessionStorage.removeItem('mvs_login_notice_version');
+          }
+        } catch {
+          /* ignore */
+        }
         set({
           isAuthenticated: false,
           token: null,

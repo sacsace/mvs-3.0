@@ -182,7 +182,13 @@ export default {
       loginError: 'Login failed.',
       loginSuccess: 'Login successful',
       invalidCredentials: 'Invalid user ID or password.',
-      serverError: 'Server error occurred.'
+      serverError: 'Server error occurred.',
+      loginElsewhereTitle: 'Signed in elsewhere',
+      loginElsewhereMessage:
+        'This account was signed in from another device or browser. Your current session stays active.',
+      sessionSupersededTitle: 'Session ended',
+      sessionSupersededMessage:
+        'Your session expired (for example after a password change). Please sign in again.'
     },
     dashboard: {
       title: 'MVS Dashboard',

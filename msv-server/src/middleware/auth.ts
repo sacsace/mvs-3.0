@@ -4,6 +4,7 @@ import { User, Company } from '../models';
 import { AuthRequest } from '../types';
 import { getCachedAuthUser, setCachedAuthUser, getCachedAuthCompany, setCachedAuthCompany, invalidateAuthUser } from '../utils/authCache';
 import { isMvsNotifierClient, isNotifierApiPathAllowed } from '../constants/authClients';
+import { ensureLoginNoticeVersionColumn } from '../utils/ensureLoginNoticeVersion';
 
 const AUTH_USER_ATTRIBUTES = [
   'id',
@@ -21,10 +22,11 @@ const AUTH_USER_ATTRIBUTES = [
   'last_login',
   'is_payment_officer',
   'session_version',
+  'login_notice_version',
   'avatar_url',
 ] as const;
 
-/** JWT sv와 DB session_version 불일치 — 다른 기기 로그인 */
+/** JWT sv와 DB session_version 불일치 — 비밀번호 변경 등으로 세션 무효화 */
 export const SESSION_SUPERSEDED_CODE = 'SESSION_SUPERSEDED';
 
 type JwtAuthClaims = {
@@ -53,13 +55,15 @@ const respondSessionSuperseded = (res: Response) =>
 /**
  * 세션 버전은 매 요청 DB(PK)에서 확인 — 멀티 인스턴스 캐시 불일치 방지.
  * 프로필 필드는 단기 캐시 사용.
- * 알람(트레이) 앱 토큰은 웹 단일 세션(중복 로그인) 정책에서 제외.
+ * 알람(트레이) 앱 토큰은 웹 session_version 강제 종료 정책에서 제외.
  */
 export const authenticateToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
   try {
+    await ensureLoginNoticeVersionColumn();
+
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -96,7 +100,7 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     }
 
     const sessionRow = await (User as any).findByPk(decoded.userId, {
-      attributes: ['id', 'status', 'session_version'],
+      attributes: ['id', 'status', 'session_version', 'login_notice_version'],
     });
 
     if (!sessionRow || sessionRow.status !== 'active') {
@@ -111,6 +115,12 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     if (!skipSessionKick && dbSv !== tokenSv) {
       invalidateAuthUser(decoded.userId);
       return respondSessionSuperseded(res);
+    }
+
+    // 모든 인증 API 응답에 실어 프론트가 폴링 없이도 다른 로그인 감지
+    const dbNotice = Number((sessionRow as any).login_notice_version ?? 0);
+    if (Number.isFinite(dbNotice)) {
+      res.setHeader('X-MVS-Login-Notice-Version', String(Math.floor(dbNotice)));
     }
 
     const cached = getCachedAuthUser(decoded.userId);

@@ -11,8 +11,8 @@ export type AuthTokenUser = {
 };
 
 /**
- * 웹: session_version 을 +1 한 값으로 서명 (단일 동시 로그인).
- * 알람 앱: 현재 session_version 유지 + client claim (웹 세션과 공존).
+ * 웹·알람 앱 모두 현재 session_version 으로 서명 (웹 동시 로그인 허용).
+ * 알람 앱은 client claim 을 추가한다.
  */
 export function buildAuthTokenClaims(
   user: AuthTokenUser,

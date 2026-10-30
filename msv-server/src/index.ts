@@ -216,7 +216,16 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-skip-error-popup']
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'x-skip-error-popup',
+    'x-skip-session-refresh',
+    'X-MVS-Client',
+  ],
+  // 브라우저 JS가 동시 로그인 안내 버전을 읽을 수 있게 노출
+  exposedHeaders: ['X-MVS-Login-Notice-Version'],
 }));
 const REQUEST_BODY_LIMIT = process.env.REQUEST_BODY_LIMIT || '50mb';
 app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
@@ -443,6 +452,11 @@ server.listen(PORT, HOST, () => {
   console.log(`📊 Health check: http://${HOST}:${PORT}/health`);
   console.log(`🌐 API base URL: http://${HOST}:${PORT}/api`);
   console.log(`🔌 WebSocket: ws://${HOST}:${PORT}`);
+
+  // 동시 로그인 안내 컬럼 — 마이그레이션 전이어도 부팅 시 확보
+  void import('./utils/ensureLoginNoticeVersion')
+    .then((m) => m.ensureLoginNoticeVersionColumn())
+    .catch((err) => console.error('login_notice_version ensure on boot:', err));
   
   // Railway deployment info
   if (process.env.RAILWAY_ENVIRONMENT) {

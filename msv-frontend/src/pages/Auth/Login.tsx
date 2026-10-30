@@ -21,7 +21,7 @@ import {
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
-import { api, API_BASE_URL } from '../../services/api';
+import { api, API_BASE_URL, setStoredLoginNoticeVersion } from '../../services/api';
 import { useTranslation } from 'react-i18next';
 import { ensureI18nLanguage, detectOsLanguage } from '../../locales/i18n';
 import { alpha, useTheme } from '@mui/material/styles';
@@ -208,14 +208,25 @@ const Login: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const finishLogin = (token: string, user: any) => {
+  const finishLogin = (token: string, user: any, loginNoticeVersion?: number) => {
     rememberUserid(user?.userid || formData.userid);
+    // 응답 인터셉터보다 먼저 기준값을 고정해 자기 로그인 팝업을 막음
+    setStoredLoginNoticeVersion(
+      loginNoticeVersion != null && Number.isFinite(Number(loginNoticeVersion))
+        ? Number(loginNoticeVersion)
+        : 0
+    );
     login(token, user);
     goAfterLogin();
   };
 
-  const offerPasskeyRegistration = async (token: string, user: any) => {
+  const offerPasskeyRegistration = async (token: string, user: any, loginNoticeVersion?: number) => {
     rememberUserid(user?.userid || formData.userid);
+    setStoredLoginNoticeVersion(
+      loginNoticeVersion != null && Number.isFinite(Number(loginNoticeVersion))
+        ? Number(loginNoticeVersion)
+        : 0
+    );
     login(token, user);
 
     const can = await canUsePlatformPasskey();
@@ -251,8 +262,8 @@ const Login: React.FC = () => {
       const response = await api.post('/auth/login', formData);
       
       if (response.data.success) {
-        const { token, user } = response.data.data;
-        await offerPasskeyRegistration(token, user);
+        const { token, user, loginNoticeVersion } = response.data.data;
+        await offerPasskeyRegistration(token, user, loginNoticeVersion);
       } else {
         showError(localizeLoginApiError(response.data));
       }
@@ -286,7 +297,7 @@ const Login: React.FC = () => {
     }
     try {
       const data = await loginWithPlatformPasskey(formData.userid);
-      finishLogin(data.token, data.user);
+      finishLogin(data.token, data.user, data.loginNoticeVersion);
     } catch (err: any) {
       if (err?.name === 'NotAllowedError') {
         showError(t('login.passkeyCancelled'));

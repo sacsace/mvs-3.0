@@ -16,8 +16,13 @@ interface UserAttributes {
   position?: string;
   status: 'active' | 'inactive' | 'suspended';
   last_login?: Date;
-  /** 단일 동시 로그인 — 로그인마다 증가, JWT `sv`와 일치해야 유효 */
+  /**
+   * 강제 세션 무효화용(비밀번호 변경 등).
+   * 일반 웹 로그인은 올리지 않아 동시 로그인을 허용한다.
+   */
   session_version?: number;
+  /** 웹 로그인마다 +1 — 다른 기기 로그인 안내(세션 유지) */
+  login_notice_version?: number;
   // 인사관리 필드
   employee_number?: string;
   birth_date?: Date;
@@ -68,6 +73,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   public status!: 'active' | 'inactive' | 'suspended';
   public last_login?: Date;
   public session_version?: number;
+  public login_notice_version?: number;
   // 인사관리 필드
   public employee_number?: string;
   public birth_date?: Date;
@@ -162,6 +168,12 @@ User.init(
       allowNull: true
     },
     session_version: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0
+    },
+    /** 웹 로그인마다 +1 — 동시 세션은 유지하고 다른 기기 로그인 알림용 */
+    login_notice_version: {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0

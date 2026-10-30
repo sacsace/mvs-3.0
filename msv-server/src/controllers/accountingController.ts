@@ -2991,6 +2991,13 @@ const recordExpenseRevisionReject = (
       step.changedByName = actor.username || '';
       step.comment = reason;
       updated = true;
+    } else if (step.status === 'pending') {
+      // 수정 반려 후 다른 대기 결재는 더 이상 진행하지 않음
+      step.status = 'skipped';
+      step.action = 'skipped';
+      step.changedById = actor.id;
+      step.changedByName = actor.username || '';
+      step.approvedAt = nowIso;
     }
   }
   if (!updated) {
@@ -3743,6 +3750,7 @@ export const updateExpenseReportStatus = async (req: RequestWithUser, res: Respo
         patch.bank_transfer_provider = null;
       }
       if (isRevisionReject) {
+        patch.current_approver_id = null;
         patch.items = mergeExpenseItemsMeta(expense.items, {
           revisionRejected: true,
           revisionRejectReason: trimmedReason,

@@ -180,7 +180,13 @@ export default {
       loginError: '로그인에 실패했습니다.',
       loginSuccess: '로그인 성공',
       invalidCredentials: '사용자 ID 또는 비밀번호가 올바르지 않습니다.',
-      serverError: '서버 오류가 발생했습니다.'
+      serverError: '서버 오류가 발생했습니다.',
+      loginElsewhereTitle: '다른 곳에서 로그인',
+      loginElsewhereMessage:
+        '다른 기기 또는 브라우저에서 동일한 계정으로 로그인했습니다. 현재 세션은 유지됩니다.',
+      sessionSupersededTitle: '세션 종료',
+      sessionSupersededMessage:
+        '비밀번호 변경 등으로 세션이 만료되어 다시 로그인해 주세요.'
     },
     dashboard: {
       title: 'MVS 대시보드',

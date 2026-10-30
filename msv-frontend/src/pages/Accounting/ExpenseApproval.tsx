@@ -4167,8 +4167,11 @@ const ExpenseApproval: React.FC = () => {
   }, []);
 
   const handleViewExpense = (expense: ExpenseApprovalItem) => {
-    // 초안은 상세 대신 바로 수정 화면으로 (빈 자동초안 열람·404 혼란 방지)
-    if (expense.status === 'draft' && canEditExpense(expense)) {
+    // 초안·수정 반려는 상세 대신 바로 수정 화면으로
+    if (
+      (expense.status === 'draft' || isRevisionRejectedExpense(expense)) &&
+      canEditExpense(expense)
+    ) {
       handleEditExpense(expense);
       return;
     }
@@ -5447,7 +5450,7 @@ const ExpenseApproval: React.FC = () => {
 
   const canEditExpense = (expense: ExpenseApprovalItem) => {
     if (!user?.id) return false;
-    if (listTab === 'received' || listTab === 'transfer') return false;
+    // 목록 탭과 무관 — 작성자면 상세에서 수정 가능 (수정 반려 포함)
     if (!isSameUserId(expense.requesterId, user.id)) return false;
     // 초안·수정반려·제출/검토 중(승인 전)만 작성자 수정 가능
     return (
@@ -5460,7 +5463,6 @@ const ExpenseApproval: React.FC = () => {
 
   const canResubmitExpense = (expense: ExpenseApprovalItem) => {
     if (!user?.id) return false;
-    if (listTab === 'received' || listTab === 'transfer') return false;
     if (!isSameUserId(expense.requesterId, user.id)) return false;
     return expense.status === 'rejected' && !isRevisionRejectedExpense(expense);
   };

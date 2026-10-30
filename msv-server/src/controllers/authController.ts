@@ -9,9 +9,9 @@ import { recordActivityLog } from '../services/activityLogService';
 import { resolveIsNotifierAuth, isMvsNotifierClient } from '../constants/authClients';
 import {
   buildAuthTokenClaims,
-  nextWebSessionVersion,
   signAuthToken,
 } from '../services/authSessionService';
+import { ensureLoginNoticeVersionColumn } from '../utils/ensureLoginNoticeVersion';
 
 const comparePassword = async (password: string, hash: string): Promise<boolean> => {
   return await bcrypt.compare(password, hash);
@@ -546,6 +546,8 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
+    await ensureLoginNoticeVersionColumn();
+
     // 사용자 조회 (기존 컬럼만 조회하여 마이그레이션 전 호환성 유지)
     const user = await (User as any).findOne({
       where: { userid: normalizedUserId, status: 'active' },
@@ -553,7 +555,7 @@ export const login = async (req: Request, res: Response) => {
         'id', 'tenant_id', 'company_id', 'userid', 'username', 'email',
         'password_hash', 'role', 'department', 'department_id', 'position', 'position_id',
         'status', 'last_login',
-        'is_payment_officer', 'session_version', 'avatar_url'
+        'is_payment_officer', 'session_version', 'login_notice_version', 'avatar_url'
       ]
     });
 
@@ -681,17 +683,38 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
-    // 웹: 단일 동시 로그인 — session_version 증가 → 기존 웹 JWT 무효화
-    // 알람 앱: 별도 클라이언트 — session_version 유지 → 웹과 공존
-    const prevSv = Number(user.session_version ?? 0);
-    const tokenSv = isNotifierLogin ? prevSv : nextWebSessionVersion(prevSv);
-    const updatePayload: Record<string, unknown> = { last_login: new Date() };
+    // 웹: 동시 로그인 허용 — session_version 유지, login_notice_version만 +1 해 다른 기기 안내
+    // 알람 앱: session_version·notice 유지 → 웹과 공존 (웹에 알림 팝업을 띄우지 않음)
+    const tokenSv = Number(user.session_version ?? 0);
+    const prevNotice = Number((user as any).login_notice_version ?? 0);
+    let nextNotice = prevNotice;
+    await user.update({ last_login: new Date() });
     if (!isNotifierLogin) {
-      updatePayload.session_version = tokenSv;
-    }
-    await user.update(updatePayload);
-    if (!isNotifierLogin) {
+      try {
+        await user.increment('login_notice_version', { by: 1 });
+        await user.reload({ attributes: ['login_notice_version'] });
+        nextNotice = Number((user as any).login_notice_version ?? prevNotice + 1);
+      } catch (noticeErr) {
+        // 컬럼 미적용 등 — raw SQL로 한 번 더 시도 후 실패해도 로그인은 계속
+        console.error('login_notice_version increment failed:', noticeErr);
+        try {
+          await ensureLoginNoticeVersionColumn();
+          const [rows]: any = await sequelize.query(
+            `UPDATE users SET login_notice_version = COALESCE(login_notice_version, 0) + 1
+             WHERE id = :id
+             RETURNING login_notice_version`,
+            { replacements: { id: user.id } }
+          );
+          const raw = Array.isArray(rows) ? rows[0] : rows;
+          nextNotice = Number(raw?.login_notice_version ?? prevNotice + 1);
+        } catch (rawErr) {
+          console.error('login_notice_version raw bump failed:', rawErr);
+          nextNotice = prevNotice + 1;
+        }
+      }
       invalidateAuthUser(user.id);
+      // 다른 탭/브라우저의 다음 API·폴링이 바로 새 버전을 보도록 응답 헤더에도 기록
+      res.setHeader('X-MVS-Login-Notice-Version', String(Math.floor(nextNotice)));
     }
 
     const token = signAuthToken(
@@ -708,8 +731,8 @@ export const login = async (req: Request, res: Response) => {
       status: 'success',
       reason: isNotifierLogin
         ? 'desktop_notifier_login'
-        : prevSv > 0
-          ? 'login_replaced_previous_session'
+        : prevNotice > 0
+          ? 'concurrent_web_login'
           : null,
       ip_address: clientIp,
       user_agent: userAgent
@@ -734,7 +757,8 @@ export const login = async (req: Request, res: Response) => {
           is_payment_officer: user.is_payment_officer,
           avatar_url: user.avatar_url || null
         },
-        sessionReplaced: !isNotifierLogin && prevSv > 0
+        loginNoticeVersion: nextNotice,
+        sessionReplaced: false
       },
       message: '로그인 성공'
     });
@@ -841,7 +865,7 @@ export const refreshToken = async (req: AuthRequest, res: Response) => {
   }
 };
 
-/** 현재 세션 유효성 — 프론트 폴링/포커스 복귀 시 중복 로그인 감지 */
+/** 현재 세션 유효성 — 프론트 폴링/포커스 복귀 시 다른 기기 로그인 안내 */
 export const checkSession = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
@@ -852,12 +876,19 @@ export const checkSession = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    await ensureLoginNoticeVersionColumn();
+    // 캐시가 아닌 DB에서 직접 읽어 다른 인스턴스/브라우저 로그인을 즉시 반영
+    const fresh = await (User as any).findByPk(req.user.id, {
+      attributes: ['id', 'session_version', 'login_notice_version'],
+    });
+
     return res.json({
       success: true,
       data: {
         valid: true,
         userId: req.user.id,
-        sessionVersion: Number((req.user as any).session_version ?? 0)
+        sessionVersion: Number(fresh?.session_version ?? (req.user as any).session_version ?? 0),
+        loginNoticeVersion: Number(fresh?.login_notice_version ?? 0)
       }
     });
   } catch (error) {
@@ -869,18 +900,12 @@ export const checkSession = async (req: AuthRequest, res: Response) => {
   }
 };
 
-/** 명시적 로그아웃 — 웹만 session_version 증가. 알람 앱은 웹 세션을 끊지 않음 */
+/** 명시적 로그아웃 — 해당 기기 토큰만 버림. 다른 기기 동시 세션은 유지 */
 export const logout = async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user;
     const isNotifier = isMvsNotifierClient((req as any).authClient || (req as any).user?.client);
     if (user?.id && !isNotifier) {
-      const current = Number((user as any).session_version ?? 0);
-      await (User as any).update(
-        { session_version: current + 1 },
-        { where: { id: user.id } }
-      );
-      invalidateAuthUser(user.id);
       recordActivityLog({
         tenant_id: user.tenant_id ?? null,
         company_id: user.company_id ?? null,

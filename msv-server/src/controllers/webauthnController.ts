@@ -13,6 +13,7 @@ import WebAuthnCredential from '../models/WebAuthnCredential';
 import { invalidateAuthUser } from '../utils/authCache';
 import { referenceCacheGet, referenceCacheSet, referenceCacheDel } from '../utils/redisCache';
 import { recordActivityLog } from '../services/activityLogService';
+import { ensureLoginNoticeVersionColumn } from '../utils/ensureLoginNoticeVersion';
 
 const RP_NAME = process.env.WEBAUTHN_RP_NAME || 'MVS';
 const CHALLENGE_TTL_SEC = 300;
@@ -115,12 +116,12 @@ const issueLoginToken = async (user: any, req: Request, reason: string | null) =
     /* default */
   }
 
-  const prevSv = Number(user.session_version ?? 0);
-  const nextSv = prevSv + 1;
-  await user.update({
-    last_login: new Date(),
-    session_version: nextSv,
-  });
+  await ensureLoginNoticeVersionColumn();
+  const tokenSv = Number(user.session_version ?? 0);
+  await user.update({ last_login: new Date() });
+  await user.increment('login_notice_version', { by: 1 });
+  await user.reload({ attributes: ['login_notice_version'] });
+  const nextNotice = Number((user as any).login_notice_version ?? 0);
   invalidateAuthUser(user.id);
 
   const token = jwt.sign(
@@ -130,7 +131,7 @@ const issueLoginToken = async (user: any, req: Request, reason: string | null) =
       role: user.role,
       tenantId: user.tenant_id,
       companyId: user.company_id,
-      sv: nextSv,
+      sv: tokenSv,
     },
     jwtSecret,
     { expiresIn: sessionTimeoutMinutes * 60 } as SignOptions
@@ -163,7 +164,8 @@ const issueLoginToken = async (user: any, req: Request, reason: string | null) =
       is_payment_officer: user.is_payment_officer,
       avatar_url: user.avatar_url || null,
     },
-    sessionReplaced: prevSv > 0,
+    loginNoticeVersion: nextNotice,
+    sessionReplaced: false,
   };
 };
 

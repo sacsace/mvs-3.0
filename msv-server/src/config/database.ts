@@ -5,6 +5,13 @@ import { SYSTEM_CONSTANTS } from './constants';
 // Railway 환경 변수 우선 사용
 const databaseUrl = process.env.DATABASE_URL;
 const isRailwayInternal = Boolean(databaseUrl?.includes('.railway.internal'));
+// 공개 프록시(rlwy.net)는 NODE_ENV=development 여도 SSL 필요. internal은 SSL 금지.
+const databaseUrlNeedsSsl = Boolean(
+  databaseUrl &&
+    !isRailwayInternal &&
+    (/rlwy\.net|railway\.app|sslmode=require/i.test(databaseUrl) ||
+      env.NODE_ENV === 'production')
+);
 
 const sequelize = databaseUrl 
   ? new Sequelize(databaseUrl, {
@@ -22,8 +29,7 @@ const sequelize = databaseUrl
         freezeTableName: true
       },
       dialectOptions: {
-        // railway.internal 은 SSL 없음 — require:true 시 연결 지연/실패 가능
-        ssl: env.NODE_ENV === 'production' && !isRailwayInternal
+        ssl: databaseUrlNeedsSsl
           ? { require: true, rejectUnauthorized: false }
           : false
       }

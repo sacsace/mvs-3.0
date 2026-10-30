@@ -21,6 +21,7 @@ export interface RequestWithUser extends Request {
     is_payment_officer?: boolean;
     last_login?: Date;
     session_version?: number;
+    login_notice_version?: number;
     created_at?: Date;
     updated_at?: Date;
   };
