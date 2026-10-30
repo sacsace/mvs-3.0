@@ -247,12 +247,25 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
+/** 로그인·가입 시도만 제한. session/refresh/profile 폴링은 제외(동시 로그인 안내용) */
 const authLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
-  max: 10,
-  message: 'Too many login attempts, please try again later.',
+  max: 20,
+  message: {
+    success: false,
+    message: '너무 많은 로그인 시도가 발생했습니다. 잠시 후 다시 시도해주세요.',
+    code: 'AUTH_RATE_LIMIT',
+  },
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  skip: (req) => {
+    const path = String(req.originalUrl || req.url || '').split('?')[0];
+    const isCredentialAttempt =
+      /\/api\/auth\/login\/?$/.test(path) ||
+      /\/api\/auth\/register\/?$/.test(path) ||
+      /\/api\/auth\/webauthn\/login\//.test(path);
+    return !isCredentialAttempt;
+  },
 });
 
 const uploadLimiter = rateLimit({

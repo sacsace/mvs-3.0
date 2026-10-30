@@ -95,7 +95,7 @@ const authStorage = {
 };
 const SESSION_WARNING_MS = 30 * 1000; // 30초
 const SESSION_CHECK_INTERVAL_MS = 5 * 1000; // 5초
-const SESSION_VALIDITY_POLL_MS = 3 * 1000; // 다른 기기 로그인 안내 폴링
+const SESSION_VALIDITY_POLL_MS = 5 * 1000; // 다른 기기 로그인 안내 폴링 (헤더 감지도 병행)
 const SESSION_SUPERSEDED_CODE = 'SESSION_SUPERSEDED';
 const LOGIN_NOTICE_STORAGE_KEY = 'mvs_login_notice_version';
 const LOGIN_NOTICE_HEADER = 'x-mvs-login-notice-version';
