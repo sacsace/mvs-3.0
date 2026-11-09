@@ -2,8 +2,10 @@ import { type PayrollCustomColumn } from './payrollColumnPrefs';
 import type { PayrollGridRow } from './payrollGridTypes';
 import {
   countEditProps,
+  isDailySalaryBasisRow,
   numberEditProps,
   otHourEditProps,
+  resolveDailyDaysWorked,
   roundOtHour,
   roundUnpaidLeave,
   unpaidLeaveEditProps,
@@ -131,7 +133,15 @@ export function patchPayrollRowField(
   }
 
   if (field === 'unpaid_leave') {
-    next.unpaid_leave = String(roundUnpaidLeave(Number(value) || 0));
+    const unpaid = roundUnpaidLeave(Number(value) || 0);
+    next.unpaid_leave = String(unpaid);
+    // 일용직: 무급 수동 조정 시 근무일 = 월총일 − 무급으로 맞춘 뒤 재계산에 반영
+    if (isDailySalaryBasisRow(next)) {
+      const calendarDays = Math.max(1, Number(String(next.total_day_of_month).replace(/,/g, '')) || 30);
+      next.days_worked = String(
+        resolveDailyDaysWorked(calendarDays, Math.max(0, calendarDays - unpaid))
+      );
+    }
     return next;
   }
 

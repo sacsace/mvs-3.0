@@ -306,10 +306,12 @@ export function computeEmploymentPaySumTotal(
 
   if (payCfg.salaryBasis === 'daily') {
     const proratedBasic = rupee(amount * worked);
+    // 무급 = 월총일 − 실근무일 (HeresNow 출근일만 있어도 그리드 표시와 일치)
     return {
       sumTotal: rupee(proratedBasic + ot + bon),
       proratedBasic,
       effectiveDaysWorked: worked,
+      unpaidLeave: Math.max(0, cd - worked),
     };
   }
 

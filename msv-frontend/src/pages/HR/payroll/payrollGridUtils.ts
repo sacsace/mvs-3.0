@@ -103,6 +103,25 @@ export function derivedDaysWorkedFromCalendarAndUnpaid(
   return Math.min(Math.max(0, roundUnpaidLeave(raw)), calendarDays);
 }
 
+/** 일용직(일당) — HeresNow/근태 실근무일을 근무일수로 유지 */
+export function isDailySalaryBasisRow(
+  row: Pick<PayrollGridRow, 'employment_salary_basis' | 'employment_type'> | null | undefined
+): boolean {
+  if (!row) return false;
+  if (String(row.employment_salary_basis || '').trim() === 'daily') return true;
+  return String(row.employment_type || '').trim().toLowerCase() === 'daily';
+}
+
+/** 일용직 근무일 — 저장된 실근무일(근태)을 우선, 없으면 0 */
+export function resolveDailyDaysWorked(
+  totalDayOfMonth: unknown,
+  daysWorked: unknown
+): number {
+  const calendarDays = Math.max(1, num(totalDayOfMonth) || 30);
+  const worked = roundUnpaidLeave(num(daysWorked));
+  return Math.min(Math.max(0, worked), calendarDays);
+}
+
 const DEFAULT_FIXED_REST_DAYS = 4;
 
 /**
@@ -687,14 +706,15 @@ export function recalculatePayrollRow(
     resolveCustomAllowanceAmounts(row, columnPrefs.customColumns);
   const totalSalaryInput = num(row.total_salary);
   const rowSalaryBasis = String(row.employment_salary_basis || '').trim();
-  const rowIsDaily = rowSalaryBasis === 'daily';
+  const isDaily = rowSalaryBasis === 'daily' || isDailySalaryBasisRow(row);
+  const isFixedRest = rowSalaryBasis === 'fixed_rest_monthly';
 
   let basic: number;
   let hra: number;
   let otherAllowance: number;
   let constant_parts: Record<string, number>;
 
-  if (rowIsDaily) {
+  if (isDaily) {
     // 일용직: 급여 합계 = 일당. 기본급에만 두고 HRA·상수 분해 없음.
     const dailyRate = Math.max(0, roundInr(totalSalaryInput > 0 ? totalSalaryInput : num(row.basic_salary)));
     basic = dailyRate;
@@ -725,15 +745,20 @@ export function recalculatePayrollRow(
   const totalSalary = packageSum;
 
   const calendarDays = Math.max(1, num(row.total_day_of_month) || 30);
-  const unpaidNormalized = roundUnpaidLeave(num(row.unpaid_leave));
-  const isDaily = rowIsDaily;
-  const isFixedRest = rowSalaryBasis === 'fixed_rest_monthly';
   const fixedRestDays =
     row.fixed_rest_days != null && Number.isFinite(num(row.fixed_rest_days))
       ? Math.floor(num(row.fixed_rest_days))
       : DEFAULT_FIXED_REST_DAYS;
-  // 서비스 직군도 표시 근무일 = 월총일 − 무급휴가
-  const worked = derivedDaysWorkedFromCalendarAndUnpaid(row.total_day_of_month, unpaidNormalized);
+  // 일용직: HeresNow/근태 실근무일 유지. 그 외·서비스: 표시 근무일 = 월총일 − 무급휴가
+  let worked: number;
+  let unpaidNormalized: number;
+  if (isDaily) {
+    worked = resolveDailyDaysWorked(row.total_day_of_month, row.days_worked);
+    unpaidNormalized = roundUnpaidLeave(calendarDays - worked);
+  } else {
+    unpaidNormalized = roundUnpaidLeave(num(row.unpaid_leave));
+    worked = derivedDaysWorkedFromCalendarAndUnpaid(row.total_day_of_month, unpaidNormalized);
+  }
   const days_worked = String(worked);
   const unpaid_leave = String(unpaidNormalized);
 
@@ -821,7 +846,11 @@ export function recalculatePayrollRow(
     total_salary: totalSalary,
     unpaid_leave,
     days_worked,
-    employment_salary_basis: row.employment_salary_basis,
+    employment_salary_basis: isDaily
+      ? 'daily'
+      : isFixedRest
+        ? 'fixed_rest_monthly'
+        : row.employment_salary_basis,
     fixed_rest_days: isFixedRest ? fixedRestDays : row.fixed_rest_days,
     ot_rate: otRate,
     day_ot_hour: dayOtHour,
@@ -1098,10 +1127,27 @@ export function payrollRecordToGridRow(
     Number.isFinite(fixedRestFromExtra) && fixedRestFromExtra >= 0
       ? fixedRestFromExtra
       : DEFAULT_FIXED_REST_DAYS;
-  const initialDaysWorked = derivedDaysWorkedString(
-    ex(x, 'total_day_of_month'),
-    ex(x, 'unpaid_leave')
-  );
+  const employmentType = String(
+    ex(x, 'employment_type') || (emp as any).employment_type || ''
+  ).trim();
+  const isDailyForDays =
+    isDailyRow || salaryBasis === 'daily' || employmentType.toLowerCase() === 'daily';
+  const storedDaysWorkedRaw = ex(x, 'days_worked');
+  const initialDaysWorked = isDailyForDays
+    ? String(
+        resolveDailyDaysWorked(
+          ex(x, 'total_day_of_month'),
+          storedDaysWorkedRaw !== '' ? storedDaysWorkedRaw : 0
+        )
+      )
+    : derivedDaysWorkedString(ex(x, 'total_day_of_month'), ex(x, 'unpaid_leave'));
+  const initialUnpaidLeave = isDailyForDays
+    ? String(
+        roundUnpaidLeave(
+          Math.max(1, num(ex(x, 'total_day_of_month')) || 30) - num(initialDaysWorked)
+        )
+      )
+    : ex(x, 'unpaid_leave');
 
   const row: PayrollGridRow = {
     id: p.id,
@@ -1116,9 +1162,7 @@ export function payrollRecordToGridRow(
     position: toProperCaseInput(ex(x, 'position') || str(emp.position)),
     birth_date: ex(x, 'birth_date') || (emp.birth_date ? String(emp.birth_date).split('T')[0] : ''),
     joining_date: joining,
-    employment_type: String(
-      ex(x, 'employment_type') || (emp as any).employment_type || ''
-    ).trim(),
+    employment_type: employmentType,
     working_month: workingMonth,
     basic_salary: basic,
     house_rent_allowance: hra,
@@ -1129,9 +1173,9 @@ export function payrollRecordToGridRow(
     custom_allowance_inputs,
     total_salary: totalSalary,
     total_day_of_month: ex(x, 'total_day_of_month'),
-    unpaid_leave: ex(x, 'unpaid_leave'),
+    unpaid_leave: initialUnpaidLeave,
     days_worked: initialDaysWorked,
-    employment_salary_basis: salaryBasis || undefined,
+    employment_salary_basis: salaryBasis || (isDailyForDays ? 'daily' : undefined),
     fixed_rest_days: isFixedRestRow ? fixedRestDays : undefined,
     ot_rate: otRateInitial,
     day_ot_hour: dayOtHour,
@@ -1197,15 +1241,16 @@ export function gridRowToPayload(
     unpaid_leave: stripCommaField(recalculated.unpaid_leave),
     days_worked: stripCommaField(recalculated.days_worked),
     employment_salary_basis: recalculated.employment_salary_basis || '',
-    ...(recalculated.employment_salary_basis === 'daily'
+    ...(recalculated.employment_salary_basis === 'daily' ||
+    String(recalculated.employment_type || '').toLowerCase() === 'daily'
       ? {
           daily_wage: String(recalculated.total_salary),
           prorated_basic: String(
             roundInr(
               num(recalculated.total_salary) *
-                derivedDaysWorkedFromCalendarAndUnpaid(
+                resolveDailyDaysWorked(
                   recalculated.total_day_of_month,
-                  recalculated.unpaid_leave
+                  recalculated.days_worked
                 )
             )
           ),

@@ -43,6 +43,10 @@ import {
   readPayrollGridSettingsFromCompanySettings,
 } from '../utils/payrollGridSettings';
 import {
+  getHeresnowSettings,
+  pullHeresnowAttendance,
+} from '../services/heresnowIntegrationService';
+import {
   computeEmploymentPaySumTotal,
   mergeEmploymentTypePayIntoCompanySettings,
   normalizeEmploymentTypePaySettings,
@@ -405,9 +409,35 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
 
     const companyForPay = await (Company as any).findOne({
       where: { id: company_id, tenant_id },
-      attributes: ['id', 'settings'],
     });
     const companyPaySettings = companyForPay?.settings;
+
+    /** HeresNow 연동 ON이면 일괄 생성 직전 근태를 당겨 일용직 근무일에 반영 */
+    let heresnow_sync: {
+      attempted: boolean;
+      ok: boolean;
+      applied?: number;
+      total?: number;
+      message?: string;
+    } = { attempted: false, ok: false };
+    if (companyForPay && getHeresnowSettings(companyForPay).enabled) {
+      heresnow_sync.attempted = true;
+      try {
+        const syncResult = await pullHeresnowAttendance(companyForPay, {
+          since: `${payroll_period}-01`,
+        });
+        heresnow_sync = {
+          attempted: true,
+          ok: true,
+          applied: syncResult.applied,
+          total: syncResult.total,
+        };
+      } catch (syncErr: any) {
+        const msg = String(syncErr?.message || syncErr || 'HERESNOW_SYNC_FAILED');
+        console.warn('[bulkGeneratePayrolls] HeresNow sync skipped:', msg);
+        heresnow_sync = { attempted: true, ok: false, message: msg };
+      }
+    }
 
     // 미확정 월 재생성: 기존 활성 급여는 soft-delete 후 새로 생성
     const { created, deactivatedCount } = await sequelize.transaction(async (transaction) => {
@@ -559,16 +589,17 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
         const bankIfsc = emp.bank_ifsc != null ? String(emp.bank_ifsc).trim() : '';
         const bankName = emp.bank_name != null ? String(emp.bank_name).trim() : '';
 
-        /** 서비스 직군 포함: 무급휴가·근무일 = 다른 직군과 동일(월총일−무급). */
-        const unpaidLeaveVal =
+        /** 정규·서비스: 무급=결근 등. 일용직: 근무일=근태 실근무, 무급=월총일−근무일. */
+        const unpaidForNonDaily =
           pr.unpaidLeave != null
             ? pr.unpaidLeave
-            : isDaily && att.recordCount === 0
-              ? bounds.daysInMonth
-              : att.absentDays;
+            : att.absentDays;
         const daysWorkedVal = isFixedRest
-          ? Math.max(0, bounds.daysInMonth - unpaidLeaveVal)
+          ? Math.max(0, bounds.daysInMonth - unpaidForNonDaily)
           : pr.effectiveDaysWorked;
+        const unpaidLeaveVal = isDaily
+          ? Math.max(0, bounds.daysInMonth - daysWorkedVal)
+          : unpaidForNonDaily;
 
         const extra_fields = {
           emp_id: String((emp as any).employee_number || '').trim(),
@@ -614,6 +645,7 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
           attendance_day_ot_hours: String(dayOtHours),
           attendance_night_ot_hours: String(nightOtHours),
           attendance_holiday_work_hours: String(att.holidayWorkHours),
+          attendance_late_hours_deducted: String(att.lateHoursDeducted ?? 0),
           day_ot_hour: String(dayOtHours),
           night_ot_hour: String(nightOtHours),
           ot_eligible: String(otEligible),
@@ -650,13 +682,19 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
       return { created: createdCount, deactivatedCount: Number(deactivated) || 0 };
     });
 
+    const syncNote =
+      heresnow_sync.attempted && heresnow_sync.ok
+        ? ` HeresNow 근태 ${heresnow_sync.applied ?? 0}건을 반영했습니다.`
+        : heresnow_sync.attempted && !heresnow_sync.ok
+          ? ' HeresNow 동기화는 실패해 기존 근태로 생성했습니다.'
+          : '';
     res.status(201).json({
       success: true,
       message:
         deactivatedCount > 0
-          ? `기존 ${deactivatedCount}건을 비활성화한 뒤 급여 ${created}건을 다시 생성했습니다. 전자근로계약·근태를 반영했습니다.`
-          : `급여 ${created}건이 생성되었습니다. 전자근로계약·근태를 반영했습니다.`,
-      data: { created, replaced: deactivatedCount }
+          ? `기존 ${deactivatedCount}건을 비활성화한 뒤 급여 ${created}건을 다시 생성했습니다. 전자근로계약·근태를 반영했습니다.${syncNote}`
+          : `급여 ${created}건이 생성되었습니다. 전자근로계약·근태를 반영했습니다.${syncNote}`,
+      data: { created, replaced: deactivatedCount, heresnow_sync }
     });
   } catch (error) {
     console.error('급여 일괄 생성 오류:', error);
@@ -715,8 +753,35 @@ export const previewBulkPayrollGeneration = async (req: RequestWithUser, res: Re
 
     const previewCompany = await (Company as any).findOne({
       where: { id: company_id, tenant_id },
-      attributes: ['id', 'settings'],
     });
+
+    let heresnow_sync: {
+      attempted: boolean;
+      ok: boolean;
+      applied?: number;
+      total?: number;
+      message?: string;
+    } = { attempted: false, ok: false };
+    if (previewCompany && getHeresnowSettings(previewCompany).enabled) {
+      heresnow_sync.attempted = true;
+      try {
+        const syncResult = await pullHeresnowAttendance(previewCompany, {
+          since: `${payroll_period}-01`,
+        });
+        heresnow_sync = {
+          attempted: true,
+          ok: true,
+          applied: syncResult.applied,
+          total: syncResult.total,
+        };
+      } catch (syncErr: any) {
+        heresnow_sync = {
+          attempted: true,
+          ok: false,
+          message: String(syncErr?.message || syncErr || 'HERESNOW_SYNC_FAILED'),
+        };
+      }
+    }
 
     let with_attendance = 0;
     let without_attendance = 0;
@@ -754,6 +819,7 @@ export const previewBulkPayrollGeneration = async (req: RequestWithUser, res: Re
         will_replace: existingActive > 0,
         existing_active_count: existingActive,
         employee_total: employees.length,
+        heresnow_sync,
         attendance: {
           with_attendance,
           without_attendance,

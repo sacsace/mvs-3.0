@@ -68,6 +68,8 @@ interface AttendanceRow {
   status: string;
   check_in?: string | null;
   check_out?: string | null;
+  check_in_client_time?: string | null;
+  check_out_client_time?: string | null;
   check_in_local?: string | null;
   check_out_local?: string | null;
   check_in_display?: string | null;
@@ -171,19 +173,22 @@ function rowDateYmd(dateVal: string) {
 
 const STANDARD_WORK_DAY_HOURS = 8;
 const STANDARD_CHECK_IN_HOUR_IST = 9;
+/** 정규 퇴근 후 30분까지는 OT 미적용 (급여 산정과 동일) */
+const OT_END_GRACE_HOURS = 0.5;
 const IST_OFFSET = '+05:30';
 
-function parseAttendanceCheckInMs(row: AttendanceRow): number | null {
-  if (row.check_in) {
-    const d = new Date(row.check_in);
-    if (!Number.isNaN(d.getTime())) return d.getTime();
+function parseWallClockToMs(ymd: string, raw?: string | null): number | null {
+  if (!raw) return null;
+  const text = String(raw).trim();
+  if (!text) return null;
+
+  const iso = text.match(/T(\d{2}):(\d{2})/);
+  if (iso) {
+    const d = new Date(`${ymd}T${iso[1]}:${iso[2]}:00${IST_OFFSET}`);
+    return Number.isNaN(d.getTime()) ? null : d.getTime();
   }
 
-  const local = row.check_in_local || row.check_in_display;
-  if (!local) return null;
-
-  const ymd = rowDateYmd(row.date);
-  const ko = local.match(/(오전|오후)\s*(\d{1,2}):(\d{2})/);
+  const ko = text.match(/(오전|오후)\s*(\d{1,2}):(\d{2})/);
   if (ko) {
     let hour = parseInt(ko[2], 10);
     const minute = parseInt(ko[3], 10);
@@ -195,7 +200,7 @@ function parseAttendanceCheckInMs(row: AttendanceRow): number | null {
     return Number.isNaN(d.getTime()) ? null : d.getTime();
   }
 
-  const en = local.match(/(AM|PM)\s*(\d{1,2}):(\d{2})/i);
+  const en = text.match(/(AM|PM)\s*(\d{1,2}):(\d{2})/i);
   if (en) {
     let hour = parseInt(en[2], 10);
     const minute = parseInt(en[3], 10);
@@ -208,7 +213,7 @@ function parseAttendanceCheckInMs(row: AttendanceRow): number | null {
     return Number.isNaN(d.getTime()) ? null : d.getTime();
   }
 
-  const plain = local.match(/(\d{1,2}):(\d{2})/);
+  const plain = text.match(/(\d{1,2}):(\d{2})/);
   if (plain) {
     const hour = parseInt(plain[1], 10);
     const minute = parseInt(plain[2], 10);
@@ -218,6 +223,22 @@ function parseAttendanceCheckInMs(row: AttendanceRow): number | null {
     return Number.isNaN(d.getTime()) ? null : d.getTime();
   }
 
+  return null;
+}
+
+/** OT 지각 차감용 출근 시각 — 표시/client 벽시계 우선 (UTC 왜곡 방지) */
+function parseAttendanceCheckInMs(row: AttendanceRow): number | null {
+  const ymd = rowDateYmd(row.date);
+  const fromWall =
+    parseWallClockToMs(ymd, row.check_in_client_time) ??
+    parseWallClockToMs(ymd, row.check_in_display) ??
+    parseWallClockToMs(ymd, row.check_in_local);
+  if (fromWall != null) return fromWall;
+
+  if (row.check_in) {
+    const d = new Date(row.check_in);
+    if (!Number.isNaN(d.getTime())) return d.getTime();
+  }
   return null;
 }
 
@@ -283,7 +304,10 @@ function computeAttendanceDetailSummary(rows: AttendanceRow[]): AttendanceDetail
     }
 
     const lateHours = computeLateHours(row);
-    const dayOt = Math.max(0, workHours - STANDARD_WORK_DAY_HOURS - lateHours);
+    const dayOt = Math.max(
+      0,
+      workHours - STANDARD_WORK_DAY_HOURS - lateHours - OT_END_GRACE_HOURS
+    );
     otHours += dayOt;
   }
 
