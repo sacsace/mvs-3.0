@@ -41,25 +41,25 @@ describe('annual leave accrual by hire date and fiscal year', () => {
     expect(countAnnualLeaveMonthsInLeaveYear(hire, fy2026, eligibility)).toBe(12);
   });
 
-  it('respects eligibility delay within fiscal year', () => {
+  it('ignores eligibility delay for grant months (hire-date based only)', () => {
     const hire = new Date('2026-07-13');
     const eligibility = new Date('2026-10-01');
-    expect(countAnnualLeaveMonthsInLeaveYear(hire, fy2026, eligibility)).toBe(6);
+    expect(countAnnualLeaveMonthsInLeaveYear(hire, fy2026, eligibility)).toBe(8);
   });
 
-  it('counts Oct–Mar as 6 months for Aug 10 hire with 30-day wait (eligible Sep 9)', () => {
+  it('counts Sep–Mar as 7 months for Aug 10 hire even with 30-day wait', () => {
     const hire = new Date('2026-08-10');
     const eligibility = new Date('2026-09-09');
-    expect(countAnnualLeaveMonthsInLeaveYear(hire, fy2026, eligibility)).toBe(6);
+    expect(countAnnualLeaveMonthsInLeaveYear(hire, fy2026, eligibility)).toBe(7);
   });
 
-  it('builds per-employee accrual label within fiscal year', () => {
+  it('builds per-employee accrual label from hire date within fiscal year', () => {
     const hire = new Date('2026-08-10');
     const eligibility = new Date('2026-09-09');
     const period = getAnnualLeaveAccrualPeriod(hire, fy2026, eligibility);
-    expect(period?.months).toBe(6);
+    expect(period?.months).toBe(7);
     expect(buildEmployeeAccrualLeaveYearLabel(fy2026, period)).toBe(
-      '2026-27 (2026-10-01 ~ 2027-03-31)'
+      '2026-27 (2026-09-01 ~ 2027-03-31)'
     );
   });
 
@@ -75,6 +75,14 @@ describe('annual leave accrual by hire date and fiscal year', () => {
     const policy = { forceFixedAnnualForTenure: true, forceFixedAnnualDays: 12 };
     expect(qualifiesForFullFiscalYearLeave(hire, fy2026, eligibility)).toBe(true);
     expect(calculateAnnualLeaveTotalDays(hire, fy2026, eligibility, policy)).toBe(12);
+  });
+
+  it('grants fixed days for pre-FY hire even when start policy delays use', () => {
+    const hire = new Date('2026-02-02');
+    const eligibility = new Date('2026-04-03'); // 60일 이후
+    const policy = { forceFixedAnnualForTenure: true, forceFixedAnnualDays: 6 };
+    expect(qualifiesForFullFiscalYearLeave(hire, fy2026, eligibility)).toBe(true);
+    expect(calculateAnnualLeaveTotalDays(hire, fy2026, eligibility, policy)).toBe(6);
   });
 
   it('keeps month-based days for mid-year hire even when fixed policy is on', () => {

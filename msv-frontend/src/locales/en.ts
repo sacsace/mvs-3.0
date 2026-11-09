@@ -6054,7 +6054,7 @@ export default {
       annualNotEligible: 'Annual leave waiting period. Accrual and use start after hire date + waiting days.',
       noLeaveBalances: 'No employee leave balances to display.',
       leaveBalancesHint:
-        'Total annual leave uses the intersection of the India fiscal year (1 Apr – 31 Mar), hire date, and leave eligibility. One day per accrual month; the Leave year column shows each employee’s accrual window. Hire month excluded except 4/1 hires; +1 month skip for 31st hires; mid-month eligibility skips that month.',
+        'Total annual leave is based on the India fiscal year (1 Apr – 31 Mar) and hire date. One day per accrual month; the Leave year column shows each employee’s accrual window. Hire month excluded except 4/1 hires; +1 month skip for 31st hires. The start-date policy only controls when leave can be used.',
       leaveBalancesSearchPlaceholder: 'Search by employee, department, position, join date…',
       leaveHistoryTitle: 'Leave history',
       leaveHistoryEmpty: 'No leave requests for this employee.',
@@ -6180,13 +6180,13 @@ export default {
       annualStartImmediate: 'Start immediately',
       currentSettingImmediate: 'Current setting: Annual leave available from date of join.',
       currentSettingDays: 'Current setting: Annual leave available {{days}} days after date of join.',
-      earnedLeaveDesc2: '1 day per accrual month from hire date within the fiscal year (4/1 hire includes hire month; 31st hire and mid-month eligibility skip extra months).',
+      earnedLeaveDesc2: '1 day per accrual month from hire date within the fiscal year (4/1 hire includes hire month; 31st hire skips one extra month). Start-date policy only limits when leave can be used.',
       earnedLeaveDesc2Forced:
         'Full fiscal year (1 Apr – 31 Mar): fixed {{days}} day(s). Mid-year hires: months from hire date (1 month = 1 day).',
       earnedLeaveDesc3: 'Available annual leave is calculated within the India fiscal year (1 Apr – 31 Mar). Unused days do not carry over.',
       forceFixedAnnualForTenure: 'Fixed annual leave for full fiscal-year employment',
       forceFixedAnnualHint:
-        'When enabled, employees accruing from April through March get the fixed days below (default 12). Mid-year hires still use monthly accrual from their hire date.',
+        'When enabled, employees accruing from April through March get the fixed days below (default 12). Mid-year hires still use monthly accrual from their hire date. The start-date policy only controls when leave can be used.',
       forceFixedAnnualDaysLabel: 'Forced annual leave days',
       fiscalYearResetNote: 'All leave balances reset at the end of the India fiscal year (1 April – 31 March). Unused days cannot be accumulated or carried forward.',
       leaveTypeDaysLabel: 'Annual leave days',

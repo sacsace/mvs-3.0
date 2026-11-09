@@ -166,13 +166,14 @@ export type AnnualLeaveAccrualPeriod = {
 
 /**
  * 입사일·휴가연도(회계연도) 교집합에서 연차 부여 개월 수 계산.
- * 부여 시작 = max(입사 조정 월, 사용 가능 조정 월, 회계연도 시작 월)
+ * 부여 시작 = max(입사 조정 월, 회계연도 시작 월) — 입사일 기준.
  * 부여 종료 = 회계연도 종료(3월)
+ * 연차 시작일 정책(대기일)은 사용 가능 여부만 제한하며 부여 개월에는 반영하지 않음.
  */
 export function getAnnualLeaveAccrualPeriod(
   hireDate: Date,
   leaveYear: LeaveYearRange,
-  eligibilityDate: Date
+  _eligibilityDate?: Date
 ): AnnualLeaveAccrualPeriod | null {
   const hire = new Date(hireDate);
   hire.setHours(0, 0, 0, 0);
@@ -186,10 +187,8 @@ export function getAnnualLeaveAccrualPeriod(
   const fyStartYm = yearMonthFromDate(fyStart);
   const fyEndYm = yearMonthFromDate(fyEnd);
   const hireStartYm = getHireAccrualStartMonth(hire, fyStart);
-  const eligibilityStartYm = getEligibilityAccrualStartMonth(eligibilityDate);
 
-  let startYm = maxYearMonth(hireStartYm, fyStartYm);
-  startYm = maxYearMonth(startYm, eligibilityStartYm);
+  const startYm = maxYearMonth(hireStartYm, fyStartYm);
 
   if (compareYearMonth(startYm, fyEndYm) > 0) {
     return {
@@ -222,11 +221,11 @@ export function getAnnualLeaveAccrualPeriod(
   };
 }
 
-/** 회계연도 4월부터 3월까지 전 기간 부여 대상인지 (입사일·대기일 반영 후 부여 시작이 4월) */
+/** 회계연도 4월부터 3월까지 전 기간 부여 대상인지 (입사일 기준 부여 시작이 4월·12개월) */
 export function qualifiesForFullFiscalYearLeave(
   hireDate: Date,
   leaveYear: LeaveYearRange,
-  eligibilityDate: Date
+  eligibilityDate?: Date
 ): boolean {
   const period = getAnnualLeaveAccrualPeriod(hireDate, leaveYear, eligibilityDate);
   if (!period || period.months < 12) return false;
