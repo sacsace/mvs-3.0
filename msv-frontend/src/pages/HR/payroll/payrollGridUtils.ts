@@ -151,11 +151,21 @@ export function derivedDaysWorkedString(totalDayOfMonth: unknown, unpaidLeave: u
   return String(n);
 }
 
-/** 엑셀 OT/Rate = 기본급 / 26 / 8 × 2 */
+/** 정규직 등 월급 OT/Rate = 기본급 / 26 / 8 × 2 */
 export function defaultOtRateFromBasic(basicSalary: number): number {
   const basic = Math.max(0, num(basicSalary));
   if (basic <= 0) return 0;
   return roundInr((basic / 26 / 8) * 2);
+}
+
+/** 일용직 소정근로 — 하루 9시간 */
+export const DAILY_STANDARD_WORK_HOURS = 9;
+
+/** 일용직 OT/Rate = 일당 / 9시간 × 2 */
+export function defaultOtRateFromDailyWage(dailyWage: number): number {
+  const daily = Math.max(0, num(dailyWage));
+  if (daily <= 0) return 0;
+  return roundInr((daily / DAILY_STANDARD_WORK_HOURS) * 2);
 }
 
 function splitSalaryComponentsFromTotal(
@@ -326,7 +336,17 @@ function resolveOtInputsFromExtra(
   otEligible = false,
   otManual = false
 ): { ot_rate: number; day_ot_hour: number; night_ot_hour: number } {
-  const defaultRate = basic > 0 ? defaultOtRateFromBasic(basic) : 0;
+  const isDaily = isDailyWagePayrollRow({
+    employment_salary_basis: String(x.employment_salary_basis || ''),
+    employment_type: String(x.employment_type || ''),
+  });
+  const defaultRateForBasic = (amount: number) =>
+    amount > 0
+      ? isDaily
+        ? defaultOtRateFromDailyWage(amount)
+        : defaultOtRateFromBasic(amount)
+      : 0;
+  const defaultRate = defaultRateForBasic(basic);
   const rateManual = isManualOverrideFlag(x, 'ot_rate_manual');
   const storedManualRate = Math.max(0, Math.floor(num(x.ot_rate)));
 
@@ -356,7 +376,7 @@ function resolveOtInputsFromExtra(
   if (hasHourFields) {
     let otRate = rateManual ? storedManualRate : num(x.ot_rate);
     if (!rateManual && otRate <= 0 && basic > 0) {
-      otRate = defaultOtRateFromBasic(basic);
+      otRate = defaultRateForBasic(basic);
     }
     return {
       ot_rate: otRate,
@@ -371,7 +391,7 @@ function resolveOtInputsFromExtra(
   if (hasAttendanceOt) {
     let otRate = num(x.ot_rate);
     if (otRate <= 0 && basic > 0) {
-      otRate = defaultOtRateFromBasic(basic);
+      otRate = defaultRateForBasic(basic);
     }
     return {
       ot_rate: otRate,
@@ -384,7 +404,7 @@ function resolveOtInputsFromExtra(
   if (attendanceOtTotal > 0) {
     let otRate = num(x.ot_rate);
     if (otRate <= 0 && basic > 0) {
-      otRate = defaultOtRateFromBasic(basic);
+      otRate = defaultRateForBasic(basic);
     }
     return {
       ot_rate: otRate,
@@ -399,7 +419,7 @@ function resolveOtInputsFromExtra(
   if (hasAmountFields) {
     let otRate = num(x.ot_rate);
     if (otRate <= 0 && basic > 0) {
-      otRate = defaultOtRateFromBasic(basic);
+      otRate = defaultRateForBasic(basic);
     }
     const dayAmt = Math.max(0, num(x.day_ot));
     const nightAmt = Math.max(0, num(x.night_ot));
@@ -429,7 +449,7 @@ function resolveOtInputsFromExtra(
 
   if (hasLegacy) {
     if (otRate <= 0 && basic > 0) {
-      otRate = defaultOtRateFromBasic(basic);
+      otRate = defaultRateForBasic(basic);
     }
     const dayAmt = roundInr(otHour * otRate + dayShift * LEGACY_DAY_SHIFT_RATE_INR);
     const nightAmt = Math.max(0, nightShift);
@@ -762,9 +782,12 @@ export function recalculatePayrollRow(
   const days_worked = String(worked);
   const unpaid_leave = String(unpaidNormalized);
 
-  // 일용직: total_salary = 일당. OT Rate는 월 환산(일당×달력일) 기준.
-  const otBase = isDaily ? totalSalary * calendarDays : basic;
-  const defaultOtRate = otBase > 0 ? defaultOtRateFromBasic(otBase) : 0;
+  // 일용직: OT Rate = 일당 / 9시간 × 2. 월급: 기본급 / 26 / 8 × 2.
+  const defaultOtRate = isDaily
+    ? defaultOtRateFromDailyWage(totalSalary)
+    : basic > 0
+      ? defaultOtRateFromBasic(basic)
+      : 0;
   const otRateManual = Boolean(row.ot_rate_manual);
   const otRate = otRateManual ? Math.max(0, Math.floor(num(row.ot_rate))) : defaultOtRate;
   const otEligible = row.ot_eligible === true;
