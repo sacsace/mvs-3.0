@@ -979,6 +979,7 @@ export const payrollService = {
     company_id?: number;
     columnPrefs: unknown;
     salaryRatios: unknown;
+    otRateFormula?: unknown;
   }) => {
     const response = await api.put('/hr/payroll-grid-settings', data);
     return response.data;

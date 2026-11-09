@@ -31,12 +31,14 @@ import {
   Add as AddIcon,
   KeyboardArrowDown as ArrowDownIcon,
   KeyboardArrowUp as ArrowUpIcon,
+  Calculate as CalculateIcon,
   DeleteOutline as DeleteOutlineIcon,
   EditOutlined as EditOutlinedIcon,
   Percent as PercentIcon,
   Reorder as ReorderIcon,
   ViewColumn as ViewColumnIcon,
 } from '@mui/icons-material';
+import { getMvsDialogActionsSx, getMvsDialogPaperSx } from '../../components/Common/mvsDialogShell';
 import { payrollService } from '../../services/api';
 import type { PayrollGridRow } from './payroll/payrollGridTypes';
 import {
@@ -84,6 +86,17 @@ import {
   type PayrollConstantPart,
   type PayrollSalaryRatios,
 } from './payroll/payrollSalaryRatios';
+import {
+  DEFAULT_OT_RATE_FORMULA,
+  formulaToDraft,
+  isOtRateFormulaDraftValid,
+  loadPayrollOtRateFormula,
+  normalizeOtRateFormula,
+  savePayrollOtRateFormula,
+  sanitizeOtNumericInput,
+  type PayrollOtRateFormula,
+  type PayrollOtRateFormulaDraft,
+} from './payroll/payrollOtRateFormula';
 import {
   persistPayrollGridSettings,
 } from './payroll/payrollGridSettingsSync';
@@ -183,6 +196,14 @@ const PayrollExcelGrid: React.FC<Props> = ({
   );
   const [allowConstantsEdit, setAllowConstantsEdit] = useState(false);
   const [applyingRatios, setApplyingRatios] = useState(false);
+  const [otFormulaOpen, setOtFormulaOpen] = useState(false);
+  const [otFormula, setOtFormula] = useState<PayrollOtRateFormula>(() =>
+    loadPayrollOtRateFormula(companyId)
+  );
+  const [otFormulaDraft, setOtFormulaDraft] = useState<PayrollOtRateFormulaDraft>(() =>
+    formulaToDraft(loadPayrollOtRateFormula(companyId))
+  );
+  const [applyingOtFormula, setApplyingOtFormula] = useState(false);
 
   const recalcCtx = useMemo<PayrollRecalcContext>(
     () => ({
@@ -190,12 +211,21 @@ const PayrollExcelGrid: React.FC<Props> = ({
       payrollMonth,
       companyId,
       salaryRatios,
+      otRateFormula: otFormula,
       payrollEmployeeCount:
         payrollEmployeeCount != null && Number.isFinite(Number(payrollEmployeeCount))
           ? Number(payrollEmployeeCount)
           : rows.length,
     }),
-    [companyId, companyStateCode, payrollMonth, salaryRatios, payrollEmployeeCount, rows.length]
+    [
+      companyId,
+      companyStateCode,
+      payrollMonth,
+      salaryRatios,
+      otFormula,
+      payrollEmployeeCount,
+      rows.length,
+    ]
   );
 
   useEffect(() => {
@@ -203,6 +233,9 @@ const PayrollExcelGrid: React.FC<Props> = ({
     const ratios = loadPayrollSalaryRatios(companyId);
     setSalaryRatios(ratios);
     setRatioDraft(ratios);
+    const nextOt = loadPayrollOtRateFormula(companyId);
+    setOtFormula(nextOt);
+    setOtFormulaDraft(formulaToDraft(nextOt));
   }, [companyId, settingsRevision]);
 
   const persistPrefs = useCallback(
@@ -776,6 +809,77 @@ const PayrollExcelGrid: React.FC<Props> = ({
   const ratioSumOk = Math.abs(ratioSum - 100) < 0.05;
   const monthStructureLocked = Boolean(payrollMonth && lockedPeriods.has(payrollMonth));
 
+  const openOtFormulaDialog = () => {
+    const current = loadPayrollOtRateFormula(companyId);
+    setOtFormula(current);
+    setOtFormulaDraft(formulaToDraft(current));
+    setOtFormulaOpen(true);
+  };
+
+  const applyOtFormulaToList = async () => {
+    if (!isOtRateFormulaDraftValid(otFormulaDraft)) return;
+    const next = normalizeOtRateFormula(otFormulaDraft);
+    savePayrollOtRateFormula(next, companyId);
+    setOtFormula(next);
+    setOtFormulaDraft(formulaToDraft(next));
+    void persistPayrollGridSettings(companyId, { otRateFormula: next });
+
+    if (!allowCellEdit || rows.length === 0) {
+      onSuccess(t('payrollManagement.otRateFormulaSaved'));
+      setOtFormulaOpen(false);
+      return;
+    }
+
+    setApplyingOtFormula(true);
+    onError(null);
+    const applyCtx: PayrollRecalcContext = {
+      ...recalcCtx,
+      otRateFormula: next,
+    };
+    let ok = 0;
+    let fail = 0;
+    try {
+      for (const row of rows) {
+        const period = String(row.working_month || '').trim();
+        if (!isRoot && period && lockedPeriods.has(period)) {
+          fail += 1;
+          continue;
+        }
+        // 수동 OT 요율은 유지. 그 외는 새 산식으로 재계산.
+        const updated = recalculatePayrollRow(
+          {
+            ...row,
+            ot_rate_manual: row.ot_rate_manual === true,
+          },
+          applyCtx
+        );
+        try {
+          const payload = gridRowToPayload(updated, applyCtx);
+          const scopeCompanyId =
+            companyId != null && Number(companyId) > 0 ? Number(companyId) : undefined;
+          const res = await payrollService.updatePayroll(
+            updated.id,
+            payload,
+            scopeCompanyId != null ? { company_id: scopeCompanyId } : undefined
+          );
+          if (res.success) ok += 1;
+          else fail += 1;
+        } catch {
+          fail += 1;
+        }
+      }
+      await onReload();
+      if (fail === 0) {
+        onSuccess(t('payrollManagement.otRateFormulaApplied', { count: ok }));
+        setOtFormulaOpen(false);
+      } else {
+        onError(t('payrollManagement.otRateFormulaApplyPartial', { ok, fail }));
+      }
+    } finally {
+      setApplyingOtFormula(false);
+    }
+  };
+
   const PAYROLL_ROW_HEIGHT = 36;
   const PAYROLL_HEADER_HEIGHT = 48;
   const PAYROLL_LIST_BOTTOM_GAP = PAYROLL_ROW_HEIGHT;
@@ -847,12 +951,16 @@ const PayrollExcelGrid: React.FC<Props> = ({
         >
           {t('payrollManagement.actions.editConstants')}
         </Button>
-        <Typography variant="caption" color="text.secondary" sx={{ ml: { sm: 0.5 } }}>
-          {t('payrollManagement.columnToolbarHint')}
-          {` · ${t('payrollManagement.salaryRatiosShort', {
-            summary: salaryRatios.parts.map((p) => `${p.label} ${p.pct}%`).join(' / '),
-          })}`}
-        </Typography>
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<CalculateIcon fontSize="small" />}
+          onClick={openOtFormulaDialog}
+          disabled={!allowCellEdit || monthStructureLocked}
+          sx={mvsBodyOutlinedBtnSx}
+        >
+          {t('payrollManagement.actions.otRateFormula')}
+        </Button>
       </Box>
 
       <Box
@@ -1400,6 +1508,87 @@ const PayrollExcelGrid: React.FC<Props> = ({
             variant="contained"
           >
             {t('payrollManagement.actions.applyRatiosToList')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={otFormulaOpen}
+        onClose={() => !applyingOtFormula && setOtFormulaOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: getMvsDialogPaperSx(theme) }}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <DialogTitle>{t('payrollManagement.dialog.otRateFormulaTitle')}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t('payrollManagement.dialog.otRateFormulaHint')}
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            <TextField
+              size="small"
+              label={t('payrollManagement.dialog.otHoursPerDayLabel')}
+              value={otFormulaDraft.hoursPerDay}
+              disabled={applyingOtFormula}
+              inputMode="decimal"
+              onChange={(e) => {
+                const next = sanitizeOtNumericInput(e.target.value);
+                setOtFormulaDraft((prev) => ({ ...prev, hoursPerDay: next }));
+              }}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (['e', 'E', '+', '-', ','].includes(e.key)) e.preventDefault();
+              }}
+              inputProps={{ inputMode: 'decimal', pattern: '[0-9.]*' }}
+              helperText={t('payrollManagement.dialog.otNumericOnlyHint')}
+            />
+            <TextField
+              size="small"
+              label={t('payrollManagement.dialog.otMultiplierLabel')}
+              value={otFormulaDraft.multiplier}
+              disabled={applyingOtFormula}
+              inputMode="decimal"
+              onChange={(e) => {
+                const next = sanitizeOtNumericInput(e.target.value);
+                setOtFormulaDraft((prev) => ({ ...prev, multiplier: next }));
+              }}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (['e', 'E', '+', '-', ','].includes(e.key)) e.preventDefault();
+              }}
+              inputProps={{ inputMode: 'decimal', pattern: '[0-9.]*' }}
+              helperText={t('payrollManagement.dialog.otNumericOnlyHint')}
+            />
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+            {t('payrollManagement.dialog.otRateFormulaPreview', {
+              hours: otFormulaDraft.hoursPerDay || '—',
+              multiplier: otFormulaDraft.multiplier || '—',
+            })}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={getMvsDialogActionsSx(theme)}>
+          <Button
+            onClick={() => setOtFormulaDraft(formulaToDraft(DEFAULT_OT_RATE_FORMULA))}
+            disabled={applyingOtFormula}
+          >
+            {t('payrollManagement.actions.resetOtRateFormula')}
+          </Button>
+          <Box sx={{ flex: 1 }} />
+          <Button onClick={() => setOtFormulaOpen(false)} disabled={applyingOtFormula}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            onClick={() => void applyOtFormulaToList()}
+            disabled={
+              applyingOtFormula ||
+              rows.length === 0 ||
+              !isOtRateFormulaDraftValid(otFormulaDraft)
+            }
+            variant="contained"
+          >
+            {t('payrollManagement.actions.applyOtRateFormula')}
           </Button>
         </DialogActions>
       </Dialog>

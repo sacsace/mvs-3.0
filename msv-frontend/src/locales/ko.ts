@@ -2095,6 +2095,10 @@ export default {
         reorderColumns: '컬럼 순서',
         resetColumnOrder: '순서 초기화',
         editConstants: '상수 영역 설정',
+        otRateFormula: 'OT 요율 계산',
+        saveOtRateFormula: '설정 저장',
+        applyOtRateFormula: '목록에 적용',
+        resetOtRateFormula: '기본(9시간·2배)',
         saveRatios: '비율 저장',
         applyRatiosToList: '목록에 적용',
         resetRatios: '기본 비율(50/30/20)',
@@ -2115,6 +2119,10 @@ export default {
       salaryRatiosSaved: '상수 영역 비율을 저장했습니다.',
       salaryRatiosApplied: '상수 비율을 {{count}}건에 적용했습니다.',
       salaryRatiosApplyPartial: '상수 비율 적용: 성공 {{ok}}건, 실패 {{fail}}건',
+      otRateFormulaShort: 'OT {{summary}}',
+      otRateFormulaSaved: 'OT 요율 산식을 저장했습니다.',
+      otRateFormulaApplied: 'OT 요율을 {{count}}건에 적용했습니다.',
+      otRateFormulaApplyPartial: 'OT 요율 적용: 성공 {{ok}}건, 실패 {{fail}}건',
       empty: {
         loading: '급여 데이터를 불러오는 중입니다.',
         noItems: '표시할 급여 데이터가 없습니다.',
@@ -2164,7 +2172,19 @@ export default {
         otherPctLabel: '기타 수당 비율',
         otherPctHelper: '나머지 비율로 자동 계산됩니다.',
         ratioSumLabel: '합계 {{sum}}% (100%여야 합니다)',
-        allowConstantsCellEdit: '그리드에서 상수 셀 직접 수정 허용'
+        allowConstantsCellEdit: '그리드에서 상수 셀 직접 수정 허용',
+        otRateFormulaTitle: 'OT 요율 계산',
+        otRateFormulaHint:
+          '하루 소정근로 시간과 시간당 배수를 선택합니다. 일용직은 일당÷시간×배수, 월급은 기본급÷26÷시간×배수입니다. 직접 수정한 OT 요율은 유지됩니다.',
+        otHoursPerDayLabel: '하루 근무 시간',
+        otHours8: '8시간',
+        otHours9: '9시간',
+        otMultiplierLabel: '시간당 배수',
+        otMultiplier1: '1배',
+        otMultiplier2: '2배',
+        otNumericOnlyHint: '숫자만 입력 (예: 8, 9, 1.5)',
+        otRateFormulaPreview:
+          '일용직 예: 일당 ÷ {{hours}} × {{multiplier}}  ·  월급 예: 기본급 ÷ 26 ÷ {{hours}} × {{multiplier}}',
       },
       hints: {
         createChooseOtherMonth:

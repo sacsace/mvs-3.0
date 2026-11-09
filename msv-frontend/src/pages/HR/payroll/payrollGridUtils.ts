@@ -15,9 +15,16 @@ import {
   splitPackageByRatios,
   type PayrollSalaryRatios,
 } from './payrollSalaryRatios';
+import {
+  DEFAULT_OT_RATE_FORMULA,
+  loadPayrollOtRateFormula,
+  type PayrollOtRateFormula,
+} from './payrollOtRateFormula';
 
 export type { PayrollSalaryRatios };
 export { DEFAULT_SALARY_RATIOS, loadPayrollSalaryRatios, splitPackageByRatios };
+export type { PayrollOtRateFormula };
+export { DEFAULT_OT_RATE_FORMULA, loadPayrollOtRateFormula };
 
 export type PayrollRecalcContext = {
   /** 회사 등록 주 GST code (예: 29) */
@@ -28,9 +35,16 @@ export type PayrollRecalcContext = {
   companyId?: string | number | null;
   /** 적용 중인 상수 % (있으면 localStorage보다 우선) */
   salaryRatios?: PayrollSalaryRatios;
+  /** OT 요율 산식 (하루 시간·배수). 없으면 companyId localStorage */
+  otRateFormula?: PayrollOtRateFormula;
   /** 해당 급여월 기본 직원 수 — 10명 초과일 때만 ESIC 자동 적용 */
   payrollEmployeeCount?: number | null;
 };
+
+function resolveOtRateFormula(ctx: PayrollRecalcContext = {}): PayrollOtRateFormula {
+  if (ctx.otRateFormula) return ctx.otRateFormula;
+  return loadPayrollOtRateFormula(ctx.companyId);
+}
 
 /** ESIC: 지급합계(Q) ≤ 21,000 이면 Q×0.75% / Q×3.25%, 초과 시 0 */
 export const ESIC_SUM_CEILING_INR = 21000;
@@ -151,21 +165,31 @@ export function derivedDaysWorkedString(totalDayOfMonth: unknown, unpaidLeave: u
   return String(n);
 }
 
-/** 정규직 등 월급 OT/Rate = 기본급 / 26 / 8 × 2 */
-export function defaultOtRateFromBasic(basicSalary: number): number {
+/** 정규직 등 월급 OT/Rate = 기본급 / 26 / 하루시간 × 배수 */
+export function defaultOtRateFromBasic(
+  basicSalary: number,
+  formula: PayrollOtRateFormula = DEFAULT_OT_RATE_FORMULA
+): number {
   const basic = Math.max(0, num(basicSalary));
   if (basic <= 0) return 0;
-  return roundInr((basic / 26 / 8) * 2);
+  const hours = formula.hoursPerDay > 0 ? formula.hoursPerDay : DEFAULT_OT_RATE_FORMULA.hoursPerDay;
+  const mult = formula.multiplier > 0 ? formula.multiplier : DEFAULT_OT_RATE_FORMULA.multiplier;
+  return roundInr((basic / 26 / hours) * mult);
 }
 
-/** 일용직 소정근로 — 하루 9시간 */
-export const DAILY_STANDARD_WORK_HOURS = 9;
+/** @deprecated 설정값 hoursPerDay 사용 — 호환용 기본 9 */
+export const DAILY_STANDARD_WORK_HOURS = DEFAULT_OT_RATE_FORMULA.hoursPerDay;
 
-/** 일용직 OT/Rate = 일당 / 9시간 × 2 */
-export function defaultOtRateFromDailyWage(dailyWage: number): number {
+/** 일용직 OT/Rate = 일당 / 하루시간 × 배수 */
+export function defaultOtRateFromDailyWage(
+  dailyWage: number,
+  formula: PayrollOtRateFormula = DEFAULT_OT_RATE_FORMULA
+): number {
   const daily = Math.max(0, num(dailyWage));
   if (daily <= 0) return 0;
-  return roundInr((daily / DAILY_STANDARD_WORK_HOURS) * 2);
+  const hours = formula.hoursPerDay > 0 ? formula.hoursPerDay : DEFAULT_OT_RATE_FORMULA.hoursPerDay;
+  const mult = formula.multiplier > 0 ? formula.multiplier : DEFAULT_OT_RATE_FORMULA.multiplier;
+  return roundInr((daily / hours) * mult);
 }
 
 function splitSalaryComponentsFromTotal(
@@ -334,17 +358,18 @@ function resolveOtInputsFromExtra(
   basic: number,
   overtimePayFromApi: number,
   otEligible = false,
-  otManual = false
+  otManual = false,
+  formula: PayrollOtRateFormula = DEFAULT_OT_RATE_FORMULA
 ): { ot_rate: number; day_ot_hour: number; night_ot_hour: number } {
-  const isDaily = isDailyWagePayrollRow({
+  const isDaily = isDailySalaryBasisRow({
     employment_salary_basis: String(x.employment_salary_basis || ''),
     employment_type: String(x.employment_type || ''),
   });
   const defaultRateForBasic = (amount: number) =>
     amount > 0
       ? isDaily
-        ? defaultOtRateFromDailyWage(amount)
-        : defaultOtRateFromBasic(amount)
+        ? defaultOtRateFromDailyWage(amount, formula)
+        : defaultOtRateFromBasic(amount, formula)
       : 0;
   const defaultRate = defaultRateForBasic(basic);
   const rateManual = isManualOverrideFlag(x, 'ot_rate_manual');
@@ -782,11 +807,12 @@ export function recalculatePayrollRow(
   const days_worked = String(worked);
   const unpaid_leave = String(unpaidNormalized);
 
-  // 일용직: OT Rate = 일당 / 9시간 × 2. 월급: 기본급 / 26 / 8 × 2.
+  // 일용직: OT Rate = 일당 / 하루시간 × 배수. 월급: 기본급 / 26 / 하루시간 × 배수.
+  const otFormula = resolveOtRateFormula(ctx);
   const defaultOtRate = isDaily
-    ? defaultOtRateFromDailyWage(totalSalary)
+    ? defaultOtRateFromDailyWage(totalSalary, otFormula)
     : basic > 0
-      ? defaultOtRateFromBasic(basic)
+      ? defaultOtRateFromBasic(basic, otFormula)
       : 0;
   const otRateManual = Boolean(row.ot_rate_manual);
   const otRate = otRateManual ? Math.max(0, Math.floor(num(row.ot_rate))) : defaultOtRate;
@@ -1123,7 +1149,8 @@ export function payrollRecordToGridRow(
     basic,
     num(p.overtime_pay),
     otEligible,
-    otManual
+    otManual,
+    resolveOtRateFormula(ctx)
   );
   const transport = num(ex(x, 'transport_allowance'));
   const indianPfMode = resolvePfModeFromExtra(x);

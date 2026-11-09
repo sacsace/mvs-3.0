@@ -1977,6 +1977,10 @@ export default {
         reorderColumns: 'Reorder Columns',
         resetColumnOrder: 'Reset order',
         editConstants: 'Payroll Settings',
+        otRateFormula: 'OT Rate Formula',
+        saveOtRateFormula: 'Save settings',
+        applyOtRateFormula: 'Apply to list',
+        resetOtRateFormula: 'Default (9h × 2)',
         saveRatios: 'Save ratios',
         applyRatiosToList: 'Apply to list',
         resetRatios: 'Default (50/30/20)',
@@ -1997,6 +2001,10 @@ export default {
       salaryRatiosSaved: 'Payroll settings ratios saved.',
       salaryRatiosApplied: 'Applied salary component ratios to {{count}} row(s).',
       salaryRatiosApplyPartial: 'Ratio apply: {{ok}} ok, {{fail}} failed',
+      otRateFormulaShort: 'OT {{summary}}',
+      otRateFormulaSaved: 'OT rate formula saved.',
+      otRateFormulaApplied: 'Applied OT rate formula to {{count}} row(s).',
+      otRateFormulaApplyPartial: 'OT rate apply: {{ok}} ok, {{fail}} failed',
       empty: {
         loading: 'Loading payroll data…',
         noItems: 'No payroll data to display.',
@@ -2046,7 +2054,19 @@ export default {
         otherPctLabel: 'Other allowances %',
         otherPctHelper: 'Auto-calculated as the remaining share.',
         ratioSumLabel: 'Total {{sum}}% (must be 100%)',
-        allowConstantsCellEdit: 'Allow editing constant cells in the grid'
+        allowConstantsCellEdit: 'Allow editing constant cells in the grid',
+        otRateFormulaTitle: 'OT Rate Formula',
+        otRateFormulaHint:
+          'Choose standard hours per day and the hourly multiplier. Daily wage: daily ÷ hours × multiplier. Monthly: basic ÷ 26 ÷ hours × multiplier. Manually edited OT rates are kept.',
+        otHoursPerDayLabel: 'Hours per day',
+        otHours8: '8 hours',
+        otHours9: '9 hours',
+        otMultiplierLabel: 'Hourly multiplier',
+        otMultiplier1: '1×',
+        otMultiplier2: '2×',
+        otNumericOnlyHint: 'Numbers only (e.g. 8, 9, 1.5)',
+        otRateFormulaPreview:
+          'Daily example: wage ÷ {{hours}} × {{multiplier}}  ·  Monthly example: basic ÷ 26 ÷ {{hours}} × {{multiplier}}',
       },
       hints: {
         createChooseOtherMonth:

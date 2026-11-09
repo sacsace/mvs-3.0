@@ -26,9 +26,15 @@ export type StoredPayrollSalaryRatios = {
   parts: StoredPayrollConstantPart[];
 };
 
+export type StoredPayrollOtRateFormula = {
+  hoursPerDay: number;
+  multiplier: number;
+};
+
 export type StoredPayrollGridSettings = {
   columnPrefs: StoredPayrollColumnPrefs;
   salaryRatios: StoredPayrollSalaryRatios;
+  otRateFormula?: StoredPayrollOtRateFormula;
   updatedAt?: string;
 };
 
@@ -101,6 +107,17 @@ export function normalizeStoredSalaryRatios(raw: unknown): StoredPayrollSalaryRa
   return { parts };
 }
 
+export function normalizeStoredOtRateFormula(raw: unknown): StoredPayrollOtRateFormula {
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const hoursRaw = Number(obj.hoursPerDay);
+  const multRaw = Number(obj.multiplier);
+  const hoursPerDay =
+    Number.isFinite(hoursRaw) && hoursRaw > 0 ? Math.min(24, Math.max(0.01, hoursRaw)) : 9;
+  const multiplier =
+    Number.isFinite(multRaw) && multRaw > 0 ? Math.min(100, Math.max(0.01, multRaw)) : 2;
+  return { hoursPerDay, multiplier };
+}
+
 export function readPayrollGridSettingsFromCompanySettings(
   settings: unknown
 ): StoredPayrollGridSettings | null {
@@ -112,21 +129,29 @@ export function readPayrollGridSettingsFromCompanySettings(
   const g = grid as Record<string, unknown>;
   const columnPrefs = normalizeStoredColumnPrefs(g.columnPrefs);
   const salaryRatios = normalizeStoredSalaryRatios(g.salaryRatios);
+  const hasOtFormula = g.otRateFormula != null && typeof g.otRateFormula === 'object';
+  const otRateFormula = hasOtFormula
+    ? normalizeStoredOtRateFormula(g.otRateFormula)
+    : undefined;
   const hasColumns = columnPrefs.customColumns.length > 0 || columnPrefs.order.length > 0;
   const hasRatios = salaryRatios.parts.length > 0;
-  if (!hasColumns && !hasRatios) return null;
+  if (!hasColumns && !hasRatios && !hasOtFormula) return null;
   return {
     columnPrefs,
     salaryRatios,
+    ...(otRateFormula ? { otRateFormula } : {}),
     updatedAt: g.updatedAt ? String(g.updatedAt) : undefined,
   };
 }
 
 export function buildPayrollGridSettingsPatch(body: unknown): StoredPayrollGridSettings {
   const obj = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+  const hasOt =
+    Object.prototype.hasOwnProperty.call(obj, 'otRateFormula') && obj.otRateFormula != null;
   return {
     columnPrefs: normalizeStoredColumnPrefs(obj.columnPrefs),
     salaryRatios: normalizeStoredSalaryRatios(obj.salaryRatios),
+    ...(hasOt ? { otRateFormula: normalizeStoredOtRateFormula(obj.otRateFormula) } : {}),
     updatedAt: new Date().toISOString(),
   };
 }
@@ -141,15 +166,24 @@ export function mergePayrollGridIntoCompanySettings(
     base.payroll && typeof base.payroll === 'object'
       ? { ...(base.payroll as Record<string, unknown>) }
       : {};
+  const prev = readPayrollGridSettingsFromCompanySettings(settings);
+  const mergedGrid: StoredPayrollGridSettings = {
+    ...grid,
+    otRateFormula: grid.otRateFormula ?? prev?.otRateFormula,
+  };
   return {
     ...base,
     payroll: {
       ...payroll,
-      grid,
+      grid: mergedGrid,
     },
   };
 }
 
 export function isPayrollGridSettingsEmpty(grid: StoredPayrollGridSettings): boolean {
-  return grid.columnPrefs.customColumns.length === 0 && grid.salaryRatios.parts.length === 0;
+  return (
+    grid.columnPrefs.customColumns.length === 0 &&
+    grid.salaryRatios.parts.length === 0 &&
+    grid.otRateFormula == null
+  );
 }

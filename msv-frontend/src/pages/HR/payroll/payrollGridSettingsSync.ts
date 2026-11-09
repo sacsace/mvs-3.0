@@ -14,10 +14,18 @@ import {
   savePayrollSalaryRatios,
   type PayrollSalaryRatios,
 } from './payrollSalaryRatios';
+import {
+  DEFAULT_OT_RATE_FORMULA,
+  loadPayrollOtRateFormula,
+  normalizeOtRateFormula,
+  savePayrollOtRateFormula,
+  type PayrollOtRateFormula,
+} from './payrollOtRateFormula';
 
 export type PayrollGridSettingsBundle = {
   columnPrefs: PayrollColumnPrefs;
   salaryRatios: PayrollSalaryRatios;
+  otRateFormula: PayrollOtRateFormula;
 };
 
 function mapCustomColumns(raw: unknown): PayrollCustomColumn[] {
@@ -67,13 +75,22 @@ function normalizeServerSalaryRatios(raw: unknown): PayrollSalaryRatios | null {
   });
 }
 
+function normalizeServerOtRateFormula(raw: unknown): PayrollOtRateFormula | null {
+  if (!raw || typeof raw !== 'object') return null;
+  return normalizeOtRateFormula(raw);
+}
+
 function localHasGridSettings(
   columnPrefs: PayrollColumnPrefs,
-  salaryRatios: PayrollSalaryRatios
+  salaryRatios: PayrollSalaryRatios,
+  otRateFormula: PayrollOtRateFormula
 ): boolean {
   const ratiosDiffer =
     JSON.stringify(salaryRatios.parts) !== JSON.stringify(DEFAULT_SALARY_RATIOS.parts);
-  return columnPrefs.customColumns.length > 0 || ratiosDiffer;
+  const otDiffer =
+    otRateFormula.hoursPerDay !== DEFAULT_OT_RATE_FORMULA.hoursPerDay ||
+    otRateFormula.multiplier !== DEFAULT_OT_RATE_FORMULA.multiplier;
+  return columnPrefs.customColumns.length > 0 || ratiosDiffer || otDiffer;
 }
 
 /** 서버 → localStorage 동기화. 서버 비어 있고 로컬만 있으면 서버로 업로드 */
@@ -82,6 +99,7 @@ export async function syncPayrollGridSettingsFromServer(
 ): Promise<PayrollGridSettingsBundle> {
   const localPrefs = loadPayrollColumnPrefs(companyId);
   const localRatios = loadPayrollSalaryRatios(companyId);
+  const localOt = loadPayrollOtRateFormula(companyId);
 
   try {
     const res = await payrollService.getPayrollGridSettings(
@@ -92,26 +110,32 @@ export async function syncPayrollGridSettingsFromServer(
     const serverRatios = data?.salaryRatios
       ? normalizeServerSalaryRatios(data.salaryRatios)
       : null;
+    const serverOt = data?.otRateFormula
+      ? normalizeServerOtRateFormula(data.otRateFormula)
+      : null;
 
-    if (serverPrefs || serverRatios) {
+    if (serverPrefs || serverRatios || serverOt) {
       const columnPrefs = serverPrefs || localPrefs;
       const salaryRatios = serverRatios || localRatios;
+      const otRateFormula = serverOt || localOt;
       savePayrollColumnPrefs(columnPrefs, companyId);
       savePayrollSalaryRatios(salaryRatios, companyId);
-      return { columnPrefs, salaryRatios };
+      savePayrollOtRateFormula(otRateFormula, companyId);
+      return { columnPrefs, salaryRatios, otRateFormula };
     }
 
-    if (localHasGridSettings(localPrefs, localRatios)) {
+    if (localHasGridSettings(localPrefs, localRatios, localOt)) {
       await savePayrollGridSettingsToServer(companyId, {
         columnPrefs: localPrefs,
         salaryRatios: localRatios,
+        otRateFormula: localOt,
       });
     }
   } catch {
     /* 오프라인·구버전 API — localStorage 유지 */
   }
 
-  return { columnPrefs: localPrefs, salaryRatios: localRatios };
+  return { columnPrefs: localPrefs, salaryRatios: localRatios, otRateFormula: localOt };
 }
 
 export async function savePayrollGridSettingsToServer(
@@ -124,6 +148,7 @@ export async function savePayrollGridSettingsToServer(
       company_id: Number(companyId),
       columnPrefs: bundle.columnPrefs,
       salaryRatios: bundle.salaryRatios,
+      otRateFormula: bundle.otRateFormula,
     });
   } catch (e) {
     console.warn('payroll grid settings save failed', e);
@@ -136,7 +161,13 @@ export async function persistPayrollGridSettings(
 ): Promise<void> {
   const columnPrefs = patch.columnPrefs ?? loadPayrollColumnPrefs(companyId);
   const salaryRatios = patch.salaryRatios ?? loadPayrollSalaryRatios(companyId);
+  const otRateFormula = patch.otRateFormula ?? loadPayrollOtRateFormula(companyId);
   savePayrollColumnPrefs(columnPrefs, companyId);
   savePayrollSalaryRatios(salaryRatios, companyId);
-  await savePayrollGridSettingsToServer(companyId, { columnPrefs, salaryRatios });
+  savePayrollOtRateFormula(otRateFormula, companyId);
+  await savePayrollGridSettingsToServer(companyId, {
+    columnPrefs,
+    salaryRatios,
+    otRateFormula,
+  });
 }
