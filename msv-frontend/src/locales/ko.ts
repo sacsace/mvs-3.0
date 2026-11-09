@@ -5582,6 +5582,8 @@ export default {
         remarksRequiredHint: '영수증이 없으면 비고에 사유를 입력해야 합니다.',
         remarksRequiredGst: '비고 (계산식 없음 · 필수)',
         remarksRequiredGstHint: '계산식이 없으면 비고에 사유를 입력해야 합니다.',
+        statutoryNoAttachmentHint:
+          'TDS·GST 지출결의서는 택스 인보이스·첨부파일이 필요 없습니다. 송금 후 송금 확인증만 업로드하면 됩니다.',
         remarksInternal: '비고',
         receiptQr: '휴대폰으로 영수증 올리기',
         receiptQrLoading: 'QR 생성 중...',
@@ -5724,6 +5726,8 @@ export default {
         cannotEditProcessed:
           '검토 중이거나 처리된 문서는 수정할 수 없습니다. 목록에서 문서 상태를 확인해 주세요.',
         invoiceTypeRequired: '첨부 유형(Tax / Proforma Invoice (Quotation) / 인보이스 없음)을 선택해주세요.',
+        statutoryAttachmentNotAllowed:
+          'TDS·GST 지출결의서는 첨부파일이 필요 없습니다. 송금 시 송금 확인증만 업로드하세요.',
         deleteFailed: '삭제 중 오류가 발생했습니다.',
         approveFailed: '승인 중 오류가 발생했습니다.',
         rejectFailed: '반려 중 오류가 발생했습니다.',

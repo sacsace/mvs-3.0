@@ -5470,6 +5470,8 @@ export default {
         remarksRequiredHint: 'If there is no receipt, enter the reason in remarks.',
         remarksRequiredGst: 'Remarks (required without calculation file)',
         remarksRequiredGstHint: 'If there is no calculation file, enter the reason in remarks.',
+        statutoryNoAttachmentHint:
+          'TDS/GST vouchers do not need a tax invoice or attachments. After remittance, upload the remittance confirmation only.',
         remarksInternal: 'Internal notes',
         receiptQr: 'Upload receipt from phone',
         receiptQrLoading: 'Generating QR…',
@@ -5610,6 +5612,8 @@ export default {
         cannotEditProcessed:
           'This document is under review or already processed and cannot be edited. Check the status in the list.',
         invoiceTypeRequired: 'Please select Tax Invoice / Proforma Invoice (Quotation) / No invoice.',
+        statutoryAttachmentNotAllowed:
+          'TDS/GST vouchers do not need attachments. Upload the remittance confirmation when recording remittance.',
         deleteFailed: 'An error occurred while deleting.',
         approveFailed: 'An error occurred while approving.',
         rejectFailed: 'An error occurred while rejecting.',

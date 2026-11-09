@@ -2569,7 +2569,9 @@ const tryFinalizeExpenseIfReady = async (expense: any, actorUserId?: number) => 
   const remaining = getExpenseRemainingAmount(expense);
   if (remaining > 0) return false;
   const canCloseWithoutTax =
-    isExpenseNoInvoiceMeta(expense.items) || isExpensePrepaidMeta(expense.items);
+    isExpenseNoInvoiceMeta(expense.items) ||
+    isExpensePrepaidMeta(expense.items) ||
+    isExpenseStatutoryTaxVoucher(expense.items);
   if (!canCloseWithoutTax && !expenseHasTaxInvoice(expense.attachments)) return false;
   const paymentStatus = String(expense.payment_request_status || '').toLowerCase();
   if (paymentStatus === 'paid' && docStatus === 'paid') return false;
@@ -2592,6 +2594,16 @@ const isExpenseTdsForm = (itemsValue: any) => {
   const raw = String(meta.formType || meta.form_type || '').trim().toLowerCase();
   return raw === 'tds';
 };
+
+const isExpenseGstForm = (itemsValue: any) => {
+  const meta = mergeExpenseItemsMeta(itemsValue, {}).meta || {};
+  const raw = String(meta.formType || meta.form_type || '').trim().toLowerCase();
+  return raw === 'gst';
+};
+
+/** TDS/GST 납부 전표 — Tax Invoice·영수증 없이 송금 확인증만으로 종료 */
+const isExpenseStatutoryTaxVoucher = (itemsValue: any) =>
+  isExpenseTdsForm(itemsValue) || isExpenseGstForm(itemsValue);
 
 const receiptOrRemarksRequiredMessage =
   '영수증을 첨부하거나, 영수증이 없으면 비고에 설명을 입력해주세요.';
@@ -3203,7 +3215,7 @@ export const createExpenseReport = async (req: RequestWithUser, res: Response) =
     }
     if (
       createStatus === 'submitted' &&
-      !isExpenseTdsForm(items) &&
+      !isExpenseStatutoryTaxVoucher(items) &&
       !expenseHasReceipts(attachments) &&
       !expenseHasRemarks(items, notes)
     ) {
@@ -3463,7 +3475,7 @@ export const updateExpenseReport = async (req: RequestWithUser, res: Response) =
     }
     if (
       isSubmit &&
-      !isExpenseTdsForm(nextBody.items != null ? nextBody.items : expense.items) &&
+      !isExpenseStatutoryTaxVoucher(nextBody.items != null ? nextBody.items : expense.items) &&
       !expenseHasReceipts(nextBody.attachments != null ? nextBody.attachments : expense.attachments) &&
       !expenseHasRemarks(nextBody.items != null ? nextBody.items : expense.items, nextBody.notes != null ? nextBody.notes : expense.notes)
     ) {
@@ -3667,7 +3679,7 @@ export const updateExpenseReportStatus = async (req: RequestWithUser, res: Respo
         return res.status(400).json({ success: false, message: '승인권자를 선택해주세요.' });
       }
       if (
-        !isExpenseTdsForm(expense.items) &&
+        !isExpenseStatutoryTaxVoucher(expense.items) &&
         !expenseHasReceipts(expense.attachments) &&
         !expenseHasRemarks(expense.items, expense.notes)
       ) {
@@ -4628,8 +4640,10 @@ export const completeExpensePayment = async (req: RequestWithUser, res: Response
     const isFullPayment = requestedAmount >= remaining - 0.001;
     const hasTaxInvoice = expenseHasTaxInvoice(expense.attachments);
     const noInvoice = isExpenseNoInvoiceMeta(expense.items);
-    const canClose = isFullPayment && (hasTaxInvoice || noInvoice);
-    const awaitingTaxInvoice = isFullPayment && !hasTaxInvoice && !noInvoice;
+    const statutoryTaxVoucher = isExpenseStatutoryTaxVoucher(expense.items);
+    const canCloseWithoutTax = hasTaxInvoice || noInvoice || statutoryTaxVoucher;
+    const canClose = isFullPayment && canCloseWithoutTax;
+    const awaitingTaxInvoice = isFullPayment && !canCloseWithoutTax;
     const transferLogs = Array.isArray(expense.bank_transfer_logs)
       ? [...expense.bank_transfer_logs]
       : [];

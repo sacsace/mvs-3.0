@@ -251,6 +251,16 @@ const expenseIsPrepaid = (expense: { itemMeta?: Record<string, any> } | null | u
   return v === true || v === 'true' || v === 1 || v === '1';
 };
 
+/** TDS/GST 납부 전표 — Tax Invoice·영수증 첨부 없음. 송금 확인증만 필요 */
+const expenseIsStatutoryTaxVoucher = (expense: {
+  itemMeta?: Record<string, any>;
+} | null | undefined) => {
+  const raw = String(expense?.itemMeta?.formType || expense?.itemMeta?.form_type || '')
+    .trim()
+    .toLowerCase();
+  return raw === 'tds' || raw === 'gst';
+};
+
 const expenseIsAwaitingTaxInvoice = (expense: {
   attachments?: ExpenseAttachment[] | string[];
   totalAmount?: number;
@@ -261,6 +271,7 @@ const expenseIsAwaitingTaxInvoice = (expense: {
 }) => {
   if (expenseIsPrepaid(expense)) return false;
   if (expenseIsNoInvoice(expense)) return false;
+  if (expenseIsStatutoryTaxVoucher(expense)) return false;
   const total = Number(expense.totalAmount || 0);
   const paid = Number(expense.paidAmount || 0);
   const remaining = Math.max(0, total - paid);
@@ -536,6 +547,9 @@ const resolveExpenseFormType = (meta?: Record<string, any> | null): ExpenseFormT
   if (raw === 'general' || raw === 'gst' || raw === 'tds') return raw;
   return 'general';
 };
+
+const isStatutoryTaxVoucherForm = (formType: ExpenseFormType) =>
+  formType === 'tds' || formType === 'gst';
 
 const calcTdsLineAmounts = (item: {
   amount?: number;
@@ -3266,6 +3280,9 @@ const ExpenseApproval: React.FC = () => {
           (voucherData.perLineGst || !hasExpenseGstNumber(voucherData.gstNumber))
             ? { igstRate: 0, cgstRate: 0, sgstRate: 0 }
             : {}),
+          ...(isStatutoryTaxVoucherForm(voucherData.formType)
+            ? { noInvoice: true, invoiceMode: 'none', isPrepaid: false }
+            : {}),
         },
       },
       status: statusOverride,
@@ -4338,15 +4355,20 @@ const ExpenseApproval: React.FC = () => {
       gstRoundingAdjustment: Number(meta.gstRoundingAdjustment ?? meta.gst_rounding_adjustment ?? 0),
       gstProfessionalTax: Number(meta.gstProfessionalTax ?? meta.gst_professional_tax ?? 0),
       perLineGst: Boolean(meta.perLineGst ?? meta.per_line_gst),
-      isPrepaid: Boolean(meta.isPrepaid ?? meta.is_prepaid),
-      noInvoice: Boolean(meta.noInvoice ?? meta.no_invoice) ||
-        String(meta.invoiceMode || meta.invoice_mode || '').toLowerCase() === 'none',
-      invoiceMode: (Boolean(meta.noInvoice ?? meta.no_invoice)
+      isPrepaid: isStatutoryTaxVoucherForm(resolvedFormType)
+        ? false
+        : Boolean(meta.isPrepaid ?? meta.is_prepaid),
+      noInvoice: isStatutoryTaxVoucherForm(resolvedFormType)
+        ? true
+        : Boolean(meta.noInvoice ?? meta.no_invoice) ||
+          String(meta.invoiceMode || meta.invoice_mode || '').toLowerCase() === 'none',
+      invoiceMode: (isStatutoryTaxVoucherForm(resolvedFormType) ||
+      Boolean(meta.noInvoice ?? meta.no_invoice)
         ? 'none'
         : normalizeExpenseInvoiceType(meta.invoiceMode || meta.invoice_mode || 'tax')) as ExpenseInvoiceType,
     });
     setReceiptInvoiceType(
-      Boolean(meta.noInvoice ?? meta.no_invoice)
+      isStatutoryTaxVoucherForm(resolvedFormType) || Boolean(meta.noInvoice ?? meta.no_invoice)
         ? 'none'
         : normalizeExpenseInvoiceType(meta.invoiceMode || meta.invoice_mode || 'tax')
     );
@@ -4596,15 +4618,16 @@ const ExpenseApproval: React.FC = () => {
       perLineGst: next === 'general' ? prev.perLineGst : false,
       gstRoundingAdjustment: next === 'gst' ? prev.gstRoundingAdjustment : 0,
       gstProfessionalTax: next === 'gst' ? prev.gstProfessionalTax : 0,
-      isPrepaid: next === 'gst' || next === 'tds' ? false : prev.isPrepaid,
-      noInvoice: next === 'gst' || next === 'tds' ? false : prev.noInvoice,
-      invoiceMode:
-        next === 'gst' || next === 'tds'
-          ? ('tax' as ExpenseInvoiceType)
-          : prev.invoiceMode,
+      isPrepaid: isStatutoryTaxVoucherForm(next) ? false : prev.isPrepaid,
+      // TDS/GST: 택스 인보이스·영수증 없음. 송금 후 송금 확인증만 업로드
+      noInvoice: isStatutoryTaxVoucherForm(next) ? true : prev.noInvoice,
+      invoiceMode: isStatutoryTaxVoucherForm(next)
+        ? ('none' as ExpenseInvoiceType)
+        : prev.invoiceMode,
     }));
     setLineItems(next === 'gst' ? createGstSummaryLineItems() : [createEmptyLineItem(next)]);
-    if (next === 'gst' || next === 'tds') {
+    if (isStatutoryTaxVoucherForm(next)) {
+      setReceiptInvoiceType('none');
       setFormData((prev) => ({
         ...prev,
         title: buildPaymentVoucherTitle(next === 'gst' ? 'GST' : 'TDS', voucherData.voucherDate),
@@ -5218,9 +5241,12 @@ const ExpenseApproval: React.FC = () => {
       viewMode === 'view' || viewMode === 'edit'
         ? resolveExpenseFormType(selectedExpense?.itemMeta)
         : voucherData.formType;
-    const invoiceTypeForUpload: ExpenseInvoiceType =
-      activeFormType === 'gst' ? 'tax' : receiptInvoiceType;
-    if (activeFormType !== 'gst' && !receiptInvoiceType) {
+    if (isStatutoryTaxVoucherForm(activeFormType)) {
+      setError(t('expenseApproval.errors.statutoryAttachmentNotAllowed'));
+      return;
+    }
+    const invoiceTypeForUpload: ExpenseInvoiceType = receiptInvoiceType;
+    if (!receiptInvoiceType) {
       setError(t('expenseApproval.errors.invoiceTypeRequired'));
       return;
     }
@@ -5240,8 +5266,7 @@ const ExpenseApproval: React.FC = () => {
     if (viewMode === 'view' && !wasAwaitingTaxInvoice) {
       return;
     }
-    const uploadingTaxInvoice =
-      invoiceTypeForUpload === 'tax' || activeFormType === 'gst';
+    const uploadingTaxInvoice = invoiceTypeForUpload === 'tax';
     // 승인 이후 Tax Invoice가 이미 있으면 재업로드 안내
     if (
       viewMode === 'view' &&
@@ -5327,13 +5352,11 @@ const ExpenseApproval: React.FC = () => {
         return;
       }
       setSuccess(
-        activeFormType === 'gst'
-          ? t('expenseApproval.success.calculationAttached')
-          : invoiceTypeForUpload === 'proforma'
-            ? t('expenseApproval.success.proformaAttached')
-            : invoiceTypeForUpload === 'none'
-              ? t('expenseApproval.success.noInvoiceAttached')
-              : t('expenseApproval.success.taxInvoiceAttached')
+        invoiceTypeForUpload === 'proforma'
+          ? t('expenseApproval.success.proformaAttached')
+          : invoiceTypeForUpload === 'none'
+            ? t('expenseApproval.success.noInvoiceAttached')
+            : t('expenseApproval.success.taxInvoiceAttached')
       );
     } catch (uploadError: any) {
       setError(
@@ -8656,44 +8679,37 @@ const ExpenseApproval: React.FC = () => {
 
             <TextField
               label={
-                voucherData.formType === 'tds' || currentAttachments.length
+                isStatutoryTaxVoucherForm(voucherData.formType) || currentAttachments.length
                   ? t('expenseApproval.voucher.remarksIfAny')
-                  : voucherData.formType === 'gst'
-                    ? t('expenseApproval.voucher.remarksRequiredGst')
-                    : t('expenseApproval.voucher.remarksRequired')
+                  : t('expenseApproval.voucher.remarksRequired')
               }
               value={voucherData.remarks}
               onChange={(e) => setVoucherData({ ...voucherData, remarks: e.target.value })}
               fullWidth
               multiline
               minRows={3}
-              required={voucherData.formType !== 'tds' && !currentAttachments.length}
+              required={
+                !isStatutoryTaxVoucherForm(voucherData.formType) && !currentAttachments.length
+              }
               helperText={
-                voucherData.formType === 'tds' || currentAttachments.length
-                  ? undefined
-                  : voucherData.formType === 'gst'
-                    ? t('expenseApproval.voucher.remarksRequiredGstHint')
-                    : t('expenseApproval.voucher.remarksRequiredHint')
+                isStatutoryTaxVoucherForm(voucherData.formType) || currentAttachments.length
+                  ? isStatutoryTaxVoucherForm(voucherData.formType)
+                    ? t('expenseApproval.voucher.statutoryNoAttachmentHint')
+                    : undefined
+                  : t('expenseApproval.voucher.remarksRequiredHint')
               }
               sx={{ mt: 2, ...softFieldSx }}
             />
 
-            {voucherData.formType !== 'tds' && (
+            {!isStatutoryTaxVoucherForm(voucherData.formType) && (
               <>
             <Divider sx={{ my: 1.5, borderColor: alpha(theme.palette.text.primary, 0.08) }} />
 
             <Box sx={sectionShellSx}>
               <Typography variant="subtitle2" sx={sectionTitleSx}>
-                {voucherData.formType === 'gst'
-                  ? t('expenseApproval.voucher.sectionCalculationAttachments')
-                  : t('expenseApproval.voucher.sectionReceipts')}
+                {t('expenseApproval.voucher.sectionReceipts')}
               </Typography>
-              {voucherData.formType === 'gst' ? (
-                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, pl: EXPENSE_TEXT_PAD_LEFT }}>
-                  {t('expenseApproval.voucher.gstPaymentCalculationLabel')}
-                </Typography>
-              ) : (
-                <>
+              <>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                     {t('expenseApproval.voucher.invoiceTypeHint')}
                   </Typography>
@@ -8768,48 +8784,36 @@ const ExpenseApproval: React.FC = () => {
                       {t('expenseApproval.voucher.noInvoiceHint')}
                     </Typography>
                   ) : null}
-                </>
-              )}
+              </>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
-                {voucherData.formType !== 'gst' && (
-                  <Button variant="outlined" startIcon={<QrCodeIcon />} onClick={handleOpenQr} disabled={qrLoading} sx={{ textTransform: 'none', borderRadius: '8px' }}>
+                <Button variant="outlined" startIcon={<QrCodeIcon />} onClick={handleOpenQr} disabled={qrLoading} sx={{ textTransform: 'none', borderRadius: '8px' }}>
                   {qrLoading ? t('expenseApproval.voucher.receiptQrLoading') : t('expenseApproval.voucher.receiptQr')}
                 </Button>
-                )}
                 <Button variant="outlined" component="label" disabled={uploadingReceipts} sx={{ textTransform: 'none', borderRadius: '8px' }}>
                   {uploadingReceipts ? t('expenseApproval.voucher.receiptUploading') : t('expenseApproval.voucher.receiptUpload')}
                   <input
                     hidden
                     multiple
                     type="file"
-                    {...(voucherData.formType === 'gst'
-                      ? {}
-                      : { accept: 'image/*,application/pdf' })}
+                    accept="image/*,application/pdf"
                     onChange={(e) => {
                       void handleUploadReceipts(e.target.files);
                       e.target.value = '';
                     }}
                   />
                 </Button>
-                {voucherData.formType !== 'gst' && (
-                  <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadExpenseData} sx={{ textTransform: 'none', borderRadius: '8px' }}>
+                <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadExpenseData} sx={{ textTransform: 'none', borderRadius: '8px' }}>
                   {t('expenseApproval.voucher.refresh')}
                 </Button>
-                )}
               </Box>
               {currentAttachments.length ? (
                 renderAttachmentList(currentAttachments, {
                   deletable: true,
                   onDelete: handleDeleteReceipt,
-                  ...(voucherData.formType === 'gst'
-                    ? { typeLabel: t('expenseApproval.voucher.gstPaymentCalculationLabel') }
-                    : {}),
                 })
               ) : (
                 <Typography variant="body2" color="text.secondary">
-                  {voucherData.formType === 'gst'
-                    ? t('expenseApproval.voucher.calculationNone')
-                    : t('expenseApproval.voucher.receiptNone')}
+                  {t('expenseApproval.voucher.receiptNone')}
                 </Typography>
               )}
             </Box>
@@ -10186,27 +10190,26 @@ const ExpenseApproval: React.FC = () => {
             <Box
               sx={{
                 ...expenseDetailFooterRowSx,
-                ...(detailFormType === 'tds' ? { justifyContent: 'flex-end' } : {}),
+                ...(isStatutoryTaxVoucherForm(detailFormType)
+                  ? { justifyContent: 'flex-end' }
+                  : {}),
               }}
             >
-            {/* 첨부파일 — 표 왼쪽 하단 (TDS는 영수증 첨부 없음) */}
-            {detailFormType !== 'tds' && (
+            {/* 첨부파일 — 표 왼쪽 하단 (TDS/GST는 영수증·택스 인보이스 첨부 없음) */}
+            {!isStatutoryTaxVoucherForm(detailFormType) && (
             <Box
               className="expense-pdf-plain expense-pdf-hide"
               sx={{ flex: 1, minWidth: 0, width: { xs: '100%', sm: 'auto' } }}
             >
               <Typography variant="subtitle2" sx={sectionTitleSx}>
-                {detailFormType === 'gst'
-                  ? t('expenseApproval.voucher.sectionCalculationAttachments')
-                  : t('expenseApproval.detail.attachments')}
+                {t('expenseApproval.detail.attachments')}
                         </Typography>
-              {detailFormType !== 'gst' && expenseIsAwaitingTaxInvoice(selectedExpense) && (
+              {expenseIsAwaitingTaxInvoice(selectedExpense) && (
                 <Alert severity="warning" sx={{ mb: 1.5, py: 0.5 }}>
                   {t('expenseApproval.detail.awaitingTaxInvoiceHint')}
                 </Alert>
               )}
-              {detailFormType !== 'gst' &&
-                isRequester &&
+              {isRequester &&
                 isExpenseApproved &&
                 expenseHasTaxInvoice(selectedExpense.attachments) &&
                 !expenseIsAwaitingTaxInvoice(selectedExpense) && (
@@ -10236,7 +10239,6 @@ const ExpenseApproval: React.FC = () => {
                   !approvedWithProformaLocked &&
                   awaitingTax;
                 const taxOnlyUpload = awaitingTax;
-                const isGstForm = detailFormType === 'gst';
 
                 if (!showInvoiceUpload) {
                   if (isRemittanceView || approvedWithProformaLocked) {
@@ -10251,11 +10253,7 @@ const ExpenseApproval: React.FC = () => {
 
                 return (
                   <Box sx={{ mb: 1.5 }}>
-                    {isGstForm ? (
-                      <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.75, pl: EXPENSE_TEXT_PAD_LEFT }}>
-                        {t('expenseApproval.voucher.gstPaymentCalculationLabel')}
-                        </Typography>
-                    ) : taxOnlyUpload ? (
+                    {taxOnlyUpload ? (
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
                         {t('expenseApproval.detail.uploadTaxInvoiceOnly')}
                       </Typography>
@@ -10298,21 +10296,21 @@ const ExpenseApproval: React.FC = () => {
                       size="small"
                       sx={{ textTransform: 'none', borderRadius: '8px' }}
                       onClick={() => {
-                        if (taxOnlyUpload || isGstForm) setReceiptInvoiceType('tax');
+                        if (taxOnlyUpload) setReceiptInvoiceType('tax');
                       }}
                     >
                       {uploadingReceipts
                         ? t('expenseApproval.voucher.receiptUploading')
-                        : taxOnlyUpload && !isGstForm
+                        : taxOnlyUpload
                           ? t('expenseApproval.voucher.uploadTaxInvoice')
                           : t('expenseApproval.voucher.receiptUpload')}
                       <input
                         hidden
                         multiple
                         type="file"
-                        {...(isGstForm ? {} : { accept: 'image/*,application/pdf' })}
+                        accept="image/*,application/pdf"
                         onChange={(e) => {
-                          if (taxOnlyUpload || isGstForm) setReceiptInvoiceType('tax');
+                          if (taxOnlyUpload) setReceiptInvoiceType('tax');
                           void handleUploadReceipts(e.target.files);
                           e.target.value = '';
                         }}
@@ -10328,16 +10326,10 @@ const ExpenseApproval: React.FC = () => {
                 if (attachmentRows.length === 0) {
                   return (
                       <Typography variant="body2" color="text.secondary">
-                      {detailFormType === 'gst'
-                        ? t('expenseApproval.voucher.calculationNone')
-                        : t('expenseApproval.voucher.receiptNone')}
+                      {t('expenseApproval.voucher.receiptNone')}
                       </Typography>
                   );
                 }
-                const gstTypeLabel =
-                  detailFormType === 'gst'
-                    ? { typeLabel: t('expenseApproval.voucher.gstPaymentCalculationLabel') }
-                    : undefined;
                 return (
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                     {proformaRows.length > 0 ? (
@@ -10350,12 +10342,12 @@ const ExpenseApproval: React.FC = () => {
                     ) : null}
                     {otherRows.length > 0 ? (
                       <Box>
-                        {proformaRows.length > 0 && detailFormType !== 'gst' ? (
+                        {proformaRows.length > 0 ? (
                           <Typography variant="subtitle2" sx={{ ...sectionTitleSx, mt: 0, mb: 0.75 }}>
                             {t('expenseApproval.voucher.invoiceTypeTax')}
                         </Typography>
                         ) : null}
-                        {renderAttachmentList(otherRows, gstTypeLabel)}
+                        {renderAttachmentList(otherRows)}
                       </Box>
                     ) : null}
                   </Box>
@@ -10535,8 +10527,8 @@ const ExpenseApproval: React.FC = () => {
             )}
             </Box>
 
-            {/* 송금 확인증 — 첨부파일 영역(위)에 표시. TDS 등 첨부 영역이 없을 때만 여기 노출 */}
-            {detailFormType === 'tds' &&
+            {/* 송금 확인증 — 첨부파일 영역이 없는 TDS/GST에서 여기 노출 */}
+            {isStatutoryTaxVoucherForm(detailFormType) &&
               (() => {
                 const proofPaths = (selectedExpense.bankTransferLogs || [])
                   .map((log) => log.proof || log.payload?.proof)
