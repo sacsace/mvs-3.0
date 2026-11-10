@@ -5220,7 +5220,7 @@ export default {
         status: 'Status',
         priority: 'Priority',
         all: 'All',
-        draftAndSubmitted: 'Draft · Submitted',
+        draftAndSubmitted: 'Draft · Submitted · Awaiting Tax Invoice',
         paymentApprovedOnly: 'Approved for payment only',
         company: 'Company',
         allCompanies: 'All companies'

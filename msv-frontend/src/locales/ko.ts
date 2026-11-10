@@ -5334,7 +5334,7 @@ export default {
         status: '상태',
         priority: '우선순위',
         all: '전체',
-        draftAndSubmitted: '초안 · 제출됨',
+        draftAndSubmitted: '초안 · 제출됨 · 택스 인보이스 대기',
         paymentApprovedOnly: '승인됨',
         company: '회사',
         allCompanies: '전체 회사'

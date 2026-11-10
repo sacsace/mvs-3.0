@@ -273,11 +273,12 @@ function sortBoardCardCommentsThreaded(comments: BoardCardComment[]): BoardCardC
     if (!byParent.has(pid)) byParent.set(pid, []);
     byParent.get(pid)!.push(c);
   }
-  byParent.forEach((arr) => {
+  byParent.forEach((arr, pid) => {
     arr.sort((a: BoardCardComment, b: BoardCardComment) => {
       const ta = new Date(resolveCommentCreatedAt(a)).getTime() || 0;
       const tb = new Date(resolveCommentCreatedAt(b)).getTime() || 0;
-      return ta - tb;
+      // 최상위 댓글: 최신글 위. 답글: 대화 흐름 유지(오래된 순).
+      return pid == null ? tb - ta : ta - tb;
     });
   });
   const out: BoardCardComment[] = [];
@@ -1615,19 +1616,19 @@ const ListColumn = memo(function ListColumn({
             flexDirection: 'column',
             gap: 1,
             minHeight: 8,
-          }}
-        >
-          {cards.map((c) => (
-            <DraggableCard
-              key={c.id}
-              card={c}
+        }}
+      >
+        {cards.map((c) => (
+          <DraggableCard
+            key={c.id}
+            card={c}
               members={members}
               isCompletedList={isCompletedList}
-              onOpenDetail={handleOpenCard}
+            onOpenDetail={handleOpenCard}
               dragDisabled={!allowCardDrag}
-            />
-          ))}
-        </Box>
+          />
+        ))}
+      </Box>
       </SortableContext>
 
       {allowAddCard && composerOpen ? (
@@ -2126,8 +2127,8 @@ export default function WorkBoardDetailPage() {
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const clearDragOverlay = () => {
-      setActiveCard(null);
-      setActiveList(null);
+    setActiveCard(null);
+    setActiveList(null);
       lastKanbanOverKeyRef.current = null;
     };
     const snapshot = boardBeforeDragRef.current;
@@ -4767,7 +4768,7 @@ export default function WorkBoardDetailPage() {
               </Typography>
             ) : null}
             <IconButton
-              size="small"
+            size="small"
               onClick={closeCardDetail}
               aria-label={txt('카드 닫기', 'Close card')}
               sx={{
@@ -4812,20 +4813,20 @@ export default function WorkBoardDetailPage() {
                 alignItems: 'start',
               }}
             >
-              <TextField
-                fullWidth
-                size="small"
+          <TextField
+            fullWidth
+            size="small"
                 label={txt('제목', 'Title')}
                 {...CARD_DETAIL_OUTLINED}
-                variant="outlined"
-                value={cardDetail?.title || ''}
-                onChange={(e) =>
-                  setCardDetail((prev) =>
-                    prev ? { ...prev, title: e.target.value } : prev
-                  )
-                }
-                disabled={!menuCanEdit}
-                placeholder={txt('카드 제목', 'Card Title')}
+            variant="outlined"
+            value={cardDetail?.title || ''}
+            onChange={(e) =>
+              setCardDetail((prev) =>
+                prev ? { ...prev, title: e.target.value } : prev
+              )
+            }
+            disabled={!menuCanEdit}
+              placeholder={txt('카드 제목', 'Card Title')}
                 sx={cardDetailOutlinedWhiteSx}
               />
               <TextField
@@ -4863,21 +4864,21 @@ export default function WorkBoardDetailPage() {
                   </MenuItem>
                 ))}
               </TextField>
-              <Autocomplete
-                multiple
-                disabled={!menuCanEdit}
-                options={memberOptions}
+            <Autocomplete
+              multiple
+              disabled={!menuCanEdit}
+              options={memberOptions}
                 getOptionLabel={(option) => option.label}
                 value={memberOptions.filter((option) =>
                   (cardDetail?.referenceUserIds || []).includes(option.id)
                 )}
-                onChange={(_event, selected) => {
-                  const nextIds = selected.map((item) => item.id);
+              onChange={(_event, selected) => {
+                const nextIds = selected.map((item) => item.id);
                   setCardDetail((prev) =>
                     prev ? { ...prev, referenceUserIds: nextIds } : prev
                   );
-                }}
-                isOptionEqualToValue={(option, value) => option.id === value.id}
+              }}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
                 slotProps={{
                   popper: {
                     sx: { zIndex: 2100 },
@@ -4898,8 +4899,8 @@ export default function WorkBoardDetailPage() {
                     </li>
                   );
                 }}
-                renderTags={(value, getTagProps) =>
-                  value.map((option, index) => (
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
                     <Chip
                       size="small"
                       label={option.label}
@@ -4907,9 +4908,9 @@ export default function WorkBoardDetailPage() {
                       key={option.id}
                       sx={{ borderRadius: KANBAN_CHIP_RADIUS, fontWeight: 600, maxWidth: 96 }}
                     />
-                  ))
-                }
-                renderInput={(params) => (
+                ))
+              }
+              renderInput={(params) => (
                   <TextField
                     {...params}
                     size="small"
@@ -4962,21 +4963,21 @@ export default function WorkBoardDetailPage() {
               variant="caption"
               sx={{ ...cardDetailFieldLabelSx, mb: 0.5 }}
             >
-              {txt('카드 색상', 'Card Color')}
-            </Typography>
+            {txt('카드 색상', 'Card Color')}
+          </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75 }}>
-              <TextField
-                type="color"
-                hiddenLabel
-                variant="outlined"
-                size="small"
-                value={cardDetail?.color || '#1976D2'}
-                disabled={!menuCanEdit}
-                onChange={(e) =>
-                  setCardDetail((prev) => (prev ? { ...prev, color: e.target.value } : prev))
-                }
-                sx={{
-                  width: 44,
+            <TextField
+              type="color"
+              hiddenLabel
+              variant="outlined"
+              size="small"
+              value={cardDetail?.color || '#1976D2'}
+              disabled={!menuCanEdit}
+              onChange={(e) =>
+                setCardDetail((prev) => (prev ? { ...prev, color: e.target.value } : prev))
+              }
+              sx={{
+                width: 44,
                   '& .MuiOutlinedInput-root': {
                     borderRadius: KANBAN_CONTROL_RADIUS,
                     bgcolor: '#FFFFFF',
@@ -4984,20 +4985,20 @@ export default function WorkBoardDetailPage() {
                     '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E2E8F0' },
                     '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#94A3B8' },
                   },
-                  '& input[type="color"]': {
+                '& input[type="color"]': {
                     borderRadius: KANBAN_CONTROL_RADIUS,
-                    cursor: 'pointer',
+                  cursor: 'pointer',
                     minHeight: 28,
                   },
-                }}
-              />
-              <Button
-                size="small"
+              }}
+            />
+            <Button
+              size="small"
                 variant={!cardDetail?.color ? 'contained' : 'text'}
-                disabled={!menuCanEdit}
-                onClick={() =>
-                  setCardDetail((prev) => (prev ? { ...prev, color: '' } : prev))
-                }
+              disabled={!menuCanEdit}
+              onClick={() =>
+                setCardDetail((prev) => (prev ? { ...prev, color: '' } : prev))
+              }
                 sx={{
                   borderRadius: KANBAN_CONTROL_RADIUS,
                   minWidth: 48,
@@ -5010,19 +5011,19 @@ export default function WorkBoardDetailPage() {
                     boxShadow: 'none',
                   },
                 }}
-              >
-                {txt('기본', 'Default')}
-              </Button>
-              {CARD_COLOR_PRESETS.map((hex) => (
-                <Button
-                  key={hex}
-                  size="small"
+            >
+              {txt('기본', 'Default')}
+            </Button>
+            {CARD_COLOR_PRESETS.map((hex) => (
+              <Button
+                key={hex}
+                size="small"
                   variant="text"
-                  disabled={!menuCanEdit}
-                  onClick={() =>
-                    setCardDetail((prev) => (prev ? { ...prev, color: hex } : prev))
-                  }
-                  sx={{
+                disabled={!menuCanEdit}
+                onClick={() =>
+                  setCardDetail((prev) => (prev ? { ...prev, color: hex } : prev))
+                }
+                sx={{
                     minWidth: 28,
                     width: 28,
                     height: 28,
@@ -5032,10 +5033,10 @@ export default function WorkBoardDetailPage() {
                     bgcolor: cardDetail?.color === hex ? hex : hexToRgba(hex, 0.38),
                     boxShadow: cardDetail?.color === hex ? `0 0 0 2px #FFFFFF, 0 0 0 3px ${hex}` : 'none',
                     '&:hover': { bgcolor: hex, opacity: 0.9, boxShadow: 'none' },
-                  }}
-                />
-              ))}
-            </Box>
+                }}
+              />
+            ))}
+          </Box>
           </Box>
 
           <Box
@@ -5619,7 +5620,7 @@ export default function WorkBoardDetailPage() {
                 color: '#FFFFFF',
                 '&:hover': {
                   bgcolor: 'primary.dark',
-                  boxShadow: 'none',
+                boxShadow: 'none',
                 },
                 '&.Mui-disabled': {
                   bgcolor: '#E2E8F0',
@@ -5707,8 +5708,8 @@ export default function WorkBoardDetailPage() {
                 };
 
                 const renderCommentRow = (comment: BoardCardComment, allowReply: boolean) => {
-                  const canDelete =
-                    menuCanEdit && (isOwner || comment.user_id === user?.id || user?.role === 'root');
+                const canDelete =
+                  menuCanEdit && (isOwner || comment.user_id === user?.id || user?.role === 'root');
                   const { date: commentDate, time: commentTime } = formatCommentDateTimeParts(
                     resolveCommentCreatedAt(comment)
                   );
@@ -5729,20 +5730,20 @@ export default function WorkBoardDetailPage() {
                   const displayName =
                     comment.user?.username || txt('알 수 없는 사용자', 'Unknown user');
                   const initial = (displayName || '?').trim().charAt(0).toUpperCase() || '?';
-                  return (
+                return (
                     <Box sx={{ minWidth: 0 }}>
-                      <Box
-                        sx={{
-                          display: 'flex',
+                    <Box
+                      sx={{
+                        display: 'flex',
                           alignItems: 'center',
-                          gap: 0.75,
+                        gap: 0.75,
                           minWidth: 0,
-                        }}
-                      >
+                      }}
+                    >
                         <Avatar
                           src={avatarSrc}
                           alt={displayName}
-                          sx={{
+                        sx={{
                             width: 22,
                             height: 22,
                             fontSize: '0.7rem',
@@ -5773,12 +5774,12 @@ export default function WorkBoardDetailPage() {
                           {displayName}
                         </Typography>
                       </Box>
-                      <Typography
-                        variant="body2"
+                        <Typography
+                          variant="body2"
                         component="div"
-                        sx={{
-                          whiteSpace: 'pre-wrap',
-                          wordBreak: 'break-word',
+                          sx={{
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
                           lineHeight: 1.4,
                           mt: 0.25,
                           ml: '30px',
@@ -5787,7 +5788,7 @@ export default function WorkBoardDetailPage() {
                         }}
                       >
                         {renderCommentWithMentions(comment.content || '', memberOptions)}
-                      </Typography>
+                        </Typography>
                       <Box
                         sx={{
                           display: 'flex',
@@ -5901,8 +5902,8 @@ export default function WorkBoardDetailPage() {
                           <Box sx={{ minWidth: 0 }}>{renderCommentRow(reply, false)}</Box>
                         </Box>
                       ))}
-                    </Box>
-                  );
+                  </Box>
+                );
                 });
               })()
             )}
@@ -5911,7 +5912,7 @@ export default function WorkBoardDetailPage() {
           )}
           </Box>
         </Box>
-        </Paper>
+      </Paper>
       )}
 
       <Dialog

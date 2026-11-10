@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, IconButton, Divider, Popover, SxProps, Theme, Tooltip } from '@mui/material';
 import {
   FormatBold,
@@ -23,7 +23,14 @@ import {
   Straighten,
   Image as ImageIcon,
 } from '@mui/icons-material';
-import { useEditor, EditorContent, type Editor } from '@tiptap/react';
+import {
+  useEditor,
+  EditorContent,
+  NodeViewWrapper,
+  ReactNodeViewRenderer,
+  type Editor,
+  type NodeViewProps,
+} from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import { Table as TableExtension } from '@tiptap/extension-table';
@@ -48,6 +55,103 @@ const FONT_COLOR_PRESETS = [
   '#64748B',
   '#FFFFFF',
 ];
+
+const ResizableImageView: React.FC<NodeViewProps> = ({
+  node,
+  updateAttributes,
+  selected,
+  editor,
+}) => {
+  const imgRef = useRef<HTMLImageElement>(null);
+  const align = String(node.attrs.align || 'left');
+  const widthAttr = node.attrs.width;
+  const widthPx = widthAttr ? Number(widthAttr) : undefined;
+  const editable = editor.isEditable;
+
+  const startResize = useCallback(
+    (event: React.MouseEvent) => {
+      if (!editable) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const startX = event.clientX;
+      const startWidth =
+        imgRef.current?.getBoundingClientRect().width ||
+        (Number.isFinite(widthPx) ? Number(widthPx) : 420);
+
+      const onMove = (ev: MouseEvent) => {
+        const next = Math.max(120, Math.min(1200, Math.round(startWidth + (ev.clientX - startX))));
+        updateAttributes({ width: next, height: null });
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    },
+    [editable, updateAttributes, widthPx]
+  );
+
+  const margin =
+    align === 'left' ? '12px auto 12px 0' : align === 'right' ? '12px 0 12px auto' : '12px auto';
+
+  return (
+    <NodeViewWrapper
+      as="div"
+      data-no-photo-preview
+      className="rte-image-node"
+      data-align={align}
+      style={{
+        position: 'relative',
+        display: 'block',
+        width: widthPx ? `${widthPx}px` : 'fit-content',
+        maxWidth: '100%',
+        margin,
+        outline: selected && editable ? '2px solid #2563EB' : 'none',
+        outlineOffset: 2,
+      }}
+    >
+      <img
+        ref={imgRef}
+        src={String(node.attrs.src || '')}
+        alt={String(node.attrs.alt || '')}
+        width={widthPx || undefined}
+        data-align={align}
+        data-no-photo-preview
+        className="resizable-image"
+        draggable={false}
+        style={{
+          display: 'block',
+          width: widthPx ? `${widthPx}px` : 'auto',
+          maxWidth: '100%',
+          height: 'auto',
+          borderRadius: 4,
+          cursor: editable ? 'default' : undefined,
+        }}
+      />
+      {selected && editable ? (
+        <Box
+          component="span"
+          className="rte-image-resize-handle"
+          onMouseDown={startResize}
+          sx={{
+            position: 'absolute',
+            right: -5,
+            bottom: -5,
+            width: 12,
+            height: 12,
+            bgcolor: '#2563EB',
+            border: '2px solid #fff',
+            borderRadius: '2px',
+            cursor: 'nwse-resize',
+            boxShadow: '0 0 0 1px rgba(15,23,42,0.2)',
+            zIndex: 2,
+          }}
+        />
+      ) : null}
+    </NodeViewWrapper>
+  );
+};
 
 const ResizableImage = Image.extend({
   group: 'block',
@@ -90,6 +194,9 @@ const ResizableImage = Image.extend({
       },
     };
   },
+  addNodeView() {
+    return ReactNodeViewRenderer(ResizableImageView);
+  },
 });
 
 type ImageAlign = 'left' | 'center' | 'right';
@@ -126,9 +233,24 @@ const editorContentSx = (minHeight: number): SxProps<Theme> => ({
       display: 'block',
       borderRadius: 4,
     },
-    '& img[data-align="left"]': { margin: '12px 0 12px 0' },
-    '& img[data-align="center"]': { margin: '12px auto' },
-    '& img[data-align="right"]': { margin: '12px 0 12px auto' },
+    '& .rte-image-node': {
+      maxWidth: '100%',
+    },
+    '& .rte-image-node img': {
+      maxWidth: '100%',
+      height: 'auto',
+      display: 'block',
+      borderRadius: 4,
+    },
+    '& img[data-align="left"], & .rte-image-node[data-align="left"]': {
+      margin: '12px 0 12px 0',
+    },
+    '& img[data-align="center"], & .rte-image-node[data-align="center"]': {
+      margin: '12px auto',
+    },
+    '& img[data-align="right"], & .rte-image-node[data-align="right"]': {
+      margin: '12px 0 12px auto',
+    },
     '& table': {
       borderCollapse: 'collapse',
       width: '100%',

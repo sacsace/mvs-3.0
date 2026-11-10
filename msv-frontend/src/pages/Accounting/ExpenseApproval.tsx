@@ -144,7 +144,7 @@ const isImageReceipt = (filePath: string): boolean =>
 const isPdfReceipt = (filePath: string): boolean =>
   /\.pdf(?:$|[?#])/i.test(String(filePath || ''));
 
-/** 작성/받은 탭 기본 상태 필터: 초안 + 제출됨 */
+/** 작성/받은 탭 기본 상태 필터: 초안 + 제출됨 + 택스 인보이스 대기 */
 const DEFAULT_LIST_STATUS_FILTER = 'draft_submitted';
 /** 송금 탭 단일 상태 필터 기본값(레거시/일부 리셋용) */
 const DEFAULT_TRANSFER_STATUS_FILTER = 'transfer_pending';
@@ -3604,9 +3604,12 @@ const ExpenseApproval: React.FC = () => {
             !expenseIsAwaitingTaxInvoice(expense)
         );
       } else if (statusFilter === DEFAULT_LIST_STATUS_FILTER) {
-        // 기본: 초안 + 제출됨
+        // 기본: 초안 + 제출됨 + 택스 인보이스 대기
         filtered = filtered.filter(
-          (expense) => expense.status === 'draft' || expense.status === 'submitted'
+          (expense) =>
+            expense.status === 'draft' ||
+            expense.status === 'submitted' ||
+            expenseIsAwaitingTaxInvoice(expense)
         );
       } else if (statusFilter) {
         filtered = filtered.filter(
@@ -10294,7 +10297,22 @@ const ExpenseApproval: React.FC = () => {
                       component="label"
                       disabled={uploadingReceipts}
                       size="small"
-                      sx={{ textTransform: 'none', borderRadius: '8px' }}
+                      sx={{
+                        textTransform: 'none',
+                        borderRadius: '8px',
+                        ...(taxOnlyUpload
+                          ? {
+                              bgcolor: '#FCE8E6',
+                              borderColor: '#E8A39A',
+                              color: '#9B2C2C',
+                              fontWeight: 600,
+                              '&:hover': {
+                                bgcolor: '#F8D7D3',
+                                borderColor: '#D9897F',
+                              },
+                            }
+                          : {}),
+                      }}
                       onClick={() => {
                         if (taxOnlyUpload) setReceiptInvoiceType('tax');
                       }}

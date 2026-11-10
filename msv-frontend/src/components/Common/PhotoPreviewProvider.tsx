@@ -41,6 +41,11 @@ function resolvePreviewUrlFromTarget(target: EventTarget | null): {
   // 헤더 유저 메뉴 등 — 미리보기 제외
   if (target.closest('[data-no-photo-preview]')) return null;
 
+  // 편집 중 리치텍스트 이미지는 미리보기 대신 리사이즈 핸들 사용
+  if (target.closest('.ProseMirror[contenteditable="true"], .tiptap[contenteditable="true"]')) {
+    return null;
+  }
+
   const explicit = target.closest('[data-photo-preview]') as HTMLElement | null;
   if (explicit) {
     const url =
