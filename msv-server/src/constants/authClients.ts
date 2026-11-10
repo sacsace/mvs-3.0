@@ -51,8 +51,11 @@ export function isNotifierApiPathAllowed(req: RequestLike & { method?: string })
   if (method === 'POST' && (path === '/api/auth/refresh' || path === '/api/auth/logout')) {
     return true;
   }
-  // 트레이 폴링: 알림 목록만 (발송·수정·삭제·inbox 제외)
-  if (method === 'GET' && path === '/api/notifications') {
+  // 트레이 폴링: 알림 목록·인박스 조회, 읽음 표시
+  if (method === 'GET' && (path === '/api/notifications' || path === '/api/notifications/inbox')) {
+    return true;
+  }
+  if (method === 'PUT' && /^\/api\/notifications\/\d+$/.test(path)) {
     return true;
   }
   return false;

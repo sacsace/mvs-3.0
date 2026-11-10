@@ -523,13 +523,18 @@ export const sendNotification = async (req: NotificationRequest, res: Response) 
 
 export const getNotifications = async (req: Request, res: Response) => {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20; // 기본 20개만 반환
+    const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
+    const rawLimit = parseInt(String(req.query.limit || '20'), 10) || 20;
+    const limit = Math.min(100, Math.max(1, rawLimit));
     const offset = (page - 1) * limit;
+    const sinceId = parseInt(String(req.query.since_id || '0'), 10) || 0;
+    const unreadOnly =
+      req.query.unread === '1' ||
+      String(req.query.unread || '').toLowerCase() === 'true';
     const userId = (req as any).user?.id;
     const tenantId = (req as any).user?.tenant_id;
 
-    const filteredNotifications = notificationsStore.filter((notification) => {
+    let filteredNotifications = notificationsStore.filter((notification) => {
       if (notification.target_type === 'all') {
         return true;
       }
@@ -539,8 +544,20 @@ export const getNotifications = async (req: Request, res: Response) => {
       return isNotificationForUser(notification, userId);
     });
 
-    const notifications = filteredNotifications.slice(offset, offset + limit);
+    if (sinceId > 0) {
+      filteredNotifications = filteredNotifications.filter((n) => Number(n.id) > sinceId);
+    }
+    if (unreadOnly) {
+      filteredNotifications = filteredNotifications.filter((n) => !n.read);
+    }
+
+    // 최신 id 우선 (트레이 폴링·웹 피드가 오래된 페이지를 먼저 보지 않도록)
+    filteredNotifications = [...filteredNotifications].sort(
+      (a, b) => Number(b.id) - Number(a.id)
+    );
+
     const totalCount = filteredNotifications.length;
+    const notifications = filteredNotifications.slice(offset, offset + limit);
 
     res.json({
       success: true,
@@ -549,7 +566,9 @@ export const getNotifications = async (req: Request, res: Response) => {
         page,
         limit,
         total: totalCount,
-        totalPages: Math.ceil(totalCount / limit)
+        totalPages: Math.ceil(totalCount / limit) || 0,
+        since_id: sinceId > 0 ? sinceId : undefined,
+        unread: unreadOnly || undefined,
       }
     });
   } catch (error) {

@@ -11851,18 +11851,22 @@ const ExpenseApproval: React.FC = () => {
                         !isDesignatedApprover(expense) && (
                           <Box
                             component="span"
+                            title={t('expenseApproval.cc.hint')}
                             sx={{
                               display: 'inline-flex',
                               alignItems: 'center',
+                              justifyContent: 'center',
                               flexShrink: 0,
-                              height: 22,
-                              px: 0.5,
-                              fontSize: '0.75rem',
-                              fontWeight: 600,
+                              width: 26,
+                              height: 26,
+                              borderRadius: '50%',
+                              fontSize: '0.65rem',
+                              fontWeight: 700,
+                              letterSpacing: '0.02em',
                               lineHeight: 1,
-                              border: '1px solid #B4B4B4',
-                              bgcolor: '#FFFFFF',
-                              color: 'text.secondary',
+                              border: '1px solid #94A3B8',
+                              bgcolor: '#F1F5F9',
+                              color: '#475569',
                               whiteSpace: 'nowrap',
                             }}
                           >

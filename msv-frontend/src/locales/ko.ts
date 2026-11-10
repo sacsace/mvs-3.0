@@ -5302,7 +5302,7 @@ export default {
         label: '참조',
         hint: '열람·진행 확인만 가능 (승인 불가)',
         placeholder: '참조 인원 검색·추가',
-        badge: '참조'
+        badge: 'CC'
       },
       list: {
         remainingShort: '잔금 {{currency}} {{amount}}',
