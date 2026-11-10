@@ -70,7 +70,7 @@ const DesktopNotifierDownload: React.FC = () => {
             />
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-                MVS Notifier v2.1
+                MVS Notifier v2.1.1
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {txt('설치 프로그램 · 제거 지원 · Windows 버전 호환', 'Installer, uninstall, multi-Windows support')}
@@ -80,8 +80,8 @@ const DesktopNotifierDownload: React.FC = () => {
 
           <Alert severity="info" sx={{ mb: 2, borderRadius: 0 }}>
             {txt(
-              'v2.1: Win10/11은 Toast, 구형은 풍선 알림으로 자동 전환합니다. TLS1.2·아이콘·제거 로직을 버전별로 안전하게 처리합니다. Setup.bat 설치 / Windows 설정 → 앱에서 제거. 업그레이드 후 트레이에서 다시 로그인하세요.',
-              'v2.1: Toast on Win10/11; balloon fallback on older Windows. TLS 1.2, icons, and uninstall are version-safe. Install with Setup.bat; remove from Settings → Apps. Re-login in the tray after upgrade.'
+              'v2.1.1: 로그인 API 주소를 자동으로 /api 형태로 맞춥니다(404 방지). Win10/11 Toast / 구형 풍선. Setup.bat 설치 후, 아래 API 주소를 복사해 로그인하세요. 업그레이드 후 트레이에서 다시 로그인하세요.',
+              'v2.1.1: Login API URL is normalized to end with /api (avoids 404). Toast on Win10/11, balloon on older OS. After Setup.bat, copy the API URL below to sign in. Re-login in the tray after upgrade.'
             )}
           </Alert>
 

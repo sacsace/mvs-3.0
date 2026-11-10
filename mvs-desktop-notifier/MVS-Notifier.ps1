@@ -36,7 +36,7 @@ Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Security
 
 $AppName = "MVS Notifier"
-$AppVersion = "2.1"
+$AppVersion = "2.1.1"
 $Publisher = "Minsub Ventures"
 $AppUserModelId = "MinsubVentures.MVS.Notifier"
 $UserAgent = "MVS-Notifier/$AppVersion"
@@ -223,14 +223,14 @@ function Show-LoginDialog([string]$DefaultApi) {
   $form.Controls.Add($lblSub)
 
   $lblApi = New-Object System.Windows.Forms.Label
-  $lblApi.Text = T "API 주소" "API Base URL"
+  $lblApi.Text = T "API 주소 (끝의 /api 포함, 없으면 자동 추가)" "API Base URL (append /api if missing)"
   $lblApi.Location = New-Object System.Drawing.Point(18, 78)
   $lblApi.AutoSize = $true
 
   $txtApi = New-Object System.Windows.Forms.TextBox
   $txtApi.Location = New-Object System.Drawing.Point(18, 98)
   $txtApi.Width = 406
-  $txtApi.Text = if ($DefaultApi) { $DefaultApi } else { "https://your-host/api" }
+  $txtApi.Text = if ($DefaultApi) { $DefaultApi } else { "https://your-mvs-host/api" }
 
   $lblUser = New-Object System.Windows.Forms.Label
   $lblUser.Text = T "사용자 ID" "User ID"
@@ -278,37 +278,132 @@ function Show-LoginDialog([string]$DefaultApi) {
   $result = $form.ShowDialog()
   if ($result -ne [System.Windows.Forms.DialogResult]::OK) { return $null }
   return [pscustomobject]@{
-    apiBase      = $txtApi.Text.Trim().TrimEnd("/")
+    apiBase      = (Normalize-MvsApiBase $txtApi.Text)
     userid       = $txtUser.Text.Trim()
     password     = $txtPass.Text
     startWithWin = [bool]$chkStartup.Checked
   }
 }
 
+function Normalize-MvsApiBase([string]$Raw) {
+  # 웹과 동일: 끝이 /api 가 아니면 붙인다. /api/auth 같은 오입력도 정리.
+  $s = [string]$Raw
+  if ([string]::IsNullOrWhiteSpace($s)) { return "" }
+  $s = $s.Trim()
+  # scheme 없으면 https 가정 (로컬호스트는 http)
+  if ($s -notmatch '^[a-zA-Z][a-zA-Z0-9+.-]*://') {
+    if ($s -match '^(localhost|127\.0\.0\.1)(:|/|$)') {
+      $s = "http://$s"
+    } else {
+      $s = "https://$s"
+    }
+  }
+  $s = $s.TrimEnd("/")
+  # 흔한 오입력: .../api/auth/login, .../auth/login
+  $s = $s -replace '/api/auth/login$', '/api'
+  $s = $s -replace '/auth/login$', '/api'
+  $s = $s -replace '/api/auth$', '/api'
+  if ($s -match '/api/api$') { $s = $s -replace '/api/api$', '/api' }
+  if (-not ($s -match '/api$')) { $s = "$s/api" }
+  return $s
+}
+
+function Get-MvsApiBaseCandidates([string]$Raw) {
+  $primary = Normalize-MvsApiBase $Raw
+  $list = New-Object System.Collections.Generic.List[string]
+  if ($primary) { [void]$list.Add($primary) }
+  # 사용자가 이미 /api 를 넣었는데 서버가 루트에 API를 둔 경우(드묾)
+  $trimmed = [string]$Raw
+  if (-not [string]::IsNullOrWhiteSpace($trimmed)) {
+    $trimmed = $trimmed.Trim().TrimEnd("/")
+    if ($trimmed -notmatch '^[a-zA-Z][a-zA-Z0-9+.-]*://') {
+      if ($trimmed -match '^(localhost|127\.0\.0\.1)') { $trimmed = "http://$trimmed" } else { $trimmed = "https://$trimmed" }
+    }
+    $noApi = $trimmed -replace '/api$', ''
+    if ($noApi -and $noApi -ne $primary -and -not $list.Contains($noApi)) {
+      # 404 재시도용 — 보통은 쓰지 않음
+    }
+    # localhost:3000 → :5000/api (개발 프론트 주소 오입력)
+    if ($trimmed -match '^(https?://)(localhost|127\.0\.0\.1):3000(/api)?$') {
+      $dev = "http://$($Matches[2]):5000/api"
+      if (-not $list.Contains($dev)) { [void]$list.Add($dev) }
+    }
+  }
+  return @($list)
+}
+
+function Get-HttpStatusCode($ErrorRecord) {
+  try {
+    if ($ErrorRecord.Exception.Response -and $ErrorRecord.Exception.Response.StatusCode) {
+      return [int]$ErrorRecord.Exception.Response.StatusCode
+    }
+  } catch { }
+  try {
+    $m = [string]$ErrorRecord.Exception.Message
+    if ($m -match '\((\d{3})\)') { return [int]$Matches[1] }
+  } catch { }
+  return 0
+}
+
 function Invoke-MvsLogin($ApiBase, $UserId, $Password) {
+  $candidates = Get-MvsApiBaseCandidates $ApiBase
+  if (-not $candidates -or $candidates.Count -eq 0) {
+    throw (T "API 주소를 입력하세요. 예: https://서버주소/api" "Enter API URL. Example: https://your-host/api")
+  }
+
   $payload = [ordered]@{
     userid   = $UserId
     password = $Password
     client   = "mvs_notifier"
   }
   $json = ($payload | ConvertTo-Json -Compress)
-  $resp = Invoke-RestMethod -Method Post -Uri "$ApiBase/auth/login" `
-    -ContentType "application/json; charset=utf-8" `
-    -Headers (Get-NotifierHeaders "") `
-    -Body ([System.Text.Encoding]::UTF8.GetBytes($json))
-  if (-not $resp.success -or -not $resp.data.token) {
-    throw (T "로그인에 실패했습니다." "Login failed")
+  $body = [System.Text.Encoding]::UTF8.GetBytes($json)
+
+  $lastErr = $null
+  $tried = New-Object System.Collections.Generic.List[string]
+  foreach ($base in $candidates) {
+    $uri = "$base/auth/login"
+    [void]$tried.Add($uri)
+    try {
+      $resp = Invoke-RestMethod -Method Post -Uri $uri `
+        -ContentType "application/json; charset=utf-8" `
+        -Headers (Get-NotifierHeaders "") `
+        -Body $body
+      if (-not $resp.success -or -not $resp.data.token) {
+        throw (T "로그인에 실패했습니다." "Login failed")
+      }
+      $cfg = [pscustomobject]@{
+        apiBase          = $base
+        tokenProtected   = Protect-Secret ([string]$resp.data.token)
+        userid           = $UserId
+        webBase          = ($base -replace "/api$", "")
+        version          = $AppVersion
+        lang             = $script:UiLang
+        startWithWindows = $false
+      }
+      return $cfg
+    } catch {
+      $lastErr = $_
+      $code = Get-HttpStatusCode $_
+      # 404면 다음 후보 시도, 401/403은 즉시 중단(계정 문제)
+      if ($code -eq 401 -or $code -eq 403) { break }
+      if ($code -ne 404 -and $code -ne 0) { break }
+    }
   }
-  $cfg = [pscustomobject]@{
-    apiBase        = $ApiBase
-    tokenProtected = Protect-Secret ([string]$resp.data.token)
-    userid         = $UserId
-    webBase        = ($ApiBase -replace "/api$", "")
-    version        = $AppVersion
-    lang           = $script:UiLang
-    startWithWindows = $false
+
+  $code = Get-HttpStatusCode $lastErr
+  $detail = if ($lastErr) { [string]$lastErr.Exception.Message } else { "" }
+  $triedText = ($tried -join ", ")
+  if ($code -eq 404) {
+    $ko404 = "로그인 실패(404). API 주소가 올바른지 확인하세요.`r`n예: https://서버주소/api`r`n시도: $triedText"
+    $en404 = "Login failed (404). Check API URL.`r`nExample: https://your-host/api`r`nTried: $triedText"
+    throw (T $ko404 $en404)
   }
-  return $cfg
+  if ($code -eq 401 -or $code -eq 403) {
+    throw (T "아이디 또는 비밀번호가 올바르지 않습니다." "Invalid user ID or password.")
+  }
+  if ($detail) { throw $detail }
+  throw (T "로그인에 실패했습니다." "Login failed")
 }
 
 function Invoke-MvsRefresh([string]$ApiBase, [string]$Token) {
