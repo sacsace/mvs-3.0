@@ -114,6 +114,11 @@ export const projectService = {
     return response.data;
   },
 
+  reorderTasks: async (projectId: number, orderedIds: number[]) => {
+    const response = await api.post(`/projects/${projectId}/tasks/reorder`, { ordered_ids: orderedIds });
+    return response.data;
+  },
+
   deleteTask: async (projectId: number, taskId: number) => {
     const response = await api.delete(`/projects/${projectId}/tasks/${taskId}`);
     return response.data;

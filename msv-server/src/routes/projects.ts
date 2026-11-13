@@ -26,6 +26,7 @@ import {
   createProjectTask,
   updateProjectTask,
   moveProjectTask,
+  reorderProjectTasks,
   deleteProjectTask,
   listProjectActivities,
   listProjectTaskComments,
@@ -152,6 +153,12 @@ router.post(
   restrictAuditToReadOnly,
   requireMenuPermission(MENU_PROJECT_MANAGEMENT, 'can_edit'),
   createProjectTask
+);
+router.post(
+  '/:id/tasks/reorder',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_PROJECT_MANAGEMENT, 'can_edit'),
+  reorderProjectTasks
 );
 router.get('/:id/tasks/:taskId', requireMenuPermission(MENU_PROJECT_MANAGEMENT, 'can_view'), getProjectTask);
 router.put(

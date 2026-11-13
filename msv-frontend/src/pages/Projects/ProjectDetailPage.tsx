@@ -30,13 +30,29 @@ import {
   CheckCircleOutline as CheckCircleOutlineIcon,
   CircleOutlined as CircleOutlinedIcon,
   DeleteOutline as DeleteIcon,
-  KeyboardArrowDown as ArrowDownIcon,
-  KeyboardArrowUp as ArrowUpIcon,
+  DragIndicator as DragIndicatorIcon,
   PersonAddOutlined as PersonAddIcon,
   Refresh as RefreshIcon,
   Reply as ReplyIcon,
   Timelapse as TimelapseIcon,
 } from '@mui/icons-material';
+import {
+  DndContext,
+  DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@mui/material/styles';
@@ -184,6 +200,126 @@ type TaskRow = {
   }>;
 };
 
+const COMPLETED_ROW_BG = '#E2EFDA';
+const COMPLETED_ROW_HOVER = '#D9EAD3';
+const COMPLETED_ROW_FG = '#548235';
+
+function isTaskCompleted(status?: string | null): boolean {
+  return String(status || '') === 'completed';
+}
+
+function sortTasksCompletedLast(list: TaskRow[]): TaskRow[] {
+  const active: TaskRow[] = [];
+  const done: TaskRow[] = [];
+  for (const row of list) {
+    if (isTaskCompleted(row.status)) done.push(row);
+    else active.push(row);
+  }
+  return [...active, ...done];
+}
+
+function SortableTaskLabelRow({
+  task,
+  canDrag,
+  dragHint,
+  statusText,
+  onOpen,
+}: {
+  task: TaskRow;
+  canDrag: boolean;
+  dragHint: string;
+  statusText: string;
+  onOpen: () => void;
+}) {
+  const completed = isTaskCompleted(task.status);
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
+    useSortable({
+      id: task.id,
+      disabled: !canDrag || completed,
+    });
+
+  return (
+    <Box
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.72 : 1,
+        zIndex: isDragging ? 3 : undefined,
+        position: 'relative',
+      }}
+      sx={{
+        height: ROW_H,
+        borderBottom: `1px solid ${GRID}`,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0.5,
+        px: 0.5,
+        bgcolor: isDragging ? '#F8FAFC' : completed ? COMPLETED_ROW_BG : '#FFFFFF',
+        cursor: 'pointer',
+        '&:hover': { bgcolor: completed ? COMPLETED_ROW_HOVER : ROW_HOVER },
+      }}
+      onClick={onOpen}
+    >
+      {canDrag && !completed ? (
+        <Tooltip title={dragHint}>
+          <IconButton
+            size="small"
+            ref={setActivatorNodeRef}
+            {...attributes}
+            {...listeners}
+            onClick={(e) => e.stopPropagation()}
+            sx={{
+              p: 0.25,
+              flexShrink: 0,
+              cursor: 'grab',
+              '&:active': { cursor: 'grabbing' },
+            }}
+            aria-label="drag-reorder"
+          >
+            <DragIndicatorIcon sx={{ fontSize: 18, color: '#64748B' }} />
+          </IconButton>
+        </Tooltip>
+      ) : (
+        <Box sx={{ width: 26, flexShrink: 0 }} />
+      )}
+      <Box
+        sx={{
+          width: 4,
+          alignSelf: 'stretch',
+          my: 0.5,
+          bgcolor: completed ? '#A9D08E' : barColors(task.color).bg,
+          flexShrink: 0,
+          opacity: completed ? 0.85 : 1,
+        }}
+      />
+      <Box sx={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'center', gap: 0.75 }}>
+        <Tooltip title={statusText} placement="top" enterDelay={400}>
+          <Box sx={{ display: 'inline-flex', flexShrink: 0, lineHeight: 0 }}>
+            <TaskStatusIcon status={task.status} fontSize={18} />
+          </Box>
+        </Tooltip>
+        <Typography
+          sx={{
+            fontSize: '0.8125rem',
+            fontWeight: completed ? 500 : 600,
+            color: completed ? COMPLETED_ROW_FG : '#0F172A',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            lineHeight: 1.2,
+            minWidth: 0,
+            textDecoration: completed ? 'line-through' : 'none',
+            textDecorationColor: completed ? '#A9D08E' : undefined,
+          }}
+        >
+          {task.title}
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
+
 function toYmd(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -242,6 +378,7 @@ const ProjectDetailPage: React.FC = () => {
     color: '',
   });
   const [savingCreate, setSavingCreate] = useState(false);
+  const [reorderingTasks, setReorderingTasks] = useState(false);
 
   const [popupOpen, setPopupOpen] = useState(false);
   const [popupTask, setPopupTask] = useState<TaskRow | null>(null);
@@ -314,10 +451,14 @@ const ProjectDetailPage: React.FC = () => {
     const taskId = Number(taskData.id);
     setTasks((prev) => {
       const idx = prev.findIndex((row) => Number(row.id) === taskId);
-      if (idx < 0) return [...prev, taskData as TaskRow];
-      const next = [...prev];
-      next[idx] = { ...next[idx], ...taskData };
-      return next;
+      let next: TaskRow[];
+      if (idx < 0) {
+        next = [...prev, taskData as TaskRow];
+      } else {
+        next = [...prev];
+        next[idx] = { ...next[idx], ...taskData };
+      }
+      return sortTasksCompletedLast(next);
     });
   }, []);
 
@@ -347,7 +488,7 @@ const ProjectDetailPage: React.FC = () => {
         return;
       }
       setProject(detailRes.data);
-      setTasks(Array.isArray(taskRes.data) ? taskRes.data : []);
+      setTasks(sortTasksCompletedLast(Array.isArray(taskRes.data) ? taskRes.data : []));
     } catch (e: any) {
       showErrorPopup(e, t('projectManagement.errors.loadDetailTitle'));
       if (!silent) setProject(null);
@@ -745,18 +886,53 @@ const ProjectDetailPage: React.FC = () => {
     }
   };
 
-  const moveTask = async (task: TaskRow, direction: 'up' | 'down') => {
-    if (!canEditWorkspace) return;
+  const taskSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleTaskDragEnd = async (event: DragEndEvent) => {
+    if (!canEditWorkspace || reorderingTasks) return;
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const activeId = Number(active.id);
+    const overId = Number(over.id);
+    const activeTask = tasks.find((row) => row.id === activeId);
+    const overTask = tasks.find((row) => row.id === overId);
+    if (!activeTask || !overTask) return;
+    if (isTaskCompleted(activeTask.status) || isTaskCompleted(overTask.status)) return;
+
+    const openTasks = tasks.filter((row) => !isTaskCompleted(row.status));
+    const doneTasks = tasks.filter((row) => isTaskCompleted(row.status));
+    const oldIndex = openTasks.findIndex((row) => row.id === activeId);
+    const newIndex = openTasks.findIndex((row) => row.id === overId);
+    if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return;
+
+    const previous = tasks;
+    const next = [...arrayMove(openTasks, oldIndex, newIndex), ...doneTasks];
+    setTasks(next);
+    setReorderingTasks(true);
     try {
-      const res = await projectService.moveTask(id, task.id, direction);
+      const res = await projectService.reorderTasks(
+        id,
+        next.map((row) => row.id)
+      );
       if (!res.success) {
-        showErrorPopup(res.message || t('projectManagement.errors.taskTitle'), t('projectManagement.errors.taskTitle'));
+        setTasks(previous);
+        showErrorPopup(
+          res.message || t('projectManagement.errors.taskTitle'),
+          t('projectManagement.errors.taskTitle')
+        );
         return;
       }
-      if (Array.isArray(res.data)) setTasks(res.data);
+      if (Array.isArray(res.data)) setTasks(sortTasksCompletedLast(res.data));
       else void load({ silent: true });
     } catch (e: any) {
+      setTasks(previous);
       showErrorPopup(e, t('projectManagement.errors.taskTitle'));
+    } finally {
+      setReorderingTasks(false);
     }
   };
 
@@ -816,7 +992,7 @@ const ProjectDetailPage: React.FC = () => {
   };
 
   const applyDateToCell = async (task: TaskRow, day: Date) => {
-    if (!canEditWorkspace) return;
+    if (!canEditWorkspace || isTaskCompleted(task.status)) return;
     const ymd = toYmd(day);
     const start = task.start_date || ymd;
     const due = task.due_date || ymd;
@@ -936,6 +1112,8 @@ const ProjectDetailPage: React.FC = () => {
   const progress = Number(project.progress || 0);
   const gridW = range.days.length * dayW;
   const popupStatusHl = taskStatusHighlight(popupForm.status);
+  /** 완료 상태면 내용 편집 잠금(상태 변경으로만 해제 가능) */
+  const isPopupFieldsLocked = isTaskCompleted(popupForm.status);
 
   return (
     <Box sx={mvsPageRootFullBleedSx}>
@@ -1325,80 +1503,27 @@ const ProjectDetailPage: React.FC = () => {
                   {t('projectManagement.detail.noTasks')}
                 </Box>
               ) : (
-                tasks.map((task, taskIndex) => (
-                  <Box
-                    key={task.id}
-                    sx={{
-                      height: ROW_H,
-                      borderBottom: `1px solid ${GRID}`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 0.5,
-                      px: 0.5,
-                      bgcolor: '#FFFFFF',
-                      cursor: 'pointer',
-                      '&:hover': { bgcolor: ROW_HOVER },
-                    }}
-                    onClick={() => openTaskFromTimeline(task)}
+                <DndContext
+                  sensors={taskSensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={(e) => void handleTaskDragEnd(e)}
+                >
+                  <SortableContext
+                    items={tasks.map((task) => task.id)}
+                    strategy={verticalListSortingStrategy}
                   >
-                    {canEditWorkspace && (
-                      <Stack
-                        spacing={0}
-                        onClick={(e) => e.stopPropagation()}
-                        sx={{ flexShrink: 0 }}
-                      >
-                        <IconButton
-                          size="small"
-                          disabled={taskIndex === 0}
-                          onClick={() => void moveTask(task, 'up')}
-                          sx={{ p: 0, width: 18, height: 14 }}
-                          title={t('projectManagement.detail.moveUp')}
-                        >
-                          <ArrowUpIcon sx={{ fontSize: 14 }} />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          disabled={taskIndex === tasks.length - 1}
-                          onClick={() => void moveTask(task, 'down')}
-                          sx={{ p: 0, width: 18, height: 14 }}
-                          title={t('projectManagement.detail.moveDown')}
-                        >
-                          <ArrowDownIcon sx={{ fontSize: 14 }} />
-                        </IconButton>
-                      </Stack>
-                    )}
-                    <Box
-                      sx={{
-                        width: 4,
-                        alignSelf: 'stretch',
-                        my: 0.5,
-                        bgcolor: barColors(task.color).bg,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <Box sx={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                      <Tooltip title={statusLabel(task.status)} placement="top" enterDelay={400}>
-                        <Box sx={{ display: 'inline-flex', flexShrink: 0, lineHeight: 0 }}>
-                          <TaskStatusIcon status={task.status} fontSize={18} />
-                        </Box>
-                      </Tooltip>
-                      <Typography
-                        sx={{
-                          fontSize: '0.8125rem',
-                          fontWeight: 600,
-                          color: '#0F172A',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          lineHeight: 1.2,
-                          minWidth: 0,
-                        }}
-                      >
-                        {task.title}
-                      </Typography>
-                    </Box>
-                  </Box>
-                ))
+                    {tasks.map((task) => (
+                      <SortableTaskLabelRow
+                        key={task.id}
+                        task={task}
+                        canDrag={canEditWorkspace && !reorderingTasks}
+                        dragHint={t('projectManagement.dragReorder')}
+                        statusText={statusLabel(task.status)}
+                        onOpen={() => openTaskFromTimeline(task)}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
               )}
             </Box>
 
@@ -1453,6 +1578,7 @@ const ProjectDetailPage: React.FC = () => {
                 <Box sx={{ width: gridW, height: ROW_H, borderBottom: `1px solid ${GRID}` }} />
               ) : (
                 tasks.map((task) => {
+                  const completed = isTaskCompleted(task.status);
                   const preview = dragPreview?.taskId === task.id ? dragPreview : null;
                   const startStr = preview?.start || task.start_date;
                   const dueStr = preview?.due || task.due_date;
@@ -1475,9 +1601,9 @@ const ProjectDetailPage: React.FC = () => {
                         width: gridW,
                         height: ROW_H,
                         borderBottom: `1px solid ${GRID}`,
-                        bgcolor: '#FFFFFF',
+                        bgcolor: completed ? COMPLETED_ROW_BG : '#FFFFFF',
                         backgroundImage: `repeating-linear-gradient(to right, transparent 0, transparent ${dayW - 1}px, ${GRID} ${dayW - 1}px, ${GRID} ${dayW}px)`,
-                        '&:hover': { bgcolor: ROW_HOVER },
+                        '&:hover': { bgcolor: completed ? COMPLETED_ROW_HOVER : ROW_HOVER },
                       }}
                     >
                       {range.days.map((day) => (
@@ -1485,14 +1611,14 @@ const ProjectDetailPage: React.FC = () => {
                           key={`${task.id}-${toYmd(day)}`}
                           onClick={() => {
                             if (!allowTimelineClick()) return;
-                            if (!task.start_date && !task.due_date) {
+                            if (!completed && !task.start_date && !task.due_date) {
                               void applyDateToCell(task, day);
                               return;
                             }
                             openTaskFromTimeline(task);
                           }}
                           onDoubleClick={() => {
-                            if (!allowTimelineClick()) return;
+                            if (!allowTimelineClick() || completed) return;
                             void applyDateToCell(task, day);
                           }}
                           sx={{
@@ -1518,10 +1644,10 @@ const ProjectDetailPage: React.FC = () => {
                             left: left + 1,
                             width: Math.max(20, width - 2),
                             height: ROW_H - 28,
-                            bgcolor: colors.bg,
-                            border: `1px solid ${colors.border}`,
+                            bgcolor: completed ? '#A9D08E' : colors.bg,
+                            border: `1px solid ${completed ? '#548235' : colors.border}`,
                             borderRadius: 0,
-                            color: '#fff',
+                            color: completed ? '#1F4E19' : '#fff',
                             px: 0.75,
                             display: 'flex',
                             alignItems: 'center',
@@ -1530,9 +1656,10 @@ const ProjectDetailPage: React.FC = () => {
                             zIndex: 1,
                             overflow: 'hidden',
                             userSelect: 'none',
+                            opacity: completed ? 0.88 : 1,
                           }}
                         >
-                          {canEditWorkspace && (
+                          {canEditWorkspace && !completed && (
                             <Box
                               onMouseDown={(e) => {
                                 e.preventDefault();
@@ -1561,7 +1688,7 @@ const ProjectDetailPage: React.FC = () => {
                           <TaskStatusIcon
                             status={task.status}
                             fontSize={14}
-                            sx={{ opacity: task.status === 'completed' ? 1 : 0.9 }}
+                            sx={{ opacity: completed ? 1 : 0.9 }}
                           />
                           <Typography
                             sx={{
@@ -1571,11 +1698,12 @@ const ProjectDetailPage: React.FC = () => {
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               flex: 1,
+                              textDecoration: completed ? 'line-through' : 'none',
                             }}
                           >
                             {task.title}
                           </Typography>
-                          {canEditWorkspace && (
+                          {canEditWorkspace && !completed && (
                             <Box
                               onMouseDown={(e) => {
                                 e.preventDefault();
@@ -1789,7 +1917,7 @@ const ProjectDetailPage: React.FC = () => {
               size="small"
               label={t('projectManagement.fields.name')}
               value={popupForm.title}
-              disabled={!canEditWorkspace}
+              disabled={!canEditWorkspace || isPopupFieldsLocked}
               onChange={(e) => setPopupForm((f) => ({ ...f, title: e.target.value }))}
               sx={mvsSearchFieldSx}
             />
@@ -1800,7 +1928,7 @@ const ProjectDetailPage: React.FC = () => {
                 label={t('projectManagement.fields.startDate')}
                 InputLabelProps={{ shrink: true }}
                 value={popupForm.start_date}
-                disabled={!canEditWorkspace}
+                disabled={!canEditWorkspace || isPopupFieldsLocked}
                 onChange={(e) => setPopupForm((f) => ({ ...f, start_date: e.target.value }))}
                 sx={{ ...mvsSearchFieldSx, flex: 1 }}
               />
@@ -1810,7 +1938,7 @@ const ProjectDetailPage: React.FC = () => {
                 label={t('projectManagement.detail.dueDate')}
                 InputLabelProps={{ shrink: true }}
                 value={popupForm.due_date}
-                disabled={!canEditWorkspace}
+                disabled={!canEditWorkspace || isPopupFieldsLocked}
                 onChange={(e) => setPopupForm((f) => ({ ...f, due_date: e.target.value }))}
                 sx={{ ...mvsSearchFieldSx, flex: 1 }}
               />
@@ -1865,7 +1993,7 @@ const ProjectDetailPage: React.FC = () => {
               </FormControl>
             </Stack>
 
-            {canEditWorkspace && (
+            {canEditWorkspace && !isPopupFieldsLocked && (
               <Box>
                 <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, mb: 0.75 }}>
                   {t('projectManagement.detail.taskColor')}
@@ -1891,12 +2019,28 @@ const ProjectDetailPage: React.FC = () => {
                 </Stack>
               </Box>
             )}
+            {isPopupFieldsLocked && popupForm.color ? (
+              <Box>
+                <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, mb: 0.75 }}>
+                  {t('projectManagement.detail.taskColor')}
+                </Typography>
+                <Box
+                  sx={{
+                    width: 28,
+                    height: 28,
+                    bgcolor: popupForm.color,
+                    border: '1px solid #B4B4B4',
+                    opacity: 0.7,
+                  }}
+                />
+              </Box>
+            ) : null}
 
             <Autocomplete
               multiple
               options={memberOptions}
               value={memberOptions.filter((m) => popupForm.assignee_ids.includes(m.id))}
-              disabled={!canEditWorkspace}
+              disabled={!canEditWorkspace || isPopupFieldsLocked}
               onChange={(_, v) => setPopupForm((f) => ({ ...f, assignee_ids: v.map((x) => x.id) }))}
               getOptionLabel={(o) => o.username}
               renderTags={(value, getTagProps) =>
@@ -1920,7 +2064,7 @@ const ProjectDetailPage: React.FC = () => {
               minRows={3}
               label={t('projectManagement.detail.progressNote')}
               value={popupForm.progress_note}
-              disabled={!canEditWorkspace}
+              disabled={!canEditWorkspace || isPopupFieldsLocked}
               onChange={(e) => setPopupForm((f) => ({ ...f, progress_note: e.target.value }))}
               sx={mvsSearchFieldSx}
             />
@@ -1930,7 +2074,7 @@ const ProjectDetailPage: React.FC = () => {
                 <Typography sx={{ fontSize: '0.8125rem', fontWeight: 700 }}>
                   {t('projectManagement.detail.attachments')}
                 </Typography>
-                {canEditWorkspace && (
+                {canEditWorkspace && !isPopupFieldsLocked && (
                   <>
                     <input
                       ref={fileInputRef}
@@ -1972,7 +2116,7 @@ const ProjectDetailPage: React.FC = () => {
                     >
                       {file.originalName}
                     </Typography>
-                    {canEditWorkspace && (
+                    {canEditWorkspace && !isPopupFieldsLocked && (
                       <IconButton size="small" onClick={() => void removeAttachment(file.storedName)}>
                         <DeleteIcon fontSize="small" />
                       </IconButton>

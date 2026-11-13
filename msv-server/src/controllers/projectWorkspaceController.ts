@@ -596,10 +596,7 @@ export const listProjectTasks = async (req: RequestWithUser, res: Response) => {
     const rows = await (ProjectTask as any).findAll({
       where,
       include,
-      order: [
-        ['sort_order', 'ASC'],
-        ['id', 'ASC'],
-      ],
+      order: taskListOrder(),
     });
     res.json({ success: true, data: rows });
   } catch (error: any) {
@@ -789,6 +786,12 @@ export const updateProjectTask = async (req: RequestWithUser, res: Response) => 
       if (patch.status === 'completed') {
         patch.completed_at = new Date();
         patch.completed_by = req.user!.id;
+        const maxOrder = await (ProjectTask as any).max('sort_order', {
+          where: { project_id: project.id, is_active: true },
+          transaction: t,
+        });
+        const nextOrder = Number.isFinite(Number(maxOrder)) ? Number(maxOrder) + 1 : 0;
+        patch.sort_order = nextOrder;
       } else if (prevStatus === 'completed') {
         patch.completed_at = null;
         patch.completed_by = null;
@@ -844,6 +847,33 @@ export const updateProjectTask = async (req: RequestWithUser, res: Response) => 
   }
 };
 
+/** 미완료 Task 우선, 완료는 항상 하단 */
+function taskListOrder(): any[] {
+  return [
+    [
+      sequelize.literal(`CASE WHEN "ProjectTask"."status" = 'completed' THEN 1 ELSE 0 END`),
+      'ASC',
+    ],
+    ['sort_order', 'ASC'],
+    ['id', 'ASC'],
+  ];
+}
+
+async function listProjectTasksOrdered(projectId: number) {
+  return (ProjectTask as any).findAll({
+    where: { project_id: projectId, is_active: true },
+    include: [
+      {
+        model: ProjectTaskAssignee,
+        as: 'assignees',
+        required: false,
+        include: [{ model: User, as: 'user', attributes: userAttrs }],
+      },
+    ],
+    order: taskListOrder(),
+  });
+}
+
 export const moveProjectTask = async (req: RequestWithUser, res: Response) => {
   const t = await sequelize.transaction();
   try {
@@ -882,7 +912,7 @@ export const moveProjectTask = async (req: RequestWithUser, res: Response) => {
     const swapIndex = direction === 'up' ? index - 1 : index + 1;
     if (swapIndex < 0 || swapIndex >= tasks.length) {
       await t.rollback();
-      return res.json({ success: true, data: tasks });
+      return res.json({ success: true, data: await listProjectTasksOrdered(project.id) });
     }
 
     const ordered = [...tasks];
@@ -897,28 +927,72 @@ export const moveProjectTask = async (req: RequestWithUser, res: Response) => {
     }
 
     await t.commit();
-
-    const rows = await (ProjectTask as any).findAll({
-      where: { project_id: project.id, is_active: true },
-      include: [
-        {
-          model: ProjectTaskAssignee,
-          as: 'assignees',
-          required: false,
-          include: [{ model: User, as: 'user', attributes: userAttrs }],
-        },
-      ],
-      order: [
-        ['sort_order', 'ASC'],
-        ['id', 'ASC'],
-      ],
-    });
-    res.json({ success: true, data: rows });
+    res.json({ success: true, data: await listProjectTasksOrdered(project.id) });
   } catch (error: any) {
     await t.rollback();
     const status = error?.status || 500;
     if (status !== 500) return res.status(status).json({ success: false, message: error.message });
     console.error('Task 이동 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/** 드래그 앤 드롭으로 전달된 Task 전체 순서 저장 */
+export const reorderProjectTasks = async (req: RequestWithUser, res: Response) => {
+  const t = await sequelize.transaction();
+  try {
+    await ensureProjectTaskSchema();
+    const { project, membership, asAdmin } = await getProjectWithAccessOrThrow(
+      Number(req.params.id),
+      req.user!
+    );
+    if (!canEditWorkspace(membership?.role, asAdmin)) {
+      await t.rollback();
+      return res.status(403).json({ success: false, message: 'Task 순서를 변경할 권한이 없습니다.' });
+    }
+
+    const orderedIds = Array.isArray(req.body?.ordered_ids)
+      ? (req.body.ordered_ids as unknown[])
+          .map((id) => Number(id))
+          .filter((n) => Number.isFinite(n) && n > 0)
+      : [];
+    if (orderedIds.length === 0) {
+      await t.rollback();
+      return res.status(400).json({ success: false, message: 'ordered_ids가 필요합니다.' });
+    }
+
+    const tasks = await (ProjectTask as any).findAll({
+      where: { project_id: project.id, is_active: true },
+      order: [
+        ['sort_order', 'ASC'],
+        ['id', 'ASC'],
+      ],
+      transaction: t,
+    });
+
+    const byId = new Map<number, any>(tasks.map((row: any) => [Number(row.id), row]));
+    if (orderedIds.length !== tasks.length || orderedIds.some((id) => !byId.has(id))) {
+      await t.rollback();
+      return res.status(400).json({
+        success: false,
+        message: '순서 목록이 현재 Task 목록과 일치하지 않습니다. 새로고침 후 다시 시도해 주세요.',
+      });
+    }
+
+    const ordered = orderedIds.map((id) => byId.get(id));
+    for (let i = 0; i < ordered.length; i += 1) {
+      if (Number(ordered[i].sort_order) !== i) {
+        await ordered[i].update({ sort_order: i }, { transaction: t });
+      }
+    }
+
+    await t.commit();
+    res.json({ success: true, data: await listProjectTasksOrdered(project.id) });
+  } catch (error: any) {
+    await t.rollback();
+    const status = error?.status || 500;
+    if (status !== 500) return res.status(status).json({ success: false, message: error.message });
+    console.error('Task 순서 변경 오류:', error);
     res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
   }
 };

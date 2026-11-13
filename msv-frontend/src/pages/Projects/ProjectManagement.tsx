@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Autocomplete,
+  Avatar,
+  AvatarGroup,
   Box,
   Button,
   Card,
@@ -88,6 +90,7 @@ import {
   mvsTableHeadHighlightSx,
   mvsTableScrollSx,
 } from '../../theme/mvsLayout';
+import { getUploadUrl } from '../../utils/uploadUrl';
 
 const MENU_ROUTE = '/work/project-management';
 const STATUS_KEYS = ['planning', 'in_progress', 'on_hold', 'completed', 'cancelled'] as const;
@@ -97,6 +100,12 @@ function normalizeStatus(status: string): string {
   return status || 'planning';
 }
 
+type ProjectMemberFace = {
+  id: number;
+  name: string;
+  avatarUrl?: string;
+};
+
 type ProjectRow = {
   id: number;
   project_code: string;
@@ -104,7 +113,7 @@ type ProjectRow = {
   description: string;
   manager: string;
   manager_id: number | null;
-  members: string;
+  members: ProjectMemberFace[];
   status: string;
   priority: string;
   startDate: string;
@@ -112,6 +121,10 @@ type ProjectRow = {
   progress: number;
   budget: number;
 };
+
+function memberSearchText(members: ProjectMemberFace[]): string {
+  return members.map((m) => m.name).join(' ').toLowerCase();
+}
 
 type ProjectListSortKey =
   | 'name'
@@ -323,22 +336,48 @@ const SortableProjectRow = ({
           {project.name}
         </Typography>
       </TableCell>
-      <TableCell>
-        <Typography
-          component="span"
-          sx={{
-            fontSize: '0.8125rem',
-            color: '#0F172A',
-            display: 'block',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            maxWidth: 260,
-          }}
-          title={project.members}
-        >
-          {project.members}
-        </Typography>
+      <TableCell sx={{ py: 0.5 }}>
+        {project.members.length === 0 ? (
+          <Typography component="span" sx={{ fontSize: '0.8125rem', color: '#94A3B8' }}>
+            -
+          </Typography>
+        ) : (
+          <Tooltip
+            title={project.members.map((m) => m.name).join(', ')}
+            placement="top"
+            enterDelay={400}
+          >
+            <AvatarGroup
+              max={5}
+              sx={{
+                justifyContent: 'flex-start',
+                '& .MuiAvatar-root': {
+                  width: 26,
+                  height: 26,
+                  fontSize: '0.6875rem',
+                  fontWeight: 600,
+                  border: '1.5px solid #fff',
+                  color: '#475569',
+                  bgcolor: '#E2E8F0',
+                },
+              }}
+            >
+              {project.members.map((m) => {
+                const src = m.avatarUrl ? getUploadUrl(m.avatarUrl) || undefined : undefined;
+                return (
+                  <Avatar
+                    key={m.id}
+                    src={src}
+                    alt={m.name}
+                    sx={{ bgcolor: src ? 'transparent' : '#E2E8F0' }}
+                  >
+                    {(m.name || '?').charAt(0).toUpperCase()}
+                  </Avatar>
+                );
+              })}
+            </AvatarGroup>
+          </Tooltip>
+        )}
       </TableCell>
       <TableCell>{project.startDate || '-'}</TableCell>
       <TableCell>{project.endDate || '-'}</TableCell>
@@ -463,10 +502,18 @@ const ProjectManagement: React.FC = () => {
       if (response.success) {
         setProjects(
           (response.data || []).map((p: any) => {
-            const memberNames = Array.isArray(p.members)
-              ? p.members
-                  .map((m: any) => String(m?.user?.username || '').trim())
-                  .filter(Boolean)
+            const members: ProjectMemberFace[] = Array.isArray(p.members)
+              ? p.members.reduce((acc: ProjectMemberFace[], m: any) => {
+                  const name = String(m?.user?.username || '').trim();
+                  const id = Number(m?.user?.id || m?.user_id || 0);
+                  if (!name || !Number.isFinite(id) || id <= 0) return acc;
+                  acc.push({
+                    id,
+                    name,
+                    avatarUrl: m?.user?.avatar_url ? String(m.user.avatar_url) : undefined,
+                  });
+                  return acc;
+                }, [])
               : [];
             return {
               id: p.id,
@@ -474,7 +521,7 @@ const ProjectManagement: React.FC = () => {
               description: p.description || '',
               manager: p.manager?.username || '-',
               manager_id: p.project_manager ?? null,
-              members: memberNames.length > 0 ? memberNames.join(', ') : '-',
+              members,
               status: normalizeStatus(p.status),
               progress: Number(p.progress) || 0,
               startDate: p.start_date || '',
@@ -569,7 +616,7 @@ const ProjectManagement: React.FC = () => {
         p.name.toLowerCase().includes(q) ||
         p.description.toLowerCase().includes(q) ||
         p.project_code.toLowerCase().includes(q) ||
-        p.members.toLowerCase().includes(q) ||
+        memberSearchText(p.members).includes(q) ||
         p.manager.toLowerCase().includes(q)
     );
   }, [projects, searchTerm]);
@@ -591,7 +638,7 @@ const ProjectManagement: React.FC = () => {
         case 'name':
           return p.name.toLowerCase();
         case 'members':
-          return p.members.toLowerCase();
+          return memberSearchText(p.members);
         case 'startDate':
           return p.startDate || '';
         case 'endDate':
