@@ -36,7 +36,7 @@ Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Security
 
 $AppName = "MVS Notifier"
-$AppVersion = "2.1.1"
+$AppVersion = "2.2"
 $Publisher = "Minsub Ventures"
 $AppUserModelId = "MinsubVentures.MVS.Notifier"
 $UserAgent = "MVS-Notifier/$AppVersion"
@@ -46,6 +46,7 @@ $SeenPath = Join-Path $DataDir "seen-ids.json"
 $PollSeconds = 20
 $RefreshEveryTicks = 45  # ~15 min at 20s
 $FetchLimit = 50
+$MaxTrayTips = 5          # 한 번에 트레이/Toast로 보여줄 최대 건수
 
 function Get-MvsOsCapabilities {
   # Environment.OSVersion alone is unreliable; prefer CurrentBuildNumber.
@@ -395,8 +396,8 @@ function Invoke-MvsLogin($ApiBase, $UserId, $Password) {
   $detail = if ($lastErr) { [string]$lastErr.Exception.Message } else { "" }
   $triedText = ($tried -join ", ")
   if ($code -eq 404) {
-    $ko404 = "로그인 실패(404). API 주소가 올바른지 확인하세요.`r`n예: https://서버주소/api`r`n시도: $triedText"
-    $en404 = "Login failed (404). Check API URL.`r`nExample: https://your-host/api`r`nTried: $triedText"
+    $ko404 = "로그인 실패(404). www 사이트 주소가 아니라 백엔드 API 주소를 넣으세요.`r`nMVS 웹 → 알람 → 알림 프로그램에서 'API 주소 복사'를 사용하세요.`r`n시도: $triedText"
+    $en404 = "Login failed (404). Use the backend API URL, not the www site.`r`nIn MVS web: Alarms → Desktop Notifier → Copy API URL.`r`nTried: $triedText"
     throw (T $ko404 $en404)
   }
   if ($code -eq 401 -or $code -eq 403) {
@@ -549,7 +550,8 @@ function Show-ToastWithXml([string]$XmlText) {
   return $true
 }
 
-function Show-MvsToast([string]$Title, [string]$Body, [string]$LaunchUrl) {
+function Show-MvsToast([string]$Title, [string]$Body, [string]$Tag) {
+  # 브라우저를 열지 않는 순수 알림(Toast). launch/protocol 없음.
   if ($script:OsCaps.PreferBalloonOnly) { return $false }
   if ($script:ToastOk -eq $false) { return $false }
 
@@ -563,9 +565,8 @@ function Show-MvsToast([string]$Title, [string]$Body, [string]$LaunchUrl) {
 
   $t1 = Escape-Xml $Title
   $t2 = Escape-Xml $Body
-  $launch = Escape-Xml $(if ($LaunchUrl) { $LaunchUrl } elseif ($config -and $config.webBase) { [string]$config.webBase } else { "" })
 
-  # 1) Win10 1607+ : ToastGeneric (+ optional logo). activationType은 선택(구빌드 실패 방지).
+  # 1) Win10 1607+ : ToastGeneric (+ optional logo). 클릭해도 브라우저 실행 안 함.
   if ($script:OsCaps.SupportsToastGeneric) {
     $logo = Get-AssetPath "toast-logo.png"
     if (-not $logo) { $logo = Get-AssetPath "app-icon.png" }
@@ -575,38 +576,41 @@ function Show-MvsToast([string]$Title, [string]$Body, [string]$LaunchUrl) {
       $imgXml = "<image placement=`"appLogoOverride`" src=`"$(Escape-Xml $logoUri)`"/>"
     }
 
-    $templates = @()
-    if ($launch) {
-      $templates += @"
-<toast launch="$launch" activationType="protocol">
-  <visual><binding template="ToastGeneric"><text>$t1</text><text>$t2</text>$imgXml</binding></visual>
+    $xmlText = @"
+<toast duration="short">
+  <visual>
+    <binding template="ToastGeneric">
+      <text>$t1</text>
+      <text>$t2</text>
+      $imgXml
+    </binding>
+  </visual>
 </toast>
 "@
-      $templates += @"
-<toast launch="$launch">
-  <visual><binding template="ToastGeneric"><text>$t1</text><text>$t2</text>$imgXml</binding></visual>
-</toast>
-"@
-    }
-    $templates += @"
-<toast>
-  <visual><binding template="ToastGeneric"><text>$t1</text><text>$t2</text>$imgXml</binding></visual>
-</toast>
-"@
-
-    foreach ($xmlText in $templates) {
-      try {
-        [void](Show-ToastWithXml $xmlText)
-        $script:ToastOk = $true
-        return $true
-      } catch { }
-    }
+    try {
+      $xml = New-ToastXmlDocument $xmlText
+      $toast = New-Object Windows.UI.Notifications.ToastNotification $xml
+      if ($Tag) {
+        try { $toast.Tag = ([string]$Tag).Substring(0, [Math]::Min(16, ([string]$Tag).Length)) } catch { }
+        try { $toast.Group = "mvs" } catch { }
+      }
+      $notifier = $null
+      if ($script:OsCaps.SupportsAumid) {
+        try { $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($AppUserModelId) } catch { }
+      }
+      if (-not $notifier) {
+        $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier()
+      }
+      $notifier.Show($toast)
+      $script:ToastOk = $true
+      return $true
+    } catch { }
   }
 
   # 2) Win8 / 초기 Win10 : ToastText02
   if ($script:OsCaps.SupportsToastLegacy) {
     $legacy = @"
-<toast>
+<toast duration="short">
   <visual>
     <binding template="ToastText02">
       <text id="1">$t1</text>
@@ -751,17 +755,17 @@ function Save-Config {
   Write-JsonFile -Path $ConfigPath -Object $config
 }
 
-function Show-Tip([string]$Title, [string]$Body, [string]$OpenUrl) {
+function Show-Tip([string]$Title, [string]$Body, [string]$OpenUrl, [string]$Tag = "") {
+  # 트레이/알림센터에만 표시. 브라우저는 자동으로 열지 않음.
   if (-not $script:Enabled) { return }
   if ($OpenUrl) { $script:LastOpenUrl = $OpenUrl }
-  $launch = if ($OpenUrl) { $OpenUrl } else { $script:LastOpenUrl }
 
   $toastWorked = $false
   if (-not $script:OsCaps.PreferBalloonOnly) {
-    $toastWorked = Show-MvsToast -Title $Title -Body $Body -LaunchUrl $launch
+    $toastWorked = Show-MvsToast -Title $Title -Body $Body -Tag $Tag
   }
 
-  # Toast 실패·미지원·Win7 → 항상 풍선. Win10+에서 Toast 성공 시 중복 풍선은 생략.
+  # Toast 실패·미지원·Win7 → 트레이 풍선만
   if (-not $toastWorked) {
     [void](Show-BalloonTipSafe -Title $Title -Body $Body)
   }
@@ -862,37 +866,61 @@ function Sync-Notifications([bool]$ForceTip) {
     return
   }
 
-  # newest first from API — show a few tips without flooding
-  $shown = 0
+  # 새 미읽음만 모아 최대 5건을 트레이 Toast/풍선으로 표시 (브라우저 미실행)
+  $tips = New-Object System.Collections.Generic.List[object]
   foreach ($row in $rows) {
     $id = [string]$row.id
     if (-not $id -or $script:SeenIds.Contains($id)) { continue }
     Remember-Id $id
     if ($row.read) { continue }
-    if ($shown -ge 3) { continue }
     $title = if ($row.title) { [string]$row.title } else { $AppName }
     $msg = if ($row.message) { [string]$row.message } else { "" }
     $href = Get-NotificationHref $row
-    Show-Tip $title $msg (Build-OpenUrl $href)
-    $shown++
+    $tips.Add([pscustomobject]@{
+        Id    = $id
+        Title = $title
+        Body  = $msg
+        Url   = (Build-OpenUrl $href)
+      }) | Out-Null
   }
 
   foreach ($row in $inbox) {
     $id = "inbox-" + [string]$row.id
     if ($script:SeenIds.Contains($id)) { continue }
     Remember-Id $id
-    if ($shown -ge 3) { continue }
     $kind = [string]$row.kind
     $title = T "승인·처리 대기" "Action required"
     $msg = if ($kind) { $kind } else { (T "새 대기 항목" "New inbox item") }
     $href = if ($row.href) { [string]$row.href } else { $null }
-    Show-Tip $title $msg (Build-OpenUrl $href)
+    $tips.Add([pscustomobject]@{
+        Id    = $id
+        Title = $title
+        Body  = $msg
+        Url   = (Build-OpenUrl $href)
+      }) | Out-Null
+  }
+
+  $totalNew = $tips.Count
+  $shown = 0
+  $limit = [Math]::Min($MaxTrayTips, $totalNew)
+  for ($i = 0; $i -lt $limit; $i++) {
+    $tip = $tips[$i]
+    Show-Tip $tip.Title $tip.Body $tip.Url ("n$i")
+    $shown++
+    if ($i -lt ($limit - 1)) {
+      Start-Sleep -Milliseconds 450
+    }
+  }
+  if ($totalNew -gt $MaxTrayTips) {
+    $more = $totalNew - $MaxTrayTips
+    Start-Sleep -Milliseconds 450
+    Show-Tip $AppName (T "외 ${more}건의 알림이 더 있습니다." "${more} more notification(s).") (Build-OpenUrl "") "more"
     $shown++
   }
 
   Save-Seen
   if ($ForceTip -and $shown -eq 0) {
-    Show-Tip $AppName (T "새 알림이 없습니다." "No new notifications.") (Build-OpenUrl "")
+    Show-Tip $AppName (T "새 알림이 없습니다." "No new notifications.") $null "none"
   }
 }
 
@@ -953,8 +981,9 @@ $miExit.add_Click({
   [System.Windows.Forms.Application]::Exit()
 })
 
-$notify.add_BalloonTipClicked({ Open-Url $script:LastOpenUrl })
-$notify.add_DoubleClick({ Open-Url $script:LastOpenUrl })
+# 풍선/Toast 클릭으로 브라우저를 자동 실행하지 않음.
+# 필요할 때만 트레이 메뉴「MVS 열기」「마지막 알림 열기」또는 아이콘 더블클릭.
+$notify.add_DoubleClick({ Open-Url (Build-OpenUrl "") })
 
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = ($PollSeconds * 1000)

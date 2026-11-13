@@ -9,6 +9,7 @@ import {
   updateProject,
   deleteProject,
   moveProject,
+  reorderProjects,
   getProjectMembers,
   addProjectMembers,
   updateProjectMember,
@@ -81,6 +82,12 @@ const taskAttachmentUpload = multer({
 router.use(authenticateToken);
 
 router.get('/', requireMenuPermission(MENU_PROJECT_MANAGEMENT, 'can_view'), getProjects);
+router.post(
+  '/reorder',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_PROJECT_MANAGEMENT, 'can_edit'),
+  reorderProjects
+);
 router.post(
   '/',
   restrictAuditToReadOnly,

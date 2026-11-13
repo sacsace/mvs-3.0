@@ -2745,6 +2745,7 @@ export default {
         allManagers: 'All managers'
       },
       columns: {
+        no: 'No.',
         order: 'Order',
         code: 'Code',
         name: 'Project',
@@ -2759,6 +2760,7 @@ export default {
         progress: 'Progress',
         actions: 'Actions'
       },
+      dragReorder: 'Drag to reorder',
       reorderHint: 'Clear search, status, manager filters, and column sort to reorder.',
       reorderNeedCompany: 'Select a company before reordering.',
       fields: {

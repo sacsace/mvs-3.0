@@ -38,6 +38,11 @@ export const projectService = {
     return response.data;
   },
 
+  reorderProjects: async (orderedIds: number[]) => {
+    const response = await api.post('/projects/reorder', { ordered_ids: orderedIds });
+    return response.data;
+  },
+
   getMembers: async (projectId: number) => {
     const response = await api.get(`/projects/${projectId}/members`);
     return response.data;

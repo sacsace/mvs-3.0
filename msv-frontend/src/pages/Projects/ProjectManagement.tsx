@@ -29,12 +29,28 @@ import {
 import {
   Add as AddIcon,
   DeleteOutline as DeleteIcon,
+  DragIndicator as DragIndicatorIcon,
   EditOutlined as EditIcon,
-  KeyboardArrowDown as ArrowDownIcon,
-  KeyboardArrowUp as ArrowUpIcon,
   Refresh as RefreshIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
+import {
+  DndContext,
+  DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
@@ -65,6 +81,7 @@ import {
   mvsBodySectionHeaderSx,
   mvsFilterFieldHeightSx,
   mvsOutlinedLabelProps,
+  mvsPageContentMaxWidth,
   mvsPageRootSx,
   mvsSearchFieldSx,
   mvsTableBodyRowSx,
@@ -192,6 +209,171 @@ function remainingDays(end: string): number | null {
   return Math.round((e.getTime() - today.getTime()) / 86400000);
 }
 
+const SortableProjectRow = ({
+  project,
+  index,
+  canEdit,
+  canDelete,
+  reorderDisabledReason,
+  dragHint,
+  noEditPermission,
+  noDeletePermission,
+  dragDisabled,
+  statusText,
+  priorityText,
+  durationText,
+  remainingText,
+  overdue,
+  onOpen,
+  onEdit,
+  onDelete,
+}: {
+  project: ProjectRow;
+  index: number;
+  canEdit: boolean;
+  canDelete: boolean;
+  reorderDisabledReason: string;
+  dragHint: string;
+  noEditPermission: string;
+  noDeletePermission: string;
+  dragDisabled: boolean;
+  statusText: string;
+  priorityText: string;
+  durationText: string;
+  remainingText: string;
+  overdue: boolean;
+  onOpen: () => void;
+  onEdit: (e: React.MouseEvent) => void;
+  onDelete: (e: React.MouseEvent) => void;
+}) => {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
+    useSortable({
+      id: project.id,
+      disabled: dragDisabled,
+    });
+
+  return (
+    <TableRow
+      ref={setNodeRef}
+      hover
+      onClick={onOpen}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.72 : 1,
+        position: 'relative',
+        zIndex: isDragging ? 3 : undefined,
+        backgroundColor: isDragging ? '#F8FAFC' : undefined,
+      }}
+      sx={{ cursor: 'pointer' }}
+    >
+      <TableCell
+        sx={{
+          width: 44,
+          px: 0.75,
+          textAlign: 'center',
+          color: '#64748B',
+          fontVariantNumeric: 'tabular-nums',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {index + 1}
+      </TableCell>
+      {canEdit && (
+        <TableCell
+          sx={{ width: 44, px: 0.5, verticalAlign: 'middle' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Tooltip title={reorderDisabledReason || dragHint}>
+            <span>
+              <IconButton
+                size="small"
+                ref={setActivatorNodeRef}
+                disabled={dragDisabled}
+                {...attributes}
+                {...listeners}
+                sx={{
+                  p: 0.25,
+                  cursor: dragDisabled ? 'not-allowed' : 'grab',
+                  '&:active': { cursor: dragDisabled ? 'not-allowed' : 'grabbing' },
+                }}
+                aria-label="drag-reorder"
+              >
+                <DragIndicatorIcon sx={{ fontSize: 18, color: dragDisabled ? '#CBD5E1' : '#64748B' }} />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </TableCell>
+      )}
+      <TableCell>
+        <Typography
+          component="span"
+          sx={{
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            color: '#0F172A',
+            display: 'block',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            maxWidth: 260,
+          }}
+          title={project.name}
+        >
+          {project.name}
+        </Typography>
+      </TableCell>
+      <TableCell>
+        <Typography
+          component="span"
+          sx={{
+            fontSize: '0.8125rem',
+            color: '#0F172A',
+            display: 'block',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            maxWidth: 260,
+          }}
+          title={project.members}
+        >
+          {project.members}
+        </Typography>
+      </TableCell>
+      <TableCell>{project.startDate || '-'}</TableCell>
+      <TableCell>{project.endDate || '-'}</TableCell>
+      <TableCell>{durationText}</TableCell>
+      <TableCell
+        sx={{
+          color: overdue ? '#DC2626' : 'inherit',
+          fontWeight: overdue ? 600 : 400,
+        }}
+      >
+        {remainingText}
+      </TableCell>
+      <TableCell>{statusText}</TableCell>
+      <TableCell>{priorityText}</TableCell>
+      <TableCell>{project.progress}%</TableCell>
+      <TableCell sx={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+        <Tooltip title={!canEdit ? noEditPermission : ''}>
+          <span>
+            <IconButton size="small" onClick={onEdit} disabled={!canEdit}>
+              <EditIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title={!canDelete ? noDeletePermission : ''}>
+          <span>
+            <IconButton size="small" color="error" onClick={onDelete} disabled={!canDelete}>
+              <DeleteIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </TableCell>
+    </TableRow>
+  );
+};
+
 const ProjectManagement: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -261,14 +443,16 @@ const ProjectManagement: React.FC = () => {
     [t]
   );
 
-  const loadProjects = useCallback(async () => {
+  const loadProjects = useCallback(async (opts?: { silent?: boolean }) => {
     if (!menuFlags.canRead) {
       setProjects([]);
       return;
     }
-    setLoading(true);
+    const silent = Boolean(opts?.silent);
+    if (!silent) setLoading(true);
     try {
-      const params: Record<string, string | number> = { page: 1, limit: 1000 };
+      // 목록은 페이지 단위로 가져오고, 과도한 1000건 조인 조회를 피한다
+      const params: Record<string, string | number> = { page: 1, limit: 200 };
       if (isRootOrAudit && selectedCompanyId) {
         params.company_id = selectedCompanyId;
       }
@@ -307,7 +491,7 @@ const ProjectManagement: React.FC = () => {
     } catch (error: any) {
       showErrorPopup(error, t('projectManagement.errors.loadListTitle'));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [isRootOrAudit, managerFilter, menuFlags.canRead, selectedCompanyId, statusFilter, t]);
 
@@ -397,13 +581,9 @@ const ProjectManagement: React.FC = () => {
       medium: 2,
       low: 1,
     };
-    // 기본: 기획 → 진행중 → 보류 → 완료 → 취소 (동일 상태 내 API/수동 순서 유지)
+    // 기본: API/수동 드래그 순서(sort_order) 유지
     if (!sortKey) {
-      return [...filteredProjects].sort((a, b) => {
-        const ra = PROJECT_STATUS_RANK[a.status] ?? 99;
-        const rb = PROJECT_STATUS_RANK[b.status] ?? 99;
-        return ra - rb;
-      });
+      return filteredProjects;
     }
     const dir = sortDir === 'asc' ? 1 : -1;
     const valueOf = (p: ProjectRow): string | number => {
@@ -443,22 +623,26 @@ const ProjectManagement: React.FC = () => {
     });
   }, [filteredProjects, sortDir, sortKey]);
 
-  const moveProject = async (project: ProjectRow, direction: 'up' | 'down', e: React.MouseEvent) => {
-    e.stopPropagation();
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleProjectDragEnd = async (event: DragEndEvent) => {
     if (!canReorder || movingId != null) return;
-    const index = projects.findIndex((p) => p.id === project.id);
-    const swapIndex = direction === 'up' ? index - 1 : index + 1;
-    if (index < 0 || swapIndex < 0 || swapIndex >= projects.length) return;
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = projects.findIndex((p) => p.id === Number(active.id));
+    const newIndex = projects.findIndex((p) => p.id === Number(over.id));
+    if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return;
 
     const previous = projects;
-    const next = [...projects];
-    const tmp = next[index];
-    next[index] = next[swapIndex];
-    next[swapIndex] = tmp;
+    const next = arrayMove(projects, oldIndex, newIndex);
     setProjects(next);
-    setMovingId(project.id);
+    setMovingId(Number(active.id));
     try {
-      const res = await projectService.moveProject(project.id, direction);
+      const res = await projectService.reorderProjects(next.map((p) => p.id));
       if (!res.success) {
         setProjects(previous);
         showErrorPopup(
@@ -556,7 +740,7 @@ const ProjectManagement: React.FC = () => {
         if (response.success) {
           showSuccessPopup(t('projectManagement.messages.updated'));
           handleCloseDialog();
-          void loadProjects();
+          void loadProjects({ silent: true });
         } else {
           showErrorPopup(response.message || t('projectManagement.errors.updateFailed'), t('projectManagement.errors.saveTitle'));
         }
@@ -567,7 +751,7 @@ const ProjectManagement: React.FC = () => {
         if (response.success) {
           showSuccessPopup(t('projectManagement.messages.created'));
           handleCloseDialog();
-          void loadProjects();
+          void loadProjects({ silent: true });
           const newId = Number(response.data?.id);
           if (Number.isInteger(newId) && newId > 0) {
             navigate(`/work/project-management/${newId}`);
@@ -593,7 +777,7 @@ const ProjectManagement: React.FC = () => {
           const response = await projectService.deleteProject(id);
           if (response.success) {
             showSuccessPopup(t('projectManagement.messages.deleted'));
-            void loadProjects();
+            void loadProjects({ silent: true });
           } else {
             showErrorPopup(response.message || t('projectManagement.errors.deleteFailed'), t('projectManagement.errors.deleteTitle'));
           }
@@ -616,7 +800,7 @@ const ProjectManagement: React.FC = () => {
   };
 
   return (
-    <Box sx={{ ...mvsPageRootSx }}>
+    <Box sx={{ ...mvsPageRootSx, maxWidth: Math.round(mvsPageContentMaxWidth * 1.3) }}>
       <MvsPageHeader
         title={t('projectManagement.title')}
         description={t('projectManagement.description')}
@@ -762,204 +946,122 @@ const ProjectManagement: React.FC = () => {
               </Typography>
             </Box>
           ) : (
-            <TableContainer>
-              <Table
-                size="small"
-                sx={{
-                  borderCollapse: 'collapse',
-                  bgcolor: 'transparent',
-                  '& .MuiTableCell-root': {
-                    borderLeft: 'none',
-                    borderRight: 'none',
-                    borderTop: 'none',
-                  },
-                }}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={(e) => void handleProjectDragEnd(e)}
+            >
+              <SortableContext
+                items={displayedProjects.map((p) => p.id)}
+                strategy={verticalListSortingStrategy}
               >
-                <TableHead sx={mvsTableHeadHighlightSx}>
-                  <TableRow>
-                    {menuFlags.canEdit && (
-                      <TableCell sx={{ width: 44, px: 0.5 }}>
-                        {t('projectManagement.columns.order')}
-                      </TableCell>
-                    )}
-                    <ProjectListHeadCell sortKey="name" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
-                      {t('projectManagement.columns.name')}
-                    </ProjectListHeadCell>
-                    <ProjectListHeadCell sortKey="members" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
-                      {t('projectManagement.columns.members')}
-                    </ProjectListHeadCell>
-                    <ProjectListHeadCell sortKey="startDate" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
-                      {t('projectManagement.columns.startDate')}
-                    </ProjectListHeadCell>
-                    <ProjectListHeadCell sortKey="endDate" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
-                      {t('projectManagement.columns.endDate')}
-                    </ProjectListHeadCell>
-                    <ProjectListHeadCell sortKey="duration" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
-                      {t('projectManagement.columns.duration')}
-                    </ProjectListHeadCell>
-                    <ProjectListHeadCell sortKey="remaining" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
-                      {t('projectManagement.columns.remaining')}
-                    </ProjectListHeadCell>
-                    <ProjectListHeadCell sortKey="status" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
-                      {t('projectManagement.columns.status')}
-                    </ProjectListHeadCell>
-                    <ProjectListHeadCell sortKey="priority" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
-                      {t('projectManagement.columns.priority')}
-                    </ProjectListHeadCell>
-                    <ProjectListHeadCell sortKey="progress" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
-                      {t('projectManagement.columns.progress')}
-                    </ProjectListHeadCell>
-                    <TableCell sx={{ textAlign: 'center' }}>{t('projectManagement.columns.actions')}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody sx={mvsTableBodyRowSx}>
-                  {displayedProjects.map((project, projectIndex) => {
-                    const duration = daysBetween(project.startDate, project.endDate);
-                    const remain = remainingDays(project.endDate);
-                    const overdue =
-                      remain != null &&
-                      remain < 0 &&
-                      project.status !== 'completed' &&
-                      project.status !== 'cancelled';
-                    const reorderDisabledReason = !menuFlags.canEdit
-                      ? t('projectManagement.noEditPermission')
-                      : isRootOrAudit && selectedCompanyId === ''
-                        ? t('projectManagement.reorderNeedCompany')
-                        : sortKey != null
-                          ? t('projectManagement.reorderHint')
-                          : !canReorder
-                            ? t('projectManagement.reorderHint')
-                            : '';
-                    return (
-                      <TableRow
-                        key={project.id}
-                        hover
-                        onClick={() => navigate(`/work/project-management/${project.id}`)}
-                        sx={{ cursor: 'pointer' }}
-                      >
+                <TableContainer>
+                  <Table
+                    size="small"
+                    sx={{
+                      borderCollapse: 'collapse',
+                      bgcolor: 'transparent',
+                      '& .MuiTableCell-root': {
+                        borderLeft: 'none',
+                        borderRight: 'none',
+                        borderTop: 'none',
+                      },
+                    }}
+                  >
+                    <TableHead sx={mvsTableHeadHighlightSx}>
+                      <TableRow>
+                        <TableCell sx={{ width: 44, px: 0.75, textAlign: 'center' }}>
+                          {t('projectManagement.columns.no')}
+                        </TableCell>
                         {menuFlags.canEdit && (
-                          <TableCell
-                            sx={{ width: 44, px: 0.5, verticalAlign: 'middle' }}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Tooltip title={reorderDisabledReason}>
-                              <Box sx={{ display: 'inline-flex', flexDirection: 'column', lineHeight: 0 }}>
-                                <IconButton
-                                  size="small"
-                                  disabled={
-                                    !canReorder ||
-                                    movingId != null ||
-                                    projectIndex === 0
-                                  }
-                                  onClick={(e) => void moveProject(project, 'up', e)}
-                                  sx={{ p: 0, width: 18, height: 14 }}
-                                  title={t('projectManagement.detail.moveUp')}
-                                >
-                                  <ArrowUpIcon sx={{ fontSize: 14 }} />
-                                </IconButton>
-                                <IconButton
-                                  size="small"
-                                  disabled={
-                                    !canReorder ||
-                                    movingId != null ||
-                                    projectIndex === displayedProjects.length - 1
-                                  }
-                                  onClick={(e) => void moveProject(project, 'down', e)}
-                                  sx={{ p: 0, width: 18, height: 14 }}
-                                  title={t('projectManagement.detail.moveDown')}
-                                >
-                                  <ArrowDownIcon sx={{ fontSize: 14 }} />
-                                </IconButton>
-                              </Box>
-                            </Tooltip>
+                          <TableCell sx={{ width: 44, px: 0.5 }}>
+                            {t('projectManagement.columns.order')}
                           </TableCell>
                         )}
-                        <TableCell>
-                          <Typography
-                            component="span"
-                            sx={{
-                              fontSize: '0.875rem',
-                              fontWeight: 600,
-                              color: '#0F172A',
-                              display: 'block',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              maxWidth: 260,
-                            }}
-                            title={project.name}
-                          >
-                            {project.name}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography
-                            component="span"
-                            sx={{
-                              fontSize: '0.8125rem',
-                              color: '#0F172A',
-                              display: 'block',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              maxWidth: 260,
-                            }}
-                            title={project.members}
-                          >
-                            {project.members}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>{project.startDate || '-'}</TableCell>
-                        <TableCell>{project.endDate || '-'}</TableCell>
-                        <TableCell>
-                          {duration != null ? t('projectManagement.days', { count: duration }) : '-'}
-                        </TableCell>
-                        <TableCell
-                          sx={{
-                            color: overdue ? '#DC2626' : 'inherit',
-                            fontWeight: overdue ? 600 : 400,
-                          }}
-                        >
-                          {remain == null
-                            ? '-'
-                            : remain < 0
-                              ? t('projectManagement.daysOverdue', { count: Math.abs(remain) })
-                              : t('projectManagement.daysLeft', { count: remain })}
-                        </TableCell>
-                        <TableCell>{statusLabel(project.status)}</TableCell>
-                        <TableCell>{priorityLabel(project.priority)}</TableCell>
-                        <TableCell>{project.progress}%</TableCell>
-                        <TableCell sx={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                          <Tooltip title={!menuFlags.canEdit ? t('projectManagement.noEditPermission') : ''}>
-                            <span>
-                              <IconButton
-                                size="small"
-                                onClick={(e) => handleOpenDialog(project, e)}
-                                disabled={!menuFlags.canEdit}
-                              >
-                                <EditIcon sx={{ fontSize: 18 }} />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                          <Tooltip title={!menuFlags.canDelete ? t('projectManagement.noDeletePermission') : ''}>
-                            <span>
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={(e) => handleDelete(project.id, e)}
-                                disabled={!menuFlags.canDelete}
-                              >
-                                <DeleteIcon sx={{ fontSize: 18 }} />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                        </TableCell>
+                        <ProjectListHeadCell sortKey="name" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                          {t('projectManagement.columns.name')}
+                        </ProjectListHeadCell>
+                        <ProjectListHeadCell sortKey="members" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                          {t('projectManagement.columns.members')}
+                        </ProjectListHeadCell>
+                        <ProjectListHeadCell sortKey="startDate" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                          {t('projectManagement.columns.startDate')}
+                        </ProjectListHeadCell>
+                        <ProjectListHeadCell sortKey="endDate" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                          {t('projectManagement.columns.endDate')}
+                        </ProjectListHeadCell>
+                        <ProjectListHeadCell sortKey="duration" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                          {t('projectManagement.columns.duration')}
+                        </ProjectListHeadCell>
+                        <ProjectListHeadCell sortKey="remaining" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                          {t('projectManagement.columns.remaining')}
+                        </ProjectListHeadCell>
+                        <ProjectListHeadCell sortKey="status" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                          {t('projectManagement.columns.status')}
+                        </ProjectListHeadCell>
+                        <ProjectListHeadCell sortKey="priority" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                          {t('projectManagement.columns.priority')}
+                        </ProjectListHeadCell>
+                        <ProjectListHeadCell sortKey="progress" activeKey={sortKey} direction={sortDir} onSort={handleListSort}>
+                          {t('projectManagement.columns.progress')}
+                        </ProjectListHeadCell>
+                        <TableCell sx={{ textAlign: 'center' }}>{t('projectManagement.columns.actions')}</TableCell>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                    </TableHead>
+                    <TableBody sx={mvsTableBodyRowSx}>
+                      {displayedProjects.map((project, projectIndex) => {
+                        const duration = daysBetween(project.startDate, project.endDate);
+                        const remain = remainingDays(project.endDate);
+                        const overdue =
+                          remain != null &&
+                          remain < 0 &&
+                          project.status !== 'completed' &&
+                          project.status !== 'cancelled';
+                        const reorderDisabledReason = !menuFlags.canEdit
+                          ? t('projectManagement.noEditPermission')
+                          : isRootOrAudit && selectedCompanyId === ''
+                            ? t('projectManagement.reorderNeedCompany')
+                            : sortKey != null
+                              ? t('projectManagement.reorderHint')
+                              : !canReorder
+                                ? t('projectManagement.reorderHint')
+                                : '';
+                        return (
+                          <SortableProjectRow
+                            key={project.id}
+                            project={project}
+                            index={projectIndex}
+                            canEdit={menuFlags.canEdit}
+                            canDelete={menuFlags.canDelete}
+                            reorderDisabledReason={reorderDisabledReason}
+                            dragHint={t('projectManagement.dragReorder')}
+                            noEditPermission={t('projectManagement.noEditPermission')}
+                            noDeletePermission={t('projectManagement.noDeletePermission')}
+                            dragDisabled={!canReorder || movingId != null}
+                            statusText={statusLabel(project.status)}
+                            priorityText={priorityLabel(project.priority)}
+                            durationText={
+                              duration != null ? t('projectManagement.days', { count: duration }) : '-'
+                            }
+                            remainingText={
+                              remain == null
+                                ? '-'
+                                : remain < 0
+                                  ? t('projectManagement.daysOverdue', { count: Math.abs(remain) })
+                                  : t('projectManagement.daysLeft', { count: remain })
+                            }
+                            overdue={overdue}
+                            onOpen={() => navigate(`/work/project-management/${project.id}`)}
+                            onEdit={(e) => handleOpenDialog(project, e)}
+                            onDelete={(e) => handleDelete(project.id, e)}
+                          />
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </SortableContext>
+            </DndContext>
           )}
         </Box>
       </Box>

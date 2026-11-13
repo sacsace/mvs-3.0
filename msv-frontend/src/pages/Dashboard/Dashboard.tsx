@@ -469,7 +469,7 @@ const Dashboard: React.FC = () => {
   const [newScheduleTitle, setNewScheduleTitle] = useState('');
   const [scheduleIsPublic, setScheduleIsPublic] = useState(false);
 
-  // 사용자 권한에 따른 탭 필터링
+  // 관리자 대시보드: admin/root 만 표시. 데이터는 소속 회사 기준(서버에서 company_id 스코프).
   const isRoot = user?.role === 'root';
   const isAdmin = user?.role === 'admin';
   const canViewAdminDashboard = isRoot || isAdmin;
@@ -483,6 +483,13 @@ const Dashboard: React.FC = () => {
       ].filter(tab => tab.available),
     [t, canViewAdminDashboard]
   );
+
+  // 권한 없는 사용자에게 관리자 탭이 남아 있지 않도록 강제
+  useEffect(() => {
+    if (!canViewAdminDashboard && activeTab === 2) {
+      setActiveTab(0);
+    }
+  }, [canViewAdminDashboard, activeTab]);
 
   // 실제 탭 인덱스를 사용 가능한 탭 인덱스로 매핑
   const getTabIndex = (displayIndex: number) => {
@@ -1454,7 +1461,7 @@ const Dashboard: React.FC = () => {
 
       const uid = user?.id ? Number(user.id) : null;
       const isAdminLeave = user?.role === 'admin' || user?.role === 'root';
-      const isGeneralUser = isGeneralEmployeeRole(user?.role);
+      const canLoadAdminDashboard = user?.role === 'admin' || user?.role === 'root';
 
       const canLoadTransferExpenses = hasExpenseTransferCardAccess(user?.role, {
         isPaymentOfficer: Boolean(user?.is_payment_officer),
@@ -1475,29 +1482,32 @@ const Dashboard: React.FC = () => {
         myApprovals,
         expensesResult,
       ] = await Promise.all([
-        api.get('/dashboard/stats').catch(() => null),
-        isGeneralUser ? Promise.resolve(null) : api.get('/dashboard/revenue-trend').catch(() => null),
-        isGeneralUser ? Promise.resolve(null) : api.get('/dashboard/inventory-status').catch(() => null),
+        // KPI 통계: 서버에서 소속 회사로 스코프 (admin은 자사만, root는 전체/선택)
+        canLoadAdminDashboard ? api.get('/dashboard/stats').catch(() => null) : Promise.resolve(null),
+        canLoadAdminDashboard ? api.get('/dashboard/revenue-trend').catch(() => null) : Promise.resolve(null),
+        canLoadAdminDashboard ? api.get('/dashboard/inventory-status').catch(() => null) : Promise.resolve(null),
         noticeService.getNotices({ status: 'published', limit: 5, page: 1 }).catch(() => null),
-        vacationService.getVacations({ status: 'pending' }).catch(() => null),
+        canLoadAdminDashboard
+          ? vacationService.getVacations({ status: 'pending' }).catch(() => null)
+          : Promise.resolve(null),
         (isAdminLeave
           ? vacationService.getVacations()
           : vacationService.getVacations({ same_department: true })
         ).catch(() => null),
-        projectService.getProjects({}).catch(() => null),
-        isGeneralUser
-          ? Promise.resolve(null)
-          : api.get('/inventory/products', { params: { lowStock: true, limit: 5 } }).catch(() => null),
-        isGeneralUser
-          ? Promise.resolve(null)
-          : api
+        canLoadAdminDashboard ? projectService.getProjects({}).catch(() => null) : Promise.resolve(null),
+        canLoadAdminDashboard
+          ? api.get('/inventory/products', { params: { lowStock: true, limit: 5 } }).catch(() => null)
+          : Promise.resolve(null),
+        canLoadAdminDashboard
+          ? api
               .get('/accounting/invoices', { params: { limit: 5, orderBy: 'created_at', order: 'DESC' } })
-              .catch(() => null),
+              .catch(() => null)
+          : Promise.resolve(null),
         uid ? api.get('/dashboard/my-tasks').catch(() => null) : Promise.resolve(null),
-        uid && !isGeneralUser
+        uid
           ? approvalService.getApprovals({ current_approver_id: uid, status: 'submitted,in_review' }).catch(() => null)
           : Promise.resolve(null),
-        uid && !isGeneralUser
+        uid
           ? approvalService.getApprovals({ requester_id: uid }).catch(() => null)
           : Promise.resolve(null),
         uid
@@ -1511,7 +1521,7 @@ const Dashboard: React.FC = () => {
           : Promise.resolve(null),
       ]);
 
-      if (statsResponse?.data?.success) {
+      if (canLoadAdminDashboard && statsResponse?.data?.success) {
         setStats((prev) => ({
           ...prev,
           totalSales: statsResponse.data.data.totalRevenue || 0,
@@ -1519,6 +1529,25 @@ const Dashboard: React.FC = () => {
           totalInvoices: statsResponse.data.data.invoiceCount || 0,
           totalInventory: statsResponse.data.data.inventoryCount || 0,
           totalEmployees: statsResponse.data.data.employeeCount || 0 }));
+      } else if (!canLoadAdminDashboard) {
+        setStats((prev) => ({
+          ...prev,
+          totalSales: 0,
+          totalCustomers: 0,
+          totalInvoices: 0,
+          totalInventory: 0,
+          totalEmployees: 0,
+          totalProjects: 0,
+          pendingVacations: 0,
+        }));
+        setInventoryData([
+          { name: t('dashboard.inventoryLow'), value: 0, color: '#ff6b6b' },
+          { name: t('dashboard.inventoryNormal'), value: 0, color: '#4ecdc4' },
+          { name: t('dashboard.inventoryHigh'), value: 0, color: '#ffe66d' },
+        ]);
+        setLowStockItems([]);
+        setRecentInvoices([]);
+        setPendingVacations([]);
       }
 
       if (revenueResponse?.data?.success) {

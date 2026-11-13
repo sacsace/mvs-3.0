@@ -57,30 +57,65 @@ const queryTenantValue = (req: AuthRequest): string => (
   typeof req.query.tenantId === 'string' ? req.query.tenantId : ''
 );
 
+/**
+ * 관리자 대시보드 회사 스코프.
+ * - root/audit: 기본 전체(null). query.companyId 있으면 해당 회사만.
+ * - admin: 반드시 로그인 회사만. company_id 없으면 빈 결과용 sentinel.
+ * - 그 외 역할: 로그인 회사(없으면 sentinel).
+ */
+const resolveDashboardCompanyId = (req: AuthRequest): number | null => {
+  const user = req.user;
+  if (!user) return -1;
+  if (user.role === 'root' || user.role === 'audit') {
+    const q = parseInt(String(req.query.companyId || ''), 10);
+    if (Number.isFinite(q) && q > 0) return q;
+    return null;
+  }
+  const cid = Number(user.company_id);
+  return Number.isFinite(cid) && cid > 0 ? cid : -1;
+};
+
+const withCompanyScope = <T extends Record<string, unknown>>(
+  where: T,
+  companyId: number | null
+): T => {
+  if (companyId == null) return where;
+  return { ...where, company_id: companyId };
+};
+
+const canViewAdminDashboardApi = (req: AuthRequest): boolean => {
+  const role = String(req.user?.role || '');
+  return role === 'admin' || role === 'root';
+};
+
 router.get('/stats', async (req: AuthRequest, res) => {
   try {
     const tenantId = resolveTenantId(req);
     const user = req.user;
+    const companyId = resolveDashboardCompanyId(req);
     const cacheKey = buildReferenceCacheKey([
       'dashboard',
       'stats',
       tenantId,
-      user?.company_id || 'all',
+      companyId || 'all',
       queryTenantValue(req),
     ]);
     const cached = await getCachedJson<{ success: true; data: any }>(cacheKey);
     if (cached) {
       return res.json(cached);
     }
-    const invoiceBaseWhere: any = {
-      tenant_id: tenantId,
-      is_active: true,
-      [Op.or]: [
-        { invoice_category: 'regular' },
-        { invoice_category: 'e_invoice' },
-        { invoice_category: null }
-      ]
-    };
+    const invoiceBaseWhere: any = withCompanyScope(
+      {
+        tenant_id: tenantId,
+        is_active: true,
+        [Op.or]: [
+          { invoice_category: 'regular' },
+          { invoice_category: 'e_invoice' },
+          { invoice_category: null }
+        ]
+      },
+      companyId
+    );
 
     const safeSum = async (runner: () => Promise<number | null>) => {
       try {
@@ -106,13 +141,13 @@ router.get('/stats', async (req: AuthRequest, res) => {
       }
     };
 
-    const employeeWhere: any = {
-      tenant_id: tenantId,
-      status: 'active',
-    };
-    if (user && user.role !== 'root' && user.role !== 'audit') {
-      employeeWhere.company_id = user.company_id;
-    }
+    const employeeWhere: any = withCompanyScope(
+      {
+        tenant_id: tenantId,
+        status: 'active',
+      },
+      companyId
+    );
 
     const [totalRevenue, roomBookingRevenue, customerCount, invoiceCount, inventoryCount, employeeCount] = await Promise.all([
       safeSum(() => Invoice.sum('total_amount', {
@@ -122,11 +157,18 @@ router.get('/stats', async (req: AuthRequest, res) => {
         }
       })),
       safeSum(() => RoomBooking.sum('total_amount', {
-        where: { tenant_id: tenantId, payment_status: 'paid', is_active: true }
+        where: withCompanyScope(
+          { tenant_id: tenantId, payment_status: 'paid', is_active: true },
+          companyId
+        )
       })),
-      safeCount(() => Customer.count({ where: { tenant_id: tenantId } })),
+      safeCount(() => Customer.count({
+        where: withCompanyScope({ tenant_id: tenantId }, companyId)
+      })),
       safeCount(() => Invoice.count({ where: invoiceBaseWhere })),
-      safeSum(() => Product.sum('stock_quantity', { where: { tenant_id: tenantId } })),
+      safeSum(() => Product.sum('stock_quantity', {
+        where: withCompanyScope({ tenant_id: tenantId }, companyId)
+      })),
       safeCount(() => User.count({ where: employeeWhere })),
     ]);
 
@@ -154,11 +196,19 @@ router.get('/stats', async (req: AuthRequest, res) => {
 
 router.get('/revenue-trend', async (req: AuthRequest, res) => {
   try {
+    if (!canViewAdminDashboardApi(req)) {
+      return res.status(403).json({
+        success: false,
+        message: '관리자 대시보드 권한이 없습니다.',
+      });
+    }
     const tenantId = resolveTenantId(req);
+    const companyId = resolveDashboardCompanyId(req);
     const cacheKey = buildReferenceCacheKey([
       'dashboard',
       'revenue-trend',
       tenantId,
+      companyId || 'all',
       queryTenantValue(req),
     ]);
     const cached = await getCachedJson<{ success: true; data: any[] }>(cacheKey);
@@ -175,17 +225,20 @@ router.get('/revenue-trend', async (req: AuthRequest, res) => {
             [fn('DATE_TRUNC', 'month', col('created_at')), 'month'],
             [fn('SUM', col('total_amount')), 'revenue']
           ],
-          where: {
-            tenant_id: tenantId,
-            is_active: true,
-            [Op.or]: [
-              { invoice_category: 'regular' },
-              { invoice_category: 'e_invoice' },
-              { invoice_category: null }
-            ],
-            [Op.and]: [{ [Op.or]: [{ payment_status: 'paid' }, { status: 'paid' }] }],
-            created_at: { [Op.gte]: twelveMonthsAgo }
-          },
+          where: withCompanyScope(
+            {
+              tenant_id: tenantId,
+              is_active: true,
+              [Op.or]: [
+                { invoice_category: 'regular' },
+                { invoice_category: 'e_invoice' },
+                { invoice_category: null }
+              ],
+              [Op.and]: [{ [Op.or]: [{ payment_status: 'paid' }, { status: 'paid' }] }],
+              created_at: { [Op.gte]: twelveMonthsAgo }
+            },
+            companyId
+          ),
           group: [fn('DATE_TRUNC', 'month', col('created_at'))],
           order: [[fn('DATE_TRUNC', 'month', col('created_at')), 'ASC']]
         });
@@ -202,12 +255,15 @@ router.get('/revenue-trend', async (req: AuthRequest, res) => {
             [fn('DATE_TRUNC', 'month', col('check_in_date')), 'month'],
             [fn('SUM', col('total_amount')), 'revenue']
           ],
-          where: {
-            tenant_id: tenantId,
-            payment_status: 'paid',
-            is_active: true,
-            check_in_date: { [Op.gte]: twelveMonthsAgo }
-          },
+          where: withCompanyScope(
+            {
+              tenant_id: tenantId,
+              payment_status: 'paid',
+              is_active: true,
+              check_in_date: { [Op.gte]: twelveMonthsAgo }
+            },
+            companyId
+          ),
           group: [fn('DATE_TRUNC', 'month', col('check_in_date'))],
           order: [[fn('DATE_TRUNC', 'month', col('check_in_date')), 'ASC']]
         });
@@ -248,11 +304,19 @@ router.get('/revenue-trend', async (req: AuthRequest, res) => {
 
 router.get('/inventory-status', async (req: AuthRequest, res) => {
   try {
+    if (!canViewAdminDashboardApi(req)) {
+      return res.status(403).json({
+        success: false,
+        message: '관리자 대시보드 권한이 없습니다.',
+      });
+    }
     const tenantId = resolveTenantId(req);
+    const companyId = resolveDashboardCompanyId(req);
     const cacheKey = buildReferenceCacheKey([
       'dashboard',
       'inventory-status',
       tenantId,
+      companyId || 'all',
       queryTenantValue(req),
     ]);
     const cached = await getCachedJson<{ success: true; data: any }>(cacheKey);
@@ -264,7 +328,9 @@ router.get('/inventory-status', async (req: AuthRequest, res) => {
 
     const countStock = async (where: Record<string, unknown>) => {
       try {
-        return await Product.count({ where: { tenant_id: tenantId, ...where } });
+        return await Product.count({
+          where: withCompanyScope({ tenant_id: tenantId, ...where }, companyId),
+        });
       } catch (err: any) {
         if (err.name === 'SequelizeDatabaseError') return 0;
         throw err;

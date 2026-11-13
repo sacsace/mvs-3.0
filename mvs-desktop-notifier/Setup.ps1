@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Windows.Forms
 
 $AppName = "MVS Notifier"
-$AppVersion = "2.1.1"
+$AppVersion = "2.2"
 $Publisher = "Minsub Ventures"
 $AppUserModelId = "MinsubVentures.MVS.Notifier"
 

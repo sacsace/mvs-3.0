@@ -297,9 +297,42 @@ const ProjectDetailPage: React.FC = () => {
     [t]
   );
 
-  const load = useCallback(async () => {
+  const applyProjectStats = useCallback((stats: any) => {
+    if (!stats || typeof stats !== 'object') return;
+    setProject((prev: any) => {
+      if (!prev) return prev;
+      const next = { ...prev };
+      if (stats.progress != null) next.progress = Number(stats.progress) || 0;
+      if (stats.total != null) next.task_count = Number(stats.total) || 0;
+      if (stats.completed != null) next.completed_task_count = Number(stats.completed) || 0;
+      return next;
+    });
+  }, []);
+
+  const upsertTaskLocal = useCallback((taskData: any) => {
+    if (!taskData || taskData.id == null) return;
+    const taskId = Number(taskData.id);
+    setTasks((prev) => {
+      const idx = prev.findIndex((row) => Number(row.id) === taskId);
+      if (idx < 0) return [...prev, taskData as TaskRow];
+      const next = [...prev];
+      next[idx] = { ...next[idx], ...taskData };
+      return next;
+    });
+  }, []);
+
+  const patchTaskDatesLocal = useCallback((taskId: number, start: string, due: string) => {
+    setTasks((prev) =>
+      prev.map((row) =>
+        Number(row.id) === Number(taskId) ? { ...row, start_date: start, due_date: due } : row
+      )
+    );
+  }, []);
+
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!Number.isInteger(id) || id <= 0) return;
-    setLoading(true);
+    const silent = Boolean(opts?.silent);
+    if (!silent) setLoading(true);
     try {
       const [detailRes, taskRes] = await Promise.all([
         projectService.getProject(id),
@@ -310,16 +343,16 @@ const ProjectDetailPage: React.FC = () => {
           detailRes.message || t('projectManagement.errors.loadDetail'),
           t('projectManagement.errors.loadDetailTitle')
         );
-        setProject(null);
+        if (!silent) setProject(null);
         return;
       }
       setProject(detailRes.data);
       setTasks(Array.isArray(taskRes.data) ? taskRes.data : []);
     } catch (e: any) {
       showErrorPopup(e, t('projectManagement.errors.loadDetailTitle'));
-      setProject(null);
+      if (!silent) setProject(null);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [id, t]);
 
@@ -600,7 +633,9 @@ const ProjectDetailPage: React.FC = () => {
       }
       showSuccessPopup(t('projectManagement.messages.taskSaved'));
       setPopupOpen(false);
-      void load();
+      if (res.data) upsertTaskLocal(res.data);
+      else void load({ silent: true });
+      applyProjectStats(res.stats);
     } catch (e: any) {
       showErrorPopup(e, t('projectManagement.errors.taskTitle'));
     } finally {
@@ -719,7 +754,7 @@ const ProjectDetailPage: React.FC = () => {
         return;
       }
       if (Array.isArray(res.data)) setTasks(res.data);
-      else void load();
+      else void load({ silent: true });
     } catch (e: any) {
       showErrorPopup(e, t('projectManagement.errors.taskTitle'));
     }
@@ -744,7 +779,9 @@ const ProjectDetailPage: React.FC = () => {
       showSuccessPopup(t('projectManagement.messages.taskSaved'));
       setCreateOpen(false);
       setCreateForm({ title: '', start_date: '', due_date: '', status: 'todo', priority: 'medium', color: '' });
-      void load();
+      if (res.data) upsertTaskLocal(res.data);
+      else void load({ silent: true });
+      applyProjectStats(res.stats);
     } catch (e: any) {
       showErrorPopup(e, t('projectManagement.errors.taskTitle'));
     } finally {
@@ -770,7 +807,7 @@ const ProjectDetailPage: React.FC = () => {
       showSuccessPopup(t('projectManagement.messages.invited'));
       setInviteOpen(false);
       setInviteUsers([]);
-      void load();
+      void load({ silent: true });
     } catch (e: any) {
       showErrorPopup(e, t('projectManagement.errors.inviteTitle'));
     } finally {
@@ -793,17 +830,23 @@ const ProjectDetailPage: React.FC = () => {
     } else {
       nextDue = ymd;
     }
+    const prevStart = task.start_date || null;
+    const prevDue = task.due_date || null;
+    patchTaskDatesLocal(task.id, nextStart, nextDue);
     try {
       const res = await projectService.updateTask(id, task.id, {
         start_date: nextStart,
         due_date: nextDue,
       });
       if (!res.success) {
+        patchTaskDatesLocal(task.id, String(prevStart || ''), String(prevDue || ''));
         showErrorPopup(res.message || t('projectManagement.errors.taskTitle'), t('projectManagement.errors.taskTitle'));
         return;
       }
-      void load();
+      if (res.data) upsertTaskLocal(res.data);
+      applyProjectStats(res.stats);
     } catch (e: any) {
+      patchTaskDatesLocal(task.id, String(prevStart || ''), String(prevDue || ''));
       showErrorPopup(e, t('projectManagement.errors.taskTitle'));
     }
   };
@@ -838,17 +881,22 @@ const ProjectDetailPage: React.FC = () => {
       pointerGestureRef.current = null;
       if (!drag || !preview) return;
       if (preview.start === drag.startDate && preview.due === drag.dueDate) return;
+      // 미리보기 위치를 즉시 확정 — 전체 load()/스피너로 화면을 비우지 않음
+      patchTaskDatesLocal(drag.taskId, preview.start, preview.due);
       try {
         const res = await projectService.updateTask(id, drag.taskId, {
           start_date: preview.start,
           due_date: preview.due,
         });
         if (!res.success) {
+          patchTaskDatesLocal(drag.taskId, drag.startDate, drag.dueDate);
           showErrorPopup(res.message || t('projectManagement.errors.taskTitle'), t('projectManagement.errors.taskTitle'));
           return;
         }
-        void load();
+        if (res.data) upsertTaskLocal(res.data);
+        applyProjectStats(res.stats);
       } catch (err: any) {
+        patchTaskDatesLocal(drag.taskId, drag.startDate, drag.dueDate);
         showErrorPopup(err, t('projectManagement.errors.taskTitle'));
       }
     };
@@ -858,9 +906,9 @@ const ProjectDetailPage: React.FC = () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [id, load, t]);
+  }, [applyProjectStats, id, patchTaskDatesLocal, t, upsertTaskLocal]);
 
-  if (loading) {
+  if (loading && !project) {
     return (
       <Box sx={{ ...mvsPageRootFullBleedSx, display: 'flex', justifyContent: 'center', py: 8 }}>
         <CircularProgress size={28} />

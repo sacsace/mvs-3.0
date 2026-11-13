@@ -21,6 +21,7 @@ import {
 } from '../../theme/mvsLayout';
 import { useTranslation } from 'react-i18next';
 import { showSuccessPopup, showWarningPopup } from '../../utils/errorHandler';
+import { API_BASE_URL } from '../../services/api/client';
 
 const DOWNLOAD_HREF = `${process.env.PUBLIC_URL || ''}/downloads/mvs-notifier/MVS-Notifier.zip`;
 
@@ -31,9 +32,13 @@ const DesktopNotifierDownload: React.FC = () => {
   const txt = (ko: string, en: string) => (isEn ? en : ko);
   const [copying, setCopying] = useState(false);
 
+  // www 프론트 오리진이 아니라, 웹이 실제로 쓰는 API_BASE_URL을 안내한다.
+  // (프로덕션: https://mvs-backend-production.up.railway.app/api)
   const apiHint = useMemo(() => {
+    const fromClient = String(API_BASE_URL || '').trim().replace(/\/+$/, '');
+    if (fromClient) return fromClient;
     if (typeof window === 'undefined') return '';
-    return `${window.location.origin}/api`;
+    return `${window.location.origin.replace(/\/+$/, '')}/api`;
   }, []);
 
   const copyApiUrl = async () => {
@@ -70,18 +75,18 @@ const DesktopNotifierDownload: React.FC = () => {
             />
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-                MVS Notifier v2.1.1
+                MVS Notifier v2.2
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {txt('설치 프로그램 · 제거 지원 · Windows 버전 호환', 'Installer, uninstall, multi-Windows support')}
+                {txt('트레이 Toast 알림 · 브라우저 자동 실행 없음', 'Tray toast only · no auto browser')}
               </Typography>
             </Box>
           </Box>
 
           <Alert severity="info" sx={{ mb: 2, borderRadius: 0 }}>
             {txt(
-              'v2.1.1: 로그인 API 주소를 자동으로 /api 형태로 맞춥니다(404 방지). Win10/11 Toast / 구형 풍선. Setup.bat 설치 후, 아래 API 주소를 복사해 로그인하세요. 업그레이드 후 트레이에서 다시 로그인하세요.',
-              'v2.1.1: Login API URL is normalized to end with /api (avoids 404). Toast on Win10/11, balloon on older OS. After Setup.bat, copy the API URL below to sign in. Re-login in the tray after upgrade.'
+              'v2.2: 새 알림을 최대 5건까지 Windows 트레이/알림 센터에만 표시합니다. 브라우저를 자동으로 열지 않습니다. 아래 API 주소는 웹이 쓰는 백엔드 주소입니다(www 아님).',
+              'v2.2: Shows up to 5 new alerts in the Windows tray/Notification Center only — does not open the browser. The API URL below is the real backend (not www).'
             )}
           </Alert>
 
@@ -91,8 +96,8 @@ const DesktopNotifierDownload: React.FC = () => {
           <List dense disablePadding sx={{ mb: 2 }}>
             <ListItem disableGutters>
               <ListItemText
-                primary={txt('Windows Toast + 트레이', 'Windows Toast + tray')}
-                secondary={txt('알림 센터 표시, 더블클릭·풍선 클릭으로 바로가기', 'Notification Center; open via double-click / balloon')}
+                primary={txt('Windows Toast + 트레이 (최대 5건)', 'Windows Toast + tray (up to 5)')}
+                secondary={txt('알림만 표시 · 브라우저는 메뉴/더블클릭 시에만', 'Alerts only · browser opens via menu/double-click')}
               />
             </ListItem>
             <ListItem disableGutters>

@@ -110,46 +110,80 @@ export const getProjects = async (req: RequestWithUser, res: Response) => {
       whereClause.id = { [Op.in]: accessible };
     }
 
+    // members include 를 한 쿼리에 넣으면 distinct 조인으로 느려짐 → 목록은 분리 조회
     const projects = await (Project as any).findAndCountAll({
       where: whereClause,
+      attributes: [
+        'id',
+        'tenant_id',
+        'company_id',
+        'name',
+        'description',
+        'project_code',
+        'status',
+        'priority',
+        'progress',
+        'budget',
+        'start_date',
+        'end_date',
+        'project_manager',
+        'sort_order',
+        'is_active',
+        'created_at',
+        'updated_at',
+      ],
       include: [
         {
           model: User,
           as: 'manager',
-          attributes: memberUserAttrs,
-        },
-        {
-          model: ProjectMember,
-          as: 'members',
-          where: { is_active: true, status: 'active' },
-          required: false,
-          attributes: ['id', 'user_id', 'role', 'status'],
-          include: [{ model: User, as: 'user', attributes: memberUserAttrs }],
+          attributes: ['id', 'username', 'avatar_url'],
         },
       ],
       limit: Number(limit),
       offset: (Number(page) - 1) * Number(limit),
-      // 기본: 기획 → 진행중 → 보류 → 완료 → 취소, 이후 수동 순서
+      // 수동 드래그 순서(sort_order) 우선
       order: [
-        [
-          sequelize.literal(`CASE "Project"."status"
-            WHEN 'planning' THEN 0
-            WHEN 'in_progress' THEN 1
-            WHEN 'on_hold' THEN 2
-            WHEN 'completed' THEN 3
-            WHEN 'cancelled' THEN 4
-            ELSE 5 END`),
-          'ASC',
-        ],
         ['sort_order', 'ASC'],
         ['id', 'ASC'],
       ],
-      distinct: true,
+    });
+
+    const projectIds = projects.rows.map((row: any) => Number(row.id)).filter((n: number) => n > 0);
+    const memberRows =
+      projectIds.length > 0
+        ? await (ProjectMember as any).findAll({
+            where: {
+              project_id: { [Op.in]: projectIds },
+              is_active: true,
+              status: 'active',
+            },
+            attributes: ['id', 'project_id', 'user_id', 'role', 'status'],
+            include: [{ model: User, as: 'user', attributes: ['id', 'username', 'avatar_url'] }],
+            order: [
+              ['project_id', 'ASC'],
+              ['id', 'ASC'],
+            ],
+          })
+        : [];
+
+    const membersByProject = new Map<number, any[]>();
+    for (const row of memberRows) {
+      const pid = Number(row.project_id);
+      if (!membersByProject.has(pid)) membersByProject.set(pid, []);
+      membersByProject.get(pid)!.push(row);
+    }
+
+    const data = projects.rows.map((row: any) => {
+      const json = row.toJSON ? row.toJSON() : row;
+      return {
+        ...json,
+        members: membersByProject.get(Number(json.id)) || [],
+      };
     });
 
     res.json({
       success: true,
-      data: projects.rows,
+      data,
       pagination: {
         total: projects.count,
         page: Number(page),
@@ -515,16 +549,6 @@ export const moveProject = async (req: RequestWithUser, res: Response) => {
     const projects = await (Project as any).findAll({
       where,
       order: [
-        [
-          sequelize.literal(`CASE "Project"."status"
-            WHEN 'planning' THEN 0
-            WHEN 'in_progress' THEN 1
-            WHEN 'on_hold' THEN 2
-            WHEN 'completed' THEN 3
-            WHEN 'cancelled' THEN 4
-            ELSE 5 END`),
-          'ASC',
-        ],
         ['sort_order', 'ASC'],
         ['id', 'ASC'],
       ],
@@ -569,6 +593,83 @@ export const moveProject = async (req: RequestWithUser, res: Response) => {
       return res.status(status).json({ success: false, message: error.message });
     }
     console.error('프로젝트 이동 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/** 드래그 앤 드롭으로 전달된 전체 순서 저장 */
+export const reorderProjects = async (req: RequestWithUser, res: Response) => {
+  const t = await sequelize.transaction();
+  try {
+    await ensureProjectSchema();
+    const user = req.user!;
+    const orderedIds = Array.isArray(req.body?.ordered_ids)
+      ? (req.body.ordered_ids as unknown[])
+          .map((id) => Number(id))
+          .filter((n) => Number.isFinite(n) && n > 0)
+      : [];
+    if (orderedIds.length === 0) {
+      await t.rollback();
+      return res.status(400).json({ success: false, message: 'ordered_ids가 필요합니다.' });
+    }
+
+    const { project, membership, asAdmin } = await getProjectWithAccessOrThrow(orderedIds[0], user);
+    if (!canEditProject(membership?.role, asAdmin)) {
+      await t.rollback();
+      return res.status(403).json({ success: false, message: '프로젝트 순서를 변경할 권한이 없습니다.' });
+    }
+
+    const where: any = {
+      tenant_id: project.tenant_id,
+      company_id: project.company_id,
+      is_active: true,
+    };
+    const accessible = await listAccessibleProjectIds(user);
+    if (accessible !== 'all') {
+      if (accessible.length === 0) {
+        await t.rollback();
+        return res.status(403).json({ success: false, message: '프로젝트 순서를 변경할 권한이 없습니다.' });
+      }
+      where.id = { [Op.in]: accessible };
+    }
+
+    const projects = await (Project as any).findAll({
+      where,
+      order: [
+        ['sort_order', 'ASC'],
+        ['id', 'ASC'],
+      ],
+      transaction: t,
+    });
+
+    const byId = new Map<number, any>(projects.map((row: any) => [Number(row.id), row]));
+    if (orderedIds.length !== projects.length || orderedIds.some((id) => !byId.has(id))) {
+      await t.rollback();
+      return res.status(400).json({
+        success: false,
+        message: '순서 목록이 현재 프로젝트 목록과 일치하지 않습니다. 새로고침 후 다시 시도해 주세요.',
+      });
+    }
+
+    const ordered = orderedIds.map((id) => byId.get(id));
+    for (let i = 0; i < ordered.length; i += 1) {
+      if (Number(ordered[i].sort_order) !== i) {
+        await ordered[i].update({ sort_order: i }, { transaction: t });
+      }
+    }
+
+    await t.commit();
+    res.json({
+      success: true,
+      data: ordered.map((row: any) => ({ id: row.id, sort_order: Number(row.sort_order) || 0 })),
+    });
+  } catch (error: any) {
+    await t.rollback();
+    const status = error?.status || 500;
+    if (status !== 500) {
+      return res.status(status).json({ success: false, message: error.message });
+    }
+    console.error('프로젝트 순서 변경 오류:', error);
     res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
   }
 };

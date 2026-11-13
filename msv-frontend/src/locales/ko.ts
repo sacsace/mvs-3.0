@@ -2861,6 +2861,7 @@ export default {
         allManagers: '전체 담당자'
       },
       columns: {
+        no: '번호',
         order: '순서',
         code: '코드',
         name: '프로젝트명',
@@ -2875,6 +2876,7 @@ export default {
         progress: '진행률',
         actions: '작업'
       },
+      dragReorder: '드래그하여 순서 변경',
       reorderHint: '검색·상태·담당자 필터와 헤더 정렬을 해제한 뒤 순서를 변경할 수 있습니다.',
       reorderNeedCompany: '회사를 선택한 뒤 순서를 변경할 수 있습니다.',
       fields: {
