@@ -165,6 +165,109 @@ export function derivedDaysWorkedString(totalDayOfMonth: unknown, unpaidLeave: u
   return String(n);
 }
 
+/**
+ * 명세서 Earnings용 — 기본급·HRA·기타·상수 패키지를 sum_total과 동일 규칙으로 일할.
+ * (OT·커스텀 수당·식대 필드는 전액, 패키지만 근무일/지급일 비례)
+ * 라인 합 = proratedPackage 가 되도록 잔액은 마지막 양수 항목에 보정.
+ */
+export function resolvePayslipProratedPackageParts(row: PayrollGridRow): {
+  basic: number;
+  hra: number;
+  other: number;
+  constant_parts: Record<string, number>;
+  proratedPackage: number;
+  packageFull: number;
+} {
+  const isDaily =
+    String(row.employment_salary_basis || '').trim() === 'daily' || isDailySalaryBasisRow(row);
+  const isFixedRest = String(row.employment_salary_basis || '').trim() === 'fixed_rest_monthly';
+  const calendarDays = Math.max(1, num(row.total_day_of_month) || 30);
+  const fixedRestDays =
+    row.fixed_rest_days != null && Number.isFinite(num(row.fixed_rest_days))
+      ? Math.floor(num(row.fixed_rest_days))
+      : DEFAULT_FIXED_REST_DAYS;
+
+  const basicFull = Math.max(0, num(row.basic_salary));
+  const hraFull = isDaily ? 0 : Math.max(0, num(row.house_rent_allowance));
+  const otherFull = isDaily ? 0 : Math.max(0, num(row.other_allowance));
+  const constantFull: Record<string, number> = {};
+  if (!isDaily && row.constant_parts && typeof row.constant_parts === 'object') {
+    for (const [id, val] of Object.entries(row.constant_parts)) {
+      const amount = Math.max(0, num(val));
+      if (amount > 0) constantFull[id] = amount;
+    }
+  }
+
+  const packageFull = roundInr(
+    basicFull +
+      hraFull +
+      otherFull +
+      Object.values(constantFull).reduce((s, v) => s + num(v), 0)
+  );
+
+  let unpaidNormalized: number;
+  let worked: number;
+  if (isDaily) {
+    worked = resolveDailyDaysWorked(row.total_day_of_month, row.days_worked);
+    unpaidNormalized = roundUnpaidLeave(calendarDays - worked);
+  } else {
+    unpaidNormalized = roundUnpaidLeave(num(row.unpaid_leave));
+    worked = derivedDaysWorkedFromCalendarAndUnpaid(row.total_day_of_month, unpaidNormalized);
+  }
+  const payDays = isFixedRest
+    ? fixedRestPayDays(row.total_day_of_month, unpaidNormalized, fixedRestDays)
+    : worked;
+
+  const proratedPackage = isDaily
+    ? roundInr(packageFull * worked)
+    : roundInr((packageFull * payDays) / calendarDays);
+
+  if (packageFull <= 0 || proratedPackage === packageFull) {
+    return {
+      basic: basicFull,
+      hra: hraFull,
+      other: otherFull,
+      constant_parts: { ...constantFull },
+      proratedPackage,
+      packageFull,
+    };
+  }
+
+  type Part = { key: 'basic' | 'hra' | 'other' | string; amount: number };
+  const parts: Part[] = [
+    { key: 'basic', amount: basicFull },
+    { key: 'hra', amount: hraFull },
+    { key: 'other', amount: otherFull },
+    ...Object.entries(constantFull).map(([key, amount]) => ({ key, amount })),
+  ].filter((p) => p.amount > 0);
+
+  const allocated: Record<string, number> = {};
+  let used = 0;
+  parts.forEach((p, index) => {
+    if (index === parts.length - 1) {
+      allocated[p.key] = Math.max(0, proratedPackage - used);
+      return;
+    }
+    const share = roundInr((p.amount * proratedPackage) / packageFull);
+    allocated[p.key] = share;
+    used += share;
+  });
+
+  const constant_parts: Record<string, number> = {};
+  for (const id of Object.keys(constantFull)) {
+    constant_parts[id] = allocated[id] ?? 0;
+  }
+
+  return {
+    basic: allocated.basic ?? 0,
+    hra: allocated.hra ?? 0,
+    other: allocated.other ?? 0,
+    constant_parts,
+    proratedPackage,
+    packageFull,
+  };
+}
+
 /** 정규직 등 월급 OT/Rate = 기본급 / 26 / 하루시간 × 배수 */
 export function defaultOtRateFromBasic(
   basicSalary: number,

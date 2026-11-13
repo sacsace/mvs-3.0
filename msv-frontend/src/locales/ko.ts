@@ -2055,6 +2055,7 @@ export default {
         totalSalary: '총 급여액',
         netSalary: '실수령액',
         totalTax: '총 세금',
+        totalDeductions: '총 공제',
         pendingPayroll: '대기중인 급여',
         scopeForPayMonth: '아래 합계는 조회 급여월 {{period}}의 활성 급여만 합산했습니다.',
         scopeNoMonth: '급여월을 선택하면 해당 월 합계가 표시됩니다.'

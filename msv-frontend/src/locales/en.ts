@@ -1937,6 +1937,7 @@ export default {
         totalSalary: 'Total Gross Pay',
         netSalary: 'Total Net Pay',
         totalTax: 'Total Tax Deductions',
+        totalDeductions: 'Total Deductions',
         pendingPayroll: 'Pending Payroll Records',
         scopeForPayMonth: 'Totals include only active payroll records for {{period}}.',
         scopeNoMonth: 'Select a payroll month to see totals for that month.'

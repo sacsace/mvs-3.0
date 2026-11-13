@@ -530,16 +530,30 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     [payrollRecordsForSelectedMonth]
   );
 
-  /** 조회 급여월(`periodKey`)에 해당하는 활성 급여만 합산 — 상단 카드·그리드 데이터 범위와 동일 */
+  /**
+   * 상단 카드 = 화면에 보이는 그리드(재계산된 sum_total/net)와 동일 합산.
+   * DB gross_salary·tax_amount만 쓰면 무급휴가 재계산 후 리스트와 어긋남.
+   */
   const summaryStats = useMemo(() => {
-    const rows = payrollRecordsForSelectedMonth;
+    const gross = gridRows.reduce((s, r) => s + parsePayrollMoney(r.sum_total), 0);
+    const net = gridRows.reduce((s, r) => s + parsePayrollMoney(r.net_salary_payable), 0);
+    const deductions = gridRows.reduce((s, r) => {
+      return (
+        s +
+        parsePayrollMoney(r.pf_employee) +
+        parsePayrollMoney(r.esic_employee) +
+        parsePayrollMoney(r.tds) +
+        parsePayrollMoney(r.pt) +
+        parsePayrollMoney(r.deduct_this_month)
+      );
+    }, 0);
     return {
-      gross: rows.reduce((s, p: any) => s + parsePayrollMoney(p.gross_salary), 0),
-      net: rows.reduce((s, p: any) => s + parsePayrollMoney(p.net_salary), 0),
-      tax: rows.reduce((s, p: any) => s + parsePayrollMoney(p.tax_amount), 0),
-      pending: rows.filter((p: any) => p.status === 'pending').length
+      gross,
+      net,
+      tax: deductions,
+      pending: filteredRecords.filter((p: any) => p.status === 'pending').length,
     };
-  }, [payrollRecordsForSelectedMonth]);
+  }, [gridRows, filteredRecords]);
 
   /** 미리보기 API로 출퇴근·중복 여부 확인 후 확인 창 표시 */
   const handleRequestBulkPayrollPreview = async () => {
@@ -1295,7 +1309,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
           {[
             { key: 'gross', label: t('payrollManagement.summary.totalSalary'), value: `Rs. ${formatPayrollSummaryRupee(summaryStats.gross)}` },
             { key: 'net', label: t('payrollManagement.summary.netSalary'), value: `Rs. ${formatPayrollSummaryRupee(summaryStats.net)}` },
-            { key: 'tax', label: t('payrollManagement.summary.totalTax'), value: `Rs. ${formatPayrollSummaryRupee(summaryStats.tax)}` },
+            { key: 'tax', label: t('payrollManagement.summary.totalDeductions'), value: `Rs. ${formatPayrollSummaryRupee(summaryStats.tax)}` },
             { key: 'pending', label: t('payrollManagement.summary.pendingPayroll'), value: String(summaryStats.pending), valueColor: 'warning.main' as const },
           ].map((item) => (
             <Card key={item.key} elevation={0} sx={mvsKpiCardSx}>

@@ -1,7 +1,4 @@
 import type { PayrollGridRow } from './payroll/payrollGridTypes';
-import { formatOtHourDisplay } from './payroll/payrollGridUtils';
-import { loadPayrollColumnPrefs } from './payroll/payrollColumnPrefs';
-import { loadPayrollSalaryRatios } from './payroll/payrollSalaryRatios';
 import { formatPositionLabel } from '../../utils/positionLabels';
 import {
   inrAmountInWords,
@@ -10,6 +7,7 @@ import {
   type PayslipCompanyInfo,
   type PayslipLabels,
 } from './PayslipContent';
+import { buildPayslipLedger } from './payslipLedger';
 import { PAYSLIP_LABELS_EN } from './payslipLabelsEn';
 
 const PRIMARY = '#1D4E7C';
@@ -33,13 +31,6 @@ function esc(value: unknown): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
-}
-
-function parseMoney(v: string | number | undefined | null): number {
-  if (v === '' || v == null) return 0;
-  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
-  const n = parseFloat(String(v).replace(/,/g, '').trim());
-  return Number.isFinite(n) ? n : 0;
 }
 
 function displayText(value: unknown): string {
@@ -70,10 +61,6 @@ function statementDateFromPeriod(period: string): string {
   return last.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function moneyFromField(v: string | number | undefined | null): string {
-  return money(parseMoney(v));
-}
-
 function resolveLogoSrc(logo?: string | null): string {
   const raw = String(logo || '').trim();
   if (!raw) return '';
@@ -87,102 +74,21 @@ function resolveLogoSrc(logo?: string | null): string {
 }
 
 function buildLedger(row: PayrollGridRow, labels: PayslipLabels, companyId?: string | number | null) {
-  const dayHours = parseMoney(row.day_ot_hour);
-  const otRate = parseMoney(row.ot_rate);
-  const otPayTotal = Math.floor(dayHours * otRate);
-  const grossPay = parseMoney(row.sum_total);
-  const pfEmp = parseMoney(row.pf_employee);
-  const esicEmp = parseMoney(row.esic_employee);
-  const tdsAmt = parseMoney(row.tds);
-  const ptAmt = parseMoney(row.pt);
-  const otherDeduct = Math.max(0, parseMoney(row.deduct_this_month) - (pfEmp + esicEmp + tdsAmt + ptAmt));
-  const totalDeductions =
-    parseMoney(row.deduct_this_month) > 0
-      ? parseMoney(row.deduct_this_month)
-      : pfEmp + esicEmp + tdsAmt + ptAmt + otherDeduct;
-  const netPay = parseMoney(row.net_salary_payable);
-  const dayOtLabel =
-    dayHours > 0 ? `${labels.dayOt} (${formatOtHourDisplay(dayHours)}h)` : labels.dayOt;
-
-  const customLines = Array.isArray(row.payslip_earning_lines) ? row.payslip_earning_lines : [];
-  const earningItems: LedgerLine[] = customLines.length
-    ? customLines.map((line) => ({
-        label: line.label,
-        value: money(line.amount),
-        highlight: line.highlight,
-      }))
-    : [
-        ...(() => {
-          const ratios = loadPayrollSalaryRatios(companyId);
-          const lines = ratios.parts.map((part) => {
-            let amount = 0;
-            if (part.id === 'basic_salary') amount = Number(row.basic_salary) || 0;
-            else if (part.id === 'house_rent_allowance') amount = Number(row.house_rent_allowance) || 0;
-            else if (part.id === 'other_allowance') amount = Number(row.other_allowance) || 0;
-            else amount = Number(row.constant_parts?.[part.id]) || 0;
-            return { label: part.label, value: money(amount) };
-          });
-          const known = new Set(ratios.parts.map((p) => p.id));
-          Object.entries(row.constant_parts || {}).forEach(([id, amount]) => {
-            if (known.has(id) || !(Number(amount) > 0)) return;
-            lines.push({ label: id.replace(/_/g, ' '), value: money(amount) });
-          });
-          return lines;
-        })(),
-        ...(Number(row.food_allowance) > 0
-          ? [{ label: labels.foodAllowance, value: money(row.food_allowance) }]
-          : []),
-        ...(dayHours > 0
-          ? [{ label: dayOtLabel, value: money(otPayTotal), highlight: true }]
-          : dayHours === 0 && otPayTotal === 0
-            ? [{ label: labels.dayOt, value: money(0), highlight: true }]
-            : []),
-        ...(Number(row.transport_allowance) > 0
-          ? [{ label: labels.extraAllowance, value: money(row.transport_allowance), highlight: true }]
-          : []),
-        ...(() => {
-          const prefs = loadPayrollColumnPrefs(companyId);
-          const lines: LedgerLine[] = [];
-          const shown = new Set<string>();
-          for (const col of prefs.customColumns) {
-            const amount = Number(row.custom_allowances?.[col.id]) || 0;
-            if (amount <= 0) continue;
-            shown.add(col.id);
-            let label = col.label;
-            const isCountFormula =
-              col.inputMode === 'count' && Boolean(String(col.formula || '').trim());
-            if (isCountFormula) {
-              const count = Math.max(
-                0,
-                Math.floor(Number(row.custom_allowance_inputs?.[col.id]) || 0)
-              );
-              if (count > 0) label = `${col.label} (${count})`;
-            }
-            lines.push({ label, value: money(amount), highlight: true });
-          }
-          Object.entries(row.custom_allowances || {}).forEach(([key, amount]) => {
-            if (shown.has(key) || !(Number(amount) > 0)) return;
-            lines.push({
-              label: key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-              value: money(amount),
-              highlight: true,
-            });
-          });
-          return lines;
-        })(),
-      ];
-
-  const deductionItems: LedgerLine[] = [
-    { label: labels.pfEmployee, value: moneyFromField(row.pf_employee) },
-    { label: labels.esicEmployee, value: moneyFromField(row.esic_employee) },
-    { label: labels.pt, value: moneyFromField(row.pt) },
-    { label: labels.tds, value: money(row.tds) },
-  ];
-  if (otherDeduct > 0) {
-    deductionItems.push({ label: labels.deductMonth, value: money(otherDeduct) });
-  }
-
-  return { earningItems, deductionItems, grossPay, totalDeductions, netPay };
+  const ledger = buildPayslipLedger(row, labels, companyId);
+  return {
+    earningItems: ledger.earningItems.map((line) => ({
+      label: line.label,
+      value: money(line.amount),
+      highlight: line.highlight,
+    })),
+    deductionItems: ledger.deductionItems.map((line) => ({
+      label: line.label,
+      value: money(line.amount),
+    })),
+    grossPay: ledger.grossPay,
+    totalDeductions: ledger.totalDeductions,
+    netPay: ledger.netPay,
+  };
 }
 
 function empFieldHtml(label: string, value: string, opts?: { highlight?: boolean; link?: boolean }) {
